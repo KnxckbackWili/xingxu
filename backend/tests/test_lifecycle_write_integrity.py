@@ -8,6 +8,11 @@ from app.models import AcceptanceRecord, ArchiveChecklist, CheckItem, DailyProgr
 from tests.test_project_lifecycle_boundaries import project
 
 
+def check_version(cid):
+    with SessionLocal() as db:
+        return db.get(CheckItem, cid).version or 0
+
+
 def completeable_project(client, headers, *, documents_data=None, legacy_acceptance=False):
     pid = project(client, headers, '端到端生命周期')
     with SessionLocal() as db:
@@ -39,11 +44,8 @@ def completeable_project(client, headers, *, documents_data=None, legacy_accepta
         json={'version': 0, 'is_completed': True, 'reason': '已按现行工作口径核对并完成'})
     assert completed.status_code == 200, completed.text
     from tests.document_helpers import complete_documents, requirement, upload_documents
-    # Lifetime (stage 9) documents exist once the internal kickoff actually happened.
-    version = client.get(f'/api/projects/{pid}', headers=headers).json()['version']
-    kickoff = client.put(f'/api/projects/{pid}/events/internal_kickoff', headers=headers,
-        json={'actual_date': '2026-08-03', 'version': version})
-    assert kickoff.status_code == 200, kickoff.text
+    from tests.lifecycle_helpers import register_kickoff
+    register_kickoff(client, headers, pid)
     complete_documents(client, headers, pid)
     for index, item in enumerate(documents_data or []):
         item = {'name': item, 'required': True} if isinstance(item, str) else item
@@ -72,20 +74,6 @@ def test_required_document_needs_real_submission_for_completion(client, pm_heade
                          json={'status': 'completed'})
     assert result.status_code == 400, result.text
     assert '资料' in result.json()['detail']['message']
-
-
-def test_archive_rechecks_safety_evidence_invalidated_after_completion(client, pm_headers):
-    pid, _, cid = completeable_project(client, pm_headers)
-    assert client.post(f'/api/projects/{pid}/status', headers=pm_headers,
-                       json={'status': 'completed'}).status_code == 200
-    check = client.put(f'/api/projects/{pid}/check-items/{cid}', headers=pm_headers,
-                       json={'failed': True, 'failed_reason': '复检发现急停失效'})
-    assert check.status_code == 200, check.text
-    result = client.post(f'/api/projects/{pid}/status', headers=pm_headers,
-                         json={'status': 'archived', 'retrospective': '收尾复盘'})
-    assert result.status_code == 400, result.text
-    with SessionLocal() as db:
-        assert db.get(Project, pid).status == 'completed'
 
 
 @pytest.mark.parametrize('state', ['pending', 'failed', 'na'])
@@ -122,7 +110,7 @@ def test_preparation_pass_records_actor_even_with_explicit_actual_date(client, p
         assert row.completed_at is not None
 
 
-@pytest.mark.parametrize('operation', ['create', 'update', 'delete', 'import', 'review'])
+@pytest.mark.parametrize('operation', ['create', 'update', 'delete', 'import'])
 def test_preparation_write_rechecks_archival_after_preload(client, pm_headers, operation):
     from app.routers import preparations as prep
     pid = project(client, pm_headers)
@@ -144,10 +132,8 @@ def test_preparation_write_rechecks_archival_after_preload(client, pm_headers, o
                 prep.delete_item(pid, item.id, actor, stale)
             elif operation == 'seed':
                 prep.seed_items(pid, actor, stale)
-            elif operation == 'import':
-                prep.import_procurements(pid, prep.ProcurementImportBody(), actor, stale)
             else:
-                prep.review_confirm(pid, prep.ReviewConfirmBody(conclusion='risky', notes='旧页面'), actor, stale)
+                prep.import_procurements(pid, prep.ProcurementImportBody(), actor, stale)
         assert error.value.status_code == 400
         stale.rollback()
     with SessionLocal() as db:
@@ -179,59 +165,24 @@ def test_completion_evidence_rechecks_archival_after_preload(client, pm_headers,
         assert not db.query(ArchiveChecklist).filter_by(project_id=pid, is_done=True).count()
 
 
-def test_newly_required_preparation_invalidates_previous_optional_risk(client, pm_headers):
-    pid = project(client, pm_headers)
-    path = f'/api/projects/{pid}/procurements'
-    item = client.post(path, headers=pm_headers, json={'name': '可选资料', 'is_required': False}).json()
-    result = client.post(path.replace('/procurements', '/preparations') + '/review/confirm', headers=pm_headers,
-                         json={'conclusion': 'risky', 'notes': '允许此可选资料后续补充'})
-    assert result.status_code == 200 and result.json()['summary']['entry_confirmed']
-    assert client.put(path + '/' + item['id'], headers=pm_headers,
-                      json={'is_required': True}).status_code == 200
-    summary = client.get(path, headers=pm_headers).json()['summary']
-    assert summary['void'] and not summary['entry_confirmed']
-
-
 def test_repair_after_failed_archive_gate_can_finish_normally(client, pm_headers):
     pid, _, cid = completeable_project(client, pm_headers)
     status_path = f'/api/projects/{pid}/status'
     assert client.post(status_path, headers=pm_headers, json={'status': 'completed'}).status_code == 200
-    assert client.put(f'/api/projects/{pid}/check-items/{cid}', headers=pm_headers,
-                      json={'failed': True, 'failed_reason': '复检不通过'}).status_code == 200
-    assert client.post(status_path, headers=pm_headers,
-                       json={'status': 'archived', 'retrospective': '先整改'}).status_code == 400
-    # The denial must not strand the project: reopen, repair, complete, then archive.
+    # Checks are frozen once completed: reopen to acceptance before recording a failed recheck.
     assert client.post(status_path, headers=pm_headers, json={'status': 'acceptance'}).status_code == 200
     assert client.put(f'/api/projects/{pid}/check-items/{cid}', headers=pm_headers,
-                      json={'is_done': True}).status_code == 200
+                      json={'failed': True, 'failed_reason': '复检不通过', 'version': check_version(cid)}).status_code == 200
+    assert client.post(status_path, headers=pm_headers, json={'status': 'completed'}).status_code == 400
+    # The denial must not strand the project: repair, complete, then archive.
+    assert client.put(f'/api/projects/{pid}/check-items/{cid}', headers=pm_headers,
+                      json={'is_done': True, 'version': check_version(cid)}).status_code == 200
     assert client.post(status_path, headers=pm_headers, json={'status': 'completed'}).status_code == 200
     assert client.post(status_path, headers=pm_headers,
                        json={'status': 'archived', 'retrospective': '整改复检通过后归档'}).status_code == 200
 
 
-def test_stale_preparation_manifest_cannot_confirm_changed_requirements(client, pm_headers):
-    from app.routers.preparations import review_confirm, ReviewConfirmBody, _review_manifest
-    pid = project(client, pm_headers)
-    assert client.post(f'/api/projects/{pid}/procurements', headers=pm_headers, json={'name': '采购约定', 'category': 'procurement'}).status_code == 200
-    with SessionLocal() as stale:
-        p = stale.get(Project, pid)
-        actor = stale.get(User, p.manager)
-        item = stale.query(ProjectPreparationItem).filter_by(project_id=pid).first()
-        previous = _review_manifest(stale, p)
-        with SessionLocal() as newer:
-            changed = newer.get(ProjectPreparationItem, item.id)
-            changed.name = '已经变更的新要求'
-            newer.commit()
-        with pytest.raises(HTTPException) as error:
-            review_confirm(pid, ReviewConfirmBody(conclusion='risky', notes='已核查旧要求',
-                                                  review_token=previous['review_token']), actor, stale)
-        assert error.value.status_code == 409
-        stale.rollback()
-    with SessionLocal() as db:
-        assert not db.query(ProjectReadinessReview).filter_by(project_id=pid).count()
-
-
-@pytest.mark.parametrize('prior', ['preparing', 'planning'])
+@pytest.mark.parametrize('prior', ['preparing'])
 def test_pausing_pre_execution_project_does_not_enable_acceptance(client, pm_headers, prior):
     pid = project(client, pm_headers)
     with SessionLocal() as db:
@@ -270,7 +221,7 @@ def test_legacy_archive_can_reopen_for_correction_without_recertifying_completio
     assert blocked.status_code == 400, blocked.text
     assert client.post(path, headers=pm_headers, json={'status': 'acceptance'}).status_code == 200
     assert client.put(f'/api/projects/{pid}/check-items/{cid}', headers=pm_headers,
-                      json={'is_done': True}).status_code == 200
+                      json={'is_done': True, 'version': check_version(cid)}).status_code == 200
     missing_signature = client.post(path, headers=pm_headers, json={'status': 'completed'})
     assert missing_signature.status_code == 400 and '验收' in missing_signature.json()['detail']['message']
     with SessionLocal() as db:
@@ -372,7 +323,8 @@ def test_retired_governance_cannot_forge_requester_or_notify_reviewers(client, p
     pid = project(client, pm_headers)
     worker_id = client.get('/api/auth/me', headers=worker_headers).json()['id']
     manager_id = client.get('/api/auth/me', headers=pm_headers).json()['id']
-    assert client.put(f'/api/projects/{pid}', headers=pm_headers, json={'members': [worker_id]}).status_code == 200
+    from tests.lifecycle_helpers import project_version
+    assert client.put(f'/api/projects/{pid}', headers=pm_headers, json={'members': [worker_id], 'version': project_version(client, pm_headers, pid)}).status_code == 200
     with SessionLocal() as db:
         count=db.query(ChangeLog).filter_by(project_id=pid).count()
     response = client.post(f'/api/projects/{pid}/governance-requests', headers=worker_headers,

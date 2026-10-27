@@ -51,3 +51,17 @@ def complete_vehicle_progress(client, headers, project_id):
         response=client.put(f'/api/projects/{project_id}/vehicle-progress',headers=headers,json={
             'cells':cells,'is_done':True,'done_on':completed_on,'note':'测试明确登记实车环节'})
         assert response.status_code==200,response.text
+
+
+def register_kickoff(client, headers, project_id, day='2026-08-03'):
+    """Record the actual internal kickoff so lifetime (stage 9) documents exist."""
+    version = client.get(f'/api/projects/{project_id}', headers=headers).json()['version']
+    response = client.put(f'/api/projects/{project_id}/events/internal_kickoff', headers=headers,
+                          json={'actual_date': day, 'version': version})
+    assert response.status_code == 200, response.text
+
+
+def project_version(client, headers, project_id):
+    response = client.get(f'/api/projects/{project_id}', headers=headers)
+    assert response.status_code == 200, response.text
+    return response.json()['version']

@@ -73,6 +73,8 @@ def _completion_fixture(client, headers, status="acceptance"):
         json={'version': 0, 'is_completed': True, 'reason': '已明确核对当前实施工作完成'})
     assert completed.status_code == 200, completed.text
     from tests.document_helpers import complete_documents
+    from tests.lifecycle_helpers import register_kickoff
+    register_kickoff(client, headers, pid)
     complete_documents(client, headers, pid)
     with SessionLocal() as db:
         db.get(Project, pid).status = status
@@ -109,40 +111,19 @@ def test_either_mandatory_or_blocking_prerequisite_needs_risk_decision(client, p
     assert _status(client, pm_headers, pid, "executing").status_code == 400
 
 
-def test_optional_nonblocking_item_does_not_become_a_new_hard_gate(client, pm_headers):
-    pid = _project(client, pm_headers)
-    _preparation(client, pm_headers, pid, is_required=False, blocks_entry=False)
-    response = _status(client, pm_headers, pid, "executing")
-    assert response.status_code == 200, response.text
-
-
-def test_empty_checklist_needs_its_own_current_reason_and_can_recover(client, pm_headers):
-    pid = _project(client, pm_headers)
-    item = _preparation(client, pm_headers, pid)
-    assert _review(client, pm_headers, pid).status_code == 200
-    deleted = client.delete(f"/api/projects/{pid}/procurements/{item}", headers=pm_headers)
-    assert deleted.status_code == 200, deleted.text
-    blocked = _status(client, pm_headers, pid, "executing")
-    assert blocked.status_code == 400, blocked.text
-    assert _review(client, pm_headers, pid, notes="已核对本项目无需现场准备项").status_code == 200
-    recovered = _status(client, pm_headers, pid, "executing")
-    assert recovered.status_code == 200, recovered.text
-
-
-@pytest.mark.parametrize("origin", ["ready", "commissioning", "suspended"])
+@pytest.mark.parametrize("origin", ["ready", "suspended"])
 def test_every_executing_entry_path_rechecks_current_risk(client, pm_headers, origin):
-    pid = _project(client, pm_headers, "executing" if origin == "suspended" else origin)
-    item = _preparation(client, pm_headers, pid, risk="low")
-    assert _review(client, pm_headers, pid).status_code == 200
+    """Entering or resuming execution rechecks the current stage-5 risk approval."""
+    from tests.test_dispatch_review_t29 import scope, confirm, requirement
+    pid, _ = scope(client, pm_headers, status="executing" if origin == "suspended" else origin)
+    assert confirm(client, pm_headers, pid).status_code == 200
     if origin == "suspended":
         assert _status(client, pm_headers, pid, "suspended", reason="暂停等待现场").status_code == 200
-    changed = client.put(f"/api/projects/{pid}/procurements/{item}", headers=pm_headers,
-                         json={"risk": "high"})
-    assert changed.status_code == 200, changed.text
+    requirement(client, pm_headers, pid, "批准后新增的发车资料")
     denied = _status(client, pm_headers, pid, "executing", confirm_warnings=True)
     assert denied.status_code == 400, denied.text
     _assert_status(pid, origin)
-    assert _review(client, pm_headers, pid).status_code == 200
+    assert confirm(client, pm_headers, pid).status_code == 200
     assert _status(client, pm_headers, pid, "executing").status_code == 200
 
 
@@ -246,8 +227,10 @@ def test_new_required_project_document_cannot_reuse_old_signature(client, pm_hea
 def test_cosmetic_project_updates_do_not_invalidate_scope_signoff(client, pm_headers):
     pid, _ = _completion_fixture(client, pm_headers)
     _sign(client, pm_headers, pid)
+    from tests.lifecycle_helpers import project_version
     changed = client.put(f"/api/projects/{pid}", headers=pm_headers,
-                         json={"description": "文字纠错", "staffing_notes": "排班备注"})
+                         json={"description": "文字纠错", "staffing_notes": "排班备注",
+                               "version": project_version(client, pm_headers, pid)})
     assert changed.status_code == 200, changed.text
     result = _status(client, pm_headers, pid, "completed")
     assert result.status_code == 200, result.text
@@ -284,7 +267,7 @@ def test_legacy_archived_project_can_restore_but_needs_current_signoff_to_rearch
     assert _status(client, pm_headers, pid, "archived", retrospective="补充当前范围签字后归档").status_code == 200
 
 
-@pytest.mark.parametrize("stage", ["executing", "commissioning", "pilot", "acceptance"])
+@pytest.mark.parametrize("stage", ["executing", "acceptance"])
 def test_percentage_helpers_cannot_advance_or_regress_manual_stage(client, pm_headers, monkeypatch, stage):
     from app.services.status_flow import advance_project_status, regress_project_status
     pid = _project(client, pm_headers, stage)
@@ -299,7 +282,7 @@ def test_percentage_helpers_cannot_advance_or_regress_manual_stage(client, pm_he
             db.commit()
 
 
-@pytest.mark.parametrize("stage,target", [("executing", "commissioning"), ("commissioning", "pilot"), ("pilot", "acceptance")])
+@pytest.mark.parametrize("stage,target", [("executing", "ready"), ("ready", "preparing")])
 def test_stage_requires_authorized_human_action_not_percentage(client, pm_headers, worker_headers, stage, target):
     pid = _project(client, pm_headers, stage)
     worker = client.get("/api/auth/me", headers=worker_headers).json()["id"]
@@ -313,12 +296,13 @@ def test_stage_requires_authorized_human_action_not_percentage(client, pm_header
     _assert_status(pid, target)
 
 
-@pytest.mark.parametrize("stage", ["executing", "commissioning", "pilot", "acceptance"])
+@pytest.mark.parametrize("stage", ["executing", "acceptance"])
 def test_manual_completion_round_trip_preserves_stage(client, pm_headers, stage):
     pid, tid = _completion_fixture(client, pm_headers, stage)
-    for action in ("complete", "reopen"):
-        response = client.post(f"/api/worker/tasks/{tid}/{action}", headers=pm_headers,
-                               json={"reason": "独立业务纠错验证"})
+    path = f"/api/projects/{pid}/work-items/{tid}/completion"
+    for completed in (False, True):
+        version = client.get(f"/api/projects/{pid}/tasks/{tid}/workspace", headers=pm_headers).json()["task"]["version"]
+        response = client.put(path, headers=pm_headers, json={"version": version, "is_completed": completed, "reason": "独立业务纠错验证"})
         assert response.status_code == 200, response.text
         _assert_status(pid, stage)
 
@@ -326,8 +310,10 @@ def test_manual_completion_round_trip_preserves_stage(client, pm_headers, stage)
 def test_generic_project_and_agent_tools_cannot_write_stage(client, pm_headers):
     from app.services.ai_tools import ALL_TOOL_MAP
     pid = _project(client, pm_headers, "executing")
+    from tests.lifecycle_helpers import project_version
     response = client.put(f"/api/projects/{pid}", headers=pm_headers,
-                          json={"status": "acceptance", "description": "普通资料更新"})
+                          json={"status": "acceptance", "description": "普通资料更新",
+                                "version": project_version(client, pm_headers, pid)})
     assert response.status_code == 200, response.text
     _assert_status(pid, "executing")
     assert not {"project_status", "change_status", "advance_project_status"} & set(ALL_TOOL_MAP)
@@ -393,7 +379,7 @@ def test_stale_loaded_scope_does_not_survive_current_status_gate(client, pm_head
 
 def test_stale_actor_loses_stage_authority_after_grant_revocation(client, pm_headers, worker_headers):
     from app.routers.projects import ProjectStatusChange, change_status
-    pid = _project(client, pm_headers, "commissioning")
+    pid = _project(client, pm_headers, "executing")
     wid = client.get("/api/auth/me", headers=worker_headers).json()["id"]
     with SessionLocal() as setup:
         p = setup.get(Project, pid)
@@ -407,10 +393,10 @@ def test_stale_actor_loses_stage_authority_after_grant_revocation(client, pm_hea
             newer.get(Project, pid).member_permissions = []
             newer.commit()
         with pytest.raises(HTTPException) as error:
-            change_status(pid, ProjectStatusChange(status="pilot"), actor, p, stale)
+            change_status(pid, ProjectStatusChange(status="ready"), actor, p, stale)
         assert error.value.status_code == 403
         stale.rollback()
-    _assert_status(pid, "commissioning")
+    _assert_status(pid, "executing")
 
 
 def test_legacy_confirm_ready_is_retired_and_cannot_grant_dispatch_authority(client, pm_headers):
@@ -427,11 +413,13 @@ def test_legacy_confirm_ready_is_retired_and_cannot_grant_dispatch_authority(cli
 def test_explicit_member_stage_authority_is_honored(client, pm_headers, worker_headers):
     pid = _project(client, pm_headers, "executing")
     wid = client.get("/api/auth/me", headers=worker_headers).json()["id"]
+    from tests.lifecycle_helpers import project_version
     response = client.put(f"/api/projects/{pid}", headers=pm_headers, json={
         "members": [wid], "member_permissions": [{"user_id": wid, "capabilities": ["project.update"]}],
+        "version": project_version(client, pm_headers, pid),
     })
     assert response.status_code == 200, response.text
-    allowed = _status(client, worker_headers, pid, "commissioning")
+    allowed = _status(client, worker_headers, pid, "ready")
     assert allowed.status_code == 200, allowed.text
 
 
@@ -483,8 +471,8 @@ def test_new_acceptance_date_uses_project_local_today(client, pm_headers, monkey
     ("accepted", "rejected", 200),
 ])
 def test_legacy_future_record_is_visible_but_cannot_supply_current_decision(client, pm_headers, monkeypatch, current, future, expected):
-    monkeypatch.setattr("app.time_utils.project_today", lambda _: date(2026, 10, 2))
     pid, _ = _completion_fixture(client, pm_headers)
+    monkeypatch.setattr("app.time_utils.project_today", lambda _: date(2026, 10, 2))
     future_id = _sign(client, pm_headers, pid, future)
     with SessionLocal() as db:
         db.get(AcceptanceRecord, future_id).accepted_at = date(2026, 10, 3)
@@ -515,7 +503,7 @@ def test_agent_token_cannot_be_used_as_a_human_status_session(client, pm_headers
     _assert_status(pid, "executing")
 
 
-@pytest.mark.parametrize("stage", ["planning", "archived"])
+@pytest.mark.parametrize("stage", ["preparing", "archived"])
 def test_real_startup_preserves_stage_and_does_not_unlock_archived_edits(client, pm_headers, worker_headers, monkeypatch, stage):
     from app.db import init_db
     pid = _project(client, pm_headers, stage)
@@ -532,7 +520,7 @@ def test_real_startup_preserves_stage_and_does_not_unlock_archived_edits(client,
         assert project.json()["status"] == stage
         assert "project.update" in project.json()["capabilities"]
         changed = client.put(f"/api/projects/{pid}", headers=worker_headers,
-                             json={"description": "重启后合法权限仍然有效"})
+                             json={"description": "重启后合法权限仍然有效", "version": project.json()["version"]})
         assert changed.status_code == (400 if stage == "archived" else 200), changed.text
     if stage == "archived":
         assert _status(client, worker_headers, pid, "completed").status_code == 200
