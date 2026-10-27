@@ -97,3 +97,27 @@ def enter_execution(client, headers, project_id):
             approve_risk_entry(client, headers, project_id)
         response = client.post(f'/api/projects/{project_id}/status', headers=headers, json={'status': target})
         assert response.status_code == 200, response.text
+
+
+def complete_all_work(client, headers, project_id, *, recorder_headers=None):
+    """Record every real vehicle step, required check and non-vehicle work item as done."""
+    from app.db import SessionLocal
+    from app.models import CheckItem, Task
+    recorder = recorder_headers or headers
+    complete_vehicle_progress(client, headers, project_id)
+    with SessionLocal() as db:
+        tasks = [t.id for t in db.query(Task).filter_by(project_id=project_id) if t.quantity_type != 'per_vehicle']
+        checks = [(c.id, c.version or 0) for c in db.query(CheckItem).filter(CheckItem.task_id.in_(tasks), CheckItem.is_done.is_not(True))]
+    for cid, version in checks:
+        response = client.put(f'/api/projects/{project_id}/check-items/{cid}', headers=recorder, json={'is_done': True, 'version': version})
+        assert response.status_code == 200, response.text
+    for tid in tasks:
+        with SessionLocal() as db:
+            task = db.get(Task, tid)
+            if task.manually_completed:
+                continue
+            version = task.version or 0
+        response = client.put(f'/api/projects/{project_id}/work-items/{tid}/completion', headers=recorder,
+                              json={'version': version, 'is_completed': True, 'reason': '现场完成并自检'})
+        assert response.status_code == 200, response.text
+    return tasks

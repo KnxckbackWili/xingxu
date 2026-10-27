@@ -4,7 +4,7 @@
 人工输入项（客户名称/验收结论等）在用例内以占位演示值提供。
 """
 
-from tests.lifecycle_helpers import versioned, enter_execution, complete_vehicle_progress, register_kickoff
+from tests.lifecycle_helpers import versioned, enter_execution, complete_all_work, register_kickoff
 
 
 def _status(client, headers, pid):
@@ -18,8 +18,6 @@ def _advance(client, headers, pid, target, **extra):
 
 
 def test_end_to_end_closure(client, pm_headers, worker_headers):
-    from app.db import SessionLocal
-    from app.models import CheckItem, Task
     from tests.document_helpers import complete_documents
     # 1. 建档：新项目只能从筹备开始
     r = client.post("/api/projects", headers=pm_headers, json={
@@ -39,19 +37,7 @@ def test_end_to_end_closure(client, pm_headers, worker_headers):
     assert _status(client, pm_headers, pid) == "executing"
 
     # 3. 现场实际：工程师逐车登记环节、完成检查与工作；登记不会自动推进项目状态
-    complete_vehicle_progress(client, pm_headers, pid)
-    with SessionLocal() as db:
-        tasks = [t.id for t in db.query(Task).filter_by(project_id=pid) if t.quantity_type != "per_vehicle"]
-        checks = [(c.id, c.version or 0) for c in db.query(CheckItem).filter(CheckItem.task_id.in_(tasks))]
-    for cid, version in checks:
-        r = client.put(f"/api/projects/{pid}/check-items/{cid}", headers=worker_headers, json={"is_done": True, "version": version})
-        assert r.status_code == 200, r.text
-    for tid in tasks:
-        with SessionLocal() as db:
-            version = db.get(Task, tid).version or 0
-        r = client.put(f"/api/projects/{pid}/work-items/{tid}/completion", headers=worker_headers,
-                       json={"version": version, "is_completed": True, "reason": "现场完成并自检"})
-        assert r.status_code == 200, r.text
+    tasks = complete_all_work(client, pm_headers, pid, recorder_headers=worker_headers)
     progress = client.get(f"/api/projects/{pid}/progress", headers=pm_headers).json()
     assert progress["percent"] == 100
     assert _status(client, pm_headers, pid) == "executing"
