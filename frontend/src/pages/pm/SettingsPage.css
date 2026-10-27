@@ -1,0 +1,13 @@
+.settings-hub-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 20px; }
+.settings-hub-group { background: var(--agv-bg-container); border: 1px solid var(--agv-border-soft); border-radius: 12px; overflow: hidden; }
+.settings-hub-group h2 { margin: 0; padding: 14px 20px; font-size: 16px; font-weight: 600; border-bottom: 1px solid var(--agv-border-soft); }
+.settings-hub-group ul { list-style: none; margin: 0; padding: 0; }
+.settings-hub-group li + li { border-top: 1px solid var(--agv-border-soft); }
+.settings-hub-group a { display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 10px 20px; color: var(--agv-text); text-decoration: none; }
+.settings-hub-group a:hover { background: var(--agv-bg-subtle); }
+.settings-hub-group a:focus-visible { outline: 2px solid var(--agv-primary); outline-offset: -2px; }
+.settings-hub-group a > .anticon { color: var(--agv-text-secondary); font-size: 12px; }
+.settings-hub-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--agv-primary-soft); color: var(--agv-primary); font-size: 17px; flex-shrink: 0; }
+.settings-hub-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.settings-hub-copy strong { font-weight: 500; font-size: 15px; }
+.settings-hub-copy small { color: var(--agv-text-secondary); font-size: 13px; }

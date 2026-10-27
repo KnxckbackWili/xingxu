@@ -68,9 +68,21 @@ it('本人记录分别展示完成日期、登记时间和协助对象', async (
 
 it('按真实周计划范围显示逐车检查与统一完成事实', async () => {
   mocks.get.mockResolvedValue({ data: { ...base, plans: [{ ...plan, vehicle_step_key: 'arrival_inspection', scope: { vehicle_unit_ids: ['car-a'] }, completion: { state: 'planned', completed_count: 0, required_count: 1, quantity_unknown: false, is_complete: false }, work_item: { ...plan.work_item, kind: 'vehicle', vehicle_step_key: 'arrival_inspection', check_items: [{ id: 'check-a', name: '范围内检查', vehicle_unit_id: 'car-a', version: 0, is_done: false, is_applicable: true }, { id: 'check-b', name: '其它批次检查', vehicle_unit_id: 'car-b', version: 0, is_done: false, is_applicable: true }] } }], vehicle_matrices: { 'project-1': { steps: [{ key: 'arrival_inspection', name: '到场点检', source_task_id: 'work-1' }], units: [{ id: 'car-a', asset_code: 'AGV-A', cells: {} }, { id: 'car-b', asset_code: 'AGV-B', cells: {} }] } } } }); draw()
+  fireEvent.click(await screen.findByText('待完成检查 1 项'))
   expect(await screen.findByText('范围内检查')).toBeInTheDocument()
   expect(screen.queryByText('其它批次检查')).not.toBeInTheDocument()
   expect(screen.getByText('当前完成 0 / 累计计划 1')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: /AGV-A/ })).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: /AGV-B/ })).not.toBeInTheDocument()
+})
+
+it('shows repeated warnings and the shared not-on-site notice once, naming the projects', async () => {
+  const other = { ...plan, id: 'cell-2', project_id: 'project-2', project_name: '项目乙', project_status: 'preparing', can_record: false }
+  mocks.get.mockResolvedValue({ data: { ...base, plans: [{ ...plan, project_status: 'preparing', can_record: false }, other],
+    warnings: [{ project_id: 'project-1', message: '必需或安全检查仍需核对' }, { project_id: 'project-2', message: '必需或安全检查仍需核对' }, { project_id: 'project-2', message: '同周被安排到多个项目' }] } }); draw()
+  expect(await screen.findByText('有 3 条需要核对的提醒')).toBeInTheDocument()
+  expect(screen.getByText('必需或安全检查仍需核对（2 处）')).toBeInTheDocument()
+  expect(screen.getAllByText(/项目进入「现场实施」后才能登记完成和检查/)).toHaveLength(1)
+  expect(screen.getByText(/项目甲、项目乙：项目进入「现场实施」后/)).toBeInTheDocument()
+  expect(screen.getAllByRole('link', { name: '查看项目' })[0]).toHaveAttribute('href', '/pm/projects/project-1/overview')
 })

@@ -8,14 +8,13 @@ import { canAccessNav } from './constants/nav'
 import { SYSTEM_PERMISSION_REFRESH_EVENT } from './constants/systemPermissions'
 import { installAccessibilityPatches } from './utils/a11y'
 import WorkDetailHost from './components/WorkDetailHost'
-import UploadQueue from './components/UploadQueue'
 import LoginPage from './pages/LoginPage'
 import ForbiddenPage from './pages/ForbiddenPage'
 import NotFoundPage from './pages/NotFoundPage'
 
 const ExternalViewPage = lazy(() => import('./pages/ExternalViewPage'))
-const PmLayout = lazy(() => import('./layouts/PmLayout'))
-const WorkerLayout = lazy(() => import('./layouts/WorkerLayout'))
+const AppLayout = lazy(() => import('./layouts/AppLayout'))
+const SettingsPage = lazy(() => import('./pages/pm/SettingsPage'))
 const ProjectListPage = lazy(() => import('./pages/pm/ProjectListPage'))
 const ProjectLayout = lazy(() => import('./pages/pm/project/ProjectLayout'))
 const InventoryOverviewPage = lazy(() => import('./pages/pm/InventoryOverviewPage'))
@@ -47,8 +46,10 @@ function LegacyWeekRedirect() {
 
 const WorkerIssuesPage = lazy(() => import('./pages/worker/WorkerIssuesPage'))
 const MyPage = lazy(() => import('./pages/worker/MyPage'))
-const WorkerProjectsPage = lazy(() => import('./pages/worker/WorkerProjectsPage'))
-const WorkerProjectDetailPage = lazy(() => import('./pages/worker/WorkerProjectDetailPage'))
+function WorkerProjectRedirect() {
+  const location = useLocation()
+  return <Navigate to={location.pathname.replace(/^\/worker\/projects/, '/pm/projects')} replace />
+}
 const FeedbackPage = lazy(() => import('./pages/FeedbackPage'))
 
 
@@ -161,7 +162,7 @@ export default function App() {
         path="/pm"
         element={
           <ProtectedRoute allow={PM_ROLES}>
-            {load(<PmLayout />)}
+            {load(<AppLayout />)}
           </ProtectedRoute>
         }
       >
@@ -192,12 +193,13 @@ export default function App() {
         <Route path="holidays" element={<ProtectedRoute navKey="/pm/holidays">{load(<HolidayCalendarsPage />)}</ProtectedRoute>} />
         <Route path="vehicle-types" element={<ProtectedRoute navKey="/pm/vehicle-types">{load(<VehicleTypesPage />)}</ProtectedRoute>} />
         <Route path="feedback" element={<ProtectedRoute navKey="/pm/feedback">{load(<FeedbackPage />)}</ProtectedRoute>} />
+        <Route path="settings" element={load(<SettingsPage />)} />
       </Route>
       <Route
         path="/worker"
         element={
           <ProtectedRoute allow={WORKER_ROLES}>
-            {load(<WorkerLayout />)}
+            {load(<AppLayout />)}
           </ProtectedRoute>
         }
       >
@@ -206,8 +208,9 @@ export default function App() {
         <Route path="today" element={<LegacyWeekRedirect />} />
         <Route path="schedule" element={<LegacyWeekRedirect />} />
         <Route path="issues" element={<ProtectedRoute navKey="/worker/issues">{load(<WorkerIssuesPage />)}</ProtectedRoute>} />
-        <Route path="projects" element={<ProtectedRoute navKey="/worker/projects">{load(<WorkerProjectsPage />)}</ProtectedRoute>} />
-        <Route path="projects/:projectId" element={<ProtectedRoute navKey="/worker/projects">{load(<WorkerProjectDetailPage />)}</ProtectedRoute>} />
+        {/* 两端已合并：项目统一在项目页查看 */}
+        <Route path="projects" element={<WorkerProjectRedirect />} />
+        <Route path="projects/:projectId" element={<WorkerProjectRedirect />} />
         <Route path="my" element={load(<MyPage />)} />
         {/* 旧路由兼容 */}
         <Route path="records" element={<Navigate to="/worker/my" replace />} />
@@ -220,7 +223,6 @@ export default function App() {
       </Routes>
       {!location.pathname.startsWith('/external') && <>
         <WorkDetailHost />
-        {user && <UploadQueue key={user.id} ownerId={user.id} />}
       </>}
     </div>
   )

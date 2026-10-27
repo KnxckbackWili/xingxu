@@ -47,7 +47,8 @@ export default function UploadQueue({ ownerId }: { ownerId: string }) {
     finally { setWorking(undefined) }
   }
   return <>
-    <div style={{ position: 'fixed', right: 20, bottom: 72, zIndex: 1000 }}><Badge count={pending.length} size="small"><Button aria-label="打开上传队列" icon={<CloudUploadOutlined />} onClick={() => setOpen(true)}>上传队列</Button></Badge></div>
+    {/* Only shown in the top bar while this account has upload records. */}
+    {current.length > 0 && <Badge count={pending.length} size="small"><Button type="text" aria-label="打开上传队列" title="上传队列" icon={<CloudUploadOutlined />} onClick={() => setOpen(true)} /></Badge>}
     <Drawer title="上传队列" open={open} onClose={() => setOpen(false)} width={520}>
       <Typography.Paragraph type="secondary">分片上传可在断网后继续。仅服务器完成文件核验并保存后，资料才会更新为已提交。队列只显示当前账号的文件。</Typography.Paragraph>
       {error && <Alert type="error" showIcon message={error} closable onClose={() => setError('')} />}

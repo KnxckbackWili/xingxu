@@ -1,6 +1,5 @@
 import { WorkPageHeader, WorkSection } from '../../components/WorkPage'
 import { NAV_LABEL, NAV_DESCRIPTION } from '../../constants/nav'
-import { useAuth } from '../../stores/auth'
 import './SettingsPages.css'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Button, Card, Empty, Input, Pagination, Select, Space, Spin, Table, Tag } from 'antd'
@@ -18,7 +17,6 @@ const STATUS: Record<string, string> = { expected: '待到场', in_transit: '运
 
 export default function InventoryOverviewPage() {
   const navigate = useNavigate()
-  const role = useAuth(state => state.user?.role)
   const isMobile = useMediaQuery(MEDIA_QUERY.mobile)
   const loadSequence = useRef(0)
   const [loadError, setLoadError] = useState(false)
@@ -55,7 +53,7 @@ export default function InventoryOverviewPage() {
   const paginationProps = { current: page, pageSize: 50, total: data.total, showSizeChanger: false, showTotal: (value: number) => `共 ${value} 条`, onChange: (next: number) => { setPage(next); void load(next) } }
   return <div className="settings-work-page inventory-page inventory-overview-page">
     <WorkPageHeader title={NAV_LABEL['/pm/inventory']} description={NAV_DESCRIPTION['/pm/inventory']}
-      primary={<Button type="primary" onClick={() => navigate(['worker', 'intern'].includes(role ?? '') ? '/worker/projects' : '/pm/projects')}>打开项目</Button>}
+      primary={<Button type="primary" onClick={() => navigate('/pm/projects')}>打开项目</Button>}
       tools={<Button onClick={() => void load()} loading={loading}>刷新</Button>}
       meta={`全部可见项目 · ${data.summary.total_records ?? 0} 条物品记录 · ${data.summary.attention_records ?? 0} 条需要关注`} />
     <WorkSection title="查找物品" description="在对应项目中查看流水、修改数量或登记去向。" filters={

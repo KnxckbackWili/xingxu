@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { MENU_GROUPS, MENU_ITEMS, primaryItems } from './pmMenu'
+import { MENU_GROUPS, MENU_ITEMS, activeNavKey, appNavItems, primaryItems } from './pmMenu'
 import { NAV_ACCESS, NAV_LABEL, NAV_DESCRIPTION, canAccessNav } from '../constants/nav'
 import { PM_ROLES, WORKER_ROLES } from '../constants/roles'
 
-describe('常用与设置目录', () => {
-  it('reserves software updates in management settings for real active administrators, never delegated permissions', () => {
+describe('主导航与设置目录', () => {
+  it('reserves software updates in the system settings group for real active administrators, never delegated permissions', () => {
     const admin = { role: 'admin', is_active: true, system_permissions: [] }
     expect(canAccessNav('/pm/system-updates', admin)).toBe(true)
-    expect(MENU_GROUPS(admin).find(group => group.key === 'settings')?.children).toContainEqual(expect.objectContaining({ key: '/pm/system-updates', label: '软件更新' }))
+    expect(MENU_GROUPS(admin).find(group => group.key === 'system')?.children).toContainEqual(expect.objectContaining({ key: '/pm/system-updates', label: '软件更新' }))
     for (const role of ['pm', 'director', 'worker']) {
       const delegated = { role, system_permissions: ['system.updates.manage'], permission_overrides: { 'system.updates.manage': true } }
       expect(canAccessNav('/pm/system-updates', delegated)).toBe(false)
@@ -16,24 +16,33 @@ describe('常用与设置目录', () => {
     const inactiveAdmin = { ...admin, is_active: false }
     expect(canAccessNav('/pm/system-updates', inactiveAdmin)).toBe(false)
   })
-  it('keeps four common PM destinations instead of mixed work-area landing pages', () => {
+  it('gives every role one main navigation; field staff land on their week as the workbench', () => {
     expect(primaryItems('pm').map(item => [item.key, item.label])).toEqual([
-      ['/pm/dashboard', '工作台'], ['/pm/projects', '项目'], ['/pm/people', '人员'], ['/pm/messages', '消息'],
+      ['/pm/dashboard', '工作台'], ['/pm/projects', '项目'], ['/worker/issues', '问题'], ['/pm/people', '人员'], ['/pm/messages', '消息'],
     ])
-    expect(primaryItems('admin')).toHaveLength(4)
+    for (const role of ['worker', 'intern']) expect(primaryItems(role).map(item => [item.key, item.label])).toEqual([
+      ['/worker/week', '工作台'], ['/pm/projects', '项目'], ['/worker/issues', '问题'], ['/pm/messages', '消息'],
+    ])
+    expect(appNavItems('admin').map(item => item.label)).toEqual(['工作台', '项目', '问题', '人员', '消息', '设置'])
+    expect(appNavItems('readonly').map(item => item.label)).not.toContain('问题')
   })
-  it('keeps low-frequency tools only in settings without duplicate daily links',()=>{
-    const items=MENU_ITEMS('admin');const paths=items.map(item=>item.key)
-    for(const path of ['/pm/templates','/pm/users','/pm/permissions','/pm/vehicle-types','/pm/holidays','/pm/notification-channels','/pm/backups','/pm/storage','/pm/system-updates','/pm/ai-tokens','/pm/project-recycle-bin','/pm/inventory'])expect(paths).toContain(path)
-    for(const path of ['/pm/dashboard','/pm/projects','/pm/people','/pm/messages','/pm/stats','/pm/governance','/pm/my-schedule','/pm/team-schedule','/pm/feedback'])expect(paths).not.toContain(path)
+  it('groups low-frequency tools into four settings groups without duplicate daily links', () => {
+    expect(MENU_GROUPS('admin').map(group => group.label)).toEqual(['团队与权限', '项目配置', '数据与安全', '系统'])
+    const items = MENU_ITEMS('admin'); const paths = items.map(item => item.key)
+    for (const path of ['/pm/templates', '/pm/users', '/pm/permissions', '/pm/vehicle-types', '/pm/holidays', '/pm/notification-channels', '/pm/backups', '/pm/storage', '/pm/system-updates', '/pm/ai-tokens', '/pm/project-recycle-bin']) expect(paths).toContain(path)
+    for (const path of ['/pm/dashboard', '/pm/projects', '/pm/people', '/pm/messages', '/pm/stats', '/pm/governance', '/pm/my-schedule', '/pm/team-schedule', '/pm/feedback', '/pm/inventory']) expect(paths).not.toContain(path)
     expect(new Set(paths).size).toBe(paths.length)
-    for(const item of items){expect(item.label).toBe(NAV_LABEL[item.key]);expect(item.description).toBe(NAV_DESCRIPTION[item.key]);expect(item.aliases).toEqual([])}
+    for (const item of items) { expect(item.label).toBe(NAV_LABEL[item.key]); expect(item.description).toBe(NAV_DESCRIPTION[item.key]); expect(item.aliases).toEqual([]) }
   })
-  it('keeps field daily routes out of the settings directory',()=>{
-    for(const role of ['worker','intern']){
-      expect(primaryItems(role).map(item=>item.key)).toEqual(['/worker/projects','/worker/messages'])
-      for(const item of MENU_ITEMS(role))expect(item.key).not.toMatch(/today|schedule|issues|worker\/my|feedback/)
-    }
+  it('keeps field daily routes out of the settings directory', () => {
+    for (const role of ['worker', 'intern']) for (const item of MENU_ITEMS(role)) expect(item.key).not.toMatch(/today|schedule|issues|worker\/my|feedback/)
+  })
+  it('matches old field URLs to the merged destinations', () => {
+    const nav = appNavItems('worker')
+    expect(activeNavKey(nav, '/worker/projects/p1')).toBe('/pm/projects')
+    expect(activeNavKey(nav, '/pm/projects/p1/overview')).toBe('/pm/projects')
+    expect(activeNavKey(nav, '/worker/messages')).toBe('/pm/messages')
+    expect(activeNavKey(nav, '/worker/feedback')).toBeUndefined()
   })
   it('does not expose admin settings to any other role', () => {
     for (const role of PM_ROLES.filter(role => role !== 'admin')) {

@@ -80,3 +80,16 @@
 @media (prefers-reduced-motion: reduce) {
   .worker-today-page .worker-today-task { transition: none; }
 }
+
+/* Week: work on the left, documents and issues beside it; repeated notices shown once. */
+.week-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 20px; align-items: start; }
+.week-layout-main, .week-layout-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.week-notice { margin-bottom: 12px; }
+.week-notice-list { margin: 4px 0 0; padding-left: 18px; }
+.week-plan-card.ant-card { margin-bottom: 12px; }
+.week-plan-card .week-plan-meta { margin: 0 0 8px; color: var(--agv-text-secondary); font-size: 13px; }
+.week-plan-checks.ant-collapse { margin: 8px 0 4px; }
+.week-plan-checks .ant-collapse-header { padding-inline: 0 !important; }
+.week-plan-checks .ant-collapse-content-box { padding-inline: 0 !important; }
+.week-plan-checks p { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 8px; }
+@media (max-width: 991px) { .week-layout { grid-template-columns: minmax(0, 1fr); } }

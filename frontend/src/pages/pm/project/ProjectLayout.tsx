@@ -50,7 +50,7 @@ export default function ProjectLayout() {
   const { projectId } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
-  const projectListPath = ['worker', 'intern'].includes(user?.role ?? '') ? '/worker/projects' : '/pm/projects'
+  const projectListPath = '/pm/projects'
   const [project, setProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<'unavailable' | 'forbidden' | 'network' | null>(null)

@@ -312,7 +312,7 @@ export default function ProjectListPage() {
       <WorkPageHeader title="项目" description="打开项目，查看工作项、维护周计划或处理现场问题。"
         meta={loadError ? '列表暂不可用' : `${filtered.length} 个项目`}
         primary={canCreate ? <Button type="primary" icon={<PlusOutlined />} onClick={() => { setCreateStep(0); setModalOpen(true) }}>新建项目</Button> : undefined}
-        tools={<><Button icon={<ReloadOutlined />} loading={loading} onClick={() => void load()} aria-label="刷新项目列表">刷新</Button>{canAccessNav('/pm/project-recycle-bin', user) && <Button aria-label="项目回收站" onClick={() => navigate('/pm/project-recycle-bin')}>回收站</Button>}</>} />
+        tools={<><Button icon={<ReloadOutlined />} loading={loading} onClick={() => void load()} aria-label="刷新项目列表">刷新</Button>{canAccessNav('/pm/inventory', user) && <Button onClick={() => navigate('/pm/inventory')}>物品总览</Button>}{canAccessNav('/pm/project-recycle-bin', user) && <Button aria-label="项目回收站" onClick={() => navigate('/pm/project-recycle-bin')}>回收站</Button>}</>} />
 
       {shortcuts.temporary && <Alert className="project-shortcuts-notice" type="info" showIcon message="浏览器暂时无法保存，收藏与最近浏览仅在本次使用中保留。" />}
       {!loading && !loadError && recentProjects.length > 0 && <section className="project-recent" aria-label="最近浏览的项目">

@@ -1,20 +1,18 @@
 import { expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import PmLayout from './PmLayout'
-import WorkerLayout from './WorkerLayout'
+import AppLayout from './AppLayout'
 
 const { put } = vi.hoisted(() => ({ put: vi.fn() }))
 vi.mock('../api/client', () => ({ api: { put } }))
 vi.mock('../stores/auth', () => ({ useAuth: () => ({ user: { role: 'pm', display_name: '焦点测试员' }, logout: vi.fn() }) }))
 vi.mock('../stores/theme', () => ({ useThemeStore: (selector: (value: unknown) => unknown) => selector({ mode: 'light', toggle: vi.fn() }) }))
 vi.mock('../components/NotificationBell', () => ({ default: () => null }))
+vi.mock('../components/UploadQueue', () => ({ default: () => null }))
 
 it.each([
-  { name: 'PM', Shell: PmLayout, closeAction: 'Escape' },
-  { name: 'PM', Shell: PmLayout, closeAction: '取消' },
-  { name: '现场', Shell: WorkerLayout, closeAction: 'Escape' },
-  { name: '现场', Shell: WorkerLayout, closeAction: '取消' },
+  { name: '共用外壳', Shell: AppLayout, closeAction: 'Escape' },
+  { name: '共用外壳', Shell: AppLayout, closeAction: '取消' },
 ])('$name returns password-dialog focus to the account button after $closeAction closes it', async ({ Shell, closeAction }) => {
   put.mockClear()
   render(<MemoryRouter><Shell /></MemoryRouter>)

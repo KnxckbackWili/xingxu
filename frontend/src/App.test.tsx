@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 
 vi.mock('./api/client', () => ({
@@ -146,7 +146,8 @@ describe('App 路由', () => {
 
   it('桌面常用导航直达消息，页面标题与入口一致', async () => {
     renderApp('/pm/messages')
-    expect(await screen.findByRole('link', { name: '消息' }, { timeout: 5000 })).toHaveAttribute('href', '/pm/messages')
+    const main = await screen.findByRole('navigation', { name: '主导航' }, { timeout: 5000 })
+    expect(within(main).getByRole('link', { name: '消息' })).toHaveAttribute('href', '/pm/messages')
     expect(await screen.findByRole('heading', { name: '消息' }, { timeout: 5000 })).toBeVisible()
   })
 })
