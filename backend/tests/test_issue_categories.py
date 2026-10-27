@@ -126,7 +126,8 @@ def test_old_db_issues_extra_migration(client, upgrade_legacy_schema):
     from app.db import engine, SessionLocal
 
     with engine.begin() as conn:
-        conn.execute(text("DROP TABLE issues"))
+        # PostgreSQL keeps other tables' FKs to issues; the frozen alignment re-adds them.
+        conn.execute(text("DROP TABLE issues" + ("" if engine.url.get_backend_name() == "sqlite" else " CASCADE")))
         conn.execute(text("""
             CREATE TABLE issues (
                 id VARCHAR(36) PRIMARY KEY,

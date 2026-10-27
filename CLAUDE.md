@@ -14,6 +14,8 @@ task_data_dir="$(mktemp -d)"
 env -u DATABASE_URL DATA_DIR="$task_data_dir" .venv/bin/python -m pytest tests
 ```
 
+PostgreSQL 回归同样只在首个用例跑全链迁移，其余用例按内存中的行快照 TRUNCATE 后 COPY 恢复；用例改动过表结构时自动回退为全量重建。
+
 **pytest fixture 会清空全部表；PostgreSQL 测试仅使用新建专用测试库，绝不能指向真实备份恢复库或业务库。** 真实迁移验证和运维按独立脚本及部署说明执行。
 
 ## 编码约定

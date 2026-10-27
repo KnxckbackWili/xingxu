@@ -25,7 +25,7 @@ export default function VehicleArrivalEditor({ project, units, onSaved }: {
     busy.current = true; setSaving(true); setError('')
     try {
       await api.put(`/projects/${project.id}/vehicle-arrivals`, {
-        unit_ids: values.unit_ids, arrived_at: values.mode === 'clear' ? null : values.arrived_at.format('YYYY-MM-DD'), reason: values.reason ?? '', version: project.version,
+        unit_ids: values.unit_ids, arrived_at: values.mode === 'clear' ? null : values.arrived_at.format('YYYY-MM-DD'), reason: values.reason ?? '',
       })
       if (mounted.current) { setOpen(false); await onSaved() }
     } catch (cause) { if (mounted.current) setError(errMsg(cause)) }

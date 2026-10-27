@@ -113,7 +113,8 @@ def test_encrypted_full_backup_restores_totp_seed_and_one_use_code_state(client,
         restored_secret = (install / 'secret.key').read_text()
     else:
         url = make_url(config.DATABASE_URL)
-        assert 'test' in url.database, 'restore target must be an isolated pytest database'
+        import re
+        assert re.search(r'(?:^|_)(?:ci|test|tests|pytest|gate|gates)(?:_|$)', url.database or '', re.I), 'restore target must be an isolated CI/test database'
         pg_name = 'agvm_t14_restore_' + uuid4().hex
         administrative = engine.execution_options(isolation_level='AUTOCOMMIT')
         with administrative.connect() as connection: connection.execute(text(f'CREATE DATABASE "{pg_name}"'))

@@ -1,7 +1,9 @@
 """Test fixtures: fresh isolated DB per test function.
 
-One engine/module set (imported once with a temp DATA_DIR); each test
-drops and recreates all tables so tests never leak state.
+One engine/module set (imported once with a temp DATA_DIR). The first test
+drops all tables and runs the full Alembic chain + seed; later tests restore
+that state (SQLite: page snapshot; PostgreSQL: row snapshot, with a full
+rebuild whenever a test changed the schema), so tests never leak state.
 """
 
 import os
@@ -55,15 +57,99 @@ def _sqlite_save(engine):
         source.close()
 
 
+# PostgreSQL equivalent: the migrated + seeded rows of the dedicated test DB,
+# kept in memory and copied back after TRUNCATE. Any schema change made by a
+# test (fingerprint differs) falls back to drop_all + the full Alembic chain.
+_PG_SNAPSHOT = {}
+_PG_FINGERPRINT = """
+SELECT md5(
+  coalesce((SELECT string_agg(table_name||'.'||column_name||':'||data_type||':'||is_nullable||':'||
+                              coalesce(column_default,'')||':'||coalesce(character_maximum_length::text,''),
+                              ',' ORDER BY table_name, column_name)
+            FROM information_schema.columns WHERE table_schema = current_schema()), '') ||
+  coalesce((SELECT string_agg(conrelid::regclass::text||':'||conname||':'||pg_get_constraintdef(oid),
+                              ',' ORDER BY conrelid::regclass::text, conname)
+            FROM pg_constraint WHERE connamespace = current_schema()::regnamespace), '') ||
+  coalesce((SELECT string_agg(indexdef, ',' ORDER BY indexdef) FROM pg_indexes WHERE schemaname = current_schema()), '') ||
+  coalesce((SELECT string_agg(t.tgrelid::regclass::text||':'||t.tgname, ',' ORDER BY t.tgrelid::regclass::text, t.tgname)
+            FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
+            WHERE c.relnamespace = current_schema()::regnamespace AND NOT t.tgisinternal), '') ||
+  coalesce((SELECT string_agg(proname||':'||md5(prosrc), ',' ORDER BY proname, md5(prosrc))
+            FROM pg_proc WHERE pronamespace = current_schema()::regnamespace), ''))
+"""
+
+
+def _pg_tables(cursor):
+    cursor.execute("SELECT tablename FROM pg_tables WHERE schemaname = current_schema() ORDER BY tablename")
+    return [row[0] for row in cursor.fetchall()]
+
+
+def _pg_save(engine):
+    import io
+    raw = engine.raw_connection()
+    try:
+        cursor = raw.cursor()
+        cursor.execute(_PG_FINGERPRINT)
+        fingerprint = cursor.fetchone()[0]
+        data = {}
+        for table in _pg_tables(cursor):
+            buffer = io.StringIO()
+            cursor.copy_expert(f'COPY "{table}" TO STDOUT', buffer)
+            data[table] = buffer.getvalue()
+        cursor.execute("SELECT sequencename, start_value, last_value FROM pg_sequences WHERE schemaname = current_schema()")
+        sequences = cursor.fetchall()
+        raw.rollback()
+    finally:
+        raw.close()
+    _PG_SNAPSHOT.update(fingerprint=fingerprint, data=data, sequences=sequences)
+
+
+def _pg_restore(engine):
+    """Reset rows to the snapshot; False (no change) when the schema differs."""
+    import io
+    if not _PG_SNAPSHOT:
+        return False
+    engine.dispose()
+    raw = engine.raw_connection()
+    try:
+        cursor = raw.cursor()
+        cursor.execute(_PG_FINGERPRINT)
+        if cursor.fetchone()[0] != _PG_SNAPSHOT['fingerprint'] or set(_pg_tables(cursor)) != set(_PG_SNAPSHOT['data']):
+            raw.rollback()
+            return False
+        try:
+            # The snapshot is a consistent copy, so FK triggers can be skipped while loading it.
+            cursor.execute("SET LOCAL session_replication_role = replica")
+        except Exception:
+            raw.rollback()
+            return False  # not permitted for this role: use the full rebuild
+        cursor.execute('TRUNCATE ' + ', '.join(f'"{table}"' for table in _PG_SNAPSHOT['data']))
+        for table, rows in _PG_SNAPSHOT['data'].items():
+            if rows:
+                cursor.copy_expert(f'COPY "{table}" FROM STDIN', io.StringIO(rows))
+        for name, start, last in _PG_SNAPSHOT['sequences']:
+            cursor.execute('SELECT setval(%s, %s, %s)', (f'"{name}"', last if last is not None else start, last is not None))
+        raw.commit()
+        return True
+    except Exception:
+        raw.rollback()
+        raise
+    finally:
+        raw.close()
+
+
 @pytest.fixture()
 def client():
     """Fresh tables + seed per test."""
     from app.db import engine, Base, _is_sqlite
     import app.models  # Register metadata before deleting a reused external test DB.
     file_sqlite = _is_sqlite and bool(engine.url.database)
+    postgres = engine.url.get_backend_name() == "postgresql"
     restored = file_sqlite and os.path.exists(_SQLITE_SNAPSHOT)
     if restored:
         _sqlite_restore(engine)
+    elif postgres and _pg_restore(engine):
+        restored = True
     else:
         Base.metadata.drop_all(bind=engine)
         from sqlalchemy import text
@@ -82,6 +168,8 @@ def client():
     with TestClient(app) as c:
         if file_sqlite and not restored:
             _sqlite_save(engine)
+        if postgres and not restored:
+            _pg_save(engine)
         # Business fixtures represent a configured isolated installation. #85
         # requires encrypted project evidence before deletion; missing-password
         # behavior has dedicated tests with their own fresh DATA_DIR.

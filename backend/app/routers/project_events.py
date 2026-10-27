@@ -107,7 +107,9 @@ def update_arrivals(project_id: str, body: ArrivalUpdate,
         raise HTTPException(404, "所选车辆档案不存在或不属于当前项目，未修改任何到场日期")
     if body.arrived_at is None and any(unit.arrived_at is not None for unit in units) and not body.reason.strip():
         raise HTTPException(400, "清除已登记的到场日期必须填写理由")
-    bump_version(project, require_client_version(body.version), db=db)
+    # Batches touch their own vehicle rows and re-derive the aggregate under the
+    # project lock, so concurrent batches for different vehicles both succeed.
+    bump_version(project, body.version, db=db)
     for unit in units:
         before = unit.arrived_at.isoformat() if unit.arrived_at else None
         unit.arrived_at = body.arrived_at
