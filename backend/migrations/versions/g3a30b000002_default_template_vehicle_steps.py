@@ -67,7 +67,7 @@ def upgrade():
     if bound:
         bind.execute(sa.text(
             "INSERT INTO change_logs(id,project_id,entity_type,entity_id,action,operator_id,detail,old_value,new_value,created_at) "
-            "VALUES(:id,NULL,'migration',:revision,'bind_default_vehicle_steps',NULL,:detail,:old,:new,CURRENT_TIMESTAMP)"),
+            "VALUES(:id,NULL,'migration',:revision,'bind_vehicle_steps',NULL,:detail,:old,:new,CURRENT_TIMESTAMP)"),
             {'id': str(uuid4()), 'revision': revision,
              'detail': '默认模板未改动的按车辆工作关联默认车辆环节；已生成项目不变',
              'old': json.dumps({'tasks': [{'task_id': row['task_id'], 'vehicle_step_key': None} for row in bound]}),
