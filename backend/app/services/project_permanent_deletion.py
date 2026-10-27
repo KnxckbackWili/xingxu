@@ -49,7 +49,7 @@ def _locked(db, project_id, user, version, deletion_id):
     db.execute(select(models.Project.id).where(models.Project.id == project.id).with_for_update()).all()
     list(_affected_keys(db, project, lock=True))
     if db.query(models.PersonalEvent.id).filter_by(project_id=project.id).first():
-        raise HTTPException(409, '项目仍有关联的个人日程，请由所有者改挂后再永久删除；私有日程不会进入项目备份')
+        raise HTTPException(409, '项目仍关联已退役的个人临时日程（只读保留给所有者），暂不能永久删除；请联系系统管理员按备份流程处理；私有日程不会进入项目备份')
     return project
 
 
