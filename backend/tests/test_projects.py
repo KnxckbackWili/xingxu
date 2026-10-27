@@ -1,3 +1,4 @@
+from tests.lifecycle_helpers import versioned
 """Project & vehicle tests."""
 
 
@@ -51,7 +52,7 @@ def test_project_crud_flow(client, pm_headers):
     }).json()["id"]
 
     # Update
-    r = client.put(f"/api/projects/{pid}", headers=pm_headers, json={"client": "客户B", "location": "杭州"})
+    r = client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"client": "客户B", "location": "杭州"}))
     assert r.status_code == 200
     assert r.json()["client"] == "客户B"
 
@@ -164,7 +165,7 @@ def test_member_removal_requires_handover_of_unfinished_released_work(client, pm
     pid = client.post('/api/projects', headers=pm_headers, json={
         'name': '换人交接', 'start_date': '2026-09-01', 'end_date': '2026-10-31', 'members': [uid],
     }).json()['id']
-    assert client.put(f'/api/projects/{pid}', headers=pm_headers, json={'members': [uid]}).status_code == 200
+    assert client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': [uid]})).status_code == 200
     with SessionLocal() as db:
         phase = Phase(project_id=pid, name='实施'); db.add(phase); db.flush()
         module = Module(project_id=pid, phase_id=phase.id, name='实施'); db.add(module); db.flush()
@@ -174,7 +175,7 @@ def test_member_removal_requires_handover_of_unfinished_released_work(client, pm
         eid, tid = entry.id, task.id
         report = DailyProgress(project_id=pid, task_id=tid, schedule_entry_id=eid, work_date=date(2026, 9, 30), user_id=uid, completed_quantity=1, client_uuid='partial')
         db.add(report); db.commit()
-    blocked = client.put(f'/api/projects/{pid}', headers=pm_headers, json={'members': [],'member_removal_confirmations':[uid]})
+    blocked = client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': [],'member_removal_confirmations':[uid]}))
     assert blocked.status_code == 400
     assert '现场调试' in blocked.text and '2026-09-30' in blocked.text
     assert uid in client.get(f'/api/projects/{pid}', headers=pm_headers).json()['members']
@@ -188,13 +189,13 @@ def test_member_removal_requires_handover_of_unfinished_released_work(client, pm
     with SessionLocal() as db:
         check = CheckItem(task_id=tid, name='安全确认', is_required=True, is_safety_critical=True, is_done=False)
         db.add(check); db.commit()
-    blocked = client.put(f'/api/projects/{pid}', headers=pm_headers, json={'members': [],'member_removal_confirmations':[uid]})
+    blocked = client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': [],'member_removal_confirmations':[uid]}))
     assert blocked.status_code == 400 and '安全检查' in blocked.text
     with SessionLocal() as db:
         db.query(CheckItem).filter_by(task_id=tid).one().is_done = True
         db.commit()
     # 数量及质量已完成，即使 status 仍 planned 也能移出；历史关联完整保留。
-    removed = client.put(f'/api/projects/{pid}', headers=pm_headers, json={'members': [],'member_removal_confirmations':[uid]})
+    removed = client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': [],'member_removal_confirmations':[uid]}))
     assert removed.status_code == 200, removed.text
     with SessionLocal() as db:
         assert db.get(ScheduleEntry, eid).assignee_id == uid
@@ -209,11 +210,11 @@ def test_ship_plan_edit_keeps_explicit_preparation_dates(client, pm_headers):
     assert created.status_code == 200, created.text
     before = client.get(f'/api/projects/{pid}/procurements', headers=pm_headers).json()['items']
     assert len(before) == 1 and before[0]['required_date'] == '2026-09-12'
-    result = client.put(f'/api/projects/{pid}', headers=pm_headers, json={'event_plans': {'ship': '2026-09-25'}})
+    result = client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'event_plans': {'ship': '2026-09-25'}}))
     assert next(e for e in result.json()['events'] if e['event_key'] == 'ship')['planned_date'] == '2026-09-25'
     after = client.get(f'/api/projects/{pid}/procurements', headers=pm_headers).json()['items']
     assert [(i['id'], i['required_date']) for i in before] == [(i['id'], i['required_date']) for i in after]
-    result = client.put(f'/api/projects/{pid}', headers=pm_headers, json={'event_plans': {'ship': None}})
+    result = client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'event_plans': {'ship': None}}))
     assert next(e for e in result.json()['events'] if e['event_key'] == 'ship')['planned_date'] is None
 
 
@@ -227,7 +228,7 @@ def test_quality_handover_requires_confirmed_current_successor(client, pm_header
     }).json()['id']
     with SessionLocal() as db:
         successor_id = db.query(User).filter_by(username='worker2').one().id
-    client.put(f'/api/projects/{pid}', headers=pm_headers, json={'members': [uid, successor_id]})
+    client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': [uid, successor_id]}))
     with SessionLocal() as db:
         phase = Phase(project_id=pid, name='实施'); db.add(phase); db.flush()
         module = Module(project_id=pid, phase_id=phase.id, name='实施'); db.add(module); db.flush()
@@ -238,7 +239,7 @@ def test_quality_handover_requires_confirmed_current_successor(client, pm_header
         next_entry = ScheduleEntry(project_id=pid, task_id=task.id, work_date=date(2026,10,1), assignee_id=successor_id, planned_quantity=1, is_confirmed=False)
         db.add_all([old, next_entry]); db.flush(); next_id = next_entry.id; db.commit()
     # 仅是成员或者只有草稿安排，尚未接下质量工作。
-    assert client.put(f'/api/projects/{pid}', headers=pm_headers, json={'members': [successor_id],'member_removal_confirmations':[uid]}).status_code == 400
+    assert client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': [successor_id],'member_removal_confirmations':[uid]})).status_code == 400
     with SessionLocal() as db:
         db.get(ScheduleEntry, next_id).is_confirmed = True; db.commit()
-    assert client.put(f'/api/projects/{pid}', headers=pm_headers, json={'members': [successor_id],'member_removal_confirmations':[uid]}).status_code == 200
+    assert client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': [successor_id],'member_removal_confirmations':[uid]})).status_code == 200

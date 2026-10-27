@@ -1,3 +1,4 @@
+from tests.lifecycle_helpers import versioned
 """Project preparation (准备 Tab) tests."""
 
 
@@ -139,7 +140,7 @@ def test_worker_read_only(client, pm_headers, worker_headers):
     r = client.get(f"/api/projects/{pid}/procurements", headers=worker_headers)
     assert r.status_code == 404
     # 加为成员后可读
-    client.put(f"/api/projects/{pid}", headers=pm_headers, json={"members": ["user-worker-001"]})
+    client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": ["user-worker-001"]}))
     r = client.get(f"/api/projects/{pid}/procurements", headers=worker_headers)
     assert r.status_code == 200
     # 写被拒（无 manage_plan 能力）

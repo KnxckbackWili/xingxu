@@ -9,6 +9,7 @@
 交付验收清单在最终报告中单列。
 """
 
+from tests.lifecycle_helpers import versioned
 import uuid
 
 
@@ -36,7 +37,7 @@ def _add_worker(client, pm_headers, worker_headers, pid):
     members = list(r.json()["members"])
     if wid not in members:
         members.append(wid)
-    r = client.put(f"/api/projects/{pid}", headers=pm_headers, json={"members": members})
+    r = client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": members}))
     assert r.status_code == 200, r.json()
 
 

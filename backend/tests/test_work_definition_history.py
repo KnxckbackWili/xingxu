@@ -1,3 +1,4 @@
+from tests.lifecycle_helpers import versioned
 """工作快照及原日程填报来源保全。"""
 
 
@@ -9,7 +10,7 @@ def _project_with_member(client, pm_headers, worker_headers):
     client.post(f'/api/projects/{pid}/tasks/generate', headers=pm_headers, json={'module_ids': ['mod-03']})
     wid = client.get('/api/auth/me', headers=worker_headers).json()['id']
     r = client.get(f'/api/projects/{pid}', headers=pm_headers)
-    client.put(f'/api/projects/{pid}', headers=pm_headers, json={'members': [*r.json()['members'], wid]})
+    client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': [*r.json()['members'], wid]}))
     return pid
 
 def test_daily_regeneration_preserves_original_reports(client, pm_headers, worker_headers):

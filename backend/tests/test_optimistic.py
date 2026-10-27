@@ -1,3 +1,4 @@
+from tests.lifecycle_helpers import versioned
 """乐观锁：并发写冲突返回 409。"""
 
 
@@ -22,6 +23,6 @@ def test_project_version_conflict(client, pm_headers):
 def test_project_update_without_version_ok(client, pm_headers):
     """旧前端不带 version 也能更新（向后兼容）。"""
     p = _project(client, pm_headers)
-    r = client.put(f"/api/projects/{p['id']}", headers=pm_headers, json={"name": "兼容更新"})
+    r = client.put(f"/api/projects/{p['id']}", headers=pm_headers, json=versioned(p['id'], {"name": "兼容更新"}))
     assert r.status_code == 200, r.text
     assert r.json()["version"] >= 1

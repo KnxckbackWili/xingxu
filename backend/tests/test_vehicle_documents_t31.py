@@ -1,4 +1,5 @@
 """T31 one vehicle projection of canonical document instances and versions."""
+from tests.lifecycle_helpers import versioned
 from app.db import SessionLocal
 from app.models import Project, ProjectDocument, DocumentVersion, ChangeLog, User
 from tests.test_project_documents import create, view, upload
@@ -7,7 +8,7 @@ from tests.test_project_events import unit
 
 def fleet(client,headers):
     pid=create(client,headers,dispatch_platform='NDC',timezone='Asia/Shanghai')['id']
-    assert client.put(f'/api/projects/{pid}',headers=headers,json={'members':['user-worker-001']}).status_code==200
+    assert client.put(f'/api/projects/{pid}',headers=headers,json=versioned(pid, {'members':['user-worker-001']})).status_code==200
     with SessionLocal() as db:
         db.get(Project,pid).status='executing';db.commit()
     result=client.post(f'/api/projects/{pid}/vehicles',headers=headers,json={'vehicle_type':'潜伏式','model_name':'T31实车','quantity':2})
@@ -48,16 +49,16 @@ def test_each_real_arrival_sets_only_its_inspection_24_hours_and_clear_keeps_id(
     pid,ids=fleet(client,admin_headers)
     first=inspection(vehicle_view(client,admin_headers,pid,ids[0]));second=inspection(vehicle_view(client,admin_headers,pid,ids[1]))
     assert first['due_at'] is None and second['due_at'] is None
-    result=client.put(f'/api/projects/{pid}/vehicle-arrivals',headers=admin_headers,json={'unit_ids':[ids[0]],'arrived_at':'2026-10-20'})
+    result=client.put(f'/api/projects/{pid}/vehicle-arrivals',headers=admin_headers,json=versioned(pid, {'unit_ids':[ids[0]],'arrived_at':'2026-10-20'}))
     assert result.status_code==200,result.text
     changed=inspection(vehicle_view(client,admin_headers,pid,ids[0]))
     assert changed['id']==first['id'] and changed['due_at']=='2026-10-20T16:00:00+00:00'
     assert changed['due_basis']['actual_date']=='2026-10-20' and changed['due_basis']['precision']=='date'
     assert 'actual_at' not in changed['due_basis']
     assert inspection(vehicle_view(client,admin_headers,pid,ids[1]))['due_at'] is None
-    assert client.put(f'/api/projects/{pid}/vehicle-arrivals',headers=admin_headers,json={'unit_ids':[ids[1]],'arrived_at':'2026-10-22'}).status_code==200
+    assert client.put(f'/api/projects/{pid}/vehicle-arrivals',headers=admin_headers,json=versioned(pid, {'unit_ids':[ids[1]],'arrived_at':'2026-10-22'})).status_code==200
     assert inspection(vehicle_view(client,admin_headers,pid,ids[1]))['due_at']=='2026-10-22T16:00:00+00:00'
-    assert client.put(f'/api/projects/{pid}/vehicle-arrivals',headers=admin_headers,json={'unit_ids':[ids[0]],'arrived_at':None,'reason':'原到场日待核对'}).status_code==200
+    assert client.put(f'/api/projects/{pid}/vehicle-arrivals',headers=admin_headers,json=versioned(pid, {'unit_ids':[ids[0]],'arrived_at':None,'reason':'原到场日待核对'})).status_code==200
     cleared=inspection(vehicle_view(client,admin_headers,pid,ids[0]))
     assert cleared['id']==first['id'] and cleared['due_at'] is None and cleared['due_state']=='awaiting_event'
     assert inspection(vehicle_view(client,admin_headers,pid,ids[1]))['id']==second['id']

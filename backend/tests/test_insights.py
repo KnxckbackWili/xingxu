@@ -1,5 +1,6 @@
 """Insight tests: overdue, workload, current phase."""
 
+from tests.lifecycle_helpers import versioned
 from datetime import date, timedelta
 
 
@@ -38,7 +39,7 @@ def _project_with_schedule(client, pm_headers):
         if manual: break
     if manual:
         r = client.put(f"/api/projects/{pid}/tasks/{manual['id']}", headers=pm_headers,
-                   json={"target_quantity": 4})
+                   json=versioned(manual['id'], {"target_quantity": 4}, 'Task'))
         assert r.status_code == 200, r.json()
     r = client.post(f"/api/projects/{pid}/schedule/generate", headers=pm_headers)
     assert r.status_code == 200
@@ -88,7 +89,7 @@ def test_overdue_detected_for_past_schedule(client, pm_headers):
 
 def test_worker_overdue(client, pm_headers, worker_headers):
     pid = _project_with_schedule(client, pm_headers)
-    client.put(f"/api/projects/{pid}", headers=pm_headers, json={"members": ["user-worker-001"]})
+    client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": ["user-worker-001"]}))
     r = client.get("/api/worker/overdue", headers=worker_headers)
     assert r.status_code == 200
     data = r.json()
@@ -99,7 +100,7 @@ def test_worker_overdue(client, pm_headers, worker_headers):
 def test_dashboard_overdue_aggregation(client, pm_headers, worker_headers):
     """/dashboard/overdue 聚合逾期项目与逾期任务（行动入口数据源）。"""
     pid = _project_with_schedule(client, pm_headers)
-    client.put(f"/api/projects/{pid}", headers=pm_headers, json={"members": ["user-worker-001"]})
+    client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": ["user-worker-001"]}))
     # 排程已生成且日期已过（未填报）→ 逾期
     r = client.get(f"/api/projects/{pid}/schedule", headers=pm_headers)
     assert len(r.json()) > 0
@@ -132,7 +133,7 @@ def test_people_plan_is_limited_to_visible_projects(client, pm_headers, worker_h
     assert response.status_code == 200
     assert all(item["project_id"] != pid for item in response.json()["entries"])
 
-    client.put(f"/api/projects/{pid}", headers=pm_headers, json={"members": ["user-worker-001"]})
+    client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": ["user-worker-001"]}))
     response = client.get("/api/dashboard/people-plan", headers=worker_headers)
     assert response.status_code == 200
     assert any(item["project_id"] == pid for item in response.json()["entries"])

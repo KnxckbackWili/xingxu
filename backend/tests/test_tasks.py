@@ -1,3 +1,4 @@
+from tests.lifecycle_helpers import versioned
 """Template + task generation tests."""
 
 
@@ -253,7 +254,7 @@ def test_move_task_across_phases(client, pm_headers):
     task_name = task["name"]
 
     r = client.put(f"/api/projects/{pid}/tasks/{task['id']}", headers=pm_headers,
-                   json={"phase_id": phase2["id"]})
+                   json=versioned(task['id'], {"phase_id": phase2["id"]}, 'Task'))
     assert r.status_code == 200, r.json()
 
     # Task now lives under phase 2, gone from phase 1
@@ -280,7 +281,7 @@ def test_move_task_to_same_phase_is_noop(client, pm_headers):
     pid, tree = _project_with_two_phases(client, pm_headers)
     task = tree[0]["modules"][0]["tasks"][0]
     r = client.put(f"/api/projects/{pid}/tasks/{task['id']}", headers=pm_headers,
-                   json={"phase_id": tree[0]["id"]})
+                   json=versioned(task['id'], {"phase_id": tree[0]["id"]}, 'Task'))
     assert r.status_code == 200
     # Still in phase 1
     r = client.get(f"/api/projects/{pid}/tree", headers=pm_headers)
@@ -294,7 +295,7 @@ def test_move_task_phase_and_module_conflict_400(client, pm_headers):
     task = tree[0]["modules"][0]["tasks"][0]
     target_mod = tree[1]["modules"][0]["id"]
     r = client.put(f"/api/projects/{pid}/tasks/{task['id']}", headers=pm_headers,
-                   json={"phase_id": tree[1]["id"], "module_id": target_mod})
+                   json=versioned(task['id'], {"phase_id": tree[1]["id"], "module_id": target_mod}, 'Task'))
     assert r.status_code == 400
 
 
@@ -302,7 +303,7 @@ def test_move_task_unknown_phase_404(client, pm_headers):
     pid, tree = _project_with_two_phases(client, pm_headers)
     task = tree[0]["modules"][0]["tasks"][0]
     r = client.put(f"/api/projects/{pid}/tasks/{task['id']}", headers=pm_headers,
-                   json={"phase_id": "phase-does-not-exist"})
+                   json=versioned(task['id'], {"phase_id": "phase-does-not-exist"}, 'Task'))
     assert r.status_code == 404
 
 
@@ -310,7 +311,7 @@ def test_move_task_unknown_module_404(client, pm_headers):
     pid, tree = _project_with_two_phases(client, pm_headers)
     task = tree[0]["modules"][0]["tasks"][0]
     r = client.put(f"/api/projects/{pid}/tasks/{task['id']}", headers=pm_headers,
-                   json={"module_id": "mod-does-not-exist"})
+                   json=versioned(task['id'], {"module_id": "mod-does-not-exist"}, 'Task'))
     assert r.status_code == 404
 
 
@@ -319,7 +320,7 @@ def test_move_task_by_module_id(client, pm_headers):
     task = tree[0]["modules"][0]["tasks"][0]
     target_mod = tree[1]["modules"][0]
     r = client.put(f"/api/projects/{pid}/tasks/{task['id']}", headers=pm_headers,
-                   json={"module_id": target_mod["id"]})
+                   json=versioned(task['id'], {"module_id": target_mod["id"]}, 'Task'))
     assert r.status_code == 200
 
     r = client.get(f"/api/projects/{pid}/tree", headers=pm_headers)
@@ -331,5 +332,5 @@ def test_move_task_worker_forbidden(client, pm_headers, worker_headers):
     pid, tree = _project_with_two_phases(client, pm_headers)
     task = tree[0]["modules"][0]["tasks"][0]
     r = client.put(f"/api/projects/{pid}/tasks/{task['id']}", headers=worker_headers,
-                   json={"phase_id": tree[1]["id"]})
+                   json=versioned(task['id'], {"phase_id": tree[1]["id"]}, 'Task'))
     assert r.status_code in (403, 404)

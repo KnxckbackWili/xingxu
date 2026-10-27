@@ -1,3 +1,4 @@
+from tests.lifecycle_helpers import versioned
 """项目参与者校验、人工阶段权限与直接移交。"""
 
 
@@ -14,7 +15,7 @@ def _project(client, pm_headers, name='功能边界项目'):
 
 def test_update_project_bad_member_id_returns_400(client, pm_headers):
     pid = _project(client, pm_headers)
-    r = client.put(f'/api/projects/{pid}', headers=pm_headers, json={'members': ['no-such-user']})
+    r = client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': ['no-such-user']}))
     assert r.status_code == 400
     assert '成员' in r.json()['detail']
 
@@ -123,7 +124,7 @@ def test_transfer_keeps_old_manager_when_technical_manager(client, admin_headers
     newpm = _create_user(client, admin_headers, 'newpm2')
     old_headers = _login(client, 'oldpm2')
     pid = _managed_project(client, old_headers, '移交保留技术项目', manager_id=oldpm)
-    r = client.put(f'/api/projects/{pid}', headers=old_headers, json={'technical_manager_id': oldpm})
+    r = client.put(f'/api/projects/{pid}', headers=old_headers, json=versioned(pid, {'technical_manager_id': oldpm}))
     assert r.status_code == 200, r.json()
     _transfer(client, admin_headers, pid, newpm, old_headers)
     assert client.get(f'/api/projects/{pid}', headers=old_headers).status_code == 200

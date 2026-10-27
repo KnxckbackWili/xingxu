@@ -1,4 +1,5 @@
 """Real six-sheet delivery workbooks preserve facts and both evidence ACL layers."""
+from tests.lifecycle_helpers import versioned
 from datetime import date, datetime
 from io import BytesIO
 import json
@@ -273,6 +274,6 @@ def test_portable_quantity_history_keeps_exact_original_fields_without_completin
         assert project_progress_tree(db,target)['completed']==0
         origin=db.get(models.Project,target).portable_unverified_snapshot
         assert origin['legacy_quantity_reports']==original
-    forbidden=client.put(f'/api/projects/{target}',headers=admin_headers,json={'portable_unverified_snapshot':{}})
+    forbidden=client.put(f'/api/projects/{target}',headers=admin_headers,json=versioned(target, {'portable_unverified_snapshot':{}}))
     assert forbidden.status_code==422,forbidden.text
     assert client.get(f'/api/projects/{target}/vehicle-progress/source',headers=admin_headers).json()['source']['legacy_quantity_reports']==original

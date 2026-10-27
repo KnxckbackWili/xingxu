@@ -1,4 +1,5 @@
 """T24 business events create actual auditable obligations in one transaction."""
+from tests.lifecycle_helpers import versioned
 from datetime import datetime,timedelta,timezone
 import pytest
 from app.db import SessionLocal
@@ -82,10 +83,10 @@ def test_removal_preview_and_exact_confirmation_create_one_source_per_person(cli
     assert all(any(row['code']=='6.7' for row in person['documents']) for person in preview.json()['removed'])
     with SessionLocal() as db:assert db.query(ChangeLog).count()==before and db.query(DocumentTriggerEvent).count()==0
     request={'members':original,'version':added.json()['version']}
-    assert client.put(f'/api/projects/{pid}',headers=admin_headers,json=request).status_code==409
-    assert client.put(f'/api/projects/{pid}',headers=admin_headers,json={**request,'member_removal_confirmations':['user-worker-001']}).status_code==409
-    removed=client.put(f'/api/projects/{pid}',headers=admin_headers,json={**request,
-        'member_removal_confirmations':['user-worker-001','user-worker-002']})
+    assert client.put(f'/api/projects/{pid}',headers=admin_headers,json=versioned(pid, request)).status_code==409
+    assert client.put(f'/api/projects/{pid}',headers=admin_headers,json=versioned(pid, {**request,'member_removal_confirmations':['user-worker-001']})).status_code==409
+    removed=client.put(f'/api/projects/{pid}',headers=admin_headers,json=versioned(pid, {**request,
+        'member_removal_confirmations':['user-worker-001','user-worker-002']}))
     assert removed.status_code==200,removed.text
     rows=[row for row in view(client,admin_headers,pid)['documents'] if row['code']=='6.7']
     assert len(rows)==2 and len({row['trigger_ref'] for row in rows})==2

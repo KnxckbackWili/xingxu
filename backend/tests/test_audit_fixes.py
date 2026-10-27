@@ -8,6 +8,7 @@
 5. 表单类导入（生命周期表等）的 log_change 审计行未提交而丢失（已补 db.commit）
 """
 
+from tests.lifecycle_helpers import versioned
 import io
 import pytest
 from openpyxl import Workbook
@@ -104,7 +105,7 @@ def _add_worker(client, pm_headers, worker_headers, pid):
     members = list(r.json()["members"])
     if wid not in members:
         members.append(wid)
-        r = client.put(f"/api/projects/{pid}", headers=pm_headers, json={"members": members})
+        r = client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": members}))
         assert r.status_code == 200, r.json()
     return wid
 

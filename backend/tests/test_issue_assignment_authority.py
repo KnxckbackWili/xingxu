@@ -1,5 +1,6 @@
 """问题处理人资格与项目访问范围。"""
 
+from tests.lifecycle_helpers import versioned
 import pytest
 from app.db import SessionLocal
 from app.models import Issue, Project
@@ -39,6 +40,6 @@ def test_issue_candidates_match_actual_process_permissions(client, pm_headers, w
         db.commit()
     issue = client.post(f'/api/projects/{pid}/issues', headers=worker_headers,
                         json={'title': '待处理', 'assignee_id': 'user-pm-001'}).json()
-    started = client.put(f"/api/issues/{issue['id']}", headers=pm_headers, json={'status': 'processing'})
+    started = client.put(f"/api/issues/{issue['id']}", headers=pm_headers, json=versioned(issue['id'], {'status': 'processing'}, 'Issue'))
     assert started.status_code == 200, started.text
-    assert client.put(f"/api/issues/{issue['id']}", headers=pm_headers, json={'title': 'unauthorized'}).status_code == 403
+    assert client.put(f"/api/issues/{issue['id']}", headers=pm_headers, json=versioned(issue['id'], {'title': 'unauthorized'}, 'Issue')).status_code == 403

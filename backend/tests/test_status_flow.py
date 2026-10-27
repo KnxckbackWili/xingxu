@@ -1,3 +1,4 @@
+from tests.lifecycle_helpers import versioned
 """项目状态测试：日程下达到ready，执行阶段由授权人明确推进。"""
 
 
@@ -16,7 +17,7 @@ def _member(client, pm_headers, worker_headers, pid):
     wid = r.json()["id"]
     r = client.get(f"/api/projects/{pid}", headers=pm_headers)
     client.put(f"/api/projects/{pid}", headers=pm_headers,
-               json={"members": [*r.json()["members"], wid]})
+               json=versioned(pid, {"members": [*r.json()["members"], wid]}))
 
 
 def _status(client, headers, pid):

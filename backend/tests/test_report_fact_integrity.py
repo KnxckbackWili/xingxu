@@ -1,5 +1,6 @@
 """报表周期、当地日期、真实人员和当前事实。"""
 
+from tests.lifecycle_helpers import versioned
 from datetime import date
 import pytest
 from app.db import SessionLocal
@@ -99,7 +100,7 @@ def test_worker_overdue_aggregates_each_task_once_and_uses_project_date(client, 
     tid, eid, _ = task_entry(pid)
     worker = client.get('/api/auth/me', headers=worker_headers).json()['id']
     assert client.put(f'/api/projects/{pid}', headers=pm_headers,
-                      json={'members': [worker]}).status_code == 200
+                      json=versioned(pid, {'members': [worker]})).status_code == 200
     with SessionLocal() as db:
         db.get(Project, pid).status = 'executing'
         db.get(ScheduleEntry, eid).planned_quantity = 1

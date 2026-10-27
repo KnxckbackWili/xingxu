@@ -1,5 +1,6 @@
 """定时日报/周报：纯函数直接单测（不启动 APScheduler 线程）。"""
 
+from tests.lifecycle_helpers import versioned
 from datetime import date,datetime
 
 from app import config
@@ -37,7 +38,7 @@ def _project_with_work(client, pm_headers, worker_headers, name="调度测试项
     wid = r.json()["id"]
     r = client.get(f"/api/projects/{pid}", headers=pm_headers)
     client.put(f"/api/projects/{pid}", headers=pm_headers,
-               json={"members": [*r.json()["members"], wid]})
+               json=versioned(pid, {"members": [*r.json()["members"], wid]}))
     # 现场填报须先下达日程；本组测试关注日报/归档，而非未下达草稿。
     confirmed = client.post(f"/api/projects/{pid}/schedule/confirm", headers=pm_headers)
     assert confirmed.status_code == 200, confirmed.json()
@@ -65,7 +66,7 @@ def _project_full_progress(client, pm_headers, worker_headers, name="调度测�
     wid = r.json()["id"]
     r = client.get(f"/api/projects/{pid}", headers=pm_headers)
     client.put(f"/api/projects/{pid}", headers=pm_headers,
-               json={"members": [*r.json()["members"], wid]})
+               json=versioned(pid, {"members": [*r.json()["members"], wid]}))
     # 现场填报须先下达日程；本组测试关注日报/归档，而非未下达草稿。
     confirmed = client.post(f"/api/projects/{pid}/schedule/confirm", headers=pm_headers)
     assert confirmed.status_code == 200, confirmed.json()
@@ -191,7 +192,7 @@ def test_scheduler_skips_missing_pm(client, pm_headers, admin_headers):
     })
     assert r.status_code == 200, r.text
     tmp_id = r.json()["id"]
-    r = client.put(f"/api/projects/{pid}", headers=admin_headers, json={"manager_id": tmp_id})
+    r = client.put(f"/api/projects/{pid}", headers=admin_headers, json=versioned(pid, {"manager_id": tmp_id}))
     assert r.status_code == 200, r.json()
     from app.db import SessionLocal
     from app.models import User

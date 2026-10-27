@@ -1,4 +1,5 @@
 """T32 exact real identity, safe matrix gates and portable fresh qualification."""
+from tests.lifecycle_helpers import versioned
 from datetime import date
 from app.time_utils import project_today
 from uuid import uuid4
@@ -230,7 +231,7 @@ def test_source_definition_version_and_check_cas_cannot_be_bypassed(client,pm_he
     pid,ids=setup_fleet(client,pm_headers,1);tid=work(pid,ids)
     row=checks(client,pm_headers,pid,ids[0])[0]
     assert client.put(f"/api/projects/{pid}/check-items/{row['id']}",headers=pm_headers,json={'is_done':True}).status_code==400
-    assert client.put(f'/api/projects/{pid}/tasks/{tid}',headers=pm_headers,json={'vehicle_step_key':'go_live'}).status_code==400
+    assert client.put(f'/api/projects/{pid}/tasks/{tid}',headers=pm_headers,json=versioned(tid, {'vehicle_step_key':'go_live'}, 'Task')).status_code==400
     assert mark(client,pm_headers,pid,row,is_done=True).status_code==200
     with SessionLocal() as db:
         definition=db.query(VehicleCheckDefinition).filter_by(task_id=tid).one();definition.version=2;db.commit()

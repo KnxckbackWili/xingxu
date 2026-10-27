@@ -1,4 +1,5 @@
 """New project defaults and explicit human lifecycle decisions."""
+from tests.lifecycle_helpers import versioned
 import pytest
 
 
@@ -55,7 +56,7 @@ def test_worker_cannot_create_project_or_gain_stage_management(client, worker_he
     assert client.post('/api/projects', headers=worker_headers, json=create_body()).status_code == 403
     pid = client.post('/api/projects', headers=pm_headers, json=create_body()).json()['id']
     uid = client.get('/api/auth/me', headers=worker_headers).json()['id']
-    assert client.put(f'/api/projects/{pid}', headers=pm_headers, json={'members': [uid]}).status_code == 200
+    assert client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': [uid]})).status_code == 200
     assert client.post(f'/api/projects/{pid}/status', headers=worker_headers, json={'status': 'preparing'}).status_code == 403
     assert client.get(f'/api/projects/{pid}', headers=worker_headers).json()['status'] == 'draft'
 

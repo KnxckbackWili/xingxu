@@ -1,4 +1,5 @@
 """Quantity reporting, quality verification and issue handling stay distinct."""
+from tests.lifecycle_helpers import versioned
 from datetime import date
 import pytest
 from app.db import SessionLocal
@@ -40,9 +41,9 @@ def test_completed_issue_reopen_keeps_state_and_notifies_manager(client, pm_head
     from app.models import Notification, Issue
     pid = project(client, pm_headers)
     uid = client.get('/api/auth/me', headers=worker_headers).json()['id']
-    client.put(f'/api/projects/{pid}', headers=pm_headers, json={'members': [uid]})
+    client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': [uid]}))
     issue = client.post(f'/api/projects/{pid}/issues', headers=worker_headers, json={'title': '复发'}).json()
-    client.put(f"/api/issues/{issue['id']}", headers=pm_headers, json={'status': 'resolved'})
+    client.put(f"/api/issues/{issue['id']}", headers=pm_headers, json=versioned(issue['id'], {'status': 'resolved'}, 'Issue'))
     with SessionLocal() as db:
         db.get(Project, pid).status = 'completed'; old_version = db.get(Issue, issue['id']).version; db.commit()
     result = client.post(f"/api/issues/{issue['id']}/reopen", headers=worker_headers)

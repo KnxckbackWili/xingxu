@@ -3,6 +3,7 @@
 覆盖：不可用时段 CRUD+权限+审计 / 分配冲突检测 / 看板统计 / 技能标签。
 """
 
+from tests.lifecycle_helpers import versioned
 from datetime import date, timedelta
 
 from fastapi.testclient import TestClient
@@ -28,7 +29,7 @@ def _make_project_with_schedule(client, pm_headers, name: str, worker_id: str) -
     })
     assert r.status_code == 200, r.text
     pid = r.json()["id"]
-    r = client.put(f"/api/projects/{pid}", headers=pm_headers, json={"members": [worker_id]})
+    r = client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": [worker_id]}))
     assert r.status_code == 200, r.text
     r = client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers,
                     json={"module_ids": [f"mod-{i:02d}" for i in range(1, 4)]})

@@ -1,5 +1,6 @@
 """问题归属、闭环权限、导入原子性与去重。"""
 
+from tests.lifecycle_helpers import versioned
 from datetime import timedelta
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -22,7 +23,7 @@ def _add_worker(client, pm_headers, worker_headers, pid):
     members = list(r.json()['members'])
     if wid not in members:
         members.append(wid)
-    r = client.put(f'/api/projects/{pid}', headers=pm_headers, json={'members': members})
+    r = client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': members}))
     assert r.status_code == 200, r.json()
     return wid
 
@@ -31,11 +32,11 @@ def test_assigned_worker_can_process_own_issue(client, pm_headers, worker_header
     wid = _add_worker(client, pm_headers, worker_headers, pid)
     r = client.post(f'/api/projects/{pid}/issues', headers=pm_headers, json={'title': '现场设备故障', 'severity': 'high', 'assignee_id': wid})
     issue_id = r.json()['id']
-    r = client.put(f'/api/issues/{issue_id}', headers=worker_headers, json={'status': 'processing'})
+    r = client.put(f'/api/issues/{issue_id}', headers=worker_headers, json=versioned(issue_id, {'status': 'processing'}, 'Issue'))
     assert r.status_code == 200, r.json()
-    r = client.put(f'/api/issues/{issue_id}', headers=worker_headers, json={'title': '改名'})
+    r = client.put(f'/api/issues/{issue_id}', headers=worker_headers, json=versioned(issue_id, {'title': '改名'}, 'Issue'))
     assert r.status_code == 403
-    r = client.put(f'/api/issues/{issue_id}', headers=worker_headers, json={'status': 'resolved', 'resolution': '更换传感器后恢复'})
+    r = client.put(f'/api/issues/{issue_id}', headers=worker_headers, json=versioned(issue_id, {'status': 'resolved', 'resolution': '更换传感器后恢复'}, 'Issue'))
     assert r.status_code == 200, r.json()
     assert r.json()['status'] == 'resolved'
 
@@ -43,13 +44,13 @@ def test_issue_cancelled_status(client, pm_headers):
     pid = _project(client, pm_headers)
     r = client.post(f'/api/projects/{pid}/issues', headers=pm_headers, json={'title': '可作废问题', 'issue_type': 'process'})
     issue_id = r.json()['id']
-    r = client.put(f'/api/issues/{issue_id}', headers=pm_headers, json={'status': 'cancelled', 'resolution': '需求变更，不再实施'})
+    r = client.put(f'/api/issues/{issue_id}', headers=pm_headers, json=versioned(issue_id, {'status': 'cancelled', 'resolution': '需求变更，不再实施'}, 'Issue'))
     assert r.status_code == 200, r.json()
     assert r.json()['status'] == 'cancelled'
     r2 = client.post(f'/api/projects/{pid}/issues', headers=pm_headers, json={'title': '已解决再作废'})
     i2 = r2.json()['id']
-    client.put(f'/api/issues/{i2}', headers=pm_headers, json={'status': 'resolved'})
-    r3 = client.put(f'/api/issues/{i2}', headers=pm_headers, json={'status': 'cancelled'})
+    client.put(f'/api/issues/{i2}', headers=pm_headers, json=versioned(i2, {'status': 'resolved'}, 'Issue'))
+    r3 = client.put(f'/api/issues/{i2}', headers=pm_headers, json=versioned(i2, {'status': 'cancelled'}, 'Issue'))
     assert r3.status_code == 400
 
 def test_reporter_can_reopen_resolved_issue(client, pm_headers, worker_headers):
@@ -57,7 +58,7 @@ def test_reporter_can_reopen_resolved_issue(client, pm_headers, worker_headers):
     wid = _add_worker(client, pm_headers, worker_headers, pid)
     r = client.post(f'/api/projects/{pid}/issues', headers=worker_headers, json={'title': '现场缺料', 'assignee_id': wid})
     issue_id = r.json()['id']
-    client.put(f'/api/issues/{issue_id}', headers=pm_headers, json={'status': 'resolved', 'resolution': '补料完成'})
+    client.put(f'/api/issues/{issue_id}', headers=pm_headers, json=versioned(issue_id, {'status': 'resolved', 'resolution': '补料完成'}, 'Issue'))
     r = client.post(f'/api/issues/{issue_id}/reopen', headers=worker_headers)
     assert r.status_code == 200, r.json()
     assert r.json()['status'] == 'open'
@@ -65,7 +66,7 @@ def test_reporter_can_reopen_resolved_issue(client, pm_headers, worker_headers):
     _add_worker(client, pm_headers, worker_headers, pid2)
     r = client.post(f'/api/projects/{pid2}/issues', headers=pm_headers, json={'title': '第三方问题'})
     i2 = r.json()['id']
-    client.put(f'/api/issues/{i2}', headers=pm_headers, json={'status': 'resolved'})
+    client.put(f'/api/issues/{i2}', headers=pm_headers, json=versioned(i2, {'status': 'resolved'}, 'Issue'))
     r = client.post(f'/api/issues/{i2}/reopen', headers=worker_headers)
     assert r.status_code == 403
 

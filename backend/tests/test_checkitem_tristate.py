@@ -1,3 +1,4 @@
+from tests.lifecycle_helpers import versioned
 """检查项三态（通过/不通过/不适用）测试。"""
 
 
@@ -15,7 +16,7 @@ def _project_with_check(client, pm_headers):
 def test_failed_requires_reason(client, pm_headers, worker_headers):
     pid, cid = _project_with_check(client, pm_headers)
     # worker 加为成员
-    client.put(f"/api/projects/{pid}", headers=pm_headers, json={"members": ["user-worker-001"]})
+    client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": ["user-worker-001"]}))
     # 不通过但不填原因 → 400
     r = client.put(f"/api/projects/{pid}/check-items/{cid}", headers=worker_headers, json={"failed": True})
     assert r.status_code == 400

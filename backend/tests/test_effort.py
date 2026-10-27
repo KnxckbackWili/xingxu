@@ -1,5 +1,6 @@
 """Effort statistics tests: hours derived from reports, not templates."""
 
+from tests.lifecycle_helpers import versioned
 from datetime import date, timedelta
 
 
@@ -19,7 +20,7 @@ def _project_with_reports(client, pm_headers, worker_headers):
         "vehicle_type": "潜伏式", "model_name": "AGV-500", "quantity": 10})
     client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers,
                 json={"module_ids": ["mod-03"]})
-    client.put(f"/api/projects/{pid}", headers=pm_headers, json={"members": ["user-worker-001"]})
+    client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": ["user-worker-001"]}))
     # 找 单车机械与导航调试（per_vehicle, target=10）
     r = client.get(f"/api/projects/{pid}/tree", headers=pm_headers)
     task = None

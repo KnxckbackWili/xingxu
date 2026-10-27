@@ -1,3 +1,4 @@
+from tests.lifecycle_helpers import versioned
 """Attachment + notification tests."""
 
 
@@ -62,7 +63,7 @@ def test_worker_cannot_upload(client, pm_headers, worker_headers):
 def test_issue_assignment_notifies_assignee(client, pm_headers, worker_headers):
     pid = _project(client, pm_headers)
     assert client.put(f"/api/projects/{pid}", headers=pm_headers,
-                      json={"members": ["user-worker-001"]}).status_code == 200
+                      json=versioned(pid, {"members": ["user-worker-001"]})).status_code == 200
     # Create issue assigned to worker1
     r = client.post(f"/api/projects/{pid}/issues", headers=pm_headers, json={
         "title": "地图建图失败",
@@ -95,7 +96,7 @@ def test_issue_resolve_notifies_reporter(client, pm_headers, worker_headers):
     # worker1 加入项目（上报需成员）
     wid = client.get("/api/auth/me", headers=worker_headers).json()["id"]
     members = [*client.get(f"/api/projects/{pid}", headers=pm_headers).json()["members"], wid]
-    client.put(f"/api/projects/{pid}", headers=pm_headers, json={"members": members})
+    client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": members}))
     # Worker reports an issue (no assignee)
     r = client.post(f"/api/projects/{pid}/issues", headers=worker_headers, json={
         "title": "站点偏差超限",
@@ -105,10 +106,10 @@ def test_issue_resolve_notifies_reporter(client, pm_headers, worker_headers):
     iid = r.json()["id"]
 
     # PM resolves it
-    r = client.put(f"/api/issues/{iid}", headers=pm_headers, json={
+    r = client.put(f"/api/issues/{iid}", headers=pm_headers, json=versioned(iid, {
         "status": "resolved",
         "resolution": "重新标定站点坐标",
-    })
+    }, 'Issue'))
     assert r.status_code == 200
 
     # Worker gets notified
@@ -183,7 +184,7 @@ def test_worker_member_can_upload(client, pm_headers, worker_headers):
     wid = r.json()["id"]
     r = client.get(f"/api/projects/{pid}", headers=pm_headers)
     members = [*r.json()["members"], wid]
-    client.put(f"/api/projects/{pid}", headers=pm_headers, json={"members": members})
+    client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": members}))
 
     r = client.post(f"/api/projects/{pid}/documents/files", headers=worker_headers,
                     files={"file": ("现场照片.jpg", b"\xff\xd8photo", "image/jpeg")})
@@ -198,12 +199,12 @@ def test_start_processing_sets_assignee(client, pm_headers, worker_headers):
     # worker1 加入项目（上报需成员）
     wid = client.get("/api/auth/me", headers=worker_headers).json()["id"]
     members = [*client.get(f"/api/projects/{pid}", headers=pm_headers).json()["members"], wid]
-    client.put(f"/api/projects/{pid}", headers=pm_headers, json={"members": members})
+    client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": members}))
     r = client.post(f"/api/projects/{pid}/issues", headers=worker_headers, json={"title": "自动处理人"})
     iid = r.json()["id"]
 
     # pm 开始处理 → 处理人自动记为 pm
-    r = client.put(f"/api/issues/{iid}", headers=pm_headers, json={"status": "processing"})
+    r = client.put(f"/api/issues/{iid}", headers=pm_headers, json=versioned(iid, {"status": "processing"}, 'Issue'))
     assert r.status_code == 200
     r = client.get("/api/auth/me", headers=pm_headers)
     pm_id = r.json()["id"]
@@ -211,14 +212,14 @@ def test_start_processing_sets_assignee(client, pm_headers, worker_headers):
     assert r.json()[0]["assignee_id"] == pm_id
 
     # worker 无权改问题状态（require_pm）
-    r = client.put(f"/api/issues/{iid}", headers=worker_headers, json={"status": "resolved"})
+    r = client.put(f"/api/issues/{iid}", headers=worker_headers, json=versioned(iid, {"status": "resolved"}, 'Issue'))
     assert r.status_code == 403
 
 
 def test_schedule_confirm_notifies_members(client, pm_headers, worker_headers):
     pid = _project(client, pm_headers, status='planning')
     # Add worker1 as member
-    r = client.put(f"/api/projects/{pid}", headers=pm_headers, json={"members": ["user-worker-001"]})
+    r = client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": ["user-worker-001"]}))
     assert r.status_code == 200, r.json()
     r = client.post(f"/api/projects/{pid}/vehicles", headers=pm_headers,
                 json={"vehicle_type": "潜伏式", "model_name": "AGV-500", "quantity": 1})
@@ -242,7 +243,7 @@ def test_schedule_confirm_notifies_members(client, pm_headers, worker_headers):
 def test_mark_all_read(client, pm_headers, worker_headers):
     pid = _project(client, pm_headers)
     assert client.put(f"/api/projects/{pid}", headers=pm_headers,
-                      json={"members": ["user-worker-001"]}).status_code == 200
+                      json=versioned(pid, {"members": ["user-worker-001"]})).status_code == 200
     for i in range(3):
         client.post(f"/api/projects/{pid}/issues", headers=pm_headers, json={
             "title": f"测试问题{i}", "assignee_id": "user-worker-001"})

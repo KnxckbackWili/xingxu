@@ -1,4 +1,5 @@
 """Completion checks use closure facts, real files and explicit ordinary overrides."""
+from tests.lifecycle_helpers import versioned
 from datetime import date
 from app.db import SessionLocal
 from app.models import Project, Task, CheckItem, Issue, VehicleUnit, VehicleLifecycleEvent, ChangeLog
@@ -93,9 +94,9 @@ def test_assigned_handler_cannot_close_or_cancel_but_reporter_can(client,admin_h
     with SessionLocal() as db:
         issue=Issue(project_id=pid,title='等待报告人确认',status='resolved',reporter_id='user-worker-001',assignee_id='user-worker-002');db.add(issue);db.commit();iid=issue.id
     for status in ('closed','cancelled'):
-        result=client.put(f'/api/issues/{iid}',headers=handler,json={'status':status,'resolution':'处理人试图自己闭环'})
+        result=client.put(f'/api/issues/{iid}',headers=handler,json=versioned(iid, {'status':status,'resolution':'处理人试图自己闭环'}, 'Issue'))
         assert result.status_code==403,result.text
-    result=client.put(f'/api/issues/{iid}',headers=worker_headers,json={'status':'closed'})
+    result=client.put(f'/api/issues/{iid}',headers=worker_headers,json=versioned(iid, {'status':'closed'}, 'Issue'))
     assert result.status_code==200,result.text
     with SessionLocal() as db:assert db.get(Issue,iid).status=='closed'
 

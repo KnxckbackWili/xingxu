@@ -1,3 +1,4 @@
+from tests.lifecycle_helpers import versioned
 """Dashboard overview tests."""
 
 
@@ -49,7 +50,7 @@ def test_overview_stats(client, pm_headers):
 def test_overview_reflects_progress(client, pm_headers, worker_headers):
     pid = _project_with_data(client, pm_headers)
     # Worker completes some work
-    client.put(f"/api/projects/{pid}", headers=pm_headers, json={"members": ["user-worker-001"]})
+    client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": ["user-worker-001"]}))
     r = client.get(f"/api/projects/{pid}/tree", headers=pm_headers)
     tree = r.json()
     task = None

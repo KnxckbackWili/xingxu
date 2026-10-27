@@ -1,5 +1,6 @@
 """资料版本、离线回执及现场写入边界。"""
 
+from tests.lifecycle_helpers import versioned
 from datetime import date
 import pytest
 from app.db import SessionLocal
@@ -178,7 +179,7 @@ def test_field_mutations_recheck_project_after_waiting_for_lock(client, pm_heade
     if operation == 'check':
         response = client.put(f'/api/projects/{pid}/check-items/{cid}', headers=pm_headers, json={'is_done': True})
     elif operation == 'delivery':
-        response = client.put(f'/api/projects/{pid}/documents/{extra_id}', headers=pm_headers, json={'status': 'waived', 'reason': '并发变更后不应保存'})
+        response = client.put(f'/api/projects/{pid}/documents/{extra_id}', headers=pm_headers, json=versioned(extra_id, {'status': 'waived', 'reason': '并发变更后不应保存'}, 'ProjectDocument'))
     elif operation == 'issue_create':
         response = client.post(f'/api/projects/{pid}/issues', headers=pm_headers, json={'title': '迟到的问题'})
     elif operation == 'issue_update':

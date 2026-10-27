@@ -1,4 +1,5 @@
 """The small-file CI protocol is identical to the real 2-GiB streaming drill."""
+from tests.lifecycle_helpers import versioned
 import hashlib
 import pytest
 from app.db import SessionLocal
@@ -71,7 +72,7 @@ def test_chunk_boundaries_hash_and_same_index_content_are_enforced(client,admin_
 
 def test_owner_and_current_permission_are_rechecked_before_every_part_and_finish(client,admin_headers,worker_headers):
     p=create(client,admin_headers);pid=p['id']
-    assert client.put(f'/api/projects/{pid}',headers=admin_headers,json={'members':[*p['members'],'user-worker-001']}).status_code==200
+    assert client.put(f'/api/projects/{pid}',headers=admin_headers,json=versioned(pid, {'members':[*p['members'],'user-worker-001']})).status_code==200
     session,_=start(client,worker_headers,pid,b'private pending bytes')
     sid=session['id'];base=f'/api/projects/{pid}/uploads/{sid}'
     assert client.get(base,headers=admin_headers).status_code==404

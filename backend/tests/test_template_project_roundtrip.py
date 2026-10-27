@@ -1,5 +1,6 @@
 """模板、项目及旧资料来源的便携往返。"""
 
+from tests.lifecycle_helpers import versioned
 import pytest
 
 
@@ -187,7 +188,7 @@ def test_clone_preserves_project_planning_context_but_resets_execution(client, p
     original = client.post('/api/projects', headers=pm_headers, json={
         'name': 'Clone context', 'timezone': 'America/Los_Angeles', 'description': 'Scope matters',
         'start_date': '2026-01-01', 'end_date': '2026-12-31', 'need_wms': True, 'new_vehicles': False}).json()
-    assert client.put(f"/api/projects/{original['id']}", headers=pm_headers, json={'rest_mode': 'two', 'skip_holidays': True}).status_code == 200
+    assert client.put(f"/api/projects/{original['id']}", headers=pm_headers, json=versioned(original['id'], {'rest_mode': 'two', 'skip_holidays': True})).status_code == 200
     response = client.post(f"/api/projects/{original['id']}/clone", headers=pm_headers, json={'name': 'Fresh execution'})
     assert response.status_code == 200, response.text
     with SessionLocal() as db:

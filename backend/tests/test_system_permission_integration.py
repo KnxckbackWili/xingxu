@@ -1,4 +1,5 @@
 """System grants affect real feature routes without changing resource ownership."""
+from tests.lifecycle_helpers import versioned
 from tests.test_permissions import _project
 
 WORKER = 'user-worker-001'
@@ -51,10 +52,10 @@ def test_account_maintainer_cannot_promote_or_touch_admin(client, admin_headers,
 
 def test_system_project_denial_wins_over_existing_member_grant(client, admin_headers, pm_headers, worker_headers):
     pid = _project(client, pm_headers, 'scope')
-    assert client.put(f'/api/projects/{pid}', headers=pm_headers, json={'members': [WORKER], 'member_permissions': [{'user_id': WORKER, 'capabilities': ['project.update']}]}).status_code == 200
-    assert client.put(f'/api/projects/{pid}', headers=worker_headers, json={'description': 'allowed'}).status_code == 200
+    assert client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': [WORKER], 'member_permissions': [{'user_id': WORKER, 'capabilities': ['project.update']}]})).status_code == 200
+    assert client.put(f'/api/projects/{pid}', headers=worker_headers, json=versioned(pid, {'description': 'allowed'})).status_code == 200
     policy(client, admin_headers, WORKER, {'project.update': False})
-    assert client.put(f'/api/projects/{pid}', headers=worker_headers, json={'description': 'denied'}).status_code == 403
+    assert client.put(f'/api/projects/{pid}', headers=worker_headers, json=versioned(pid, {'description': 'denied'})).status_code == 403
     assert 'project.update' not in client.get(f'/api/projects/{pid}', headers=worker_headers).json()['capabilities']
 
 
@@ -62,7 +63,7 @@ def test_system_project_grant_does_not_establish_membership(client, admin_header
     pid = _project(client, pm_headers, 'private project')
     policy(client, admin_headers, WORKER, {'project.update': True})
     assert client.get(f'/api/projects/{pid}', headers=worker_headers).status_code == 404
-    assert client.put(f'/api/projects/{pid}', headers=worker_headers, json={'description': 'no widening'}).status_code == 404
+    assert client.put(f'/api/projects/{pid}', headers=worker_headers, json=versioned(pid, {'description': 'no widening'})).status_code == 404
 
 
 def test_delegated_token_manager_can_only_mint_for_self_and_revoke_access(client, admin_headers, worker_headers):

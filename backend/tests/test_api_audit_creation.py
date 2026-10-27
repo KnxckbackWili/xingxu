@@ -8,7 +8,7 @@ import pytest
 def body(client, headers):
     tree = client.get('/api/templates/default/tree', headers=headers).json()
     mid = next(m['id'] for phase in tree if phase['name'] != '项目准备' for m in phase['modules'] if m['tasks'])
-    return {'name': '一次完成的项目', 'start_date': '2026-09-15', 'end_date': '2026-10-30', 'status': 'draft',
+    return {'name': '一次完成的项目', 'start_date': '2026-09-15', 'end_date': '2026-10-30', 'status': 'preparing',
             'vehicles': [{'vehicle_type': '潜伏式', 'model_name': 'T6', 'quantity': 3}],
             'module_ids': [mid], 'template_id': 'default', 'client_uuid': 'creation-audit-0001'}
 
@@ -74,7 +74,7 @@ def test_project_read_routes_do_not_expose_other_projects(client, pm_headers, wo
             continue
         url = re.sub(r'\{[^}]+\}', 'audit-missing-id', path.replace('{project_id}', pid))
         response = client.get(url, headers=worker_headers)
-        if response.status_code not in {403, 404, 422}:
+        if response.status_code not in {403, 404, 410, 422}:  # 410: retired route, no project data
             failures.append((path, response.status_code))
     assert failures == []
 

@@ -1,4 +1,5 @@
 """Real preset accounts, durable read-only ceilings, and project-scoped reasons."""
+from tests.lifecycle_helpers import versioned
 from types import SimpleNamespace
 
 from tests.test_permissions import _project
@@ -36,7 +37,7 @@ def test_readonly_can_view_assigned_project_but_cannot_write_even_with_old_grant
     from app.models import User
     user, headers = account(client, admin_headers, 'readonly', 'reader')
     pid = _project(client, pm_headers, 'reader project')
-    assert client.put(f'/api/projects/{pid}', headers=pm_headers, json={'members': [user['id']]}).status_code == 200
+    assert client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': [user['id']]})).status_code == 200
     assert client.get(f'/api/projects/{pid}', headers=headers).status_code == 200
     assert client.get(f'/api/projects/{pid}/export/json', headers=headers).status_code == 200
     # Simulate historical grants left behind when a former writer becomes readonly.
@@ -60,13 +61,13 @@ def test_readonly_can_view_assigned_project_but_cannot_write_even_with_old_grant
 def test_readonly_ceiling_cannot_be_removed_by_system_or_member_grants(client, admin_headers, pm_headers):
     reader, _ = account(client, admin_headers, 'readonly', 'ceiling-reader')
     pid = _project(client, pm_headers, 'ceiling')
-    assert client.put(f'/api/projects/{pid}', headers=pm_headers, json={'members': [reader['id']]}).status_code == 200
+    assert client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': [reader['id']]})).status_code == 200
     version = client.get(f"/api/permissions/users/{reader['id']}", headers=admin_headers).json()['version']
     assert client.put(f"/api/permissions/users/{reader['id']}", headers=admin_headers,
                       json={'version': version, 'overrides': {'worker.report': True}}).status_code == 422
-    denied = client.put(f'/api/projects/{pid}', headers=pm_headers, json={
+    denied = client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {
         'member_permissions': [{'user_id': reader['id'], 'capabilities': ['project.manage_plan']}],
-    })
+    }))
     assert denied.status_code == 400 and '只读预设' in denied.text
 
 
@@ -103,7 +104,7 @@ def test_project_reasons_distinguish_layers_and_enforce_inspector_scope(client, 
     assert reasons['project.read']['layer'] == 'membership'
     assert reasons['project.update']['layer'] == 'membership'
     assert client.put(f'/api/projects/{pid}', headers=pm_headers,
-                      json={'members': [reader['id'], 'user-worker-001']}).status_code == 200
+                      json=versioned(pid, {'members': [reader['id'], 'user-worker-001']})).status_code == 200
     joined = client.get(path, headers=pm_headers).json()
     assert next(x for x in joined['items'] if x['key'] == 'project.update')['layer'] == 'preset'
     assert client.get(path, headers=worker_headers).status_code == 403
@@ -113,7 +114,7 @@ def test_project_reasons_distinguish_layers_and_enforce_inspector_scope(client, 
     policy(client, admin_headers, 'user-worker-001', {'project.update': False})
     own = client.get(f'/api/permissions/projects/{pid}/users/user-worker-001/reasons', headers=worker_headers)
     assert next(x for x in own.json()['items'] if x['key'] == 'project.update')['layer'] == 'system'
-    denied = client.put(f'/api/projects/{pid}', headers=worker_headers, json={'description': 'denied'})
+    denied = client.put(f'/api/projects/{pid}', headers=worker_headers, json=versioned(pid, {'description': 'denied'}))
     assert denied.status_code == 403 and '系统禁止' in denied.text
 
 
@@ -128,9 +129,9 @@ def test_future_action_is_denied_by_readonly_ceiling(monkeypatch):
 def test_project_read_denial_reports_system_layer_on_mixed_field_writes(client, admin_headers, pm_headers, worker_headers):
     pid = _project(client, pm_headers, 'system read denial')
     assert client.put(f'/api/projects/{pid}', headers=pm_headers,
-                      json={'members': ['user-worker-001']}).status_code == 200
+                      json=versioned(pid, {'members': ['user-worker-001']})).status_code == 200
     policy(client, admin_headers, 'user-worker-001', {'project.read': False})
-    denied = client.put(f'/api/projects/{pid}', headers=worker_headers, json={'description': 'denied'})
+    denied = client.put(f'/api/projects/{pid}', headers=worker_headers, json=versioned(pid, {'description': 'denied'}))
     assert denied.status_code == 403 and '系统禁止' in denied.text
 
 
@@ -176,9 +177,9 @@ def test_project_inspectors_get_identical_membership_reason_for_all_outsiders(cl
 
 def test_member_permission_write_respects_system_membership_denial(client, admin_headers, pm_headers):
     pid = _project(client, pm_headers, 'delegation deny')
-    assert client.put(f'/api/projects/{pid}', headers=pm_headers, json={'members': ['user-worker-001']}).status_code == 200
+    assert client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': ['user-worker-001']})).status_code == 200
     policy(client, admin_headers, 'user-pm-001', {'project.manage_members': False})
-    response = client.put(f'/api/projects/{pid}', headers=pm_headers, json={
+    response = client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {
         'member_permissions': [{'user_id': 'user-worker-001', 'capabilities': ['project.manage_plan']}],
-    })
+    }))
     assert response.status_code == 403 and '系统禁止' in response.text

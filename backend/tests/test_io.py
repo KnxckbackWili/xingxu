@@ -1,5 +1,6 @@
 """Import/export + clone tests."""
 
+from tests.lifecycle_helpers import versioned
 import io
 import json
 
@@ -123,7 +124,7 @@ def test_project_export_excel_sheets(client, pm_headers, worker_headers):
     wid = r.json()["id"]
     r = client.get(f"/api/projects/{pid}", headers=pm_headers)
     client.put(f"/api/projects/{pid}", headers=pm_headers,
-               json={"members": [*r.json()["members"], wid]})
+               json=versioned(pid, {"members": [*r.json()["members"], wid]}))
     # 下达后现场成员填报，导出断言仍验证真实填报与日程关联。
     r = client.post(f"/api/projects/{pid}/schedule/confirm", headers=pm_headers)
     assert r.status_code == 200, r.json()
@@ -213,7 +214,7 @@ def test_project_export_package_zip(client, pm_headers, worker_headers):
     me = client.get("/api/auth/me", headers=worker_headers).json()
     detail = client.get(f"/api/projects/{pid}", headers=pm_headers).json()
     client.put(f"/api/projects/{pid}", headers=pm_headers,
-               json={"members": [*detail["members"], me["id"]]})
+               json=versioned(pid, {"members": [*detail["members"], me["id"]]}))
     assert client.get(f"/api/projects/{pid}/export/package", headers=worker_headers).status_code == 403
 
 

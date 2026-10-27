@@ -1,3 +1,4 @@
+from tests.lifecycle_helpers import versioned
 """Refinement tests: task quantity editing + check item ticking."""
 
 
@@ -33,11 +34,11 @@ def test_pm_fills_manual_task_quantity(client, pm_headers):
     assert task["quantity_type"] == "manual"
     assert task["target_quantity"] is None
 
-    r = client.put(f"/api/projects/{pid}/tasks/{task['id']}", headers=pm_headers, json={
+    r = client.put(f"/api/projects/{pid}/tasks/{task['id']}", headers=pm_headers, json=versioned(task['id'], {
         "target_quantity": 5,
         "unit": "个",
         "standard_hours": 6,
-    })
+    }, 'Task'))
     assert r.status_code == 200, r.json()
     assert r.json()["target_quantity"] == 5
     assert r.json()["unit"] == "个"
@@ -53,14 +54,14 @@ def test_pm_fills_manual_task_quantity(client, pm_headers):
 def test_worker_cannot_edit_task(client, pm_headers, worker_headers):
     pid = _project(client, pm_headers)
     task = _find_task(client, pm_headers, pid, "场地勘测")
-    r = client.put(f"/api/projects/{pid}/tasks/{task['id']}", headers=worker_headers, json={"target_quantity": 9})
+    r = client.put(f"/api/projects/{pid}/tasks/{task['id']}", headers=worker_headers, json=versioned(task['id'], {"target_quantity": 9}, 'Task'))
     assert r.status_code in (403, 404)
 
 
 def test_worker_ticks_check_item(client, pm_headers, worker_headers):
     pid = _project(client, pm_headers)
     # Add worker to project
-    client.put(f"/api/projects/{pid}", headers=pm_headers, json={"members": ["user-worker-001"]})
+    client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": ["user-worker-001"]}))
 
     task = _find_task(client, pm_headers, pid, "开箱检查")
     # Find the project's 开箱检查 check item via tree (mod-02 wasn't generated; use mod-03)
@@ -92,7 +93,7 @@ def test_worker_not_applicable_requires_reason_and_preserves_safety_guard(client
     CLAUDE.md「检查项三态」及 TodayPage 明确 worker 可用，不再沿用旧 PM-only 契约。
     """
     pid = _project(client, pm_headers)
-    client.put(f"/api/projects/{pid}", headers=pm_headers, json={"members": ["user-worker-001"]})
+    client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": ["user-worker-001"]}))
     task = _find_task(client, pm_headers, pid, "单车机械与导航调试")
     ci = next(c for c in task["check_items"] if not c["is_safety_critical"])
     url = f"/api/projects/{pid}/check-items/{ci['id']}"

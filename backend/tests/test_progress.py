@@ -1,3 +1,4 @@
+from tests.lifecycle_helpers import versioned
 """Progress calculation tests."""
 
 
@@ -44,7 +45,7 @@ def test_progress_after_partial_fill(client, pm_headers, worker_headers):
     # Add worker as member
     r = client.get(f"/api/projects/{pid}", headers=pm_headers)
     members = r.json()["members"] + ["user-worker-001"]
-    client.put(f"/api/projects/{pid}", headers=pm_headers, json={"members": members})
+    client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": members}))
 
     # Find 开箱检查 task (per_vehicle, target=4)
     r = client.get(f"/api/projects/{pid}/tree", headers=pm_headers)

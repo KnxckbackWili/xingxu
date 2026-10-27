@@ -1,4 +1,5 @@
 """Real weekly plans are separate from actual work and original daily sources."""
+from tests.lifecycle_helpers import versioned
 from datetime import date
 from app.db import SessionLocal
 from app.models import Project, User, Task, WeeklyPlanCell, Notification, VehicleProgress
@@ -135,7 +136,7 @@ def test_scoped_scheduler_can_edit_settings_without_core_project_update_and_sour
     changed=client.put(url,headers=worker_headers,json=body)
     assert changed.status_code==200 and changed.json()['settings']['rest_mode']=='one',changed.text
     assert client.put(url,headers=worker_headers,json=body).status_code==409
-    assert client.put(f'/api/projects/{pid}',headers=pm_headers,json={'rest_mode':'two'}).status_code==400
+    assert client.put(f'/api/projects/{pid}',headers=pm_headers,json=versioned(pid, {'rest_mode':'two'})).status_code==400
     row=create_cell(client,worker_headers,pid,task)
     assert row['permissions']['edit']
     with SessionLocal() as db:

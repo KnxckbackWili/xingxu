@@ -1,3 +1,4 @@
+from tests.lifecycle_helpers import versioned
 """Vehicle issue source-of-truth and implementation co-manager coordination."""
 
 
@@ -12,7 +13,7 @@ def _project(client, pm_headers):
 def test_vehicle_issues_are_aggregated_without_copying_project_issues(client, pm_headers, worker_headers):
     project_id = _project(client, pm_headers)
     client.put(f"/api/projects/{project_id}", headers=pm_headers,
-               json={"members": ["user-worker-001"]})
+               json=versioned(project_id, {"members": ["user-worker-001"]}))
     unit_response = client.post(f"/api/projects/{project_id}/vehicle-units", headers=pm_headers, json={
         "asset_code": "AGV-007", "serial_number": "SN-007", "current_stage": "planned",
     })
@@ -50,9 +51,9 @@ def test_vehicle_issues_are_aggregated_without_copying_project_issues(client, pm
     ordinary_focus = client.get("/api/dashboard/issues", headers=worker_headers).json()["items"]
     assert {item["title"] for item in ordinary_focus} == {"驱动轮异响"}
 
-    grant = client.put(f"/api/projects/{project_id}", headers=pm_headers, json={
+    grant = client.put(f"/api/projects/{project_id}", headers=pm_headers, json=versioned(project_id, {
         "co_managers": [{"user_id": "user-worker-001", "expires_at": "2099-12-31"}],
-    })
+    }))
     assert grant.status_code == 200, grant.text
     co_manager_focus = client.get("/api/dashboard/issues", headers=worker_headers).json()["items"]
     assert {item["title"] for item in co_manager_focus} == {"驱动轮异响", "更换驱动轮轴承"}

@@ -1,5 +1,6 @@
 """Report forms: 生命周期表 / 质量问题反馈单 / 内部联系单（物品申请）端到端测试."""
 
+from tests.lifecycle_helpers import versioned
 import io
 import zipfile
 from datetime import datetime
@@ -684,7 +685,7 @@ def test_legacy_repair_keeps_already_applied_event_schema_and_dates(client, pm_h
     from app.db import engine
     from sqlalchemy import text
     pid = _project(client, pm_headers)
-    changed = client.put(f'/api/projects/{pid}', headers=pm_headers, json={'dispatch_platform': 'NDC'})
+    changed = client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'dispatch_platform': 'NDC'}))
     assert changed.status_code == 200, changed.text
     dated = client.put(f'/api/projects/{pid}/events/ship', headers=pm_headers,
                        json={'planned_date': '2026-10-27'})

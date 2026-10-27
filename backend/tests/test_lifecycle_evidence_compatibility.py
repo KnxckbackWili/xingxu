@@ -1,5 +1,6 @@
 """旧生命周期与验收来源保全。"""
 
+from tests.lifecycle_helpers import versioned
 import pytest
 from app.db import SessionLocal
 from app.models import Project, ProjectPreparationItem, Task
@@ -233,7 +234,7 @@ def test_unknown_legacy_status_remains_readable_but_cannot_be_edited(client, pm_
         db.get(Project, pid).status = 'closed'
         db.commit()
     assert client.get(f'/api/projects/{pid}', headers=pm_headers).json()['status'] == 'closed'
-    blocked = client.put(f'/api/projects/{pid}', headers=pm_headers, json={'name': '不得修改旧归档'})
+    blocked = client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'name': '不得修改旧归档'}))
     assert blocked.status_code == 400 and '历史状态' in blocked.json()['detail']
     blocked = client.post(f'/api/projects/{pid}/procurements', headers=pm_headers, json={'name': '新增'})
     assert blocked.status_code == 400 and '历史状态' in blocked.json()['detail']
@@ -291,5 +292,5 @@ def test_full_init_preserves_archived_lock_and_planning(client, pm_headers, monk
         init_db()
         assert client.get(f'/api/projects/{pid}', headers=pm_headers).json()['status'] == 'archived'
         assert client.get(f'/api/projects/{planning}', headers=pm_headers).json()['status'] == 'planning'
-        blocked = client.put(f'/api/projects/{pid}', headers=pm_headers, json={'name': '重启不能解锁'})
+        blocked = client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'name': '重启不能解锁'}))
         assert blocked.status_code == 400 and '归档' in blocked.json()['detail']

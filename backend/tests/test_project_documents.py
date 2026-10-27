@@ -1,4 +1,5 @@
 """One real-file evidence stream replaces the former document sources."""
+from tests.lifecycle_helpers import versioned
 import hashlib
 import copy
 import io
@@ -213,7 +214,7 @@ def test_readonly_project_member_can_read_documents_without_writing(client,admin
     submitted=next(row for row in state['documents'] if row['id']==document['id'])
     assert client.get('/api'+submitted['latest_version']['download_url'],headers=headers).content==b'evidence'
     assert upload(client,headers,pid,[document['id']]).status_code==403
-    assert client.put(f'/api/projects/{pid}/documents/{document["id"]}',headers=headers,json={'status':'waived','reason':'只读不能写'}).status_code==403
+    assert client.put(f'/api/projects/{pid}/documents/{document["id"]}',headers=headers,json=versioned(document["id"], {'status':'waived','reason':'只读不能写'}, 'ProjectDocument')).status_code==403
 
 
 def rule_body(row,**changes):

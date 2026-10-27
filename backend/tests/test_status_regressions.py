@@ -1,3 +1,4 @@
+from tests.lifecycle_helpers import versioned
 """生命周期回归：相邻流转、单步推进、验收门禁、初始状态保持、终态聚合口径。"""
 
 _STATUS_ORDER = ["draft", "preparing", "planning", "ready", "executing",
@@ -9,7 +10,7 @@ def _member(client, pm_headers, worker_headers, pid):
     wid = r.json()["id"]
     r = client.get(f"/api/projects/{pid}", headers=pm_headers)
     client.put(f"/api/projects/{pid}", headers=pm_headers,
-               json={"members": [*r.json()["members"], wid]})
+               json=versioned(pid, {"members": [*r.json()["members"], wid]}))
 
 
 def _create(client, pm_headers, name, status="planning", start="2026-08-10"):

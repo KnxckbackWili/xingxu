@@ -1,4 +1,5 @@
 """T20 actual-event authority, date precision and complete-fleet arrival evidence."""
+from tests.lifecycle_helpers import versioned
 from datetime import date, datetime
 
 import pytest
@@ -42,7 +43,7 @@ def test_plans_and_platform_are_one_source_and_do_not_move_status(client, pm_hea
     assert len(e) == 9 and e['ship']['planned_date'] == '2026-01-10'
     assert all(x['actual_at'] is None for x in e.values())
     r = client.put(f"/api/projects/{p['id']}", headers=pm_headers,
-                   json={'dispatch_platform': 'integrated', 'event_plans': {'ship': None}})
+                   json=versioned(p['id'], {'dispatch_platform': 'integrated', 'event_plans': {'ship': None}}))
     assert r.status_code == 200, r.text
     assert r.json()['dispatch_platform'] == 'integrated'
     assert events(client, pm_headers, p['id'])['ship']['planned_date'] is None
@@ -104,7 +105,7 @@ def test_partial_registry_cannot_become_all_arrived_and_clear_is_atomic(client, 
 def test_fleet_expansion_invalidates_derived_actual_without_changing_project_state(client, pm_headers):
     p, vid = fleet(client, pm_headers, quantity=1); pid = p['id']
     uid = unit(client, pm_headers, pid, vid, 'AGV-1')
-    client.put(f'/api/projects/{pid}/vehicle-arrivals', headers=pm_headers, json={'unit_ids': [uid], 'arrived_at': '2026-10-01'})
+    client.put(f'/api/projects/{pid}/vehicle-arrivals', headers=pm_headers, json=versioned(pid, {'unit_ids': [uid], 'arrived_at': '2026-10-01'}))
     assert events(client, pm_headers, pid)['arrival_all']['actual_at']
     r = client.put(f'/api/projects/{pid}/vehicles/{vid}', headers=pm_headers, json={'quantity': 2})
     assert r.status_code == 200, r.text
@@ -118,25 +119,25 @@ def test_batch_does_not_write_foreign_vehicle_and_member_cannot_change_events(cl
     other = project(client, pm_headers)
     foreign = unit(client, pm_headers, other['id'], None, 'AGV-other')
     r = client.put(f'/api/projects/{pid}/vehicle-arrivals', headers=pm_headers,
-                   json={'unit_ids': [own, foreign], 'arrived_at': '2026-10-01'})
+                   json=versioned(pid, {'unit_ids': [own, foreign], 'arrived_at': '2026-10-01'}))
     assert r.status_code == 404
     assert client.get(f'/api/projects/{pid}/vehicle-units', headers=pm_headers).json()[0]['arrived_at'] is None
-    client.put(f'/api/projects/{pid}', headers=pm_headers, json={'members': ['user-worker-001']})
+    client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': ['user-worker-001']}))
     assert client.put(f'/api/projects/{pid}/events/ship', headers=worker_headers,
                       json={'actual_at': '2026-10-01T10:30:00Z'}).status_code == 403
     assert client.put(f'/api/projects/{pid}/vehicle-arrivals', headers=worker_headers,
-                      json={'unit_ids': [own], 'arrived_at': '2026-10-01'}).status_code == 403
+                      json=versioned(pid, {'unit_ids': [own], 'arrived_at': '2026-10-01'})).status_code == 403
     for payload in ({'planned_entry_date': None}, {'entry_plan': {'entry_date': '2026-10-01'}}):
-        assert client.put(f'/api/projects/{pid}', headers=pm_headers, json=payload).status_code == 422
+        assert client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, payload)).status_code == 422
 
 
 def test_portable_json_and_excel_preserve_event_precision_and_vehicle_arrival(client, pm_headers):
     from io import BytesIO
     from openpyxl import load_workbook
     p, vid = fleet(client, pm_headers, quantity=1); pid = p['id']
-    client.put(f'/api/projects/{pid}', headers=pm_headers, json={'dispatch_platform': 'GRACE', 'event_plans': {'ship': '2026-09-30'}})
+    client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'dispatch_platform': 'GRACE', 'event_plans': {'ship': '2026-09-30'}}))
     uid = unit(client, pm_headers, pid, vid, 'AGV-001')
-    client.put(f'/api/projects/{pid}/vehicle-arrivals', headers=pm_headers, json={'unit_ids': [uid], 'arrived_at': '2026-10-03'})
+    client.put(f'/api/projects/{pid}/vehicle-arrivals', headers=pm_headers, json=versioned(pid, {'unit_ids': [uid], 'arrived_at': '2026-10-03'}))
     client.put(f'/api/projects/{pid}/events/ship', headers=pm_headers, json={'actual_at': '2026-10-01T14:30:00+08:00'})
     snapshot = client.get(f'/api/projects/{pid}/export/json', headers=pm_headers).json()
     assert snapshot['vehicle_units'][0]['arrived_at'] == '2026-10-03'
@@ -169,11 +170,11 @@ def test_old_portable_dates_map_to_ship_and_arrival_without_actual_times(client,
 def test_plan_grant_can_record_arrival_without_receiving_event_update_authority(client, pm_headers, worker_headers):
     p, vid = fleet(client, pm_headers, quantity=1); pid = p['id']
     uid = unit(client, pm_headers, pid, vid, 'AGV-1')
-    grant = client.put(f'/api/projects/{pid}', headers=pm_headers, json={
-        'members': ['user-worker-001'], 'member_permissions': [{'user_id': 'user-worker-001', 'capabilities': ['project.manage_plan']}]})
+    grant = client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {
+        'members': ['user-worker-001'], 'member_permissions': [{'user_id': 'user-worker-001', 'capabilities': ['project.manage_plan']}]}))
     assert grant.status_code == 200, grant.text
     assert client.put(f'/api/projects/{pid}/vehicle-arrivals', headers=worker_headers,
-                      json={'unit_ids': [uid], 'arrived_at': '2026-10-03'}).status_code == 200
+                      json=versioned(pid, {'unit_ids': [uid], 'arrived_at': '2026-10-03'})).status_code == 200
     assert client.put(f'/api/projects/{pid}/events/ship', headers=worker_headers,
                       json={'actual_at': '2026-10-01T10:30:00Z'}).status_code == 403
     overview = client.get(f'/api/projects/{pid}/overview', headers=worker_headers).json()
@@ -203,7 +204,7 @@ def test_readonly_legacy_date_survives_handover_clear_and_clone_keeps_only_plans
                     'planned_entry_date': '2026-10-01', 'entry_plan': {'entry_date': '2026-10-03', 'meeting_point': '东门'}}})
     assert r.status_code == 200, r.text
     pid = r.json()['id']
-    cleared = client.put(f'/api/projects/{pid}', headers=pm_headers, json={'entry_plan': None})
+    cleared = client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'entry_plan': None}))
     assert cleared.status_code == 200, cleared.text
     assert cleared.json()['entry_plan'] == {'entry_date': '2026-10-03'}
     client.put(f'/api/projects/{pid}/events/ship', headers=pm_headers, json={'actual_at': '2026-10-01T10:00:00Z'})

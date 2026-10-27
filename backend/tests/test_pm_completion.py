@@ -9,6 +9,7 @@
 7. /worker/records 与周期报告暴露 source。
 """
 
+from tests.lifecycle_helpers import versioned
 from app.time_utils import today_in
 
 from app.db import SessionLocal
@@ -44,7 +45,7 @@ def _setup_active(client, pm_headers, member_headers=None, name="PM完成量测�
         uid = _me(client, member_headers)
         detail = client.get(f"/api/projects/{pid}", headers=pm_headers).json()
         r = client.put(f"/api/projects/{pid}", headers=pm_headers,
-                       json={"members": [*detail["members"], uid]})
+                       json=versioned(pid, {"members": [*detail["members"], uid]}))
         assert r.status_code == 200, r.json()
     return pid
 
@@ -130,7 +131,7 @@ def test_non_member_worker_404_member_worker_200(client, pm_headers, worker_head
     uid = _me(client, worker_headers)
     detail = client.get(f"/api/projects/{pid}", headers=pm_headers).json()
     r = client.put(f"/api/projects/{pid}", headers=pm_headers,
-                   json={"members": [*detail["members"], uid]})
+                   json=versioned(pid, {"members": [*detail["members"], uid]}))
     assert r.status_code == 200, r.json()
     r = client.post("/api/worker/reports", headers=worker_headers, json={
         "task_id": entry["task_id"], "schedule_entry_id": entry["id"],

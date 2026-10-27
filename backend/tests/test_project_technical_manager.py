@@ -1,5 +1,6 @@
 """Explicit technical-duty removal preserves membership, grants and work history."""
 
+from tests.lifecycle_helpers import versioned
 from datetime import date
 
 import pytest
@@ -25,15 +26,15 @@ def test_explicit_clear_preserves_member_grants_and_assigned_history(
     editor_headers = request.getfixturevalue(editor_fixture)
     uid = client.get('/api/auth/me', headers=worker_headers).json()['id']
     pid = _project(client, pm_headers, uid)
-    granted = client.put(f'/api/projects/{pid}', headers=pm_headers, json={
+    granted = client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {
         'member_permissions': [{'user_id': uid, 'capabilities': [C_EXPORT]}],
-    })
+    }))
     assert granted.status_code == 200, granted.text
     before = client.get(f'/api/projects/{pid}', headers=worker_headers).json()
     assert C_PLAN in before['capabilities']
 
     # An unrelated update must not interpret the omitted field as a clear.
-    omitted = client.put(f'/api/projects/{pid}', headers=editor_headers, json={'description': '只更新说明'})
+    omitted = client.put(f'/api/projects/{pid}', headers=editor_headers, json=versioned(pid, {'description': '只更新说明'}))
     assert omitted.status_code == 200, omitted.text
     assert omitted.json()['technical_manager'] == uid
     with SessionLocal() as db:
@@ -76,13 +77,13 @@ def test_technical_member_or_co_manager_cannot_clear_formal_duty(client, pm_head
     uid = client.get('/api/auth/me', headers=worker_headers).json()['id']
     pid = _project(client, pm_headers, uid)
     if co_manager:
-        grant = client.put(f'/api/projects/{pid}', headers=pm_headers, json={
+        grant = client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {
             'co_managers': [{'user_id': uid, 'expires_at': '2099-12-31'}],
-        })
+        }))
         assert grant.status_code == 200, grant.text
         assert client.put(f'/api/projects/{pid}', headers=worker_headers,
-                          json={'description': '协管可更新普通说明'}).status_code == 200
-    denied = client.put(f'/api/projects/{pid}', headers=worker_headers, json={'technical_manager_id': None})
+                          json=versioned(pid, {'description': '协管可更新普通说明'})).status_code == 200
+    denied = client.put(f'/api/projects/{pid}', headers=worker_headers, json=versioned(pid, {'technical_manager_id': None}))
     assert denied.status_code == 403
     assert client.get(f'/api/projects/{pid}', headers=pm_headers).json()['technical_manager'] == uid
 
@@ -91,7 +92,7 @@ def test_technical_member_or_co_manager_cannot_clear_formal_duty(client, pm_head
 def test_invalid_replacement_does_not_clear_existing_duty(client, pm_headers, worker_headers, replacement):
     uid = client.get('/api/auth/me', headers=worker_headers).json()['id']
     pid = _project(client, pm_headers, uid)
-    rejected = client.put(f'/api/projects/{pid}', headers=pm_headers, json={'technical_manager_id': replacement})
+    rejected = client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'technical_manager_id': replacement}))
     assert rejected.status_code == 400, rejected.text
     assert client.get(f'/api/projects/{pid}', headers=pm_headers).json()['technical_manager'] == uid
 

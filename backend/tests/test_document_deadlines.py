@@ -1,4 +1,5 @@
 """Deadline facts, site calendars, durable schedules and real API boundaries."""
+from tests.lifecycle_helpers import versioned
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace as Obj
 
@@ -334,12 +335,12 @@ def test_real_vehicle_arrival_api_keeps_date_precision_and_recomputes_clear(clie
     pid=create(client,admin_headers,timezone='America/New_York')['id']
     vehicle=client.post(f'/api/projects/{pid}/vehicles',headers=admin_headers,json={'vehicle_type':'潜伏式','model_name':'AGV','quantity':1}).json()['id']
     unit=client.post(f'/api/projects/{pid}/vehicle-units',headers=admin_headers,json={'vehicle_id':vehicle,'asset_code':'NY-01'}).json()['id']
-    assert client.put(f'/api/projects/{pid}/vehicle-arrivals',headers=admin_headers,json={'unit_ids':[unit],'arrived_at':'2026-11-01'}).status_code==200
+    assert client.put(f'/api/projects/{pid}/vehicle-arrivals',headers=admin_headers,json=versioned(pid, {'unit_ids':[unit],'arrived_at':'2026-11-01'})).status_code==200
     row=next(row for row in view(client,admin_headers,pid)['documents'] if row['code']=='6.1')
     assert row['due_at']=='2026-11-02T04:00:00+00:00' and not row['due_is_estimated']
     assert row['due_basis']['actual_date']=='2026-11-01' and row['due_basis']['precision']=='date'
     assert 'actual_at' not in row['due_basis']
-    assert client.put(f'/api/projects/{pid}/vehicle-arrivals',headers=admin_headers,json={'unit_ids':[unit],'arrived_at':None,'reason':'到场登记待核对'}).status_code==200
+    assert client.put(f'/api/projects/{pid}/vehicle-arrivals',headers=admin_headers,json=versioned(pid, {'unit_ids':[unit],'arrived_at':None,'reason':'到场登记待核对'})).status_code==200
     cleared=next(item for item in view(client,admin_headers,pid)['documents'] if item['id']==row['id'])
     assert cleared['due_at'] is None and cleared['due_state']=='awaiting_event'
 

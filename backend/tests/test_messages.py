@@ -1,3 +1,4 @@
+from tests.lifecycle_helpers import versioned
 """Message center: notification pagination + batch read tests."""
 
 
@@ -11,7 +12,7 @@ def _project(client, pm_headers):
     pid = r.json()["id"]
     # Pagination/read tests require real assignment recipients with project access.
     membership = client.put(f"/api/projects/{pid}", headers=pm_headers,
-                            json={"members": ["user-worker-001", "user-worker-002"]})
+                            json=versioned(pid, {"members": ["user-worker-001", "user-worker-002"]}))
     assert membership.status_code == 200, membership.text
     return pid
 

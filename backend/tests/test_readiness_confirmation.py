@@ -1,4 +1,5 @@
 """Reasoned stage-five exceptions remain visible without changing source evidence."""
+from tests.lifecycle_helpers import versioned
 from app.db import SessionLocal
 from app.models import Project, ProjectDocument, ProjectDocumentDefinition, ProjectReadinessReview
 from tests.test_dispatch_review_t29 import scope, preview, confirm, requirement
@@ -65,5 +66,5 @@ def test_empty_checklist_is_shown_as_missing_and_requires_explanation(client, pm
 def test_worker_cannot_force_confirmation(client, pm_headers, worker_headers):
     pid, _ = scope(client, pm_headers)
     token=preview(client, pm_headers, pid)['review_token']
-    client.put(f'/api/projects/{pid}', headers=pm_headers, json={'members':['user-worker-001']})
+    client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members':['user-worker-001']}))
     assert confirm(client, worker_headers, pid, token=token).status_code == 403

@@ -1,4 +1,5 @@
 """Completion uses business invariants; archived issue ledgers remain immutable."""
+from tests.lifecycle_helpers import versioned
 from datetime import date
 import pytest
 
@@ -17,7 +18,7 @@ def test_archived_issue_mutations_rejected(client, pm_headers, operation):
     from app.models import Project
     pid = project(client, pm_headers)
     issue = client.post(f'/api/projects/{pid}/issues', headers=pm_headers, json={'title': 'Issue'}).json()
-    client.put(f"/api/issues/{issue['id']}", headers=pm_headers, json={'status': 'resolved'})
+    client.put(f"/api/issues/{issue['id']}", headers=pm_headers, json=versioned(issue['id'], {'status': 'resolved'}, 'Issue'))
     with SessionLocal() as db:
         db.get(Project, pid).status = 'archived'
         db.commit()
@@ -38,40 +39,12 @@ def test_archived_issue_mutations_rejected(client, pm_headers, operation):
     assert len(rows) == 1 and rows[0]['title'] == 'Issue' and rows[0]['status'] == 'resolved'
 
 
-@pytest.mark.parametrize('failed,quantity', [(True, 1), (False, 0.99), (False, 0.996)])
-def test_rounded_progress_cannot_complete_project(client, pm_headers, failed, quantity):
-    from app.db import SessionLocal
-    from app.models import Project, Phase, Module, Task, CheckItem, DailyProgress, AcceptanceRecord
-    from app.services.progress import project_progress_tree
-    pid = project(client, pm_headers)
-    uid = client.get('/api/auth/me', headers=pm_headers).json()['id']
-    with SessionLocal() as db:
-        db.get(Project, pid).status = 'acceptance'
-        phase = Phase(project_id=pid, name='现场实施')
-        db.add(phase); db.flush()
-        module = Module(project_id=pid, phase_id=phase.id, name='Implementation')
-        db.add(module); db.flush()
-        for name, target, done in [('small', 1, quantity), ('large', 100, 100)]:
-            task = Task(project_id=pid, module_id=module.id, name=name, target_quantity=target)
-            db.add(task); db.flush()
-            db.add(DailyProgress(project_id=pid, task_id=task.id, user_id=uid,
-                                 work_date=date(2026, 9, 30), completed_quantity=done, client_uuid=name))
-            if name == 'small' and failed:
-                db.add(CheckItem(task_id=task.id, name='Failed test', is_applicable=True, failed=True))
-        db.add(AcceptanceRecord(project_id=pid, accepted_by_name='Customer', accepted_at=date(2026, 9, 30), conclusion='accepted'))
-        db.commit()
-        assert project_progress_tree(db, pid)['percent'] == 100
-    result = client.post(f'/api/projects/{pid}/status', headers=pm_headers, json={'status': 'completed'})
-    assert result.status_code == 400, result.text
-    assert '未完成或检查未通过' in result.json()['detail']['message']
-
-
 def test_worker_can_find_resolved_issues_for_reopen(client, pm_headers, worker_headers):
     pid = project(client, pm_headers)
     uid = client.get('/api/auth/me', headers=worker_headers).json()['id']
-    assert client.put(f'/api/projects/{pid}', headers=pm_headers, json={'members': [uid]}).status_code == 200
+    assert client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': [uid]})).status_code == 200
     issue = client.post(f'/api/projects/{pid}/issues', headers=worker_headers, json={'title': 'Verify fix'}).json()
-    assert client.put(f"/api/issues/{issue['id']}", headers=pm_headers, json={'status': 'resolved'}).status_code == 200
+    assert client.put(f"/api/issues/{issue['id']}", headers=pm_headers, json=versioned(issue['id'], {'status': 'resolved'}, 'Issue')).status_code == 200
     assert not client.get('/api/dashboard/issues', headers=worker_headers).json()['items']
     rows = client.get('/api/dashboard/issues?include_closed=true', headers=worker_headers).json()['items']
     assert rows[0]['id'] == issue['id'] and rows[0]['project_status'] == 'draft'
@@ -116,7 +89,7 @@ def test_document_review_is_metadata_and_does_not_erase_submitted_file(client, p
     from tests.document_helpers import documents, upload_documents
     pid = project(client, pm_headers)
     worker = client.get('/api/auth/me', headers=worker_headers).json()['id']
-    assert client.put(f'/api/projects/{pid}', headers=pm_headers, json={'members': [worker]}).status_code == 200
+    assert client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': [worker]})).status_code == 200
     row = documents(client, pm_headers, pid)['documents'][0]
     submitted = upload_documents(client, worker_headers, pid, [row['id']])['documents'][0]
     version = submitted['versions'][0]

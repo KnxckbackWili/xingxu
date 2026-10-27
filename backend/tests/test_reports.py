@@ -1,3 +1,4 @@
+from tests.lifecycle_helpers import versioned
 """Report generation tests."""
 
 
@@ -23,7 +24,7 @@ def _project_with_work(client, pm_headers, worker_headers):
     r = client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers,
                 json={"module_ids": ["mod-03"]})
     assert r.status_code == 200, r.json()
-    r = client.put(f"/api/projects/{pid}", headers=pm_headers, json={"members": ["user-worker-001"]})
+    r = client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": ["user-worker-001"]}))
     assert r.status_code == 200, r.json()
     # Worker completes 1 unit of 单车机械与导航调试 on 2026-08-05
     r = client.get(f"/api/projects/{pid}/tree", headers=pm_headers)

@@ -1,3 +1,4 @@
+from tests.lifecycle_helpers import versioned
 import io
 import tarfile
 import json
@@ -69,10 +70,10 @@ def test_vehicle_lifecycle_and_json_roundtrip_data(client, admin_headers, pm_hea
         },
     )
     assert repaired.status_code == 200, repaired.text
-    client.put(f"/api/projects/{project['id']}", headers=pm_headers, json={
+    client.put(f"/api/projects/{project['id']}", headers=pm_headers, json=versioned(project['id'], {
         "client_contacts": [{"department": "设备部", "team": "自动化组", "name": "李经理", "phone": "13800000000", "is_primary": True}],
         "entry_plan": {"mode": "collective", "meeting_point": "东门 1 号岗", "client_contact": "李经理"},
-    })
+    }))
     detail = client.get(f"/api/projects/{project['id']}/vehicle-units/{unit.json()['id']}", headers=pm_headers).json()
     assert detail["current_stage"] == "planned"
     assert detail["issue_count"] == 1
