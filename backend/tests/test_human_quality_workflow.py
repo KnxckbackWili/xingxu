@@ -34,8 +34,10 @@ def test_quantity_quality_and_existing_manual_override(client, pm_headers, requi
     handover = client.get(f'/api/projects/{pid}/handover-summary', headers=pm_headers).json()
     assert bool(handover['counts']['tasks']) is blocked
     if safety and blocked and not manual:
-        result = client.post(f'/api/worker/tasks/{tid}/complete', headers=pm_headers, json={})
-        assert result.status_code == 400 and '安全检查' in result.json()['detail']
+        with SessionLocal() as db: version = db.get(Task, tid).version or 0
+        result = client.put(f'/api/projects/{pid}/work-items/{tid}/completion', headers=pm_headers,
+                            json={'version': version, 'is_completed': True, 'reason': '尝试覆盖安全检查'})
+        assert result.status_code == 400 and '必需检查尚未满足' in result.text
 
 def test_completed_issue_reopen_keeps_state_and_notifies_manager(client, pm_headers, worker_headers):
     from app.models import Notification, Issue

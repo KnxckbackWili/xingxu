@@ -114,17 +114,8 @@ def test_north_star_empty_window_returns_none_rate(client, pm_headers):
         db.close()
 
 
-def test_north_star_http_endpoint(client, admin_headers):
-    """HTTP 端点返回结构与鉴权。"""
+def test_north_star_http_endpoint_is_retired(client, admin_headers):
+    """按日排程准时率随按日排程退役：HTTP 端点认证后返回 410。"""
     _seed(client, admin_headers)
     r = client.get("/api/north-star", headers=admin_headers)
-    assert r.status_code == 200, r.text
-    data = r.json()
-    assert data["metric"] == "on_time_execution_rate"
-    assert "current" in data and "baseline" in data and "delta" in data
-    assert data["window_days"] == 14
-
-    r = client.get("/api/north-star", headers=admin_headers, params={"days": 7, "baseline_days": 14})
-    assert r.status_code == 200
-    assert r.json()["window_days"] == 7
-    assert r.json()["baseline"]["window_days"] == 14
+    assert r.status_code == 410, r.text

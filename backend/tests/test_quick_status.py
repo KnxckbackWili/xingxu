@@ -48,12 +48,17 @@ def test_application_quick_status_preserves_form_and_rejects_stale_changes(clien
 def test_quick_status_does_not_write_archived_or_unknown_history(client, pm_headers):
     from app.db import SessionLocal
     from app.models import Project
-    for state in ['archived', 'legacy_unknown']:
+    # 已归档锁定；旧状态需人工修复（requires_repair）的项目同样只读。
+    for state in ['archived', 'requires_repair']:
         pid = _project(client, pm_headers)
         item = client.post(f'/api/projects/{pid}/inventory', headers=pm_headers, json={'name': '只读物品', 'quantity': 3}).json()
         app = client.post(f'/api/projects/{pid}/item-applications', headers=pm_headers, json={'title': '只读申请', 'amount': '500'}).json()
         with SessionLocal() as db:
-            db.get(Project, pid).status = state
+            project = db.get(Project, pid)
+            if state == 'archived':
+                project.status = 'archived'
+            else:
+                project.legacy_lifecycle = {'requires_repair': True, 'original_status': 'closed'}
             db.commit()
         result = client.patch(f"/api/projects/{pid}/inventory/{item['id']}/status", headers=pm_headers,
                               json={'status': 'lost', 'expected_status': 'on_site'})

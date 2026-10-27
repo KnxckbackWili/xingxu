@@ -98,34 +98,90 @@ def step_state(db,task):
 
 
 def item_dict(db,task,*,checks=False):
-    phase=phase_of(db,task)
-    matrix=step_state(db,task) if task.project_id and is_vehicle(task) else None
-    actor=db.get(User,task.manual_completed_by) if task.manual_completed_by else None
-    row={'id':task.id,'phase_id':phase.id if phase else None,'phase_name':stage_label(phase.name) if phase else '历史未分类',
-        'group_label':group_of(db,task),'name':task.name,'description':task.description or '',
-        'kind':'vehicle' if is_vehicle(task) else 'other','vehicle_step_key':task.vehicle_step_key,
-        'applicable_vehicle_types':task.applicable_vehicle_types or [],'scope_conditions':task.scope_conditions or [],
-        'is_completed':bool(matrix['complete']) if matrix else bool(task.manually_completed),'matrix':matrix,
-        'completion':{'reason':task.manual_completed_reason or '', 'by':task.manual_completed_by,
-            'by_name':actor.display_name if actor else '原操作人未记录' if task.manual_completed_by else '',
-            'at':task.manual_completed_at.isoformat()+'Z' if task.manual_completed_at else None},
-        'sort_order':task.sort_order or 0,'version':task.version or 0,'source_task_id':task.source_task_id,
-        'source_vehicle_event_id':task.source_vehicle_event_id,'has_legacy_quantity':task.legacy_work_snapshot is not None or task.target_quantity is not None,
-        'reference_docs':[{'filename':ref.get('filename'),'note':ref.get('note','')} for ref in task.reference_docs or []]}
-    if not task.project_id:
-        from app.models import TemplateDoc
-        row['reference_docs']=[{'id':d.id,'filename':d.filename,'note':d.note} for d in db.query(TemplateDoc).filter_by(task_id=task.id).order_by(TemplateDoc.uploaded_at)]
+    return item_dicts(db,[task],checks=checks)[task.id]
+
+
+def item_dicts(db,tasks,*,checks=False):
+    """Work-item rows keyed by id; each level is loaded once for the whole list.
+
+    A template tree lists every task, so per-task lookups here become N+1 queries.
+    """
+    from collections import defaultdict
+    from app.models import TemplateDoc,VehicleCheckDefinition
+    tasks=list(tasks)
+    if not tasks:return {}
+    ids=[t.id for t in tasks]
+    # Phases/modules are few and usually already in the identity map; db.get reuses it.
+    modules={key:db.get(Module,key) for key in {t.module_id for t in tasks if t.module_id and not t.phase_id}}
+    phases={key:db.get(Phase,key) for key in {t.phase_id for t in tasks if t.phase_id}|{m.phase_id for m in modules.values() if m and m.phase_id}}
+    actor_ids={t.manual_completed_by for t in tasks if t.manual_completed_by}
+    actors={u.id:u for u in db.query(User).filter(User.id.in_(actor_ids))} if actor_ids else {}
+    template_docs=defaultdict(list)
+    template_ids=[t.id for t in tasks if not t.project_id]
+    if template_ids:
+        for d in db.query(TemplateDoc).filter(TemplateDoc.task_id.in_(template_ids)).order_by(TemplateDoc.uploaded_at):
+            template_docs[d.task_id].append(d)
     if checks:
         from app.services.progress import quality_blocked_task_ids
-        row['quality_blocked']=task.id in quality_blocked_task_ids(db,[task])
-        from app.services.vehicle_checks import vehicle_label,definition_data
-        row['check_definitions']=definition_data(db,task)
-        row['check_items']=[{'id':c.id,'name':c.name,'description':c.description or '',
-            'vehicle_unit_id':c.vehicle_unit_id,'vehicle_step_key':c.vehicle_step_key,'vehicle_label':vehicle_label(db,c),
-            'is_safety_critical':c.is_safety_critical,'is_required':c.is_required,'is_applicable':c.is_applicable,
-            'is_done':c.is_done,'failed':c.failed,'failed_reason':c.failed_reason,
-            'not_applicable_reason':c.not_applicable_reason,'version':c.version or 0} for c in db.query(CheckItem).filter(CheckItem.task_id==task.id,or_(CheckItem.project_id==task.project_id,CheckItem.project_id.is_(None))).order_by(CheckItem.sort_order,CheckItem.id)]
-    return row
+        by_id={t.id:t for t in tasks}
+        all_checks=db.query(CheckItem).filter(CheckItem.task_id.in_(ids)).order_by(CheckItem.sort_order,CheckItem.id).all()
+        blocked=quality_blocked_task_ids(db,tasks,checks=all_checks)
+        task_checks=defaultdict(list)
+        for c in all_checks:
+            if c.project_id in (None,by_id[c.task_id].project_id):task_checks[c.task_id].append(c)
+        definitions=defaultdict(list)
+        for d in db.query(VehicleCheckDefinition).filter(VehicleCheckDefinition.task_id.in_(ids)).order_by(VehicleCheckDefinition.sort_order,VehicleCheckDefinition.id):
+            definitions[d.task_id].append(d)
+        unit_ids={c.vehicle_unit_id for rows in task_checks.values() for c in rows if c.vehicle_unit_id}
+        units={u.id:u for u in db.query(VehicleUnit).filter(VehicleUnit.id.in_(unit_ids))} if unit_ids else {}
+    def phase_for(task):
+        if task.phase_id:return phases.get(task.phase_id)
+        module=modules.get(task.module_id)
+        return phases.get(module.phase_id) if module and module.phase_id else None
+    def group_for(task):
+        if task.phase_id:return task.group_label or ''
+        module=modules.get(task.module_id)
+        return module.name if module else task.group_label or ''
+    def label(check):
+        if not check.vehicle_unit_id:return '任务级检查（未逐车核验）'
+        unit=units.get(check.vehicle_unit_id)
+        return (unit.fleet_no or unit.asset_code) if unit else '车辆来源待核对'
+    result={}
+    for task in tasks:
+        phase=phase_for(task)
+        matrix=step_state(db,task) if task.project_id and is_vehicle(task) else None
+        actor=actors.get(task.manual_completed_by) if task.manual_completed_by else None
+        row={'id':task.id,'phase_id':phase.id if phase else None,'phase_name':stage_label(phase.name) if phase else '历史未分类',
+            'group_label':group_for(task),'name':task.name,'description':task.description or '',
+            'kind':'vehicle' if is_vehicle(task) else 'other','vehicle_step_key':task.vehicle_step_key,
+            'applicable_vehicle_types':task.applicable_vehicle_types or [],'scope_conditions':task.scope_conditions or [],
+            'is_completed':bool(matrix['complete']) if matrix else bool(task.manually_completed),'matrix':matrix,
+            'completion':{'reason':task.manual_completed_reason or '', 'by':task.manual_completed_by,
+                'by_name':actor.display_name if actor else '原操作人未记录' if task.manual_completed_by else '',
+                'at':task.manual_completed_at.isoformat()+'Z' if task.manual_completed_at else None},
+            'sort_order':task.sort_order or 0,'version':task.version or 0,'source_task_id':task.source_task_id,
+            'source_vehicle_event_id':task.source_vehicle_event_id,'has_legacy_quantity':task.legacy_work_snapshot is not None or task.target_quantity is not None,
+            'reference_docs':[{'filename':ref.get('filename'),'note':ref.get('note','')} for ref in task.reference_docs or []]}
+        if not task.project_id:
+            row['reference_docs']=[{'id':d.id,'filename':d.filename,'note':d.note} for d in template_docs[task.id]]
+        if checks:
+            row['quality_blocked']=task.id in blocked
+            # Same shape as vehicle_checks.definition_data: frozen definitions, then unfrozen task-level sources.
+            frozen=definitions[task.id]
+            sources={d.source_check_id for d in frozen}
+            row['check_definitions']=[{'source_check_id':d.source_check_id,'source_version':d.source_version,
+                'name':d.name,'description':d.description or '','is_required':d.is_required,
+                'is_safety_critical':d.is_safety_critical,'sort_order':d.sort_order} for d in frozen]+[
+                {'source_check_id':c.id,'source_version':c.version or 0,'name':c.name,'description':c.description or '',
+                 'is_required':c.is_required,'is_safety_critical':c.is_safety_critical,'sort_order':c.sort_order}
+                for c in task_checks[task.id] if c.vehicle_unit_id is None and c.id not in sources]
+            row['check_items']=[{'id':c.id,'name':c.name,'description':c.description or '',
+                'vehicle_unit_id':c.vehicle_unit_id,'vehicle_step_key':c.vehicle_step_key,'vehicle_label':label(c),
+                'is_safety_critical':c.is_safety_critical,'is_required':c.is_required,'is_applicable':c.is_applicable,
+                'is_done':c.is_done,'failed':c.failed,'failed_reason':c.failed_reason,
+                'not_applicable_reason':c.not_applicable_reason,'version':c.version or 0} for c in task_checks[task.id]]
+        result[task.id]=row
+    return result
 
 
 def set_definition(db,task,data,*,creating=False):

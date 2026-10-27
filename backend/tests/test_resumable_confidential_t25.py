@@ -56,13 +56,14 @@ def test_private_family_revocation_rechecks_status_chunk_and_finish_without_evid
 def test_only_current_manager_may_keep_an_independent_private_session(client,pm_headers,admin_headers,worker_headers):
     pid,users=setup_project(client,pm_headers)
     session,_=start(client,pm_headers,pid,b'pending independent private',confidential=True,confidential_user_ids=[users['worker1']])
-    current=client.get('/api/projects/'+pid,headers=pm_headers).json()
-    transferred=client.put('/api/projects/'+pid,headers=admin_headers,json={'manager_id':users['admin'],'version':current['version']})
+    from tests.lifecycle_helpers import second_pm, transfer_manager
+    transferred=transfer_manager(client,admin_headers,pid,second_pm(client,admin_headers))
     assert transferred.status_code==200,transferred.text
     base=f'/api/projects/{pid}/uploads/{session["id"]}'
-    assert client.get(base,headers=pm_headers).status_code==403
-    assert chunk(client,pm_headers,pid,session['id'],0,b'pending independent private').status_code==403
-    assert client.post(base+'/finish',headers=pm_headers).status_code==403
+    # 原负责人移交后离开项目：续传会话不可读、不可续、不可完成（403/404 均为拒绝）。
+    assert client.get(base,headers=pm_headers).status_code in (403,404)
+    assert chunk(client,pm_headers,pid,session['id'],0,b'pending independent private').status_code in (403,404)
+    assert client.post(base+'/finish',headers=pm_headers).status_code in (403,404)
     import hashlib
     failed=client.post(f'/api/projects/{pid}/uploads',headers=worker_headers,json={'client_uuid':'no-private-set-001','filename':'denied.bin',
         'size':1,'sha256':hashlib.sha256(b'x').hexdigest(),'document_ids':[],'confidential':True,'confidential_user_ids':[]})

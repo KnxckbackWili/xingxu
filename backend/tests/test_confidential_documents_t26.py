@@ -123,12 +123,14 @@ def test_family_policy_covers_history_future_instances_and_current_owner_transfe
         future=docs.instantiate(db,db.get(Project,pid),definition,period_key='2027-W01')
         assert future.confidential and future.confidential_user_ids==[users['worker1']]
         db.commit()
-    current=client.get('/api/projects/'+pid,headers=pm_headers).json()
-    changed_owner=client.put('/api/projects/'+pid,headers=admin_headers,json={'manager_id':users['admin'],'version':current['version']})
+    from tests.lifecycle_helpers import second_pm, transfer_manager
+    changed_owner=transfer_manager(client,admin_headers,pid,second_pm(client,admin_headers))
     assert changed_owner.status_code==200,changed_owner.text
     file_url=f'/api/files/{first["file"]["id"]}/download'
-    assert client.get(file_url,headers=admin_headers).status_code==200
-    assert client.get(file_url,headers=pm_headers).status_code==403
+    login=client.post('/api/auth/login',json={'username':'pm-successor','password':'successor12345'}).json()
+    successor_headers={'Authorization':'Bearer '+login['access_token']}
+    assert client.get(file_url,headers=successor_headers).status_code==200  # 当前负责人继承保密资料
+    assert client.get(file_url,headers=pm_headers).status_code in (403,404)  # 原负责人不再可见
     assert client.get(file_url,headers=worker_headers).status_code==200
 
 

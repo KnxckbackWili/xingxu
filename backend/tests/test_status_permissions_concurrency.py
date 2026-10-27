@@ -88,8 +88,12 @@ def test_archive_deny_keeps_other_authorized_status_changes_available(client, pm
         actor.permission_version += 1
         db.commit()
 
+    from tests.document_helpers import documents, upload_documents
+    kickoff = [row['id'] for row in documents(client, pm_headers, project['id'])['documents'] if row['stage_key'] == '4' and row['required']]
+    upload_documents(client, pm_headers, project['id'], kickoff)
+    before = client.get(f"/api/projects/{project['id']}", headers=pm_headers).json()["version"]
     result = client.post(f"/api/projects/{project['id']}/status", headers=pm_headers,
-                         json={"status": "preparing"})
+                         json={"status": "ready"})
     assert result.status_code == 200, result.text
     current = client.get(f"/api/projects/{project['id']}", headers=pm_headers).json()
-    assert current["status"] == "preparing" and current["version"] == project["version"] + 1
+    assert current["status"] == "ready" and current["version"] == before + 1

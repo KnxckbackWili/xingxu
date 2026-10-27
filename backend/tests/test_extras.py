@@ -216,28 +216,7 @@ def test_start_processing_sets_assignee(client, pm_headers, worker_headers):
     assert r.status_code == 403
 
 
-def test_schedule_confirm_notifies_members(client, pm_headers, worker_headers):
-    pid = _project(client, pm_headers, status='planning')
-    # Add worker1 as member
-    r = client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": ["user-worker-001"]}))
-    assert r.status_code == 200, r.json()
-    r = client.post(f"/api/projects/{pid}/vehicles", headers=pm_headers,
-                json={"vehicle_type": "潜伏式", "model_name": "AGV-500", "quantity": 1})
-    assert r.status_code == 200, r.json()
-    r = client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers,
-                json={"module_ids": ["mod-03"]})
-    assert r.status_code == 200, r.json()
-    r = client.post(f"/api/projects/{pid}/schedule/generate", headers=pm_headers)
-    assert r.status_code == 200, r.json()
-
-    # Confirm schedule → worker notified
-    r = client.post(f"/api/projects/{pid}/schedule/confirm", headers=pm_headers)
-    assert r.status_code == 200
-
-    r = client.get("/api/notifications", headers=worker_headers)
-    notifs = r.json()
-    assert len(notifs) == 1
-    assert notifs[0]["ntype"] == "schedule"
+# 按日日程确认通知已随按日排程退役；周计划发布通知见 test_weekly_plans。
 
 
 def test_mark_all_read(client, pm_headers, worker_headers):

@@ -89,15 +89,17 @@ def test_task_complete_reopen_and_schedule_publication_never_change_project_stat
     with SessionLocal() as db:
         phase=Phase(project_id=pid,name='现场工作');db.add(phase);db.flush()
         module=Module(project_id=pid,phase_id=phase.id,name='工作分组');db.add(module);db.flush()
-        task=Task(project_id=pid,module_id=module.id,name='非车辆工作',quantity_type='fixed',target_quantity=1)
+        task=Task(project_id=pid,module_id=module.id,phase_id=phase.id,name='非车辆工作',quantity_type='fixed',target_quantity=1)
         db.add(task);db.flush();tid=task.id
         db.add(ScheduleEntry(project_id=pid,task_id=tid,work_date=date(2026,1,5),assignee_id='user-worker-001',planned_quantity=1));db.commit()
     response=client.post(f'/api/projects/{pid}/schedule/confirm',headers=admin_headers)
-    assert response.status_code==200,response.text
+    assert response.status_code==410,response.text  # 按日排程发布已退役
     assert client.get(f'/api/projects/{pid}',headers=admin_headers).json()['status']=='preparing'
     with SessionLocal() as db:db.get(Project,pid).status='executing';db.commit()
-    for action in ('complete','reopen'):
-        response=client.post(f'/api/worker/tasks/{tid}/{action}',headers=admin_headers,json={'reason':'实际现场核对'})
+    for done in (True,False):
+        with SessionLocal() as db:version=db.get(Task,tid).version or 0
+        response=client.put(f'/api/projects/{pid}/work-items/{tid}/completion',headers=admin_headers,
+                            json={'version':version,'is_completed':done,'reason':'实际现场核对'})
         assert response.status_code==200,response.text
         assert client.get(f'/api/projects/{pid}',headers=admin_headers).json()['status']=='executing'
     from app.services.status_flow import advance_project_status,regress_project_status

@@ -147,3 +147,21 @@ def put_check(client, headers, pid, check_id, body):
     with SessionLocal() as db:
         version = db.get(CheckItem, check_id).version or 0
     return client.put(f"/api/projects/{pid}/check-items/{check_id}", headers=headers, json={**body, "version": version})
+
+
+def transfer_manager(client, headers, pid, target_id, reason='负责人交接，测试转移'):
+    """Change the project manager via the dedicated transfer endpoint (PUT manager_id is rejected)."""
+    preview = client.get(f'/api/projects/{pid}/transfer-preview', headers=headers)
+    confirmations = [row['user_id'] for row in preview.json().get('removed', [])] if preview.status_code == 200 else []
+    version = client.get(f'/api/projects/{pid}', headers=headers).json()['version']
+    return client.post(f'/api/projects/{pid}/transfer', headers=headers, json={
+        'target_manager_id': target_id, 'reason': reason, 'version': version,
+        'member_removal_confirmations': confirmations})
+
+
+def second_pm(client, admin_headers, username='pm-successor'):
+    """An additional active PM (transfer targets must be PMs)."""
+    created = client.post('/api/users', headers=admin_headers, json={
+        'username': username, 'password': 'successor12345', 'display_name': '接任项目经理', 'role': 'pm'})
+    assert created.status_code == 200, created.text
+    return created.json()['id']

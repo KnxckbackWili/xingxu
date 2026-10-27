@@ -344,11 +344,16 @@ def get_template_tree(template_id: str, user: User = Depends(get_current_user), 
                              "prep_only": ph.name in REMINDER_ONLY_PHASE_NAMES})
         result.append({"id": ph.id, "name": ph.name, "sort_order": ph.sort_order, "color": ph.color,
                        "entry_criteria": ph.entry_criteria, "exit_criteria": ph.exit_criteria, "modules": mod_list})
-    from app.services.work_items import item_dict
+    from app.services.work_items import item_dicts
+    phase_tasks = defaultdict(list)
+    for task in sorted((t for t in template_tasks if t.phase_id), key=lambda t: (t.sort_order is not None, t.sort_order or 0, t.id)):
+        phase_tasks[task.phase_id].append(task)
+    items = item_dicts(db, [t for rows in phase_tasks.values() for t in rows], checks=True)
     for phase in result:
         existing={t['id'] for m in phase['modules'] for t in m['tasks']}
-        phase['modules'] += _flat_source_envelopes(db,tid,phase['id'],existing)
-        phase['work_items']=[item_dict(db,t,checks=True) for t in db.query(Task).filter(Task.template_id==tid,Task.project_id.is_(None),Task.phase_id==phase['id']).order_by(Task.sort_order,Task.id)]
+        if any(t.id not in existing for t in phase_tasks[phase['id']]):
+            phase['modules'] += _flat_source_envelopes(db,tid,phase['id'],existing)
+        phase['work_items']=[items[t.id] for t in phase_tasks[phase['id']]]
     return result
 
 

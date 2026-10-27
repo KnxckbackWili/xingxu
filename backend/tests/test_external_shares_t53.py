@@ -200,6 +200,8 @@ def test_fresh_actor_and_revocation_are_rechecked_after_project_lock(client,pm_h
 
 def test_signoff_delivery_ranges_and_independent_file_policy_never_include_secrets(client,pm_headers):
     pid,_=setup_project(client,pm_headers)
+    from tests.lifecycle_helpers import enter_execution
+    enter_execution(client,pm_headers,pid)  # 6.11 现场周资料从现场实施开始生成
     rows=documents(client,pm_headers,pid)['documents']
     sign=next(row for row in rows if row['code']=='6.10.2')
     delivery=next(row for row in rows if row['stage_key']=='8')

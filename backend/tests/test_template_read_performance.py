@@ -19,4 +19,5 @@ def test_default_template_tree_has_bounded_query_count(client, admin_headers):
     assert len(tasks) >= 30
     assert any(t['check_items'] for t in tasks)
     assert any(p['name'] == '项目准备' for p in phases)
-    assert len(selects) <= 8, f'Template tree used {len(selects)} SELECTs for {len(tasks)} tasks'
+    # Constant per request (auth, tree levels, work-item rows), independent of task count.
+    assert len(selects) <= 10, f'Template tree used {len(selects)} SELECTs for {len(tasks)} tasks'

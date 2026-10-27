@@ -1,7 +1,7 @@
 """HYPE-97 整体审计——已修复缺陷的回归证明测试。
 
 每个用例对应一个已确认缺陷：
-1. schedule 更新允许负数/自由状态 → 进度统计污染（已加 ge=0 / 状态枚举）
+1. schedule 更新允许负数/自由状态 → 进度统计污染（按日排程已退役，入口统一 410）
 2. 现场车辆 JSON 导出丢车型链接 → 重新导入后车辆档案与车型脱钩（已补 vehicle_type/model_name 导出）
 3. 快捷导入校验把 cancelled 状态问题拒之门外 → 作废问题无法原样还原（已把 cancelled 纳入白名单）
 4. 交付物审核缺少 manage_plan 能力 + 无提交人即可审核（绕过 C7-4）（已加能力校验 + 必须已提交）
@@ -16,16 +16,7 @@ from openpyxl import Workbook
 
 # ===== 1. Schedule 字段约束 =====
 
-def test_schedule_model_rejects_negative_quantity_and_freeform_status():
-    from pydantic import ValidationError
-    from app.routers.schedules import ScheduleUpdate
-    with pytest.raises(ValidationError):
-        ScheduleUpdate(planned_quantity=-1)
-    with pytest.raises(ValidationError):
-        ScheduleUpdate(status="weekend")
-    ok = ScheduleUpdate(planned_quantity=0, status="done")
-    assert ok.planned_quantity == 0
-    assert ok.status == "done"
+# 1. 按日日程更新模型已随按日排程退役（入口 410，见 test_weekly_plans）。
 
 
 def _project(client, pm_headers, name="审计修复项目"):

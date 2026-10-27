@@ -182,7 +182,7 @@ def test_complete_json_preserves_exact_readonly_execution_evidence_and_reimport_
         from app.services.execution_scope import REMINDER_ONLY_PHASE_NAMES
         phase=db.query(models.Phase).filter(models.Phase.project_id.is_(None),models.Phase.name.notin_(REMINDER_ONLY_PHASE_NAMES)).first()
         module=models.Module(project_id=pid,phase_id=phase.id,name='执行事实模块');db.add(module);db.flush()
-        task=models.Task(project_id=pid,module_id=module.id,name='原直接完成任务',target_quantity=1,unit='台',manually_completed=True,
+        task=models.Task(project_id=pid,module_id=module.id,name='原直接完成任务',quantity_type='fixed',target_quantity=1,unit='台',manually_completed=True,
             manual_completed_by='user-admin-001',manual_completed_role='admin',manual_completed_at=datetime(2026,2,3,4,5),manual_completed_reason='精确保留覆盖理由')
         db.add(task);db.flush()
         check=models.CheckItem(task_id=task.id,project_id=pid,name='保留失败检查',failed=True,failed_reason='原失败事实',is_done=False,version=7)

@@ -35,10 +35,9 @@ def test_daily_regeneration_preserves_original_reports(client, pm_headers, worke
         original_entry = (entry.task_id, entry.assignee_id, entry.work_date, entry.planned_quantity, entry.notes, entry.version)
         original_report = (report.task_id, report.schedule_entry_id, report.work_date, report.user_id,
             report.completed_quantity, report.note, report.client_uuid, report.created_at)
+    # 按日重排已退役：旧入口返回 410，原日程与填报只读保留。
     response = client.post(f'/api/projects/{pid}/schedule/generate', headers=pm_headers)
-    assert response.status_code == 200, response.text
-    entries = client.get(f'/api/projects/{pid}/schedule', headers=pm_headers).json()
-    assert any(row['id'] == entry_id for row in entries)
+    assert response.status_code == 410, response.text
     with SessionLocal() as db:
         entry=db.get(ScheduleEntry, entry_id); report=db.get(DailyProgress, report_id)
         assert (entry.task_id, entry.assignee_id, entry.work_date, entry.planned_quantity, entry.notes, entry.version) == original_entry

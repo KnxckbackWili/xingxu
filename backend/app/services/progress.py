@@ -18,11 +18,12 @@ def execution_tasks(db: Session, project_id: str) -> list[Task]:
     return execution_tasks_for_projects(db, [project_id])
 
 
-def quality_blocked_task_ids(db,tasks):
+def quality_blocked_task_ids(db,tasks,checks=None):
+    """checks: the tasks' already-loaded CheckItem rows, to avoid re-reading them."""
     from app.services.manual_completion import covers
     by_id={task.id:task for task in tasks}
     blocked=set()
-    for check in db.query(CheckItem).filter(CheckItem.task_id.in_(by_id)):
+    for check in (db.query(CheckItem).filter(CheckItem.task_id.in_(by_id)) if checks is None else checks):
         task=by_id[check.task_id]
         if check.project_id not in (None,task.project_id):continue
         safety=check.is_safety_critical and (not check.is_done or check.failed or not check.is_applicable)

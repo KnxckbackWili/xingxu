@@ -49,7 +49,7 @@ def test_single_forward_head_preserves_business_rows_and_has_no_raw_token_column
                 assert c.execute(sa.text('SELECT count(*) FROM external_access_logs')).scalar()==0
                 assert compare_metadata(MigrationContext.configure(c,opts={'compare_server_default':True}),Base.metadata)==[]
             assert 'token' not in {column['name'] for column in sa.inspect(engine).get_columns('external_shares')}
-            assert ScriptDirectory.from_config(cfg).get_heads()==['g3a53b000001']
+            assert len(ScriptDirectory.from_config(cfg).get_heads())==1  # single forward chain; T53 is no longer the head
             output=io.StringIO();offline=Config(str(config.BASE_DIR/'alembic.ini'),output_buffer=output)
             offline.set_main_option('script_location',str(config.BASE_DIR/'migrations'))
             command.upgrade(offline,'g3a25b000001:g3a53b000001',sql=True)

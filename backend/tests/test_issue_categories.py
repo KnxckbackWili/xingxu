@@ -160,6 +160,6 @@ def test_old_db_issues_extra_migration(client, upgrade_legacy_schema):
     from sqlalchemy import inspect
     cols = [column["name"] for column in inspect(engine).get_columns("issues")]
     assert "extra" in cols
-    # 迁移后 ORM 可用
-    with SessionLocal() as fixed_session:
-        assert fixed_session.query(Issue).first() is None
+    # 2.4.3 对齐补回 extra；之后修订新增的列（如 nature）由各自修订负责，夹具只回放对齐段。
+    with engine.connect() as connection:
+        assert connection.execute(text("SELECT extra FROM issues")).all() == []
