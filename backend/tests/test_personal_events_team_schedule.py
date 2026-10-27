@@ -48,16 +48,16 @@ def test_retired_personal_mutations_change_no_rows_audit_or_outbox(client,pm_hea
         assert client.request(method,path).status_code==401
 
 
-def test_personal_event_missing_project_column_migration_preserves_owner_original(client,pm_headers,upgrade_legacy_schema):
+def test_personal_event_missing_project_column_migration_refuses_to_invent_owner_project(client,pm_headers,upgrade_legacy_schema):
+    """冻结 2.4.3 结构要求 project_id 非空：缺列且有数据时拒绝猜测归属，原条目保持不动。"""
+    import pytest
     with SessionLocal() as db:uid=db.query(User).filter_by(username='pm').one().id
     with engine.begin() as connection:
         connection.execute(text('DROP TABLE personal_events'))
         connection.execute(text('CREATE TABLE personal_events (id VARCHAR(36) PRIMARY KEY,user_id VARCHAR(36) NOT NULL,work_date DATE NOT NULL,title VARCHAR(100) NOT NULL,notes VARCHAR(500),created_at TIMESTAMP)'))
         connection.execute(text("INSERT INTO personal_events (id,user_id,work_date,title,notes) VALUES ('original-personal-event',:uid,'2026-09-01','原无项目私密事项','原备注不猜归属')"),{'uid':uid})
-    upgrade_legacy_schema()
-    with SessionLocal() as db:
-        row=db.get(PersonalEvent,'original-personal-event')
-        assert row.user_id==uid and row.project_id is None and row.title=='原无项目私密事项' and row.notes=='原备注不猜归属'
-    response=client.get('/api/dashboard/personal-events',headers=pm_headers);assert response.status_code==200,response.text
-    row=next(r for r in response.json() if r['id']=='original-personal-event')
-    assert not row['project_id'] and not row['project_name'] and row['title']=='原无项目私密事项'
+    with pytest.raises(RuntimeError, match='cannot invent personal_events.project_id'):
+        upgrade_legacy_schema()
+    with engine.connect() as connection:
+        row=connection.execute(text("SELECT user_id,title,notes FROM personal_events WHERE id='original-personal-event'")).one()
+    assert tuple(row)==(uid,'原无项目私密事项','原备注不猜归属')

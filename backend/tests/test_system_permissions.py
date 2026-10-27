@@ -333,7 +333,7 @@ def test_frozen_legacy_postgres_policy_columns_keep_inheritance_defaults():
     ("/api/ai-projects/skill-bundle", "GET", "system.ai.use"),
     ("/api/ai-projects/test-connection", "POST", "system.ai.use"),
     ("/api/ai/internal/tokens", "POST", "system.agent_tokens.manage"),
-    ("/api/dashboard/personal-events/e", "DELETE", "personal.schedule.manage"),
+    ("/api/dashboard/personal-events/e", "DELETE", None),  # retired: authenticated 410 only
     ("/api/dashboard/people-plan/e/self", "PUT", None),
     ("/api/dashboard/people-plan", "GET", None),
     ("/api/dashboard/team-schedule", "GET", None),
@@ -343,8 +343,8 @@ def test_frozen_legacy_postgres_policy_columns_keep_inheritance_defaults():
     ("/api/dashboard/people-summary", "GET", None),
     ("/api/dashboard/stats", "GET", None),
     ("/api/dashboard/trend", "GET", None),
-    ("/api/projects/p/schedule/policy", "GET", "project.manage_schedule"),
-    ("/api/projects/p/schedule/preview", "GET", "project.manage_schedule"),
+    ("/api/projects/p/schedule/policy", "GET", "project.read"),  # retired daily schedule: read-only 410
+    ("/api/projects/p/schedule/preview", "GET", "project.read"),  # retired daily schedule: read-only 410
     ("/api/projects/p/schedule", "GET", "project.read"),
     ("/api/projects/p/procurements/x", "PUT", "project.manage_plan"),
     ("/api/projects/p/tasks/t/deliverables", "POST", None),
@@ -361,7 +361,7 @@ def test_frozen_legacy_postgres_policy_columns_keep_inheritance_defaults():
     ("/api/feedback", "POST", "feedback.submit"),
     ("/api/feedback/f/status", "PATCH", "system.feedback.manage"),
     ("/api/worker/records", "GET", "personal.records.read"),
-    ("/api/schedule/calendar", "GET", "personal.schedule.read"),
+    ("/api/schedule/calendar", "GET", "project.read"),  # retired calendar: read-only 410
     ("/api/worker/reports/r", "DELETE", None),
     ("/api/worker/operations", "POST", "worker.report"),
     ("/api/worker/records/r", "PUT", "worker.report"),

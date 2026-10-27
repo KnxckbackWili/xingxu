@@ -3,7 +3,6 @@
 from datetime import date
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.services.system_permissions import route_permission,route_permission_exempt
@@ -16,20 +15,6 @@ from app.services.progress import project_progress_tree
 from app.services.project_lifecycle import ACTIVE_PROJECT_STATUSES
 
 router = APIRouter(tags=["洞察"])
-
-
-class PersonalEventCreate(BaseModel):
-    """HYPE-89：个人临时日程创建/更新字段（标题 + 日期 + 备注 + 归属项目；不挂任务）。
-
-    project_id 为记录归属（日历显示挂在哪个项目），必填；项目日程页与团队日程
-    仍是任务排班口径，不含临时事项。"""
-
-    model_config = {"extra": "forbid"}
-
-    project_id: str = Field(..., min_length=1)
-    work_date: date
-    title: str = Field(..., min_length=1, max_length=100)
-    notes: str = Field("", max_length=500)
 
 
 def _require_pm_workbench_role(
@@ -47,10 +32,15 @@ def _require_pm_workbench_role(
 
 
 def _personal_event_names(
-    db: Session, events: list[PersonalEvent]
+    db: Session, events: list[PersonalEvent], user: User
 ) -> dict[str, Optional[str]]:
-    """批量解析事件归属项目名；历史 NULL 行（理论上无）返回 None，前端显示「（未绑定）」。"""
-    pids = {e.project_id for e in events if e.project_id}
+    """批量解析事件归属项目名，只返回当前用户可见项目的名称。
+
+    旧个人事项归原所有者只读，但所有者已不可见的项目，其当前名称不能借此泄露；
+    历史 NULL 行或不可见项目返回 None，前端显示「（未绑定）」。
+    """
+    from app.services.scope import visible_project_ids
+    pids = {e.project_id for e in events if e.project_id} & set(visible_project_ids(db, user))
     if not pids:
         return {}
     return {p.id: p.name for p in db.query(Project).filter(Project.id.in_(pids)).all()}
@@ -78,95 +68,23 @@ def list_personal_events(
 ):
     """HYPE-88：当前登录者的个人临时日程（单人读写，只返回本人条目）。"""
     _require_pm_workbench_role(user, "没有个人日程查看权限", "personal.schedule.read")
-    q = (
-        db.query(PersonalEvent)
-        .join(Project, Project.id == PersonalEvent.project_id)
-        .filter(PersonalEvent.user_id == user.id)
-    )
+    # Owner history includes rows whose project was never recorded (legacy NULL).
+    q = db.query(PersonalEvent).filter(PersonalEvent.user_id == user.id)
     if from_date:
         q = q.filter(PersonalEvent.work_date >= from_date)
     if to_date:
         q = q.filter(PersonalEvent.work_date <= to_date)
     rows = q.order_by(PersonalEvent.work_date, PersonalEvent.id).all()
-    names = _personal_event_names(db, rows)
+    names = _personal_event_names(db, rows, user)
     return [_personal_event_dict(e, names.get(e.project_id)) for e in rows]
 
 
-def _visible_project_or_404(db: Session, project_id: str, user: User) -> Project:
-    """HYPE-89：临时日程归属项目校验——存在且对当前用户可见（与 self add 同型，404 不泄露）。"""
-    from app.services.scope import visible_project_ids
-
-    proj = db.get(Project, project_id)
-    if proj is None or proj.id not in set(visible_project_ids(db, user)):
-        raise HTTPException(status_code=404, detail="项目不存在")
-    return proj
-
-
 @router.post("/dashboard/personal-events")
-@route_permission('personal.schedule.manage')
-def create_personal_event(
-    data: PersonalEventCreate,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """HYPE-88：新增个人临时日程（不挂项目任务，执行人固定当前登录者）。"""
-    _require_pm_workbench_role(user, "没有个人日程管理权限", "personal.schedule.manage")
-    proj = _visible_project_or_404(db, data.project_id, user)
-    e = PersonalEvent(
-        user_id=user.id,
-        project_id=proj.id,
-        work_date=data.work_date,
-        title=data.title,
-        notes=data.notes,
-    )
-    db.add(e)
-    db.commit()
-    return {"message": "临时日程已添加", "event": _personal_event_dict(e, proj.name)}
-
-
-def _get_own_personal_event_or_404(
-    db: Session, event_id: str, user: User
-) -> PersonalEvent:
-    """他人条目与不存在条目统一 404，不泄露越权资源存在性。"""
-    e = db.get(PersonalEvent, event_id)
-    if e is None or e.user_id != user.id:
-        raise HTTPException(status_code=404, detail="个人事项不存在")
-    return e
-
-
 @router.put("/dashboard/personal-events/{event_id}")
-@route_permission('personal.schedule.manage')
-def update_personal_event(
-    event_id: str,
-    data: PersonalEventCreate,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """HYPE-88：修改本人临时日程（标题 / 日期 / 备注；单人读写，无乐观锁）。"""
-    _require_pm_workbench_role(user, "没有个人日程管理权限", "personal.schedule.manage")
-    e = _get_own_personal_event_or_404(db, event_id, user)
-    proj = _visible_project_or_404(db, data.project_id, user)  # HYPE-89：允许改绑项目
-    e.work_date = data.work_date
-    e.project_id = proj.id
-    e.title = data.title
-    e.notes = data.notes
-    db.commit()
-    return {"message": "临时日程已更新", "event": _personal_event_dict(e, proj.name)}
-
-
 @router.delete("/dashboard/personal-events/{event_id}")
-@route_permission('personal.schedule.manage')
-def delete_personal_event(
-    event_id: str,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """HYPE-88：删除本人临时日程（他人条目一律 404）。"""
-    _require_pm_workbench_role(user, "没有个人日程管理权限", "personal.schedule.manage")
-    e = _get_own_personal_event_or_404(db, event_id, user)
-    db.delete(e)
-    db.commit()
-    return {"message": "临时日程已删除"}
+@route_permission_exempt('旧个人临时日程已随按日排程退役；认证后仅返回410，原条目归所有者只读保留')
+def retired_personal_event_mutations(user: User = Depends(get_current_user)):
+    raise HTTPException(410, "个人临时日程已退役，原条目只读保留；新安排请使用项目周计划")
 
 
 @router.get("/projects/{project_id}/overdue")
