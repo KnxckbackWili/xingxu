@@ -1,0 +1,27 @@
+.notification-preview-panel {
+  width: min(340px, calc(100vw - 24px));
+  max-height: min(420px, calc(100dvh - 100px));
+  overflow: auto;
+  border: 1px solid var(--agv-border);
+  border-radius: 14px;
+  background: var(--agv-bg-container);
+  box-shadow: 0 12px 36px rgb(0 0 0 / 12%);
+}
+.notification-preview-item {
+  display: block;
+  width: 100%;
+  border: 0;
+  padding: 10px 12px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.notification-preview-item.is-unread { background: var(--agv-accent-soft, rgb(0 122 255 / 8%)); }
+.notification-preview-item:hover { background: rgb(0 122 255 / 12%); }
+.notification-preview-item:focus-visible { outline: 2px solid #007aff; outline-offset: -3px; border-radius: 6px; }
+.notification-preview-description, .notification-preview-date { display: block; }
+.notification-preview-description { margin-top: 4px; }
+.notification-preview-date { margin-top: 3px; }

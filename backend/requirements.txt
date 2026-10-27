@@ -1,0 +1,24 @@
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+mcp==1.29.0
+sqlalchemy==2.0.35
+alembic==1.13.2
+PyJWT==2.13.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1  # passlib 1.7.4 is incompatible with bcrypt>=5.0
+python-multipart==0.0.32
+openpyxl==3.1.5
+python-docx==1.2.0
+pypdf==6.16.0
+psycopg2-binary==2.9.10  # A1：in-container PostgreSQL（DATABASE_URL 指向 PG 时生效）
+supervisor==4.2.5        # A2：单容器进程监督器（postgres/uvicorn/scheduler）
+defusedxml==0.7.1
+cryptography==50.0.0       # 通知渠道凭据加密（Fernet/HKDF，锁定与 requirements.lock 一致）
+pydantic[email]==2.13.4
+pydantic-settings==2.5.2
+aiofiles==24.1.0
+python-dateutil==2.9.0
+APScheduler==3.10.4
+certifi==2026.7.22
+
+setuptools==80.9.0  # supervisor 4.2.5 still imports pkg_resources

@@ -1,0 +1,17 @@
+.project-recycle-page { min-width: 0; }
+.project-recycle-search { max-width: 460px; margin: 20px 0; }
+.project-recycle-list { display: grid; gap: 14px; }
+.project-recycle-card { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 20px; border: 1px solid var(--agv-border-soft); border-radius: 12px; background: var(--agv-bg-container); color: var(--agv-text); }
+.project-recycle-info { min-width: 0; }
+.project-recycle-info h2 { margin: 0 0 10px; font-size: 17px; overflow-wrap: anywhere; }
+.project-recycle-info > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.project-recycle-info .ant-tag { margin: 0; }
+.project-recycle-info p { margin: 10px 0 0; color: var(--agv-text-secondary); font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+.project-recycle-actions { display: flex; flex-wrap: wrap; gap: 8px; flex-shrink: 0; }
+.project-recycle-modal h5 { overflow-wrap: anywhere; }
+@media (max-width: 700px) {
+ .project-recycle-card { flex-direction: column; align-items: stretch; padding: 16px; gap: 14px; }
+ .project-recycle-page .ant-btn, .project-recycle-modal .ant-btn { min-height: 44px; }
+ .project-recycle-actions .ant-btn { flex: 1; }
+ .project-recycle-search .ant-input-affix-wrapper { min-height: 44px; }
+}

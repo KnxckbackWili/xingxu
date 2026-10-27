@@ -1,0 +1,29 @@
+.staffing-board .staffing-heading { margin-bottom: 16px; }
+.staffing-board .staffing-heading p { margin: 5px 0 0; color: var(--agv-text-secondary); font-size: 13px; }
+.staffing-board .staffing-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding: 14px; border: 1px solid var(--agv-border-soft); border-radius: 14px; background: var(--agv-bg-container); }
+.staffing-board .staffing-date-controls { display: flex; align-items: center; gap: 6px; }
+.staffing-board .staffing-filter-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; flex: 1 1 440px; max-width: 660px; min-width: 0; }
+.staffing-board .staffing-filter-controls .ant-select { flex: 1 1 160px; min-width: 0; }
+.staffing-board .staffing-filter-controls .ant-input-affix-wrapper { flex: 1 1 150px; min-width: 0; width: auto; }
+.staffing-board .staffing-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border: 1px solid var(--agv-border-soft); border-radius: 14px; background: var(--agv-bg-container); overflow: hidden; }
+.staffing-board .staffing-metrics > span { padding: 14px 16px; color: var(--agv-text-secondary); border-right: 1px solid var(--agv-border-soft); }
+.staffing-board .staffing-metrics > span:last-child { border-right: 0; }
+.staffing-board .staffing-metrics b { color: var(--agv-text); font-variant-numeric: tabular-nums; }
+.staffing-board .staffing-metrics .needs-attention, .staffing-board .staffing-metrics .needs-attention b { color: var(--agv-warning); }
+.staffing-board .staffing-mobile article { background: var(--agv-bg-container); }
+.staffing-board .staffing-mobile h3 { overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+  .staffing-board .staffing-mobile { display: grid; }
+  .staffing-board .staffing-toolbar { gap: 12px; padding: 12px; }
+  .staffing-board .staffing-date-controls { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px auto; width: 100%; }
+  .staffing-board .staffing-date-controls .ant-btn-icon-only { width: 44px; min-height: 44px; }
+  .staffing-board .staffing-filter-controls { flex-basis: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+  .staffing-board .staffing-filter-controls .ant-select { grid-column: 1 / -1; width: 100%; }
+  .staffing-board .staffing-filter-controls .ant-input-affix-wrapper { width: 100%; min-height: 44px; }
+  .staffing-board .staffing-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .staffing-board .staffing-metrics > span { padding: 12px; }
+  .staffing-board .staffing-metrics > span:nth-child(2) { border-right: 0; }
+  .staffing-board .staffing-metrics > span:nth-child(-n+2) { border-bottom: 1px solid var(--agv-border-soft); }
+  .staffing-board .staffing-entry { min-height: 44px; }
+  .staffing-board .staffing-toolbar .ant-picker { width: 100%; min-width: 0; min-height: 44px; }
+}

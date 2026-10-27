@@ -1,0 +1,118 @@
+"""Refinement tests: task quantity editing + check item ticking."""
+
+
+def _project(client, pm_headers):
+    r = client.post("/api/projects", headers=pm_headers, json={
+        "name": "完善功能测试项目",
+        "start_date": "2026-08-10", "new_vehicles": False,
+        "end_date": "2026-09-30",
+    })
+    pid = r.json()["id"]
+    client.post(f"/api/projects/{pid}/vehicles", headers=pm_headers, json={
+        "vehicle_type": "潜伏式", "model_name": "AGV-500", "quantity": 3})
+    client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers,
+                json={"module_ids": ["mod-01", "mod-03"]})
+    return pid
+
+
+def _find_task(client, pm_headers, pid, name):
+    r = client.get(f"/api/projects/{pid}/tree", headers=pm_headers)
+    for ph in r.json():
+        for m in ph["modules"]:
+            for t in m["tasks"]:
+                if t["name"] == name:
+                    return t
+    return None
+
+
+def test_pm_fills_manual_task_quantity(client, pm_headers):
+    """PM can set target quantity on a manual task, enabling scheduling."""
+    pid = _project(client, pm_headers)
+    task = _find_task(client, pm_headers, pid, "场地勘测")
+    assert task is not None
+    assert task["quantity_type"] == "manual"
+    assert task["target_quantity"] is None
+
+    r = client.put(f"/api/projects/{pid}/tasks/{task['id']}", headers=pm_headers, json={
+        "target_quantity": 5,
+        "unit": "个",
+        "standard_hours": 6,
+    })
+    assert r.status_code == 200, r.json()
+    assert r.json()["target_quantity"] == 5
+    assert r.json()["unit"] == "个"
+
+    # Now schedulable — 场地勘测 appears in the schedule
+    r = client.post(f"/api/projects/{pid}/schedule/generate", headers=pm_headers)
+    assert r.status_code == 200
+    r = client.get(f"/api/projects/{pid}/schedule", headers=pm_headers)
+    task_names = [e["task_name"] for e in r.json()]
+    assert "场地勘测" in task_names
+
+
+def test_worker_cannot_edit_task(client, pm_headers, worker_headers):
+    pid = _project(client, pm_headers)
+    task = _find_task(client, pm_headers, pid, "场地勘测")
+    r = client.put(f"/api/projects/{pid}/tasks/{task['id']}", headers=worker_headers, json={"target_quantity": 9})
+    assert r.status_code in (403, 404)
+
+
+def test_worker_ticks_check_item(client, pm_headers, worker_headers):
+    pid = _project(client, pm_headers)
+    # Add worker to project
+    client.put(f"/api/projects/{pid}", headers=pm_headers, json={"members": ["user-worker-001"]})
+
+    task = _find_task(client, pm_headers, pid, "开箱检查")
+    # Find the project's 开箱检查 check item via tree (mod-02 wasn't generated; use mod-03)
+    task = _find_task(client, pm_headers, pid, "单车机械与导航调试")
+    assert task is not None
+    ci = task["check_items"][0]
+    assert ci["is_done"] is False
+
+    # Worker ticks it
+    r = client.put(f"/api/projects/{pid}/check-items/{ci['id']}", headers=worker_headers, json={"is_done": True})
+    assert r.status_code == 200, r.json()
+    assert r.json()["is_done"] is True
+    assert r.json()["done_by"] == "user-worker-001"
+
+    # Tree reflects it
+    task2 = _find_task(client, pm_headers, pid, "单车机械与导航调试")
+    ci2 = next(c for c in task2["check_items"] if c["id"] == ci["id"])
+    assert ci2["is_done"] is True
+
+    # Untick
+    r = client.put(f"/api/projects/{pid}/check-items/{ci['id']}", headers=worker_headers, json={"is_done": False})
+    assert r.status_code == 200
+    assert r.json()["is_done"] is False
+
+
+def test_worker_not_applicable_requires_reason_and_preserves_safety_guard(client, pm_headers, worker_headers):
+    """三态流程允许成员跳过非安全项；原因必填，安全项永不可跳过。
+
+    CLAUDE.md「检查项三态」及 TodayPage 明确 worker 可用，不再沿用旧 PM-only 契约。
+    """
+    pid = _project(client, pm_headers)
+    client.put(f"/api/projects/{pid}", headers=pm_headers, json={"members": ["user-worker-001"]})
+    task = _find_task(client, pm_headers, pid, "单车机械与导航调试")
+    ci = next(c for c in task["check_items"] if not c["is_safety_critical"])
+    url = f"/api/projects/{pid}/check-items/{ci['id']}"
+
+    response = client.put(url, headers=worker_headers, json={"is_applicable": False})
+    assert response.status_code == 400
+    assert "原因" in response.json()["detail"]
+    response = client.put(url, headers=worker_headers,
+                          json={"is_applicable": False, "not_applicable_reason": "现场未配置该功能"})
+    assert response.status_code == 200, response.text
+    assert response.json()["is_applicable"] is False
+
+    from app.db import SessionLocal
+    from app.models import CheckItem
+    with SessionLocal() as db:
+        row = db.get(CheckItem, ci["id"])
+        row.is_applicable = True
+        row.is_safety_critical = True
+        db.commit()
+    response = client.put(url, headers=worker_headers,
+                          json={"is_applicable": False, "not_applicable_reason": "安全项不能跳过"})
+    assert response.status_code == 400
+    assert "安全" in response.json()["detail"]

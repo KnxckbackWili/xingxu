@@ -1,0 +1,84 @@
+.operation-page { min-width: 0; }
+.operation-inline-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.operation-page-embedded > .work-page-header { display: none; }
+.preparation-readiness { padding: 12px 16px; margin-bottom: 16px; border: 1px solid var(--agv-border-soft); border-radius: 10px; background: var(--agv-bg-subtle); }
+.preparation-checklist .work-section-filters .ant-input-search { width: min(260px, 100%); }
+.preparation-filter-popover { width: 230px; }
+.preparation-filter-popover .ant-select { width: 230px; }
+.preparation-detail-fields { display: grid; gap: 12px; width: 290px; max-width: calc(100vw - 64px); }
+.preparation-detail-fields > label { display: grid; gap: 5px; color: var(--agv-text-secondary); font-size: 12px; }
+.preparation-detail-fields .ant-picker { width: 100%; }
+.preparation-important-date { display: grid; gap: 5px; }
+.preparation-important-date small { color: var(--agv-text-secondary); font-size: 11px; }
+.preparation-mobile-primary-date { margin-top: 12px; }
+.preparation-mobile-item .preparation-mobile-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
+.preparation-checklist .ant-collapse-header { padding-inline: 0 !important; }
+.preparation-checklist .ant-collapse-content-box { padding: 4px 0 16px !important; }
+.preparation-checklist .ant-table { border: 1px solid var(--agv-border-soft); border-radius: 8px; overflow: hidden; }
+.task-plan-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; }
+.task-plan-meta .task-plan-quantities { margin: 0; font-size: 12px; }
+.task-plan-meta .task-plan-quantities ul { gap: 6px; }
+.task-plan-meta .task-plan-quantities li { background: transparent; padding: 0; }
+.task-plan-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.task-plan-controls .ant-input-search { width: min(240px, 100%); }
+.task-plan-controls .ant-select { width: 140px; }
+.task-plan-list .ant-collapse-header { padding-inline: 0 !important; }
+.task-plan-list .ant-collapse-content-box { padding: 4px 0 18px !important; }
+.schedule-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.schedule-month-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+.schedule-screen-body { min-width: 0; }
+.schedule-stage-note { margin: -6px 0 14px; color: var(--agv-text-secondary); font-size: 12px; }
+.gantt-view-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.gantt-view-tools .gantt-legend { margin-left: auto; }
+.gantt-legend-content { display: grid; gap: 8px; min-width: 180px; }
+.gantt-legend-content > span { display: flex; align-items: center; gap: 8px; }
+@media (max-width: 767px) {
+  .operation-page .work-page-actions { width: 100%; }
+  .operation-page .work-page-actions > .ant-btn,
+  .operation-inline-actions > .ant-btn { min-height: 44px; }
+  .preparation-readiness { padding: 10px 12px; }
+  .preparation-checklist .work-section-filters .ant-input-search,
+  .task-plan-controls .ant-input-search { width: 100%; }
+  .preparation-checklist .work-section-filters { gap: 10px; }
+  .preparation-page .preparation-mobile-item { padding: 12px; }
+  .task-plan-meta { gap: 6px 12px; }
+  .task-plan-meta .task-plan-quantities { display: flex; }
+  .task-plan-meta .task-plan-quantities ul { margin: 0; }
+  .task-plan-controls .ant-select { flex: 1; min-width: 120px; }
+  .schedule-controls { gap: 10px; }
+  .schedule-controls > .ant-segmented { max-width: 100%; }
+  .schedule-month-controls { width: 100%; margin-left: 0; }
+  .schedule-month-controls .ant-btn { min-height: 44px; min-width: 44px; }
+  .gantt-view-tools { gap: 8px; }
+  .gantt-view-tools .gantt-legend { margin-left: 0; }
+}
+.preparation-row-owner { display: grid; gap: 6px; }
+.preparation-party-label { font-size: 11px; }
+.operation-page .ant-table-tbody > .ant-table-row:hover > td { background: var(--agv-bg-subtle) !important; }
+.preparation-mobile-item .preparation-row-owner { grid-template-columns: minmax(0,1fr); }
+.schedule-duration-choice { display: block; max-width: 280px; white-space: normal; overflow-wrap: anywhere; }
+.task-edit-requirements { margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--agv-border-soft); }
+.task-edit-requirements > summary { font-weight: 600; cursor: pointer; padding-block: 8px; color: var(--agv-text); }
+.task-edit-requirements > .ant-space { max-width: 100%; }
+.work-detail-drawer .ant-drawer-extra .ant-btn { min-height: 36px; }
+@media (max-width: 767px) { .work-detail-drawer .ant-btn { min-height: 44px; } }
+.preparation-form-section { margin: 10px 0 16px; padding-top: 10px; border-top: 1px solid var(--agv-border-soft); }
+.preparation-form-section > summary { cursor: pointer; font-weight: 600; padding: 8px 0; color: var(--agv-text); }
+.preparation-form-section[open] > summary { margin-bottom: 12px; }
+.preparation-edit-modal .ant-modal-body { scrollbar-gutter: stable; }
+@media (max-width: 767px) {
+  .preparation-edit-modal .ant-select-single,
+  .preparation-edit-modal .ant-picker,
+  .preparation-edit-modal .ant-input-number,
+  .preparation-edit-modal .ant-modal-footer .ant-btn { min-height: 44px; }
+  .preparation-edit-modal .ant-select-single { height: 44px; }
+}
+.task-plan-page .task-name-link { font-size: 14px; font-weight: 600; line-height: 1.5; color: var(--agv-text); }
+.task-plan-page .task-inline-action { font-size: 12px; color: var(--agv-primary); }
+.task-no-extra { color: var(--agv-text-secondary); font-size: 12px; }
+.task-filter-popover { min-width: 200px; }
+.task-filter-popover .ant-select { width: 220px; }
+.task-filter-count { margin-left: auto; font-size: 12px; }
+.startup-progress-line { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.startup-progress-line .ant-btn { color: var(--agv-text-secondary); font-size: 12px; }
+@media (max-width: 767px) { .startup-progress-line .ant-btn { min-height: 44px; } }

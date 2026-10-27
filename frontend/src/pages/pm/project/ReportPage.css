@@ -1,0 +1,38 @@
+.project-report-page { min-width: 0; }
+.project-report-page .ant-card { min-width: 0; border-radius: 16px; }
+.project-report-page .ant-card-head-title,
+.report-summary .ant-typography,
+.report-project-meta { white-space: normal; overflow-wrap: anywhere; }
+.project-report-page .ant-table-content { overscroll-behavior-x: contain; }
+.project-report-page .ant-table-cell { overflow-wrap: anywhere; }
+.report-toolbar { width: 100%; padding: 14px 16px; border: 1px solid var(--agv-border-soft); border-radius: 14px; background: var(--agv-bg-container); }
+.report-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 20px 24px; }
+.report-metrics > div { min-width: 0; overflow-wrap: anywhere; }
+.report-metrics h3 { padding-block: 6px; font-variant-numeric: tabular-nums; }
+.project-report-page .report-risk-card { border-color: var(--agv-danger); background: var(--agv-bg-container); }
+.report-risk-card .ant-card-head { color: var(--agv-danger); }
+.report-risk-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 20px; font-size: 13px; overflow-wrap: anywhere; }
+.report-risk-row > span:first-child { flex: 1 1 220px; min-width: 0; }
+.report-issue-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 24px; }
+.report-issue-columns > div { min-width: 0; overflow-wrap: anywhere; }
+.report-open-issues { display: grid; gap: 10px; }
+.report-open-issue { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: start; }
+.report-open-issue > span { overflow-wrap: anywhere; }
+.project-report-page .ant-tag { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+  .report-toolbar { gap: 10px !important; }
+  .report-toolbar .ant-picker,
+  .report-toolbar .ant-select-single { min-height: 44px; }
+  .project-report-page .ant-btn { min-height: 44px; }
+  .project-report-page .ant-card-body { padding: 16px; }
+  .report-metrics { gap: 16px; }
+  .report-metrics > div + div { padding-top: 14px; border-top: 1px solid var(--agv-border-soft); }
+  .report-open-issue { grid-template-columns: auto minmax(0, 1fr); }
+  .report-open-issue > .ant-typography { grid-column: 2; }
+}
+@media print {
+  .report-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .report-metrics > div + div { padding-top: 0; border-top: 0; }
+  .report-open-issue { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .report-open-issue > .ant-typography { grid-column: auto; }
+}

@@ -1,0 +1,97 @@
+/* Project schedule owns its controls, calendar and day details. The Gantt
+   chart and shared workspace retain their independent layout contracts. */
+.schedule-workspace .work-page-actions, .schedule-workspace .operation-inline-actions { max-width: 100%; }
+.schedule-workspace .schedule-controls { gap: 12px 20px; align-items: center; padding: 12px; border: 1px solid var(--agv-border-soft); border-radius: 14px; background: var(--agv-bg-container); }
+.schedule-workspace .schedule-control-group { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.schedule-workspace .schedule-control-label { color: var(--agv-text-secondary); font-size: 12px; white-space: nowrap; }
+.schedule-workspace .schedule-screen-body > .ant-card-body { padding: 16px; }
+.schedule-workspace .schedule-list-row { grid-template-columns: minmax(180px, 2fr) 116px minmax(100px, 1fr) minmax(104px, 1fr) 106px; gap: 12px; }
+.schedule-workspace .schedule-list-row > div { min-width: 0; overflow-wrap: anywhere; }
+.schedule-workspace .schedule-list-task button { display: block; min-height: 36px; width: 100%; line-height: 1.5; padding: 4px 0; overflow-wrap: anywhere; }
+.schedule-workspace .schedule-list-row small { font-size: 12px; }
+.schedule-workspace .schedule-list-row span { font-size: 14px; }
+.schedule-workspace .schedule-list-actions { grid-column: auto; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.schedule-workspace .schedule-list-actions .ant-btn { min-height: 32px; }
+.schedule-workspace .schedule-list-actions .ant-tag { margin: 0; }
+.project-schedule-calendar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-bottom: 16px; }
+.project-schedule-weekday { text-align: center; padding: 4px 0 8px; font-size: 12px; color: var(--agv-text-secondary); font-weight: 600; }
+.project-schedule-weekday.is-rest { color: var(--agv-danger); }
+.project-schedule-day { position: relative; min-width: 0; min-height: 96px; border: 1px solid var(--agv-border); border-radius: 7px; padding: 6px; text-align: left; font: inherit; color: var(--agv-text); background: var(--agv-bg-container); cursor: pointer; }
+.project-schedule-day.is-weekend { background: var(--agv-bg-subtle); }
+.project-schedule-day.is-outside-month { background: var(--agv-bg-layout); color: var(--agv-text-secondary); }
+.project-schedule-day.is-selected { border-color: var(--agv-primary); box-shadow: inset 0 0 0 1px var(--agv-primary); background: var(--agv-primary-soft); }
+.project-schedule-day.is-drop-target { border-color: var(--agv-primary); border-style: dashed; background: var(--agv-primary-soft); }
+.project-schedule-day:hover { border-color: var(--agv-primary); }
+.project-schedule-date { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; min-height: 24px; float: right; font-size: 13px; border-radius: 5px; font-weight: 600; }
+.project-schedule-date.is-today { color: var(--agv-on-primary, #fff); background: var(--agv-primary); }
+.project-schedule-rest { display: inline-block; color: var(--agv-danger); font-size: 11px; }
+.project-schedule-day-count { display: none; }
+.project-schedule-day-entries { display: flex; flex-direction: column; clear: both; gap: 3px; padding-top: 4px; }
+.project-schedule-assignee, .project-schedule-more-count { color: var(--agv-text-secondary); }
+.project-schedule-more-count { font-size: 11px; padding-left: 4px; }
+.schedule-workspace .schedule-selected-day-summary { margin-top: 4px; }
+.schedule-day-drawer .ant-drawer-body { min-width: 0; }
+.schedule-day-drawer .ant-table-content { max-width: 100%; overflow-x: auto; }
+.schedule-day-drawer .ant-table-cell { overflow-wrap: anywhere; }
+.schedule-day-drawer .task-name-link { font-size: 14px; }
+.schedule-day-cards { display: grid; gap: 12px; }
+.schedule-day-card { min-width: 0; padding: 12px; border: 1px solid var(--agv-border); border-radius: 8px; background: var(--agv-bg-container); }
+.schedule-day-task { display: block; width: 100%; min-height: 44px; padding: 4px 0; border: 0; background: transparent; color: var(--agv-link); text-align: left; font: inherit; font-size: 15px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; cursor: pointer; }
+.schedule-day-stage { margin: 2px 0 12px; font-size: 12px; color: var(--agv-text-secondary); overflow-wrap: anywhere; }
+.schedule-day-card dl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; margin: 0 0 12px; }
+.schedule-day-card dt { color: var(--agv-text-secondary); font-size: 12px; margin-bottom: 4px; }
+.schedule-day-card dd { margin: 0; color: var(--agv-text); font-size: 14px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.schedule-day-status, .schedule-day-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.schedule-day-status .ant-tag { margin: 0; }
+.schedule-day-notes { margin: 12px 0 0; font-size: 13px; color: var(--agv-text-secondary); white-space: pre-wrap; overflow-wrap: anywhere; }
+.schedule-day-actions { margin-top: 12px; }
+.schedule-management-modal .schedule-reschedule-start { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-top: 8px; }
+.schedule-management-modal .schedule-reschedule-start > span { flex: 1 1 180px; }
+.schedule-management-modal .schedule-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; cursor: pointer; }
+.schedule-management-modal .schedule-toggle-row > .ant-typography { flex: 1; min-width: 0; }
+.schedule-management-modal .ant-typography, .schedule-management-modal .ant-modal-body { overflow-wrap: anywhere; }
+.schedule-management-modal .ant-modal-title { padding-right: 24px; overflow-wrap: anywhere; }
+.project-schedule-day:focus-visible,
+.schedule-workspace .schedule-list-task button:focus-visible,
+.schedule-day-task:focus-visible { outline: 2px solid var(--agv-primary); outline-offset: 2px; }
+.schedule-workspace .schedule-screen-body { border-radius: 14px; }
+.schedule-workspace .schedule-list-row:last-of-type { border-bottom: 0; }
+.schedule-workspace .schedule-list-row > div:not(.schedule-list-task) > span { font-variant-numeric: tabular-nums; }
+@media (max-width: 1200px) {
+  .schedule-workspace .schedule-list-row { grid-template-columns: minmax(140px, 2fr) 108px minmax(90px, 1fr) 100px 100px; gap: 10px; }
+}
+@media (max-width: 767px) {
+  .schedule-workspace .schedule-controls { gap: 10px; }
+  .schedule-workspace .schedule-control-group { width: 100%; justify-content: space-between; }
+  .schedule-workspace .schedule-control-group .ant-segmented { max-width: calc(100% - 36px); }
+  .schedule-workspace .schedule-control-group .ant-segmented-item-label { padding-inline: 10px; }
+  .schedule-workspace .schedule-control-group .ant-segmented-item-label { min-height: 44px; display: flex; align-items: center; justify-content: center; }
+  .schedule-workspace .schedule-month-controls { gap: 6px; }
+  .schedule-workspace .schedule-month-controls .ant-picker { flex: 1; width: auto !important; min-width: 100px; min-height: 44px; }
+  .schedule-workspace .schedule-screen-body > .ant-card-body { padding: 12px; }
+  .schedule-workspace .schedule-list-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; padding: 14px 0; }
+  .schedule-workspace .schedule-list-task { grid-column: 1 / -1; }
+  .schedule-workspace .schedule-list-task button { min-height: 44px; font-size: 15px; }
+  .schedule-workspace .schedule-list-actions { grid-column: auto; flex-direction: column; align-items: flex-start; }
+  .schedule-workspace .schedule-list-actions .ant-btn { min-height: 44px; }
+  .schedule-day-drawer .ant-drawer-body { padding: 12px; }
+  .schedule-day-drawer .ant-btn, .schedule-day-drawer .ant-drawer-close { min-width: 44px; min-height: 44px; }
+  .schedule-management-modal .ant-picker,
+  .schedule-management-modal .ant-select-single,
+  .schedule-management-modal .ant-input-number { min-height: 44px; }
+  .schedule-management-modal .ant-input-number-input { height: 42px; }
+  .schedule-management-modal .ant-radio-wrapper { min-height: 44px; align-items: center; }
+  .schedule-management-modal .ant-modal-close { min-width: 44px; min-height: 44px; }
+  .schedule-management-modal .ant-btn { min-height: 44px; }
+  .schedule-management-modal.ant-modal .ant-modal-footer .ant-btn { min-height: 44px; }
+  .schedule-action-menu .ant-dropdown-menu-item,
+  .schedule-duration-choices .ant-dropdown-menu-item { min-height: 44px; }
+}
+/* Keep the compact calendar in sync with SchedulePage's 640px task-label breakpoint. */
+@media (max-width: 640px) {
+  .project-schedule-calendar { gap: 3px; }
+  .project-schedule-day { min-height: 70px; padding: 4px 2px; }
+  .project-schedule-date { float: none; min-height: 24px; width: 100%; }
+  .project-schedule-rest { position: absolute; top: 3px; left: 3px; font-size: 10px; }
+  .project-schedule-day-count { display: block; clear: both; padding-top: 6px; text-align: center; color: var(--agv-text-secondary); font-size: 12px; }
+}

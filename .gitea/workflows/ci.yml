@@ -1,0 +1,388 @@
+name: CI 门禁
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - 'feat/**'
+      # Task branches run on their PR; integration pushes get one separate gate.
+      - 'codex/v3-integration'
+  pull_request:
+
+# Gitea 1.27 job credentials are restricted to repository content reads.
+permissions:
+  contents: read
+
+jobs:
+  backend-sqlite:
+    name: Python 3.12 · SQLite pytest
+    runs-on: xingxu-v3-ci-v2
+    container: docker.gitea.com/runner-images:ubuntu-24.04
+    steps:
+      - name: 从本 Gitea 检出本次完整提交
+        shell: bash
+        env:
+          CI_CHECKOUT_TOKEN: ${{ github.token }}
+          CI_CHECKOUT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          CI_CHECKOUT_REPOSITORY: ${{ github.repository }}
+          CI_CHECKOUT_SERVER: ${{ github.server_url }}
+        run: |
+          set -euo pipefail
+          set +x
+          python3.12 - <<'PY_CHECKOUT'
+          import json, os, pathlib, re, subprocess, tempfile, urllib.request
+          from urllib.parse import urlsplit
+          expected = os.environ['CI_CHECKOUT_SHA'].lower()
+          server = os.environ['CI_CHECKOUT_SERVER'].rstrip('/')
+          repository = os.environ['CI_CHECKOUT_REPOSITORY']
+          parsed = urlsplit(server)
+          if not re.fullmatch(r'[0-9a-f]{40}', expected):
+              raise SystemExit('Expected a full 40-character source commit')
+          if parsed.scheme != 'https' or parsed.netloc != 'gitea.arrowwood.top:8773' or parsed.path or parsed.query or parsed.fragment:
+              raise SystemExit('Unexpected Gitea server; checkout refused')
+          if repository != 'codex-mac/agv-project-workflow':
+              raise SystemExit('Unexpected repository; checkout refused')
+          token = os.environ.get('CI_CHECKOUT_TOKEN', '')
+          if not token:
+              raise SystemExit('Missing ephemeral Actions job credential')
+          request = urllib.request.Request(f'{server}/api/v1/repos/{repository}', headers={'Authorization': 'token ' + token})
+          with urllib.request.urlopen(request, timeout=30) as response:
+              permissions = json.load(response).get('permissions', {})
+          if permissions.get('push') or permissions.get('admin') or permissions.get('pull') is not True:
+              raise SystemExit('Actions credential must have read-only repository access')
+          environment = dict(os.environ)
+          for key in ('GIT_TRACE', 'GIT_TRACE_CURL', 'GIT_CURL_VERBOSE'):
+              environment.pop(key, None)
+          environment['GIT_TERMINAL_PROMPT'] = '0'
+          environment['GIT_TRACE'] = '0'
+          environment['GIT_TRACE_CURL'] = '0'
+          environment['GIT_CURL_VERBOSE'] = '0'
+          with tempfile.TemporaryDirectory(prefix='xingxu-checkout-', dir=os.environ['RUNNER_TEMP']) as private:
+              os.chmod(private, 0o700)
+              askpass = pathlib.Path(private) / 'askpass.py'
+              askpass.write_text('#!/usr/bin/env python3.12\nimport os,sys\nprint("x-access-token" if "username" in sys.argv[1].lower() else os.environ["CI_CHECKOUT_TOKEN"])\n')
+              askpass.chmod(0o700)
+              environment['GIT_ASKPASS'] = str(askpass)
+              def git(*args, capture=False):
+                  return subprocess.run(['git', '-c', 'credential.helper=', '-c', 'http.sslVerify=true', *args], env=environment, check=True, text=True, stdout=subprocess.PIPE if capture else None)
+              git('init', '.')
+              git('remote', 'add', 'origin', f'{server}/{repository}.git')
+              git('fetch', '--no-tags', '--depth=1', 'origin', expected)
+              git('checkout', '--detach', 'FETCH_HEAD')
+              if git('rev-parse', 'HEAD', capture=True).stdout.strip().lower() != expected:
+                  raise SystemExit('Checkout source commit mismatch')
+              config = git('config', '--local', '--list', capture=True).stdout
+              if token in config or 'extraheader=' in config.lower() or 'credential.helper=' in config.lower():
+                  raise SystemExit('Checkout persisted authorization material')
+          print('Verified source commit:', expected)
+          print('Verified read-only job credential; no persisted checkout authorization')
+          PY_CHECKOUT
+          unset CI_CHECKOUT_TOKEN
+      - name: 创建 Python 3.12 隔离环境
+        shell: bash
+        run: |
+          python3.12 -c "import sys; assert sys.version_info[:2] == (3, 12)"
+          ci_python_dir="$RUNNER_TEMP/xingxu-python312"
+          python3.12 -m venv "$ci_python_dir"
+          echo "$ci_python_dir/bin" >> "$GITHUB_PATH"
+      - name: 安装依赖
+        working-directory: backend
+        run: |
+          python -c "import sys; assert sys.version_info[:2] == (3, 12)"
+          # The configured proxy intermittently drops PyPI TLS. These exact
+          # official hosts were verified directly; package TLS/integrity remain enabled.
+          export NO_PROXY="${NO_PROXY:+$NO_PROXY,}pypi.org,files.pythonhosted.org"
+          export no_proxy="$NO_PROXY"
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+      - name: SQLite 全量测试
+        working-directory: backend
+        run: env -u DATABASE_URL python -m pytest -q -o faulthandler_timeout=120
+
+  backend-postgres:
+    name: Python 3.12 · PostgreSQL 17 pytest + 行锁门禁
+    runs-on: xingxu-v3-ci-v2
+    container: docker.gitea.com/runner-images:ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: agv_ci
+          POSTGRES_PASSWORD: agv_ci
+          POSTGRES_DB: agv_ci
+        options: >-
+          --health-cmd "pg_isready -U agv_ci -d agv_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      # Ephemeral CI service only; it has no host port mapping.
+      DATABASE_URL: postgresql+psycopg2://agv_ci:agv_ci@postgres:5432/agv_ci
+    steps:
+      - name: 从本 Gitea 检出本次完整提交
+        shell: bash
+        env:
+          CI_CHECKOUT_TOKEN: ${{ github.token }}
+          CI_CHECKOUT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          CI_CHECKOUT_REPOSITORY: ${{ github.repository }}
+          CI_CHECKOUT_SERVER: ${{ github.server_url }}
+        run: |
+          set -euo pipefail
+          set +x
+          python3.12 - <<'PY_CHECKOUT'
+          import json, os, pathlib, re, subprocess, tempfile, urllib.request
+          from urllib.parse import urlsplit
+          expected = os.environ['CI_CHECKOUT_SHA'].lower()
+          server = os.environ['CI_CHECKOUT_SERVER'].rstrip('/')
+          repository = os.environ['CI_CHECKOUT_REPOSITORY']
+          parsed = urlsplit(server)
+          if not re.fullmatch(r'[0-9a-f]{40}', expected):
+              raise SystemExit('Expected a full 40-character source commit')
+          if parsed.scheme != 'https' or parsed.netloc != 'gitea.arrowwood.top:8773' or parsed.path or parsed.query or parsed.fragment:
+              raise SystemExit('Unexpected Gitea server; checkout refused')
+          if repository != 'codex-mac/agv-project-workflow':
+              raise SystemExit('Unexpected repository; checkout refused')
+          token = os.environ.get('CI_CHECKOUT_TOKEN', '')
+          if not token:
+              raise SystemExit('Missing ephemeral Actions job credential')
+          request = urllib.request.Request(f'{server}/api/v1/repos/{repository}', headers={'Authorization': 'token ' + token})
+          with urllib.request.urlopen(request, timeout=30) as response:
+              permissions = json.load(response).get('permissions', {})
+          if permissions.get('push') or permissions.get('admin') or permissions.get('pull') is not True:
+              raise SystemExit('Actions credential must have read-only repository access')
+          environment = dict(os.environ)
+          for key in ('GIT_TRACE', 'GIT_TRACE_CURL', 'GIT_CURL_VERBOSE'):
+              environment.pop(key, None)
+          environment['GIT_TERMINAL_PROMPT'] = '0'
+          environment['GIT_TRACE'] = '0'
+          environment['GIT_TRACE_CURL'] = '0'
+          environment['GIT_CURL_VERBOSE'] = '0'
+          with tempfile.TemporaryDirectory(prefix='xingxu-checkout-', dir=os.environ['RUNNER_TEMP']) as private:
+              os.chmod(private, 0o700)
+              askpass = pathlib.Path(private) / 'askpass.py'
+              askpass.write_text('#!/usr/bin/env python3.12\nimport os,sys\nprint("x-access-token" if "username" in sys.argv[1].lower() else os.environ["CI_CHECKOUT_TOKEN"])\n')
+              askpass.chmod(0o700)
+              environment['GIT_ASKPASS'] = str(askpass)
+              def git(*args, capture=False):
+                  return subprocess.run(['git', '-c', 'credential.helper=', '-c', 'http.sslVerify=true', *args], env=environment, check=True, text=True, stdout=subprocess.PIPE if capture else None)
+              git('init', '.')
+              git('remote', 'add', 'origin', f'{server}/{repository}.git')
+              git('fetch', '--no-tags', '--depth=1', 'origin', expected)
+              git('checkout', '--detach', 'FETCH_HEAD')
+              if git('rev-parse', 'HEAD', capture=True).stdout.strip().lower() != expected:
+                  raise SystemExit('Checkout source commit mismatch')
+              config = git('config', '--local', '--list', capture=True).stdout
+              if token in config or 'extraheader=' in config.lower() or 'credential.helper=' in config.lower():
+                  raise SystemExit('Checkout persisted authorization material')
+          print('Verified source commit:', expected)
+          print('Verified read-only job credential; no persisted checkout authorization')
+          PY_CHECKOUT
+          unset CI_CHECKOUT_TOKEN
+      - name: 创建 Python 3.12 隔离环境
+        shell: bash
+        run: |
+          python3.12 -c "import sys; assert sys.version_info[:2] == (3, 12)"
+          ci_python_dir="$RUNNER_TEMP/xingxu-python312"
+          python3.12 -m venv "$ci_python_dir"
+          echo "$ci_python_dir/bin" >> "$GITHUB_PATH"
+      - name: 安装 PostgreSQL 17 客户端
+        shell: bash
+        run: |
+          set -euo pipefail
+          ci_root() { if [ "$(id -u)" -eq 0 ]; then "$@"; else sudo "$@"; fi; }
+          ci_root apt-get update
+          ci_root apt-get install -y --no-install-recommends curl ca-certificates
+          ci_root install -d /usr/share/postgresql-common/pgdg
+          curl --fail --silent --show-error https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /tmp/ci-pgdg.asc
+          ci_root install -m 0644 /tmp/ci-pgdg.asc /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          . /etc/os-release
+          printf 'deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt %s-pgdg main\n' "$VERSION_CODENAME" | ci_root tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          ci_root apt-get update
+          ci_root apt-get install -y --no-install-recommends postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+      - name: 安装后端依赖
+        working-directory: backend
+        run: |
+          python -c "import sys; assert sys.version_info[:2] == (3, 12)"
+          # The configured proxy intermittently drops PyPI TLS. These exact
+          # official hosts were verified directly; package TLS/integrity remain enabled.
+          export NO_PROXY="${NO_PROXY:+$NO_PROXY,}pypi.org,files.pythonhosted.org"
+          export no_proxy="$NO_PROXY"
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+      - name: 核对 PostgreSQL 客户端与服务器版本
+        working-directory: backend
+        run: |
+          pg_dump --version
+          pg_restore --version
+          python - <<'PY'
+          import os
+          from sqlalchemy import create_engine, text
+          with create_engine(os.environ['DATABASE_URL']).connect() as connection:
+              assert int(connection.execute(text('SHOW server_version_num')).scalar()) // 10000 == 17
+          PY
+      - name: PostgreSQL 全量测试
+        working-directory: backend
+        run: python -m pytest -q -o faulthandler_timeout=120
+      - name: PostgreSQL 真实行锁并发门禁
+        working-directory: backend
+        run: python scripts/pg_gate.py
+
+  frontend:
+    name: 前端 tsc + vite + vitest
+    runs-on: xingxu-v3-ci-v2
+    steps:
+      - name: 从本 Gitea 检出本次完整提交
+        shell: bash
+        env:
+          CI_CHECKOUT_TOKEN: ${{ github.token }}
+          CI_CHECKOUT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          CI_CHECKOUT_REPOSITORY: ${{ github.repository }}
+          CI_CHECKOUT_SERVER: ${{ github.server_url }}
+        run: |
+          set -euo pipefail
+          set +x
+          python3.12 - <<'PY_CHECKOUT'
+          import json, os, pathlib, re, subprocess, tempfile, urllib.request
+          from urllib.parse import urlsplit
+          expected = os.environ['CI_CHECKOUT_SHA'].lower()
+          server = os.environ['CI_CHECKOUT_SERVER'].rstrip('/')
+          repository = os.environ['CI_CHECKOUT_REPOSITORY']
+          parsed = urlsplit(server)
+          if not re.fullmatch(r'[0-9a-f]{40}', expected):
+              raise SystemExit('Expected a full 40-character source commit')
+          if parsed.scheme != 'https' or parsed.netloc != 'gitea.arrowwood.top:8773' or parsed.path or parsed.query or parsed.fragment:
+              raise SystemExit('Unexpected Gitea server; checkout refused')
+          if repository != 'codex-mac/agv-project-workflow':
+              raise SystemExit('Unexpected repository; checkout refused')
+          token = os.environ.get('CI_CHECKOUT_TOKEN', '')
+          if not token:
+              raise SystemExit('Missing ephemeral Actions job credential')
+          request = urllib.request.Request(f'{server}/api/v1/repos/{repository}', headers={'Authorization': 'token ' + token})
+          with urllib.request.urlopen(request, timeout=30) as response:
+              permissions = json.load(response).get('permissions', {})
+          if permissions.get('push') or permissions.get('admin') or permissions.get('pull') is not True:
+              raise SystemExit('Actions credential must have read-only repository access')
+          environment = dict(os.environ)
+          for key in ('GIT_TRACE', 'GIT_TRACE_CURL', 'GIT_CURL_VERBOSE'):
+              environment.pop(key, None)
+          environment['GIT_TERMINAL_PROMPT'] = '0'
+          environment['GIT_TRACE'] = '0'
+          environment['GIT_TRACE_CURL'] = '0'
+          environment['GIT_CURL_VERBOSE'] = '0'
+          with tempfile.TemporaryDirectory(prefix='xingxu-checkout-', dir=os.environ['RUNNER_TEMP']) as private:
+              os.chmod(private, 0o700)
+              askpass = pathlib.Path(private) / 'askpass.py'
+              askpass.write_text('#!/usr/bin/env python3.12\nimport os,sys\nprint("x-access-token" if "username" in sys.argv[1].lower() else os.environ["CI_CHECKOUT_TOKEN"])\n')
+              askpass.chmod(0o700)
+              environment['GIT_ASKPASS'] = str(askpass)
+              def git(*args, capture=False):
+                  return subprocess.run(['git', '-c', 'credential.helper=', '-c', 'http.sslVerify=true', *args], env=environment, check=True, text=True, stdout=subprocess.PIPE if capture else None)
+              git('init', '.')
+              git('remote', 'add', 'origin', f'{server}/{repository}.git')
+              git('fetch', '--no-tags', '--depth=1', 'origin', expected)
+              git('checkout', '--detach', 'FETCH_HEAD')
+              if git('rev-parse', 'HEAD', capture=True).stdout.strip().lower() != expected:
+                  raise SystemExit('Checkout source commit mismatch')
+              config = git('config', '--local', '--list', capture=True).stdout
+              if token in config or 'extraheader=' in config.lower() or 'credential.helper=' in config.lower():
+                  raise SystemExit('Checkout persisted authorization material')
+          print('Verified source commit:', expected)
+          print('Verified read-only job credential; no persisted checkout authorization')
+          PY_CHECKOUT
+          unset CI_CHECKOUT_TOKEN
+      - name: 使用已验证的 Node 22 工具缓存
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$(uname -m)" in
+            aarch64|arm64) ci_node_arch=arm64 ;;
+            x86_64) ci_node_arch=x64 ;;
+            *) echo 'Unsupported Node cache architecture'; exit 1 ;;
+          esac
+          ci_node_dir="/opt/hostedtoolcache/node/22.23.4/$ci_node_arch"
+          test -f "$ci_node_dir.complete" || { echo 'Provision the verified Node 22.23.4 toolcache on this runner first'; exit 1; }
+          test -x "$ci_node_dir/bin/node"
+          export PATH="$ci_node_dir/bin:$PATH"
+          node -e 'if (!process.versions.node.startsWith("22.")) process.exit(1)'
+          echo "$ci_node_dir/bin" >> "$GITHUB_PATH"
+          node --version
+          npm --version
+      - name: 安装依赖
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+      - name: 类型检查 + 构建
+        working-directory: frontend
+        run: npm run build
+      - name: 前端单测
+        working-directory: frontend
+        run: npm test
+
+  compose:
+    name: Compose 配置校验
+    runs-on: xingxu-v3-ci-v2
+    steps:
+      - name: 从本 Gitea 检出本次完整提交
+        shell: bash
+        env:
+          CI_CHECKOUT_TOKEN: ${{ github.token }}
+          CI_CHECKOUT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          CI_CHECKOUT_REPOSITORY: ${{ github.repository }}
+          CI_CHECKOUT_SERVER: ${{ github.server_url }}
+        run: |
+          set -euo pipefail
+          set +x
+          python3.12 - <<'PY_CHECKOUT'
+          import json, os, pathlib, re, subprocess, tempfile, urllib.request
+          from urllib.parse import urlsplit
+          expected = os.environ['CI_CHECKOUT_SHA'].lower()
+          server = os.environ['CI_CHECKOUT_SERVER'].rstrip('/')
+          repository = os.environ['CI_CHECKOUT_REPOSITORY']
+          parsed = urlsplit(server)
+          if not re.fullmatch(r'[0-9a-f]{40}', expected):
+              raise SystemExit('Expected a full 40-character source commit')
+          if parsed.scheme != 'https' or parsed.netloc != 'gitea.arrowwood.top:8773' or parsed.path or parsed.query or parsed.fragment:
+              raise SystemExit('Unexpected Gitea server; checkout refused')
+          if repository != 'codex-mac/agv-project-workflow':
+              raise SystemExit('Unexpected repository; checkout refused')
+          token = os.environ.get('CI_CHECKOUT_TOKEN', '')
+          if not token:
+              raise SystemExit('Missing ephemeral Actions job credential')
+          request = urllib.request.Request(f'{server}/api/v1/repos/{repository}', headers={'Authorization': 'token ' + token})
+          with urllib.request.urlopen(request, timeout=30) as response:
+              permissions = json.load(response).get('permissions', {})
+          if permissions.get('push') or permissions.get('admin') or permissions.get('pull') is not True:
+              raise SystemExit('Actions credential must have read-only repository access')
+          environment = dict(os.environ)
+          for key in ('GIT_TRACE', 'GIT_TRACE_CURL', 'GIT_CURL_VERBOSE'):
+              environment.pop(key, None)
+          environment['GIT_TERMINAL_PROMPT'] = '0'
+          environment['GIT_TRACE'] = '0'
+          environment['GIT_TRACE_CURL'] = '0'
+          environment['GIT_CURL_VERBOSE'] = '0'
+          with tempfile.TemporaryDirectory(prefix='xingxu-checkout-', dir=os.environ['RUNNER_TEMP']) as private:
+              os.chmod(private, 0o700)
+              askpass = pathlib.Path(private) / 'askpass.py'
+              askpass.write_text('#!/usr/bin/env python3.12\nimport os,sys\nprint("x-access-token" if "username" in sys.argv[1].lower() else os.environ["CI_CHECKOUT_TOKEN"])\n')
+              askpass.chmod(0o700)
+              environment['GIT_ASKPASS'] = str(askpass)
+              def git(*args, capture=False):
+                  return subprocess.run(['git', '-c', 'credential.helper=', '-c', 'http.sslVerify=true', *args], env=environment, check=True, text=True, stdout=subprocess.PIPE if capture else None)
+              git('init', '.')
+              git('remote', 'add', 'origin', f'{server}/{repository}.git')
+              git('fetch', '--no-tags', '--depth=1', 'origin', expected)
+              git('checkout', '--detach', 'FETCH_HEAD')
+              if git('rev-parse', 'HEAD', capture=True).stdout.strip().lower() != expected:
+                  raise SystemExit('Checkout source commit mismatch')
+              config = git('config', '--local', '--list', capture=True).stdout
+              if token in config or 'extraheader=' in config.lower() or 'credential.helper=' in config.lower():
+                  raise SystemExit('Checkout persisted authorization material')
+          print('Verified source commit:', expected)
+          print('Verified read-only job credential; no persisted checkout authorization')
+          PY_CHECKOUT
+          unset CI_CHECKOUT_TOKEN
+      - name: 校验 Compose 配置
+        run: |
+          docker compose -f docker/docker-compose.multica.yml config -q
+          docker compose -f docker/docker-compose.yml config -q

@@ -1,0 +1,16 @@
+import { api } from './client'
+import type { DocumentAction } from './projectDocuments'
+export type Window = { earliest: string; latest: string; timezone: string }
+export type Check = { id: string; name: string; version: number; is_done: boolean; failed: boolean; is_applicable: boolean; vehicle_unit_id?: string; vehicle_label?: string }
+export type Work = { id: string; name: string; kind: 'vehicle' | 'other'; vehicle_step_key?: string; version: number; is_completed: boolean; phase_name: string; group_label?: string; check_items: Check[] }
+export type PlanCompletion = { state: string; completed_count: number | null; required_count: number | null; quantity_unknown: boolean; is_complete: boolean; overdue?: boolean; warnings?: string[] }
+export type Plan = { completion?: PlanCompletion; vehicle_step_key?: string; permissions?: { claim: boolean }; can_record?: boolean; id: string; project_id: string; project_name: string; task_id: string; version: number; week_start: string; mode: string; scope: { vehicle_type?: string; vehicle_unit_ids?: string[]; label?: string }; assignee_ids: string[]; assignees: { id: string; name: string }[]; work_item: Work; date_window: Window }
+export type Matrix = { steps: { key: string; name: string; source_task_id: string }[]; units: { id: string; asset_code: string; fleet_no: string; vehicle_type: string; cells: Record<string, { version: number; is_done: boolean; done_on: string }> }[] }
+export type FieldRecord = Window & { operation_reason?: string; restores_id?: string | null; effective?: boolean; id: string; project_id: string; project_name: string; kind: 'work' | 'vehicle' | 'check'; target_id: string; target_name: string; step_key: string; completion_date: string; recorded_at: string; actor_name: string; assisted_user_name?: string; is_done: boolean; note: string; action: string; version: number; can_edit: boolean; can_retract: boolean }
+export type Week = { state: string; plans: Plan[]; unassigned: Plan[]; assistable: Plan[]; vehicle_matrices: Record<string, Matrix>; this_week_documents: (DocumentAction & { project_id: string; timing_event?: string })[]; my_issues: { id: string; title: string; project_name: string; status: string }[]; windows: Record<string, Window>; warnings: { project_id: string; message: string }[]; permissions: { record: boolean; upload: boolean; issues: boolean; plan_read?: boolean } }
+export const fieldWeekApi = {
+  week: async (params?: { week_start?: string; project_id?: string }, expectedAccount?: string): Promise<Week> => (await api.get('/worker/week', { params, headers: expectedAccount ? { 'X-AGV-Expected-Account': expectedAccount } : {} })).data,
+  records: async (params?: { week_start?: string }, expectedAccount?: string): Promise<{ records: FieldRecord[] }> => (await api.get('/worker/records', { params, headers: expectedAccount ? { 'X-AGV-Expected-Account': expectedAccount } : {} })).data,
+  save: async (body: Record<string, unknown>, expectedAccount: string) => (await api.post('/worker/operations', body, { headers: { 'X-AGV-Expected-Account': expectedAccount } })).data,
+  claim: async (plan: Plan, expectedAccount: string) => (await api.post(`/projects/${plan.project_id}/weekly-plans/${plan.id}/claim`, { version: plan.version }, { headers: { 'X-AGV-Expected-Account': expectedAccount } })).data,
+}

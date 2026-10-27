@@ -1,0 +1,50 @@
+.startup-page.operation-page .startup-steps { margin: 0 0 20px; gap: 0; padding: 0; border: 1px solid var(--agv-border-soft); border-radius: 10px; overflow: hidden; }
+.startup-page.operation-page .startup-steps button { border: 0; border-radius: 0; padding: 12px 14px; box-shadow: none; border-right: 1px solid var(--agv-border-soft); }
+.startup-page.operation-page .startup-steps button:last-child { border-right: 0; }
+.startup-page.operation-page .startup-steps button.is-current { background: var(--agv-primary-soft); box-shadow: inset 0 -2px var(--agv-primary); }
+.startup-page.operation-page .startup-template-source { margin-bottom: 16px; color: var(--agv-text-secondary); font-size: 12px; }
+.startup-template-source summary { cursor: pointer; padding: 6px 0; }
+.startup-template-source p { margin: 6px 0; line-height: 1.6; }
+.startup-page.operation-page .startup-work { padding: 18px; }
+.startup-page.operation-page .startup-section-heading { margin-bottom: 14px; }
+.startup-page.operation-page .startup-work-toolbar { margin-bottom: 16px; }
+.startup-page.operation-page .startup-save-bar { margin-top: 18px; padding-top: 16px; }
+.startup-page.operation-page .startup-next-step { background: var(--agv-bg-container); }
+.startup-page.operation-page .work-section,
+.startup-page.operation-page .operation-page-embedded { margin-bottom: 0; }
+.startup-page.operation-page .startup-steps { border-radius: 14px; }
+.startup-page.operation-page .startup-steps button { min-width: 0; min-height: 64px; }
+.startup-page.operation-page .startup-steps button > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.startup-page.operation-page .startup-steps button:focus-visible { outline: 2px solid var(--agv-primary); outline-offset: -3px; }
+.startup-page.operation-page .startup-template-source { padding: 10px 14px; border: 1px solid var(--agv-border-soft); border-radius: 12px; background: var(--agv-bg-container); overflow-wrap: anywhere; }
+.startup-template-source summary { line-height: 1.6; }
+.startup-page.operation-page .startup-work { border-radius: 16px; }
+.startup-page.operation-page .startup-work-toolbar { padding-bottom: 16px; border-bottom: 1px solid var(--agv-border-soft); }
+.startup-page.operation-page .startup-task-row > div:first-child { min-width: 0; overflow-wrap: anywhere; line-height: 1.6; }
+.startup-page.operation-page .startup-phase h4 { border-left: 0; border-radius: 8px; color: var(--agv-text-secondary); overflow-wrap: anywhere; }
+.startup-page.operation-page .startup-quantity > span { max-width: 64px; overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+  .startup-page { scroll-margin-top: 164px; }
+  .startup-page.operation-page .startup-steps { grid-template-columns: repeat(4,minmax(0,1fr)); margin-bottom: 16px; }
+  .startup-page.operation-page .startup-steps button { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 10px 4px; gap: 5px; }
+  .startup-page.operation-page .startup-steps small { display: none; }
+  .startup-page.operation-page .startup-step-number { width: 24px; height: 24px; font-size: 12px; }
+  .startup-page.operation-page .startup-steps strong { font-size: 12px; }
+  .startup-page.operation-page .startup-work { padding: 14px; }
+  .startup-page.operation-page .startup-section-heading { flex-direction: column; gap: 8px; }
+  .startup-page.operation-page .startup-save-bar .ant-btn { min-height: 44px; }
+  .startup-template-source summary { min-height: 44px; padding-block: 10px; }
+  .startup-page.operation-page .startup-work .ant-input-number,
+  .startup-page.operation-page .startup-work .ant-input-search-button,
+  .startup-page.operation-page .startup-work .ant-input-affix-wrapper,
+  .startup-page.operation-page .startup-section-heading .ant-btn { min-height: 44px; }
+  .startup-page.operation-page .startup-work .ant-input-number-input { height: 42px; }
+  .startup-page.operation-page .startup-work .ant-segmented-item-label { min-height: 44px; display: flex; align-items: center; justify-content: center; }
+  .startup-page.operation-page .startup-save-bar > .ant-space { width: 100%; justify-content: flex-end; }
+}
+@media print {
+  body:has(.gantt-print-view) .startup-page > .work-page-header,
+  body:has(.gantt-print-view) .startup-page > .startup-steps,
+  body:has(.gantt-print-view) .startup-page .startup-next-step { display: none !important; }
+  body:has(.gantt-print-view) .startup-page .startup-step-content { margin: 0 !important; padding: 0 !important; }
+}

@@ -1,0 +1,80 @@
+{
+  "type": "agvpm-project",
+  "version": "2.3",
+  "_instructions": {
+    "purpose": "AGV 项目完整导入骨架。未知字段保持空值，不得编造；导入前必须预检。",
+    "required": [
+      "project.name",
+      "project.start_date",
+      "project.end_date"
+    ],
+    "dates": "计划日期和逐车arrived_at用YYYY-MM-DD；project_events.actual_at为带时区的实际日期时间，未知不得编造。arrival_all实际值仅由完整逐车到场记录汇总。",
+    "people": "人员建议仅整理为 project.staffing_notes 文字，不填写用户ID或创建账号。",
+    "routing": "准备/采购、实施任务、现场物品、项目问题、单车故障和交付资料必须进入各自数组，不重复记录。"
+  },
+  "project": {
+    "name": "",
+    "abbreviation": "",
+    "client": "",
+    "location": "",
+    "start_date": "",
+    "end_date": "",
+    "description": "",
+    "status": "draft",
+    "rest_mode": "none",
+    "rest_days": [],
+    "skip_holidays": false,
+    "staffing_notes": "",
+    "conditions": {
+      "need_wms": false,
+      "need_charging": false,
+      "client_server": false,
+      "new_vehicles": false,
+      "overseas": false
+    },
+    "client_contacts": [],
+    "entry_plan": {
+      "mode": "",
+      "meeting_time": "",
+      "meeting_point": "",
+      "client_contact": "",
+      "contact_phone": "",
+      "transport": "",
+      "accommodation": "",
+      "access_requirements": "",
+      "tools_ppe": "",
+      "network_access": "",
+      "notes": ""
+    },
+    "dispatch_platform": null
+  },
+  "vehicles": [],
+  "vehicle_units": [],
+  "modules": [],
+  "preparations": [],
+  "inventory_items": [],
+  "archive_checklist": [],
+  "schedule": [],
+  "progress": [],
+  "issues": [],
+  "project_events": [
+    {
+      "event_key": "internal_kickoff",
+      "planned_date": null,
+      "actual_at": null,
+      "note": ""
+    },
+    {
+      "event_key": "ship",
+      "planned_date": null,
+      "actual_at": null,
+      "note": ""
+    },
+    {
+      "event_key": "arrival_all",
+      "planned_date": null,
+      "actual_at": null,
+      "note": ""
+    }
+  ]
+}

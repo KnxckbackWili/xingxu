@@ -1,0 +1,4 @@
+interface:
+  display_name: "AGV 交接归档"
+  short_description: "整理联系人、入场、物品和交付验收资料"
+  default_prompt: "将这些现场资料整理成可交接、可追责的项目交付清单。"

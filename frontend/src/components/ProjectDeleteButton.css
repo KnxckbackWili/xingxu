@@ -1,0 +1,5 @@
+.project-delete-name { overflow-wrap: anywhere; }
+.project-delete-action { display: inline-flex; }
+@media (max-width: 700px) {
+  .project-delete-action .ant-btn, .project-delete-modal .ant-btn { min-height: 44px; }
+}

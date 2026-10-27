@@ -1,0 +1,138 @@
+# Multica 正式部署：单容器（含容器内 PostgreSQL），映射到 8002。
+# 与基线 docker-compose.yml（SQLite）并存；USE_POSTGRES=1 由 supervisord 托管 PG。
+# 统一入口：make deploy / make update（docker/scripts/deploy.sh）。
+# 环境变量写入 docker/.env（见 docker/.env.example），二次部署通常无需改动任何变量。
+# 注意：容器内 PostgreSQL 需要 setuid（supervisord 以 postgres 用户拉起进程），
+# 因此本文件不 drop ALL capabilities，也不启用 read_only（与 SQLite 基线不同）。
+services:
+  agv-pm:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      # 本机 Docker 代理指向 127.0.0.1:7897：默认 bridge 网络下 build 容器自己的
+      # loopback 上无代理 → apt/pip 拉取失败；host 网络可复用宿主代理。
+      network: host
+      args:
+        APP_VERSION: ${APP_VERSION:-3.0.0}
+        # 构建来源 git 短 SHA（deploy.sh 自动注入；直接 docker compose 时不传则为 unknown）。
+        GIT_SHA: ${GIT_SHA:-unknown}
+    image: ${AGV_IMAGE:-agv-pm-multica:3.0.0}
+    container_name: ${AGV_CONTAINER_NAME:-agv-pm-8002}
+    ports:
+      - "${BIND_ADDRESS:-0.0.0.0}:${APP_PORT:-8002}:8000"
+    environment:
+      - TZ=Asia/Shanghai
+      # 构建来源 git 短 SHA（便于线上排查运行构建；直接 docker compose 不传则为 unknown）。
+      - GIT_SHA=${GIT_SHA:-unknown}
+      # 留空时后端会在 data/secret.key 生成并持久化随机密钥。
+      - SECRET_KEY=${SECRET_KEY:-}
+      - AUTH_SIGNING_KEY=${AUTH_SIGNING_KEY:-}
+      # 正式部署默认只建 admin（SEED_DEMO_USERS=0），首次启动必须提供
+      # INITIAL_ADMIN_PASSWORD；评审/演示可在 docker/.env 设 SEED_DEMO_USERS=1。
+      # 生产暴露面收口：seed 启动时幂等禁用仍持默认口令（pm123/worker123）的
+      # 存量演示账号并失效其旧会话；需保留演示角色时先轮换为强口令（见 seed_data.py）。
+      - SEED_DEMO_USERS=${SEED_DEMO_USERS:-0}
+      - DEMO_ADMIN_PASSWORD=${DEMO_ADMIN_PASSWORD:-}
+      - DEMO_PM_PASSWORD=${DEMO_PM_PASSWORD:-}
+      - DEMO_WORKER_PASSWORD=${DEMO_WORKER_PASSWORD:-}
+      - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD:-}
+      # 存量 admin 运维轮换：设 ADMIN_PASSWORD_ROTATE=1 且提供 INITIAL_ADMIN_PASSWORD(≥8位)
+      # 时，启动时显式改密并使旧会话全部失效（幂等；见 docs/deployment.md，默认 0）。
+      - ADMIN_PASSWORD_ROTATE=${ADMIN_PASSWORD_ROTATE:-0}
+      - DATA_DIR=/app/data
+      # 容器内 PostgreSQL（A1/A2）
+      - USE_POSTGRES=1
+      - PGDATA=/app/data/pgdata
+      - NO_PROXY=*
+      - no_proxy=*
+      # Host 头白名单：默认仅本机回环，禁止 *。通过 IP/域名访问必须显式加入
+      #（评审/访问主机信息为人工输入项，上线时填写）。
+      - PUBLIC_MODE=${PUBLIC_MODE:-0}
+      - TRUSTED_HOSTS=${TRUSTED_HOSTS:-127.0.0.1,localhost}
+      # T023/T024：NPM/nginx 反代前置时信任 X-Forwarded-For/Proto（拿到真实客户端 IP 与 https scheme）。
+      # 默认透传空值，不信任代理头；生产反代显式配置为
+      # NPM 可信地址/网段，如 FORWARDED_ALLOW_IPS=<NPM 容器 IP>（或所在 Docker 桥接网段）。
+      - FORWARDED_ALLOW_IPS=${FORWARDED_ALLOW_IPS:-}
+      - FORCE_HTTPS=${FORCE_HTTPS:-0}
+      # 浏览器 Cookie 会话安全属性：可信代理的转发头让 uvicorn 正确识别外部 HTTPS；
+      # 仍需在 docker/.env 显式 COOKIE_SECURE=1
+      # 才给会话 Cookie 打 Secure——否则登录正常但部分浏览器拒绝非 Secure 的 HttpOnly Cookie。
+      # 默认 0 = 本地/内网 HTTP 演示（浏览器在 http 下不写 Secure Cookie）；SAMESITE 默认 lax。
+      - COOKIE_SECURE=${COOKIE_SECURE:-0}
+      - COOKIE_SAMESITE=${COOKIE_SAMESITE:-lax}
+      - MAX_BACKUP_UPLOAD_MB=${MAX_BACKUP_UPLOAD_MB:-2048}
+      - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-2048}
+      - MAX_BACKUP_EXPANDED_MB=${MAX_BACKUP_EXPANDED_MB:-8192}
+      # 调度器由独立 scheduler 进程承担（supervisord 内 web 已显式关闭）。
+      - SCHEDULER_ENABLED=1
+      # B4：500 项目聚合看板启用 TTL cache（overview/overdue/stats/trend）
+      - AGVPM_ENABLE_CACHE=1
+      - REPORT_WEEKLY_TIME=${REPORT_WEEKLY_TIME:-20:00}
+      - FIELD_BACKFILL_DAYS=${FIELD_BACKFILL_DAYS:-}
+      # 问题按性质使用经过小时阈值，每分钟扫描并去重；普通未设小时则兼容天数。
+      - ISSUE_SLA_DAYS=${ISSUE_SLA_DAYS:-3}
+      - ISSUE_SLA_NORMAL_HOURS=${ISSUE_SLA_NORMAL_HOURS:-}
+      - ISSUE_SLA_ACCIDENT_HOURS=${ISSUE_SLA_ACCIDENT_HOURS:-24}
+      - ISSUE_SLA_QUALITY_HOURS=${ISSUE_SLA_QUALITY_HOURS:-24}
+      # O2 unhealthy 自愈看门狗调参（默认值见 app/services/healthwatch.py）。
+      - HEALTH_CHECK_URL=${HEALTH_CHECK_URL:-http://127.0.0.1:8000/health}
+      - HEALTH_CHECK_INTERVAL=${HEALTH_CHECK_INTERVAL:-15}
+      - HEALTH_FAIL_THRESHOLD=${HEALTH_FAIL_THRESHOLD:-3}
+      - HEALTH_WEB_RESTART_LIMIT=${HEALTH_WEB_RESTART_LIMIT:-2}
+      - HEALTH_START_GRACE=${HEALTH_START_GRACE:-180}
+      # 可选：服务端 AI 项目助手；密钥绝不会发给浏览器。
+      - AI_PROVIDER=${AI_PROVIDER:-deepseek}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-v4-flash}
+      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      - MIMO_API_KEY=${MIMO_API_KEY:-}
+      - MIMO_MODEL=${MIMO_MODEL:-mimo-v2.5-pro}
+      - MIMO_BASE_URL=${MIMO_BASE_URL:-https://api.xiaomimimo.com/v1}
+      - MINIMAX_API_KEY=${MINIMAX_API_KEY:-}
+      - MINIMAX_MODEL=${MINIMAX_MODEL:-MiniMax-M2.7}
+      - MINIMAX_BASE_URL=${MINIMAX_BASE_URL:-https://api.minimaxi.com/v1}
+      - AI_PROVIDER_NAME=${AI_PROVIDER_NAME:-自建兼容服务}
+      - AI_BASE_URL=${AI_BASE_URL:-}
+      - AI_MODEL=${AI_MODEL:-}
+      - AI_API_KEY=${AI_API_KEY:-}
+      - AI_ALLOW_NO_KEY=${AI_ALLOW_NO_KEY:-0}
+      - AI_TIMEOUT_SECONDS=${AI_TIMEOUT_SECONDS:-180}
+      - INBOX_AUTO_ORGANIZE=${INBOX_AUTO_ORGANIZE:-0}
+      # AI 用量预算护栏：月度请求/token 上限（0=不限制）。超限后 AI 助手降级提示，
+      # 不发起外部调用。见 app/services/ai_budget.py。
+      - AGVPM_AI_MONTHLY_REQUESTS=${AGVPM_AI_MONTHLY_REQUESTS:-0}
+      - AGVPM_AI_MONTHLY_TOKENS=${AGVPM_AI_MONTHLY_TOKENS:-0}
+      # 外部通知渠道（HYPE-58）：钉钉机器人 Webhook / 通用 JSON webhook（加签/token 可选），
+      # 密钥只从环境/文件读取。NOTIFY_CHANNELS 为空 = 只保留站内通知，不外发。接入说明见 docs/notifications.md。
+      - NOTIFY_CHANNELS=${NOTIFY_CHANNELS:-}
+      - DINGTALK_WEBHOOK_URL=${DINGTALK_WEBHOOK_URL:-}
+      - DINGTALK_WEBHOOK_SECRET=${DINGTALK_WEBHOOK_SECRET:-}
+      - DINGTALK_WEBHOOK_SECRET_FILE=${DINGTALK_WEBHOOK_SECRET_FILE:-}
+      - JSON_WEBHOOK_URL=${JSON_WEBHOOK_URL:-}
+      - JSON_WEBHOOK_TOKEN=${JSON_WEBHOOK_TOKEN:-}
+      - JSON_WEBHOOK_TOKEN_FILE=${JSON_WEBHOOK_TOKEN_FILE:-}
+      - NOTIFY_TIMEOUT_SECONDS=${NOTIFY_TIMEOUT_SECONDS:-3}
+      # 出站队列投递参数（默认值与 config.py 一致）：最大尝试次数 / 退避基数 / 每批条数。
+      - NOTIFY_RETRY_MAX_ATTEMPTS=${NOTIFY_RETRY_MAX_ATTEMPTS:-3}
+      - NOTIFY_RETRY_BASE_SECONDS=${NOTIFY_RETRY_BASE_SECONDS:-60}
+      - NOTIFY_DELIVERY_BATCH_SIZE=${NOTIFY_DELIVERY_BATCH_SIZE:-50}
+      - WEB_CONCURRENCY=${WEB_CONCURRENCY:-2}
+    volumes:
+      - agv-pm-multica-data:/app/data
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+          cpus: "2.0"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+volumes:
+  agv-pm-multica-data:

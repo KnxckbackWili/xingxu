@@ -1,0 +1,14 @@
+.context-tip-anchor { display: inline-flex; flex: 0 0 auto; }
+.context-tip-trigger { flex: 0 0 auto; color: var(--ant-color-text-secondary, #66736f); }
+.context-tip-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.context-tip-copy { width: 250px; max-width: calc(100vw - 64px); font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.inline-select { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; }
+.inline-select .ant-select { max-width: 100%; }
+.inline-save-error { color: #d4380d; cursor: help; }
+@media (max-width: 640px) {
+  .ant-btn.context-tip-trigger, .context-tip-heading .ant-btn { min-width: 44px; min-height: 44px; }
+  .inline-select .ant-select-selector { min-height: 44px !important; align-items: center; }
+  .inline-select .ant-select-single { height: 44px; }
+  .inline-select .ant-select-selection-item, .inline-select .ant-select-selection-placeholder { line-height: 42px !important; }
+}
+@media print { .context-tip-trigger, .inline-save-error { display: none !important; } }

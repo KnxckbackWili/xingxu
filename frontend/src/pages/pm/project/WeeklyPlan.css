@@ -1,0 +1,26 @@
+.weekly-plan-toolbar { margin: 12px 0 16px; }
+.weekly-plan-scroll { max-width:100%; overflow:auto; margin-top:16px; }
+.weekly-plan-table { border-collapse:collapse; width:100%; min-width:1000px; table-layout:fixed; }
+.weekly-plan-table th,.weekly-plan-table td { border:1px solid var(--ant-color-border,#d9d9d9); padding:10px; vertical-align:top; min-width:160px; }
+.weekly-plan-table th { background:var(--ant-color-fill-quaternary,#fafafa); text-align:left; }
+.weekly-plan-table th:first-child { width:220px; }
+.weekly-plan-table small,.weekly-plan-table strong { display:block; }
+.weekly-plan-table article { margin-bottom:10px; padding-bottom:10px; border-bottom:1px dashed #ddd; }
+.weekly-plan-table .is-cancelled { opacity:.65; }
+.weekly-plan-table pre { max-height:200px; max-width:250px; overflow:auto; white-space:pre-wrap; }
+.weekly-plan-rule { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:12px 0; }
+.weekly-plan-rule strong { min-width:150px; }.weekly-plan-rule .ant-select { min-width:145px; }
+.weekly-plan-print>header { margin:12px 0; }.weekly-plan-print>header h2 { margin:0; font-size:18px; }
+@page weekly-plan { size:A4 landscape; margin:12mm; }
+@media print {
+  html.printing-weekly-plans body * { visibility:hidden; }
+  html.printing-weekly-plans .weekly-plan-print,html.printing-weekly-plans .weekly-plan-print * { visibility:visible; }
+  html.printing-weekly-plans .weekly-plan-print { page:weekly-plan; position:absolute; left:0; top:0; width:100%; background:white; color:black; }
+  html.printing-weekly-plans .weekly-plan-scroll { overflow:visible; }
+  html.printing-weekly-plans .weekly-plan-table { min-width:0; font-size:9px; }
+  html.printing-weekly-plans .weekly-plan-table th:first-child { width:130px; }
+  html.printing-weekly-plans .weekly-plan-print button,html.printing-weekly-plans .weekly-plan-print .ant-checkbox-wrapper,html.printing-weekly-plans .weekly-plan-print details { display:none; }
+  html.printing-weekly-plans .weekly-plan-table tr { break-inside:avoid; }
+}
+
+.weekly-plan-suggestions { margin:12px 0; }.weekly-plan-suggestions details>div { padding:8px 0; border-bottom:1px solid #eee; }.weekly-plan-suggestions p { margin:8px 0; }

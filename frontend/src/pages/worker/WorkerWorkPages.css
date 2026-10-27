@@ -1,0 +1,76 @@
+.worker-work-page { display: grid; gap: 16px; min-width: 0; }
+.worker-work-page .work-section-filters > .ant-input-search { max-width: 360px; }
+.worker-work-page .work-section-filters > .ant-select { min-width: 160px; }
+.worker-title-link { border: 0; padding: 0; background: none; color: var(--agv-text); font-weight: 600; font-size: 16px; cursor: pointer; text-align: left; overflow-wrap: anywhere; }
+.worker-title-link:hover { color: var(--agv-primary); }
+.worker-record-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.worker-quantity-summary { display: flex; gap: 8px; flex-wrap: wrap; list-style: none; padding: 0; margin: 0 0 16px; }
+.worker-quantity-summary li { border: 1px solid var(--agv-border); border-radius: 8px; padding: 8px 12px; color: var(--agv-text-secondary); }
+.worker-quantity-summary strong { color: var(--agv-text); }
+.worker-record-note { overflow-wrap: anywhere; white-space: pre-wrap; }
+.worker-work-rules > summary { min-height: 44px; cursor: pointer; color: var(--agv-text-secondary); display: flex; align-items: center; }
+@media (max-width: 767px) {
+  .worker-work-page .ant-btn, .worker-work-page .worker-title-link, .worker-work-page .task-name-link, .worker-work-modal .ant-btn, .worker-work-modal .task-name-link, .worker-project-detail .ant-btn { min-height: 44px; }
+  .worker-work-page .ant-btn-icon-only { min-width: 44px; }
+  .worker-work-page .work-section-filters > .ant-input-search { width: 100%; max-width: none; }
+  .worker-work-page .work-section-filters > .ant-select { flex: 1 1 160px; min-width: 160px; }
+  .worker-work-page .ant-select-single .ant-select-selector, .worker-work-page .ant-picker, .worker-work-page .ant-segmented-item-label { min-height: 44px; height: auto; }
+  .worker-work-page .ant-select-single .ant-select-selection-item { line-height: 42px; }
+  .worker-work-page .ant-segmented { max-width: 100%; overflow-x: auto; }
+  .worker-work-modal .ant-modal-close, .worker-work-modal .ant-drawer-close { min-height: 44px; min-width: 44px; }
+}
+
+.worker-schedule-earlier { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+
+.worker-project-progress { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; }
+.worker-project-detail { min-width: 0; }
+.worker-project-detail > .ant-card { border-color: var(--agv-border-soft); border-radius: 16px; }
+.worker-project-detail .ant-card-head { border-bottom-color: var(--agv-border-soft); }
+.worker-project-detail .ant-space-item { min-width: 0; }
+.worker-project-detail .ant-typography { overflow-wrap: anywhere; }
+.worker-detail-heading, .worker-detail-row { width: 100%; justify-content: space-between; align-items: flex-start; }
+.worker-detail-heading > .ant-space-item:first-child { flex: 1 1 200px; }
+.worker-detail-row > .ant-space-item:first-child { flex: 1 1 180px; }
+.worker-project-detail .worker-project-progress { flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+.worker-project-detail .worker-project-progress > .ant-typography:last-child { margin-left: auto; }
+@media (max-width: 767px) {
+  .worker-project-detail > .ant-card > .ant-card-body { padding: 16px; }
+  .worker-detail-heading > .ant-space-item:first-child { flex-basis: 100%; }
+  .worker-project-detail .ant-btn { max-width: 100%; white-space: normal; height: auto; }
+  .worker-project-detail > .ant-alert { flex-wrap: wrap; gap: 8px; }
+  .worker-project-detail > .ant-alert .ant-alert-action { margin-left: 0; }
+}
+
+/* Quiet surfaces and consistent spacing on the mobile project and record lists. */
+.worker-work-page > .work-page-header { margin-bottom: 4px; }
+.worker-work-page > .work-section { margin-bottom: 0; }
+.worker-work-page .work-section:not(:has(.work-section-heading)) > .work-section-filters { padding-top: 20px; }
+.worker-work-page .work-section-filters .ant-segmented { padding: 4px; border-radius: 12px; background: var(--agv-bg-subtle); }
+.worker-work-page .work-section-filters .ant-segmented-item { border-radius: 9px; }
+.worker-work-page .worker-quantity-summary { gap: 10px; }
+.worker-work-page .worker-quantity-summary li { min-width: 92px; padding: 12px 16px; border-color: var(--agv-border-soft); border-radius: 12px; background: var(--agv-bg-subtle); }
+.worker-work-page .worker-quantity-summary strong { font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; margin-right: 3px; }
+.worker-work-rules { border-top: 1px solid var(--agv-border-soft); padding: 4px 0; }
+.worker-work-rules > summary { font-size: 13px; }
+.worker-title-link:focus-visible { outline: 2px solid var(--agv-primary); outline-offset: 4px; border-radius: 6px; }
+.worker-projects-page .worker-project-card.ant-card { height: 100%; border-color: var(--agv-border-soft); background: var(--agv-bg-subtle); border-radius: 16px; box-shadow: none; }
+.worker-project-card.ant-card:hover { border-color: var(--agv-primary); box-shadow: 0 4px 16px rgba(16, 40, 76, .05); }
+.worker-project-card > .ant-card-body { padding: 20px; }
+.worker-project-card-heading { align-items: flex-start; gap: 6px 10px !important; }
+.worker-project-card-heading > .ant-space-item { min-width: 0; }
+.worker-project-card-heading > .ant-space-item:first-child { flex: 1 1 180px; }
+.worker-project-card .worker-title-link { font-size: 17px; font-weight: 650; line-height: 1.55; }
+.worker-project-location { display: block; font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+.worker-project-card .worker-project-progress { padding-top: 4px; font-variant-numeric: tabular-nums; }
+.worker-project-card .worker-project-progress > .ant-typography { min-width: 36px; text-align: right; }
+.worker-project-open.ant-btn { min-height: 40px; background: var(--agv-bg-container); border-color: var(--agv-border); box-shadow: none; }
+.worker-personal-page > .ant-tabs { min-width: 0; }
+.worker-personal-page .ant-list-item-meta-description { line-height: 1.8; overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+  .worker-work-page { gap: 14px; }
+  .worker-work-page .work-section:not(:has(.work-section-heading)) > .work-section-filters { padding-top: 16px; }
+  .worker-project-card > .ant-card-body { padding: 16px; }
+  .worker-project-card-heading > .ant-space-item:first-child { flex-basis: 100%; }
+  .worker-project-card .worker-title-link { min-height: 44px; display: flex; align-items: center; }
+  .worker-project-open.ant-btn { width: 100%; min-height: 44px; }
+}

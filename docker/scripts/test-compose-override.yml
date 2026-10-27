@@ -1,0 +1,13 @@
+# 故障注入回归测试专用 compose override：仅覆盖 healthcheck 为快速节奏。
+# 正式 compose 的 healthcheck start_period=40s / interval=30s 会让每轮容器重建
+# 等待 40s+，测试耗时不可接受。本文件由 test-deploy-rollback.sh 通过
+# AGV_COMPOSE_FILE 追加到正式 compose 之后（后加载覆盖先加载），
+# 生产部署不使用本文件。
+services:
+  agv-pm:
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 3s
+      timeout: 2s
+      retries: 3
+      start_period: 5s

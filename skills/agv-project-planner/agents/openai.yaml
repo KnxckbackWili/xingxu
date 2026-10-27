@@ -1,0 +1,4 @@
+interface:
+  display_name: "AGV 计划排程"
+  short_description: "整理任务依赖、人员约束和项目日程"
+  default_prompt: "根据项目任务、人员和约束生成可审核的排程调整建议。"

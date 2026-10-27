@@ -1,0 +1,47 @@
+import { beforeEach, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+const h = vi.hoisted(() => ({ list: vi.fn(), create: vi.fn(), revoke: vi.fn(), access: vi.fn() }))
+vi.mock('../../../api/externalShares', async original => ({ ...await original<object>(), externalSharesApi: h }))
+import ExternalSharePanel from './ExternalSharePanel'
+const row = { id: 's', project_id: 'p', scopes: ['project_progress','vehicle_progress'], document_ids: [], version: 2, expires_at: '2099-01-01T00:00:00Z', created_at: '2026-01-01T00:00:00Z', revoked_at: null, expired: false }
+beforeEach(() => { vi.resetAllMocks(); h.list.mockResolvedValue({ shares: [], document_options: [{ id: 'd', code: '7.1', name: '可分享原件' }] }); h.create.mockResolvedValue({ ...row, token: 'new-secret' }); h.revoke.mockResolvedValue({ ...row, revoked_at: '2026-10-27T00:00:00Z', version: 3 }); h.access.mockResolvedValue([]) })
+it('creates only the two default scopes with explicit expiry and shows fragment link once', async () => {
+  const dirty = vi.fn()
+  render(<ExternalSharePanel projectId="p" enabled onDirtyChange={dirty} />)
+  await waitFor(() => expect(screen.getByRole('button', { name: '生成分享链接' })).toBeEnabled())
+  expect(screen.getByRole('checkbox', { name: '项目进度' })).toBeChecked()
+  expect(screen.getByRole('checkbox', { name: '车辆进度表' })).toBeChecked()
+  expect(screen.getByRole('checkbox', { name: '四类签单' })).not.toBeChecked()
+  fireEvent.click(screen.getByRole('button', { name: '生成分享链接' }))
+  expect(await screen.findByLabelText('新分享链接')).toHaveValue(window.location.origin + '/external#token=new-secret')
+  expect(h.create).toHaveBeenCalledExactlyOnceWith('p', { scopes: ['project_progress','vehicle_progress'], document_ids: [], expires_at: expect.stringMatching(/Z$/) })
+  expect(screen.getByText(/链接仅在此次创建后显示/)).toBeVisible()
+})
+it('requires a concrete selected period and records unsaved scope changes', async () => {
+  const dirty = vi.fn()
+  render(<ExternalSharePanel projectId="p" enabled onDirtyChange={dirty} />)
+  await waitFor(() => expect(screen.getByRole('button', { name: '生成分享链接' })).toBeEnabled())
+  fireEvent.click(screen.getByRole('checkbox', { name: '指定资料' }))
+  expect(screen.getByRole('button', { name: '生成分享链接' })).toBeDisabled()
+  expect(dirty).toHaveBeenLastCalledWith(true)
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: '指定对外资料' }))
+  fireEvent.click(await screen.findByText('7.1 可分享原件', { selector: '.ant-select-item-option-content' }))
+  fireEvent.click(screen.getByRole('button', { name: '生成分享链接' }))
+  await waitFor(() => expect(h.create).toHaveBeenCalledWith('p', expect.objectContaining({ scopes: ['project_progress','vehicle_progress','selected_documents'], document_ids: ['d'] })))
+})
+it('revokes with the displayed CAS version and exposes access records', async () => {
+  h.list.mockResolvedValue({ shares: [row], document_options: [] })
+  render(<ExternalSharePanel projectId="p" enabled onDirtyChange={vi.fn()} />)
+  fireEvent.click(await screen.findByRole('button', { name: '撤销分享' }))
+  const confirm = await screen.findByRole('tooltip')
+  fireEvent.click(within(confirm).getByRole('button', { name: '确认撤销' }))
+  await waitFor(() => expect(h.revoke).toHaveBeenCalledExactlyOnceWith('p', expect.objectContaining({ id: 's', version: 2 })))
+  expect(await screen.findByText('已撤销')).toBeVisible()
+  fireEvent.click(screen.getByRole('button', { name: '访问记录' }))
+  await waitFor(() => expect(h.access).toHaveBeenCalledExactlyOnceWith('p', 's'))
+})
+it('does not infer share management from a global role or fetch its list when disabled', () => {
+  render(<ExternalSharePanel projectId="p" enabled={false} onDirtyChange={vi.fn()} />)
+  expect(screen.getByText(/仅当前项目负责人/)).toBeVisible()
+  expect(h.list).not.toHaveBeenCalled(); expect(screen.queryByRole('button', { name: '生成分享链接' })).toBeNull()
+})

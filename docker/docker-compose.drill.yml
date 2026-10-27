@@ -1,0 +1,70 @@
+# 演练专用独立 Compose（HYPE-19 恢复演练加固）。
+#
+# 本文件是"独立编排"，绝不作为生产 compose 的 override 叠加使用——叠加会把服务并集
+# 进生产 compose 项目，导致生产容器被重建（ports 还会取并集）。运行方式：
+#   bash docker/scripts/drill.sh
+# 其内部固定以 --project-name 指向隔离项目并先跑 guard-drill.sh 做 fail-closed 校验。
+# 顶层 name 兜底：即使有人不带 -p 直接运行，项目名也被钉死在隔离名，不会推导成生产名。
+name: ${AGV_DRILL_PROJECT:-agvpm-drill}
+
+services:
+  agv-pm-drill:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      network: host
+      args:
+        APP_VERSION: ${APP_VERSION:-2.4.1}
+    image: ${AGV_DRILL_IMAGE:-agv-pm-multica-drill:2.4.1}
+    container_name: ${AGV_DRILL_CONTAINER:-agv-pm-drill}
+    ports:
+      # 仅本机回环，避免演练服务暴露到局域网；端口与生产宿主机端口隔离（守卫强制非 8002）。
+      - "127.0.0.1:${AGV_DRILL_PORT:-8003}:8000"
+    environment:
+      - TZ=Asia/Shanghai
+      - SECRET_KEY=${SECRET_KEY:-}
+      - AUTH_SIGNING_KEY=${AUTH_SIGNING_KEY:-}
+      # 演练容器首次冷启动先 seed 演示账号，避免 web worker 崩溃（恢复演练随后用备份覆盖数据库）；
+      # 恢复后即与生产快照一致，且端口仅绑定本机回环。
+      - SEED_DEMO_USERS=1
+      - DATA_DIR=/app/data
+      - USE_POSTGRES=1
+      - PGDATA=/app/data/pgdata
+      - NO_PROXY=*
+      - no_proxy=*
+      - TRUSTED_HOSTS=${TRUSTED_HOSTS:-127.0.0.1,localhost}
+      - FORWARDED_ALLOW_IPS=${FORWARDED_ALLOW_IPS:-}
+      - PUBLIC_MODE=0
+      - FORCE_HTTPS=0
+      - COOKIE_SECURE=0
+      - COOKIE_SAMESITE=lax
+      - SCHEDULER_ENABLED=1
+      - AGVPM_ENABLE_CACHE=1
+      - REPORT_WEEKLY_TIME=${REPORT_WEEKLY_TIME:-20:00}
+      - ISSUE_SLA_DAYS=${ISSUE_SLA_DAYS:-3}
+      - ISSUE_SLA_NORMAL_HOURS=${ISSUE_SLA_NORMAL_HOURS:-}
+      - ISSUE_SLA_ACCIDENT_HOURS=${ISSUE_SLA_ACCIDENT_HOURS:-24}
+      - ISSUE_SLA_QUALITY_HOURS=${ISSUE_SLA_QUALITY_HOURS:-24}
+      - WEB_CONCURRENCY=${WEB_CONCURRENCY:-2}
+    volumes:
+      - agvpm-drill-data:/app/data
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+          cpus: "2.0"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+volumes:
+  # 顶层键用静态名（compose 不允许键位插值），运行时卷名由 name 字段钉死为 AGV_DRILL_VOLUME，
+  # 不随项目名前缀变化，与 guard-drill.sh 校验的卷标识保持一致。
+  agvpm-drill-data:
+    name: ${AGV_DRILL_VOLUME:-agvpm-drill-data}

@@ -1,0 +1,45 @@
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { beforeEach, expect, it, vi } from 'vitest'
+import type { CleanupPreview } from '../api/storage'
+const h = vi.hoisted(() => ({ project: vi.fn(), preview: vi.fn(), confirm: vi.fn(), user: { id: 'a', permission_version: 1 } }))
+vi.mock('../api/storage', () => ({ storageApi: h }))
+vi.mock('../stores/auth', () => ({ useAuth: () => ({ user: h.user }) }))
+vi.mock('../api/client', () => ({ errMsg: (error: Error) => error.message }))
+import ProjectStoragePanel from './ProjectStoragePanel'
+const preview = (project = 'p1', fingerprint = 'fresh'): CleanupPreview => ({ project_id: project, keep_periods: 8, fingerprint, candidate_bytes: 3, candidates: [{ attachment_id: 'a1', filename: '旧周报.txt', file_size: 3, sha256: 'abc', documents: [{ id: 'd1', code: '6.2', name: '周报', period_key: '2025-W01' }], versions: [] }], protected: [{ attachment_id: 'keep', filename: '签单证据.pdf', reason: '签单里程碑保护' }], milestone_protection: [{ event_key: 'handover', precision: 'date', basis: '实际发生日' }] })
+beforeEach(() => { vi.resetAllMocks(); h.project.mockResolvedValue({ bytes: 3, file_count: 1, temporary_bytes: 0, removed_bytes: 0 }); h.preview.mockResolvedValue(preview()); h.confirm.mockResolvedValue({ removed_files: 1, removed_bytes: 3, receipt_id: 'receipt' }) })
+it('requires a concrete preview and reason; a changed snapshot must be previewed again', async () => {
+  render(<ProjectStoragePanel projectId="p1" canCleanup />)
+  expect(screen.queryByRole('button', { name: '确认清理上列文件' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: /预览清理文件/ }))
+  expect(await screen.findByText('旧周报.txt')).toBeVisible()
+  const confirm = screen.getByRole('button', { name: '确认清理上列文件' })
+  expect(confirm).toBeDisabled()
+  fireEvent.change(screen.getByLabelText('存储清理理由'), { target: { value: '按八周策略释放空间' } })
+  h.confirm.mockRejectedValueOnce(new Error('资料已变化，请重新预览'))
+  fireEvent.click(confirm)
+  expect(await screen.findByText('资料已变化，请重新预览')).toBeVisible()
+  expect(screen.getByLabelText('存储清理理由')).toHaveValue('按八周策略释放空间')
+  expect(confirm).toBeDisabled()
+  h.preview.mockResolvedValueOnce(preview('p1', 'new-fingerprint'))
+  fireEvent.click(screen.getByRole('button', { name: /预览清理文件/ }))
+  await waitFor(() => expect(confirm).toBeEnabled())
+  fireEvent.click(confirm)
+  await waitFor(() => expect(h.confirm).toHaveBeenLastCalledWith('p1', expect.objectContaining({ fingerprint: 'new-fingerprint' }), '按八周策略释放空间'))
+})
+it('discards a delayed preview from the previous project', async () => {
+  let resolve!: (value: CleanupPreview) => void
+  h.preview.mockImplementationOnce(() => new Promise(done => { resolve = done }))
+  const view = render(<ProjectStoragePanel projectId="p1" canCleanup />)
+  fireEvent.click(screen.getByRole('button', { name: /预览清理文件/ }))
+  view.rerender(<ProjectStoragePanel projectId="p2" canCleanup />)
+  await act(async () => resolve(preview()))
+  expect(screen.queryByText('旧周报.txt')).toBeNull()
+  expect(h.confirm).not.toHaveBeenCalled()
+})
+it('shows usage without granting a cleanup action to a read-only viewer', async () => {
+  render(<ProjectStoragePanel projectId="p1" />)
+  expect(await screen.findByText(/正式文件 1 个/)).toBeVisible()
+  expect(screen.queryByRole('button', { name: /预览清理文件/ })).toBeNull()
+  expect(h.preview).not.toHaveBeenCalled()
+})

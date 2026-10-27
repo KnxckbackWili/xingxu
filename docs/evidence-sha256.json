@@ -1,0 +1,4094 @@
+{
+  "format": "xingxu-document-evidence-archive-1",
+  "source_commit": "855abaf5bccdf522527b06a23fcbce23c0a3d4b2",
+  "archive_label": "v3-t61-qa-archive",
+  "file_count": 817,
+  "total_bytes": 28299018,
+  "files": [
+    {
+      "path": "docs/performance-2026-09-16/agent-connections.png",
+      "bytes": 167793,
+      "sha256": "d030974f9d776f55092f8765e1a792ef4fbe91815a4e4723238de21fc76b87a3"
+    },
+    {
+      "path": "docs/performance-2026-09-16/measurements.json",
+      "bytes": 814,
+      "sha256": "0b030a8e15bffd62af364461ad457a6fafad209291ca63c5c7d5b4f4a4577ff8"
+    },
+    {
+      "path": "docs/performance-2026-09-16/startup-light.png",
+      "bytes": 133783,
+      "sha256": "bcbac3a1a56ab20c6d2e40e11c92c2ae854551444ccf3d9d3a425018127b23e6"
+    },
+    {
+      "path": "docs/performance-2026-09-16/tasks-mobile.png",
+      "bytes": 56715,
+      "sha256": "7fd716bd0d0b81b9683fd8fa90f8234999f9fbd575f7fb253276a29bf5164a02"
+    },
+    {
+      "path": "docs/qa-admin-agent-user-after.png",
+      "bytes": 63032,
+      "sha256": "25c3d6727fba4d01263af35c0c90f3fe836d87e7a5b53dedb5868d4fc97a1b19"
+    },
+    {
+      "path": "docs/qa-admin-agent-user-before.png",
+      "bytes": 67226,
+      "sha256": "04c21b57ef49eeb91cf98603ff5966745d92f7dcafba6f340322a29b70971b72"
+    },
+    {
+      "path": "docs/qa-admin-ai-confidence-after.txt",
+      "bytes": 6917,
+      "sha256": "01b0f7bbf5b2b480f3daed14e7bf2e0d4ecd0b035f62e628855a4d9c2a01e806"
+    },
+    {
+      "path": "docs/qa-admin-ai-controlled-archived.txt",
+      "bytes": 6812,
+      "sha256": "adfa5063add76d724f43d738f12ccb4e0ffa08d0f8df4573faf620a89cae5a3d"
+    },
+    {
+      "path": "docs/qa-admin-ai-controlled-completed.txt",
+      "bytes": 6909,
+      "sha256": "e7ca1dcba87ac1664a73d717ce3bf82fcaff64db8788f8a1da14305f1ad0d3dd"
+    },
+    {
+      "path": "docs/qa-admin-ai-controlled-progress.txt",
+      "bytes": 7165,
+      "sha256": "2335e101ee4632f5ddc1f9ef9daa8b652b7c36cf55c2631bae231b192160a822"
+    },
+    {
+      "path": "docs/qa-admin-backup-final-created.txt",
+      "bytes": 5816,
+      "sha256": "891e23966bc4356a02a1818a9cda4e1bae22bea764b348287b915d2d1b34c7e5"
+    },
+    {
+      "path": "docs/qa-admin-backup-final-staged.txt",
+      "bytes": 7107,
+      "sha256": "5fa5d0b0a2a1557ded68f7537459bbf43e79294e8c451070ea4c8fb1a5f96e37"
+    },
+    {
+      "path": "docs/qa-admin-backup-mobile.png",
+      "bytes": 52780,
+      "sha256": "d99803c13dcd4e2a65710fa31cde0114fb8bda9f1ce8e7fbf98236a15ec32711"
+    },
+    {
+      "path": "docs/qa-admin-backup-probe-absent.txt",
+      "bytes": 6568,
+      "sha256": "2b202d87f6bb8fda7ae691e44e9e80ccc42e8ed02649c9e69616d93c153d0798"
+    },
+    {
+      "path": "docs/qa-admin-backup-probe-present.txt",
+      "bytes": 8195,
+      "sha256": "5e0649b078d270d2a427e7e58faa56c90c36cb8899a4c3a6157d9d18f8ee9f0b"
+    },
+    {
+      "path": "docs/qa-admin-backup-restored-archive.txt",
+      "bytes": 11823,
+      "sha256": "bd7b09115e3d0ff4398513dec846b532ed1cf8bd58ba17beef5f27cdfea065ee"
+    },
+    {
+      "path": "docs/qa-admin-backup-restored-main.txt",
+      "bytes": 5444,
+      "sha256": "239b3fda55885d0ce048079053af9bd2741fe54cdf0ec7712c54c99cd3263da0"
+    },
+    {
+      "path": "docs/qa-admin-backup-restored-user.txt",
+      "bytes": 7587,
+      "sha256": "a7f8154d72644f16700e8fa17b10a74d1b46a926eeedcdf268e6dd813bfd3c93"
+    },
+    {
+      "path": "docs/qa-admin-comanager-grant.txt",
+      "bytes": 5170,
+      "sha256": "d9100bad651d62373dfb0148150e12d4be7adc8fd16f3765b62086efacc7a4b2"
+    },
+    {
+      "path": "docs/qa-admin-comanager-pm-saved.txt",
+      "bytes": 4440,
+      "sha256": "cbe605d7d82117255b228ab1ddde4f75b415f089440e48b27fedc254a32923ae"
+    },
+    {
+      "path": "docs/qa-admin-comanager-revoked.txt",
+      "bytes": 1437,
+      "sha256": "d976e4cc9c18b87d4e61910338dc716600c4cad3c4a3df8516c19940fde9e9a2"
+    },
+    {
+      "path": "docs/qa-admin-create-conditions-persisted.txt",
+      "bytes": 25608,
+      "sha256": "b8c2a3dba9a1a478d7f4aff9ffa0981edf195f4390599375c1214916e861bd83"
+    },
+    {
+      "path": "docs/qa-admin-create-conditions-preview.txt",
+      "bytes": 20387,
+      "sha256": "8fc9cacdfdfea60bc919e9784735a0ec51f7229bfb46080460751345f08c8e7d"
+    },
+    {
+      "path": "docs/qa-admin-notification-mobile.png",
+      "bytes": 81013,
+      "sha256": "9f8b511a1d6fd975cb845b08159ef4fdfac51d8b077de6c47bc11007c13a5bc8"
+    },
+    {
+      "path": "docs/qa-admin-p4-state.png",
+      "bytes": 123708,
+      "sha256": "c5f30d359e70fe1ff8607775d855afe7503468e3054b938bd4c745bf0e9c3676"
+    },
+    {
+      "path": "docs/qa-admin-procurement-after-confirm.txt",
+      "bytes": 12653,
+      "sha256": "9f06d1f55c96e4e01e79d362474c8ce4bec4097d82e2a0c4603c259cdde80990"
+    },
+    {
+      "path": "docs/qa-admin-procurement-before-confirm.txt",
+      "bytes": 7709,
+      "sha256": "f18f96af108c5baf3898102653fed3550b02e10527414c7479183f3ca2466ed2"
+    },
+    {
+      "path": "docs/qa-admin-project-unsaved-after.txt",
+      "bytes": 4835,
+      "sha256": "a9557d36c9bafc91b4f7ceaa51108eef6197a563e3ab63abee0085076421b8cb"
+    },
+    {
+      "path": "docs/qa-admin-project-unsaved-before.txt",
+      "bytes": 1379,
+      "sha256": "8c5557d83a8836f3f1a51e3afe40420116c5e4d953cc1850210174f31115f94a"
+    },
+    {
+      "path": "docs/qa-admin-project-unsaved-tab-before.txt",
+      "bytes": 6049,
+      "sha256": "eec9897a9eadbb9ee919231af82d423cf75e83538b0d435083ba2a65d1c95fdc"
+    },
+    {
+      "path": "docs/qa-admin-schedule-adjust-locked.txt",
+      "bytes": 14989,
+      "sha256": "29bff9d8d7e653156680c664c7cf19551ac4da59f022a6e78e3778bb9f3e48ae"
+    },
+    {
+      "path": "docs/qa-admin-schedule-restored.txt",
+      "bytes": 14962,
+      "sha256": "da0c271930e64521b47a32865d5afd2343aa4739bb82b3aa7e2eface087cf30f"
+    },
+    {
+      "path": "docs/qa-admin-startup-unsaved-after.txt",
+      "bytes": 14896,
+      "sha256": "8cbb105a0486e433ec052e869cbdbcbc553149a9ff69828f922ad91a2757742b"
+    },
+    {
+      "path": "docs/qa-admin-template-empty-after.png",
+      "bytes": 98599,
+      "sha256": "0c7728ef5dce5026f3878e5a963d59c028c903b8ecf7d9e5f2e4be6b1931ff61"
+    },
+    {
+      "path": "docs/qa-admin-template-empty-before.png",
+      "bytes": 96021,
+      "sha256": "163911f570e55f0548a3a2f42ad55838bcbfd2b82425a44fb81fe40cf29a0909"
+    },
+    {
+      "path": "docs/qa-admin-template-mobile.png",
+      "bytes": 76462,
+      "sha256": "6c518a4b6f3b389715fd198d032fe76b875167b9131d0d28559f0367d4ed17da"
+    },
+    {
+      "path": "docs/qa-admin-template-race-after.txt",
+      "bytes": 9464,
+      "sha256": "17232b8cb67683e13b0da4d31a578c743ffcab5a7d804d46d4dff63c1ac06b1a"
+    },
+    {
+      "path": "docs/qa-admin-template-race-before.txt",
+      "bytes": 10058,
+      "sha256": "8e09aa3b8e644b07197030ae7636b2c36865be0931418c9505c454c21c9e196f"
+    },
+    {
+      "path": "docs/qa-admin-template-target-before.png",
+      "bytes": 128667,
+      "sha256": "85a696417e5af864d75f016da68ee778281caa4ef6806f2da5e6812f8eca3123"
+    },
+    {
+      "path": "docs/qa-admin-user-create-mobile.png",
+      "bytes": 38551,
+      "sha256": "6be76e58b4502fc3e100d1a0b153eaea4a1e20f7436da8a2af5e402dce5ca40f"
+    },
+    {
+      "path": "docs/qa-admin-users-org-mobile.png",
+      "bytes": 38615,
+      "sha256": "66fcdb14157e2038e941cb1e65e8fbfd1830f62d67eca07666a22fef237583a9"
+    },
+    {
+      "path": "docs/qa-admin-vehicle-mobile.png",
+      "bytes": 61033,
+      "sha256": "78e9eec947ed5affd435b2d7ae6486de1391d1809c961e68d751a37d85c5222c"
+    },
+    {
+      "path": "docs/qa-archive-package-details-after.txt",
+      "bytes": 19993,
+      "sha256": "1bd742659bd258977b5924913d8be3ba567b61ec5d07a34863eff02c2d082abc"
+    },
+    {
+      "path": "docs/qa-archive-package-evidence-after.txt",
+      "bytes": 15285,
+      "sha256": "8fc7cd6bea6a097e5d13cc96a379541bad9055ee6dfe68bea39604e0ac8e99f5"
+    },
+    {
+      "path": "docs/qa-archive-package-evidence-before.txt",
+      "bytes": 2816,
+      "sha256": "96e02143f6fbe084536cd2ace95b6f0feafcf45998f61c8dce472ec5fe9b629a"
+    },
+    {
+      "path": "docs/qa-archive-package-html-after.txt",
+      "bytes": 10464,
+      "sha256": "b51dff8fec7d4839806dbe6c967ae58a70e69e22378214be86d23ff0f4822590"
+    },
+    {
+      "path": "docs/qa-archive-retrospective-before.txt",
+      "bytes": 8215,
+      "sha256": "475fcd75fe2bbdb36d92894d1b79846cdd79012b38f99c35a91a2e8d43e57909"
+    },
+    {
+      "path": "docs/qa-brand-2026-10-12/actual-browser-235.json",
+      "bytes": 336,
+      "sha256": "13f9160a9e116417a13d477dcee9a0fabae5f8e230db8a6b7c70a60a16d92d1b"
+    },
+    {
+      "path": "docs/qa-brand-2026-10-12/actual-login-235.png",
+      "bytes": 36329,
+      "sha256": "ab78c51533ac4139f11ee8cc1a036035f36c572a51bbbe472b671f9779637ae3"
+    },
+    {
+      "path": "docs/qa-brand-2026-10-12/actual-old-page-refresh.json",
+      "bytes": 516,
+      "sha256": "cc6c6fb4924f411343472f794e67814d886f78d7b5e1a6ab1ffe927621d2c858"
+    },
+    {
+      "path": "docs/qa-brand-2026-10-12/browser-brand-qa.json",
+      "bytes": 1325,
+      "sha256": "9cd6489d08e0ec31a475005021af05d8d132696842c758b5aaf020f855d62530"
+    },
+    {
+      "path": "docs/qa-brand-2026-10-12/evidence-manifest.json",
+      "bytes": 3376,
+      "sha256": "52a645632591e78946c4ae4df2421718489d7f024f4799f96d4f895ef2eda4e9"
+    },
+    {
+      "path": "docs/qa-brand-2026-10-12/frontend-node22-final-source-check.json",
+      "bytes": 605,
+      "sha256": "83466abb320e3c7f20b432f6325867f37ab20a8d2de85c7687d2868bc2271c8d"
+    },
+    {
+      "path": "docs/qa-brand-2026-10-12/icon-exports.json",
+      "bytes": 2186,
+      "sha256": "dfd4589f10b10f4f0a6eb2400ef29b79c1f04416620361ea8ea045953e378fe4"
+    },
+    {
+      "path": "docs/qa-brand-2026-10-12/image-2.3.5-build-proof.json",
+      "bytes": 2606,
+      "sha256": "483e4c072747ee5ecf13f8208c77d8ad593d623b7c5fc6a8f684be55b31407e9"
+    },
+    {
+      "path": "docs/qa-brand-2026-10-12/image-2.3.5-delta-lineage.json",
+      "bytes": 2674,
+      "sha256": "e81e9576fe48cf0d9d71e035c329b4624e676a8b99999cd6cf20be9c40ce163d"
+    },
+    {
+      "path": "docs/qa-brand-2026-10-12/launcher-login-version-update-235.json",
+      "bytes": 734,
+      "sha256": "597cf63ba2576edabd8e29b8b36849ab90020ed07235917c204a24927f1f796b"
+    },
+    {
+      "path": "docs/qa-brand-2026-10-12/live-source-static-services-235.json",
+      "bytes": 924,
+      "sha256": "60f1b014c79e3dd16fbdb697ed64c861c5687ac60e7d9d3332b7aa6290ed6f46"
+    },
+    {
+      "path": "docs/qa-brand-2026-10-12/login-desktop-dark.png",
+      "bytes": 35695,
+      "sha256": "ce9606b6dc69e954ec9d56fde463db321502f49045f1f4af63c24ed804570780"
+    },
+    {
+      "path": "docs/qa-brand-2026-10-12/login-mobile-dark.png",
+      "bytes": 19011,
+      "sha256": "a3e4cc27201b986076d6951491c765f65e87620d9308c2a60a08dd08cbcf4f4c"
+    },
+    {
+      "path": "docs/qa-brand-2026-10-12/login-mobile-light.png",
+      "bytes": 19229,
+      "sha256": "cd6fb76a9fe6be76390ca3798520429f9211e4fe01bda505cf12c729f883ffde"
+    },
+    {
+      "path": "docs/qa-brand-2026-10-12/pm-desktop-light.png",
+      "bytes": 64616,
+      "sha256": "435f17ff8e3e32bfa8079b8282d7facbbc5daf7e905cd51634bcf2a4d471c0b6"
+    },
+    {
+      "path": "docs/qa-brand-2026-10-12/pm-mobile-dark.png",
+      "bytes": 34089,
+      "sha256": "b7c586dfe6ef347e0b175c78fe2132e33c9918e00905e8f03dcb09c6392f620c"
+    },
+    {
+      "path": "docs/qa-brand-2026-10-12/pwa-brand-validation.json",
+      "bytes": 1179,
+      "sha256": "43756568f8bf66d8372d6b9c2f9344618debaebf2644a27527640ccbdc0badcc"
+    },
+    {
+      "path": "docs/qa-brand-2026-10-12/runtime-preservation-235.json",
+      "bytes": 1268,
+      "sha256": "b2ff37e098b045e585e7a863a4f7bf5635213ae748f1ef3f21e9fe75ae315808"
+    },
+    {
+      "path": "docs/qa-brand-2026-10-12/validation-summary.json",
+      "bytes": 1254,
+      "sha256": "61c6c844280061cf9cf9c38fce19ee9dd0dc495fba937da489ca6a410ae6ed7a"
+    },
+    {
+      "path": "docs/qa-brand-2026-10-12/worker-mobile-dark.png",
+      "bytes": 20945,
+      "sha256": "439242d03687eddab540481ac8ad5e27412d8d2c2267f2dec19f7e12d94ffb11"
+    },
+    {
+      "path": "docs/qa-brand-2026-10-12/worker-mobile-light.png",
+      "bytes": 20480,
+      "sha256": "245b4aa72909ea1c253eb54e9853cc3c77193b20d490b97f0320d0495b0c4928"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/actual-old-page-refresh-237.json",
+      "bytes": 524,
+      "sha256": "05b146160751324e0f56659b9d3f940aea967bb1458a80b4c94de5f35197b068"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/archive-mobile-light.png",
+      "bytes": 31313,
+      "sha256": "782c077e0e52c5741dd95754c6199f36a8896b4ca491b68c615c8e0e6d9cca4d"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/browser-qa-237.json",
+      "bytes": 11205,
+      "sha256": "b4f7a33438a79b3a3ce441d327375f428c047616354d25ef61508c0b1c0f32e3"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/delivery-mobile-light.png",
+      "bytes": 29236,
+      "sha256": "a2c5e3727f859697430e43ad595a94d2087a6ac18ba899c80b2521d9af1fa0ed"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/export-mobile-light.png",
+      "bytes": 26978,
+      "sha256": "0987386337b8492a223279589902e4693db450ab02e06a875db8c9900c45be1e"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/feedback-detail-mobile-dark.png",
+      "bytes": 18930,
+      "sha256": "76ff30885848487197f6972fc6edc8207a1179321018df75c7d5f32f445c9ed3"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/feedback-mobile-dark.png",
+      "bytes": 29719,
+      "sha256": "540029da0a5e86e40e10f6572cf0ac6a1fba714cb2240aae54b91509889aeb78"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/files-mobile-dark.png",
+      "bytes": 30155,
+      "sha256": "f3135b655074bb5ef51d461d93b5f9f37f752d5b29a14557d5ae1e9f030ad64e"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/frontend-node22-final-source-check.json",
+      "bytes": 605,
+      "sha256": "65b42c8278ccb5c80a58e753631e12ad2e287971f34dc36cab24ad3ced549ffe"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/frontend-node22-final-source-manifest.json",
+      "bytes": 44514,
+      "sha256": "9b8b3ef9bbc32fab29680dac26c6d4f596c1c67ac513fc062c2dc0903d1cf2ec"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/frontend-validation-237.json",
+      "bytes": 98852,
+      "sha256": "019b2d7b0ed891ee331fed23b6b46215362c31f6789b1adda1dc624a1c4b6cf9"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/image-2.3.7-build-proof.json",
+      "bytes": 2726,
+      "sha256": "d45e66258ea3aba3c431c5f4969b8df554a68d1fde43d4df642f1405160beaaf"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/image-2.3.7-delta-lineage.json",
+      "bytes": 2598,
+      "sha256": "b9ec15cdcbaf2248e0785fb6d5588b708d5cbefeb2a210978b4529a41b0efd44"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/inventory-empty-mobile-dark.png",
+      "bytes": 31383,
+      "sha256": "7a6bbacd11ad0699ec6450dbd51b6b274d8474d9f9f99208088cbd3b1de22ab4"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/inventory-mobile-dark.png",
+      "bytes": 33926,
+      "sha256": "02ac34642ea36089ecda145070f4c9456cff34b040b49d9f9b8a60478928a662"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/launcher-login-version-update-237.json",
+      "bytes": 734,
+      "sha256": "1cdae7aabd7d80b28dfebdb5bb7a33369c3293efc3029301d505ae78f67b14ea"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/live-source-static-services-237.json",
+      "bytes": 1041,
+      "sha256": "fd0d217137532a5e2c5f1f95aae968870cca0b846bf549401cdd64b8db57ccbd"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/manifest.json",
+      "bytes": 6599,
+      "sha256": "7354c816fa7014433370a50949ba5567d5260c63f7a7079402ad92cda0da6fcf"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/messages-selected-mobile-dark.png",
+      "bytes": 32425,
+      "sha256": "543d8b4f724ebae9bb7a89af820e6031004ebae8706a12e8831b64d71ede27f9"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/messages-selected-mobile-light.png",
+      "bytes": 30814,
+      "sha256": "75a52acb4c007f2f5b40c63c0e16023359b6a172c419079f71ce955e85301b43"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/notifications-mobile-dark.png",
+      "bytes": 28450,
+      "sha256": "f9f6a166f9227df659cef31515e11a28a7481dc52e5d92e791e3577789dcea0e"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/people-mobile-light.png",
+      "bytes": 31191,
+      "sha256": "b547c65bd637c7ed17fcace0cb4618c522c21fd9d842882e48e0f62bf1b237c3"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/pg-after-restart-2.3.7-comparison.json",
+      "bytes": 946,
+      "sha256": "d93f1c7cf9c4ddab72b66a7877395a035d627d88caf559df903f8f3727fecd9f"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/preparation-detail-mobile-dark.png",
+      "bytes": 30344,
+      "sha256": "983036e5f68aa6075608034fdc5e09364bc333e57894b2ce2e0f5307adaceb85"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/preparation-mobile-dark.png",
+      "bytes": 37961,
+      "sha256": "e68a97ab198b0898c8d838a09353ee3f1db5f9df4097f2bf3c7e278181ff62e6"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/reports-desktop-light.png",
+      "bytes": 74429,
+      "sha256": "62c023e239e082028ff46240d2377d86e8702589d25e9711970c807259685e8e"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/reports-mobile-dark.png",
+      "bytes": 44008,
+      "sha256": "939ed01537c71493aba2b9d32d738819bf4f7b87b736040192e4aab0caf12a67"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/schedule-calendar-tablet-dark.png",
+      "bytes": 44835,
+      "sha256": "7b32b48fe911ac066b134a55db1c7e6e12c9c82de46acf01dfce3480f00b08db"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/schedule-empty-mobile-dark.png",
+      "bytes": 32897,
+      "sha256": "de229befe36e0623950cacead4eff5700e4c98f89b8d1f30a018be174a42eee8"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/schedule-list-mobile-dark.png",
+      "bytes": 36240,
+      "sha256": "67262aa7d3e568519463183854c28cf3c17b1c6e4d7fde3f84ff4fe0a09e6af5"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/schedule-list-tablet-dark.png",
+      "bytes": 42118,
+      "sha256": "70af475242a5d405ad5cae9daf549744e8de1fed1af2e63a5fc837d0c97920ed"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/scheduler-watermark-time-proof-2.3.7.json",
+      "bytes": 910,
+      "sha256": "8e2f7c680c8314d32dae0e92ded2bd67c388161b0ac57b81a3f3f7a2a1d85022"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/start-mobile-light.png",
+      "bytes": 28372,
+      "sha256": "9e98181ec93eb08f2eaaa5d295f7deceed85ff2493378c95640c7d16a53fa82d"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/stats-mobile-dark.png",
+      "bytes": 28948,
+      "sha256": "231bffd956ce8c64fef54f762da861f47a357848c2655d00b9e176e27d0e5d73"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/stats-projects-mobile-dark.png",
+      "bytes": 29213,
+      "sha256": "e77417cec300328de3e9e22ebb253307c190edcf8ae053ed8aec211b373f3052"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/upgrade-2.3.7-restart-proof.json",
+      "bytes": 2606,
+      "sha256": "f0306de933c2bf1fb980e642131a239065e6d76167307b714f1ec0b4038c86c2"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/users-mobile-dark.png",
+      "bytes": 26594,
+      "sha256": "7feed52738d67044feae62f2a4238b544c0c6d7bb9557b18507641ab0ff4255c"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/vehicle-issue-form-mobile-dark.png",
+      "bytes": 27798,
+      "sha256": "44ec311a6018f624b8ce8ebfa8a7b44546fec8cd3a9289786ce844b2af12cabc"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/vehicle-parts-mobile-dark.png",
+      "bytes": 33668,
+      "sha256": "bd316308607aa2f605b23519de1d32481eea2dd3b1efa3c4410d4e273be5f41d"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/vehicle-record-mobile-dark.png",
+      "bytes": 21655,
+      "sha256": "f0a11a952771ade92e77276a17ca03618915696400dbd91a06cc87366af29b57"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/vehicles-mobile-dark.png",
+      "bytes": 32080,
+      "sha256": "56821a487f64d1bf0ed4d438ca14d221fe52eb2a3158a555bf7f65552ff8c3d3"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/worker-project-mobile-dark.png",
+      "bytes": 30518,
+      "sha256": "44a8c7353ee462d329d958ca7d290991f64825957bba67f4a92bb9aa15b91c66"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/worker-project-mobile-light.png",
+      "bytes": 28409,
+      "sha256": "4a0a05094ba5b7b746b6bd720af7e2e4e33908365502355de94d44112a93cf83"
+    },
+    {
+      "path": "docs/qa-comprehensive-2026-10-12/worker-today-entry-mobile-dark.png",
+      "bytes": 34943,
+      "sha256": "c5bbd96f0b5d0b8a2488e8d0b5ec030375fdd8c9cabe32a8f10b8eed08cd3bc5"
+    },
+    {
+      "path": "docs/qa-convenience-2026-10-12/actual-browser.json",
+      "bytes": 707,
+      "sha256": "424f76c119dd343a6adaba884c38cd895949a7b5dee672fdcaa09ba09e6493c0"
+    },
+    {
+      "path": "docs/qa-convenience-2026-10-12/backend-full.json",
+      "bytes": 483,
+      "sha256": "9de59be2afecbec9f484489c25f82e4b15e6a2367f4429a910271404b020a2b2"
+    },
+    {
+      "path": "docs/qa-convenience-2026-10-12/browser-acceptance.json",
+      "bytes": 3239,
+      "sha256": "f0494059134d970d5dc9fdbeb152fce8c626316873009ab5c47b1704e36932d8"
+    },
+    {
+      "path": "docs/qa-convenience-2026-10-12/browser-cleanup.json",
+      "bytes": 153,
+      "sha256": "4040948f9a31db2cfaf0d87b7f019c36ba3a26fd9f07eb789388d29169717d3e"
+    },
+    {
+      "path": "docs/qa-convenience-2026-10-12/deployment-defaults.json",
+      "bytes": 923,
+      "sha256": "05a4ec11d73430a87bd5026b14471a21e483acae93dba7640af9257955f6aede"
+    },
+    {
+      "path": "docs/qa-convenience-2026-10-12/image-build.json",
+      "bytes": 2101,
+      "sha256": "926788537c090cac806a458bb9eeef104c2242d5c8c0083ef48acfff09adfc64"
+    },
+    {
+      "path": "docs/qa-convenience-2026-10-12/image-load.json",
+      "bytes": 3190,
+      "sha256": "fd91b608c04ec08ca80c9ebe8d7128ebc91c8c94eef811ff2fb7200b785689d5"
+    },
+    {
+      "path": "docs/qa-convenience-2026-10-12/launcher.json",
+      "bytes": 308,
+      "sha256": "a7b08886dd1d42a6e1103cb41ed33035dfd92e344f0218d5d25d6daa7e5224d9"
+    },
+    {
+      "path": "docs/qa-convenience-2026-10-12/live-source-static-services.json",
+      "bytes": 924,
+      "sha256": "e1e99afb17fdbe1b8aec1de7c53747eb3be6a74889e13e35e5323c2b2b20f304"
+    },
+    {
+      "path": "docs/qa-convenience-2026-10-12/modal-touch-after-390-dark.png",
+      "bytes": 63082,
+      "sha256": "1deb9c65765ebb1d094d2dc8958b18beecb6389c1b8144cb1f04cfc648045d91"
+    },
+    {
+      "path": "docs/qa-convenience-2026-10-12/modal-touch-after-390-light.png",
+      "bytes": 61606,
+      "sha256": "24fd9c35cfbd20562fd8a75472abf6032ac8120c414de1b966e1ce739c42a677"
+    },
+    {
+      "path": "docs/qa-convenience-2026-10-12/modal-touch-after.json",
+      "bytes": 5221,
+      "sha256": "eded2f77294f82fc7612a6259288769dd6a83417364d266717029491a6ed1434"
+    },
+    {
+      "path": "docs/qa-convenience-2026-10-12/modal-touch-before.json",
+      "bytes": 2256,
+      "sha256": "d2f50ebba48099bb5d2da041b29876576cc664227bf19890374245d3ecfe6bb4"
+    },
+    {
+      "path": "docs/qa-convenience-2026-10-12/preparation-mine-700-dark.png",
+      "bytes": 70181,
+      "sha256": "4e025c63b0aca60e6268a9becec770f60bc2561cc80e617a24181a4d694f284f"
+    },
+    {
+      "path": "docs/qa-convenience-2026-10-12/preparation-mine-700-light.png",
+      "bytes": 68316,
+      "sha256": "d0cfe7dbcdfb067461570ee29b3161bca957e2a16f923a3ebf5511f985907a6a"
+    },
+    {
+      "path": "docs/qa-convenience-2026-10-12/projects-1280-final-dark.png",
+      "bytes": 98707,
+      "sha256": "9eeb1abeed77ee3094f48e9323718f4afa77f404abc0dfbbd28bdfacb6a0ae30"
+    },
+    {
+      "path": "docs/qa-convenience-2026-10-12/projects-390-final-dark.png",
+      "bytes": 65464,
+      "sha256": "9245e95bf78e6991238128c4d8d0903afb7649111792e2e75ce085948255b6a2"
+    },
+    {
+      "path": "docs/qa-convenience-2026-10-12/projects-390-final-light.png",
+      "bytes": 62952,
+      "sha256": "cf06e2fd418f056796d963b7e440a1c5061097c49e36ffaba93148a5ed26915f"
+    },
+    {
+      "path": "docs/qa-convenience-2026-10-12/projects-700-final-dark.png",
+      "bytes": 76939,
+      "sha256": "9bef00d30cdae66b4b6e5b6391f8e12b302a4364598f00317b7359f625345b59"
+    },
+    {
+      "path": "docs/qa-convenience-2026-10-12/projects-700-final-light.png",
+      "bytes": 74647,
+      "sha256": "ec5ab56f40ae860dc963799cae6fbee863c9599f24b3ae6652056ec136f659cd"
+    },
+    {
+      "path": "docs/qa-convenience-2026-10-12/qa-runtime-cleanup.json",
+      "bytes": 418,
+      "sha256": "4f364e4a781b3e3c9eaee60cea77141811709992fc934241db8755c4cdb917ad"
+    },
+    {
+      "path": "docs/qa-convenience-2026-10-12/restore-failures.json",
+      "bytes": 9248,
+      "sha256": "bb1c3348f247373debcdc45947d1ea61d8ddfa6c728c68ca8c2904865b68d21e"
+    },
+    {
+      "path": "docs/qa-convenience-2026-10-12/restore-final-readonly-review.json",
+      "bytes": 741,
+      "sha256": "4044e61785ed0cf4fe24643afae80c4554a5e71d1de3040bf4cd84890af41248"
+    },
+    {
+      "path": "docs/qa-convenience-2026-10-12/source-validation.json",
+      "bytes": 1904,
+      "sha256": "4ce717d776c8524cec50b3d4f5148a74be0695eedd6a1fff9e1dba69cea8ca16"
+    },
+    {
+      "path": "docs/qa-convenience-2026-10-12/status-permission-fix-receipt.json",
+      "bytes": 1247,
+      "sha256": "84adeb36b1c455486aa0bd37986dada3291ea656d6e9176d41c022e53526e43c"
+    },
+    {
+      "path": "docs/qa-convenience-2026-10-12/ui-browser-final-summary.json",
+      "bytes": 3905,
+      "sha256": "9c21c3954d4a6484e51ccf741439fe8b3c2479ca5457d0bd8d24ea7e43a88d9c"
+    },
+    {
+      "path": "docs/qa-convenience-2026-10-12/upgrade-public.json",
+      "bytes": 3006,
+      "sha256": "030239259d302f1d88e1e339fde9a8a3bd9bd3586ef9c2ab8f06967ed1c89231"
+    },
+    {
+      "path": "docs/qa-dashboard-empty-mobile.png",
+      "bytes": 29708,
+      "sha256": "1b824b0fd2ec7f77d53a0df58a3898f8979d94f53ac74e08ab51bc5f906724c8"
+    },
+    {
+      "path": "docs/qa-dashboard-mobile.png",
+      "bytes": 45717,
+      "sha256": "af5498ffe88dfb1f5aa10078e31ce67583fcae336c658875f7d8d58a54f26a8d"
+    },
+    {
+      "path": "docs/qa-dashboard-quantity-after.txt",
+      "bytes": 53542,
+      "sha256": "c2964f2d69d96bfd9a13fc9212c0ed0a5b2fb10d23bde4fea6921772d0807c90"
+    },
+    {
+      "path": "docs/qa-dashboard-quantity-before.txt",
+      "bytes": 18843,
+      "sha256": "986a1b65b50bde9deb98ec76e65342e59c009fc712ab40c8271798a5b0fcfb66"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-auto-regenerate-green.json",
+      "bytes": 69,
+      "sha256": "7fc577e5f7dbd6ec807185b9589adc1e802650c45af219bf44c0c22beb129838"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-auto-regenerate-preview.txt",
+      "bytes": 2422,
+      "sha256": "107aff10f4ac658c23eee4f5adbc93c4305dc536499a62a74f4cbdc0860e441a"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-auto-reset-cancel-green.json",
+      "bytes": 84,
+      "sha256": "576dec9f256a80f66a019477c3d6021d9f06e4407de56fcd28ba62188b166337"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-auto-reset-preview.txt",
+      "bytes": 2076,
+      "sha256": "4ed09d590ae257b18ebc5f4ae01dd82530ef21b813f17849f3ba8583d40d37d8"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-auto-reset-save-green.json",
+      "bytes": 84,
+      "sha256": "f76f1a43b5bb1c841c2b19a74c6629ecd5c039f7170f88607d14e72cc3b2e8a7"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-before-reproduced.json",
+      "bytes": 200,
+      "sha256": "9c3edecc4f834198b3604b213d0a306e3049a5ba85842f398895b12bdb0254df"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-before-resize-preview.txt",
+      "bytes": 17085,
+      "sha256": "b2bbd5f63b8e724096111b5896a94f7a53d227a0471ced82636666e0af4c88e3"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-before-short-saved.txt",
+      "bytes": 9694,
+      "sha256": "c11c75698487217abe2b5f611dc936cb151c5d5e3e7fea72f57ec89564786faa"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-cleanup-receipt.json",
+      "bytes": 117,
+      "sha256": "aee5223107d7c56554eb8aef3af332aab2db58fba73cdad700c9a76d1eb8a8ae"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-clone-invalid-error-green.json",
+      "bytes": 231,
+      "sha256": "a67e6deac0749a9e5c0842e794b6a4322007587935f7223151c1b8335a2e2b7e"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-clone-invalid-error-red.json",
+      "bytes": 1502,
+      "sha256": "bd54abab5b442b74d689c8e6a87e69405625cc63063f17c920d9ed5041403611"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-clone-invalid-orphans-green.json",
+      "bytes": 84,
+      "sha256": "fdd8a5130651df77da3cc37683d5a29fa2ae9f0d24da501fc40919aa636e8817"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-clone-invalid-orphans-red.json",
+      "bytes": 169,
+      "sha256": "0fc817926f06c14a58defff4b96441f1ad99e4b512cd54986c2336b9c5a2f365"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-clone-policy-green.json",
+      "bytes": 298,
+      "sha256": "4a9c879c53dc4bf63a2ce3d2dd2946616da24862732b74a12d33541f640c6964"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-drag-resize-preview.txt",
+      "bytes": 924,
+      "sha256": "170d5ca40515b9857f1112cc73cc487df5c6fe54596a6738b03edf697010663b"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-drag-resize-regenerate-green.json",
+      "bytes": 69,
+      "sha256": "c9fc4526b18edb4efbfbf2dfead0aab8fd821b52b34d662f135f9b07bf291acc"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-empty-reset-generate-green.json",
+      "bytes": 91,
+      "sha256": "35b40f50bee42253ac0b61879651a8748c06689899c5ce5707e6efa477f80739"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-empty-reset-green.json",
+      "bytes": 267,
+      "sha256": "eacf4f505a015e68cc69dab9e662d4aa76be1b1378124101ddddb135b9f8254d"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-empty-reset-list-preview.txt",
+      "bytes": 461,
+      "sha256": "35171ae1f52bb8e55a5aa7007aa3e009f247b2b8386d4f0029e5290d0a090e0b"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-fresh-resize-preview.txt",
+      "bytes": 1219,
+      "sha256": "dc20b7d558035d41aa34d1931072459ce11b3ae039b4c9feecda3ec17f795ca6"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-fresh-resize-regenerate-green.json",
+      "bytes": 69,
+      "sha256": "15b3786e9cc1187ba31bc3f67a16dcb7b0d3fbf5013eb87430e80bf7ab943814"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-import-policy-green.json",
+      "bytes": 294,
+      "sha256": "d9620ee2b4a5e89fcfb8858d1de369f973528b91db16fd77b777ac4a65360ce1"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-invalid-budget-green.txt",
+      "bytes": 430,
+      "sha256": "2c5fb32ce4bf4a8f991392510f38f7cd44c4a9d68cbe29b20ac1cfd89a0282ad"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-invalid-budget-red.txt",
+      "bytes": 291,
+      "sha256": "a496c89e19273487bd80dde4b2f4e6f41d08a4e362ec59e80cce5f24ceace2b6"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-invalid-clone-test-cleanup.json",
+      "bytes": 328,
+      "sha256": "14b6546c3fc4346c36c00e04dbcd2d193e4b7b1b35e2839a77ca126e3fff02b7"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-legacy-recovery-green.json",
+      "bytes": 112,
+      "sha256": "968cfb55be0bca8da7588b15757c6d2b4dfa437e95ef00ef3652ac949e183404"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-legacy-recovery-preview.txt",
+      "bytes": 1844,
+      "sha256": "2f438387ef589536d830d2e6f3789d462d77a0d39e5bdc5dcfe419fdd3488dc6"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-legacy-repeat-green.json",
+      "bytes": 125,
+      "sha256": "6a5a6846722bfbbacb9889e839b75d049f9a9de6dd807151be9dcc9f802e8161"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-mobile-targets-green.json",
+      "bytes": 217,
+      "sha256": "7e9338fbb6ada5ab4e243ac06faba457e47fec7306a8cfa218a992b7e8bb2ef9"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-overdue-preview.txt",
+      "bytes": 3037,
+      "sha256": "72e186720eca9041da263533e93e89c57db8055237a7f356f38d9742692674f9"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-overdue-reschedule-green.json",
+      "bytes": 69,
+      "sha256": "90349984aaedffa6e5c7e62fca50a4e6b337a53db47db51d022640713ba0127b"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-quantity-double-green.json",
+      "bytes": 69,
+      "sha256": "52fca593aaf21bd113fb6102840510d146eb5e7fab236baea12af69380a92cbe"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-quantity-double-preview.txt",
+      "bytes": 2815,
+      "sha256": "4c625734047d26c5d108200728695ed5422e9324d6c844a4ba0427c7d2d55990"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-quantity-restored-green.json",
+      "bytes": 69,
+      "sha256": "15b3786e9cc1187ba31bc3f67a16dcb7b0d3fbf5013eb87430e80bf7ab943814"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-reported-policy-reset-red.json",
+      "bytes": 102,
+      "sha256": "6e50f49a09439484abeb520370e7f0a6ed59b053c19580e1cb1519806b12f0b4"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-reported-reset-cancel-green.json",
+      "bytes": 101,
+      "sha256": "28ad7fc43b180034cb506a95560b0261dc933fd6ec5ae1eb8324bd921105b187"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-reported-reset-cancel-hashes-green.json",
+      "bytes": 405,
+      "sha256": "b55830dc82d3a18a6edbfacb45e68a5ba5c77342418b3e6c631dae5f66efb605"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-reported-reset-preservation-green.json",
+      "bytes": 515,
+      "sha256": "02ac95114a899368ab0e077eaae6128b441c612709087133bafd2179dc56c4a8"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-reported-reset-preview.txt",
+      "bytes": 461,
+      "sha256": "244f50a4108c40aa66cd3fa8a1714e2fc4855c692659c938ef1b2ddf9cec800a"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-reported-reset-regenerate-green.json",
+      "bytes": 96,
+      "sha256": "d0138e5eff7e1bae57a0610b5342fed68327ddc7d436b2e50651b41c72c4764e"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-reported-reset-regenerate-preview.txt",
+      "bytes": 2422,
+      "sha256": "78e69533ddf4cb4bbb722b329948222a34b71223e6a562a575b9801d30689f4f"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-reported-reset-save-green.json",
+      "bytes": 117,
+      "sha256": "e2538f695a53111a36c1e554dedf55789f557031061fba43b377513e3016a34f"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-reported-unit-auto-trap-red.json",
+      "bytes": 370,
+      "sha256": "7d4ba028f360ab696019cb189e734e0af8640b0c0d0b85ff9cd56499d2717025"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-scale-cancel-green.json",
+      "bytes": 84,
+      "sha256": "e34af1e468893ade99a8f90e15d36c9405194f9349087451cc376758a3389a0e"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-scale-half-preview.txt",
+      "bytes": 2277,
+      "sha256": "bfd97e7b0efa14294e923fffbafd48e9c26e914c1162be6f464e162f2250f1fd"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-scale-reload-green.json",
+      "bytes": 98,
+      "sha256": "bcc9872db948691b0a4dbd7a89cde69a4a53d062d3733fe1743006f3480e18a4"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-stale-range-failure.json",
+      "bytes": 33,
+      "sha256": "5136efaf35d06fbb47f9171eeb37aa1e40cb3b5f44989f2f53bbaaeafde6485b"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-stale-range-preserved-green.json",
+      "bytes": 782,
+      "sha256": "d4af09ba69e09d0a6a37d5b59d6d0c517701f006dc837868f76ad7c27509b3f6"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/browser-stale-range-retry-green.json",
+      "bytes": 69,
+      "sha256": "c614b7fe186b805b7348c5e25ef3ceed55473d2486b9a7160ddb9265128dabff"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/mobile-auto-choice-before.png",
+      "bytes": 80551,
+      "sha256": "2a90f18ed4dcd425525f124bf4f751a7f4d3487822ba419e9d3459998edba923"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/mobile-auto-choice-final.png",
+      "bytes": 81254,
+      "sha256": "9c65bb21de32d49bb27c5d2b3e7f943eb2db484467119e7e52d4ca27ad59a9ea"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/pg-final-browser-download.json",
+      "bytes": 131,
+      "sha256": "66598139504b6901487c65e0fdecc786fc1f1d0f92bfee28826d0784e25f9d3c"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/pg-final-overview.txt",
+      "bytes": 7280,
+      "sha256": "23483dcf697163ccd8bc5193ee83c1514ff7ffa17235b732832766a48308cc4c"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/pg-final-preparation-date.json",
+      "bytes": 368,
+      "sha256": "86f8a9aec1691177c4ddea85769415de9da1a92f9bd2da8ed9e0304e1b35c969"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/pg-final-preparation.json",
+      "bytes": 1414,
+      "sha256": "e051900897a243e90092bc3110ae055cc5127e4d0c97dbf215c63ea132243fde"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/pg-final-preparation.png",
+      "bytes": 136165,
+      "sha256": "136b9f66abb83c03a00af93ed79053262510725c2b3dc01edf9105c8e3fd2cfd"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/pg-final-preparation.txt",
+      "bytes": 16910,
+      "sha256": "1e61ff584b3db3be61e2e580629c995f2f969f83683660502584dcc9326e8219"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/pg-final-schedule.json",
+      "bytes": 177,
+      "sha256": "57bf18312c048ead2289244179c2a7c22c44875c583624a8f23cfb47bf0db57a"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/source-validation-summary.json",
+      "bytes": 1515,
+      "sha256": "ca0a216ad1935a1623cd3e58b7ebbaadd7e5c17672da57c8625c5cd8fc0ad8d9"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/upgrade-2.1.4-receipt.json",
+      "bytes": 6450,
+      "sha256": "e52386e2bbf8579987f2ac37d23555973570e4f14a3bf328b50ff2a6e945514d"
+    },
+    {
+      "path": "docs/qa-duration-2026-10-07/validation-summary.json",
+      "bytes": 14171,
+      "sha256": "ac35eb514e6f949d913c222ad4d1d943abb9d70ef0e5f705a1f12b5166040e14"
+    },
+    {
+      "path": "docs/qa-feedback-after.png",
+      "bytes": 67315,
+      "sha256": "cf5f2b64d3faa8ae9032244e25e0ed88c1aa95058d80bcccb9ec024e600be00e"
+    },
+    {
+      "path": "docs/qa-feedback-before.png",
+      "bytes": 50663,
+      "sha256": "17b966b916bfb98688f91f424223bc72ff1f0ce19a12036ee8422d6ab3871195"
+    },
+    {
+      "path": "docs/qa-feedback-detail-mobile.png",
+      "bytes": 29451,
+      "sha256": "ed549340d32ae047cd1978b1e5bc1f978fdae77d6714e2bd34e06c5ddfd28b42"
+    },
+    {
+      "path": "docs/qa-final-pg-browser-after-restart.txt",
+      "bytes": 7908,
+      "sha256": "7dd4edd2cbe38c3ec090ecadaec322364fbffe4c4c5679e97252d572939d253c"
+    },
+    {
+      "path": "docs/qa-final-pg-overview-desktop.png",
+      "bytes": 305615,
+      "sha256": "14599d7c9180c07b7b0ee6caaec7818af689c729fafe21baa9c7848589d524ee"
+    },
+    {
+      "path": "docs/qa-final-pg-overview-mobile-dark.png",
+      "bytes": 170742,
+      "sha256": "280d8cc7c6ffe41c7591ef4aa9c5669e51f3f2ecdf4826d2330c2a926a7a17f8"
+    },
+    {
+      "path": "docs/qa-final-pg-overview-mobile.png",
+      "bytes": 77769,
+      "sha256": "e1319aaf7cf98ca216883a9238f68a0c12f8c00a79db53ede7dce75cee35f2f1"
+    },
+    {
+      "path": "docs/qa-final-pg-project-export.txt",
+      "bytes": 1735,
+      "sha256": "f8100515cc05014266fb507983d15aa518463c149627547fe790fd6905aa8117"
+    },
+    {
+      "path": "docs/qa-final-validation.txt",
+      "bytes": 11813,
+      "sha256": "80a89ee8c819dacb854118e29395343668e19067564de7cc99813a929cb840a6"
+    },
+    {
+      "path": "docs/qa-followup-form-and-preparation.txt",
+      "bytes": 25810,
+      "sha256": "4e2c7b74eec49143ba06db57dd61c90d0d658286e3aca3a22ede6f4a4b74f864"
+    },
+    {
+      "path": "docs/qa-followup-preparation-readonly-mobile.png",
+      "bytes": 62626,
+      "sha256": "e00ca7fcbc725cad794f88f972363e204f158a7c1312636e4639ea062cc8920f"
+    },
+    {
+      "path": "docs/qa-followup-project-fields.txt",
+      "bytes": 6987,
+      "sha256": "2955b9de6857676fea42ba2aa41aa9a7a0414e3868e745dfebca8511ee9249f6"
+    },
+    {
+      "path": "docs/qa-followup-task-issuance.txt",
+      "bytes": 25701,
+      "sha256": "3354f83ee47b365a31fe4d6df38dcaaa32e1f456c0c19fa3b1b44a878cbdc982"
+    },
+    {
+      "path": "docs/qa-gantt-empty-before.txt",
+      "bytes": 4626,
+      "sha256": "e50b04fbcbe057d2cf3514e242339ab8fb3bf5ae0856d4b8374c413556cda655"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/actual-pg-mobile-layout-222.json",
+      "bytes": 681,
+      "sha256": "84fb052c272341e472b41e086dd4030d8d13bb1fa6a0da2c35816f1dc2a685a6"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/actual-pg-person-readback-222.json",
+      "bytes": 266,
+      "sha256": "015a92a9499897c256ebd4b37c04e9e19ea3d4cfba7c2d6e8636bf91c251f8e2"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/backend-version-only-source-check-221.json",
+      "bytes": 415,
+      "sha256": "f20db78c340271e1eebe339d2dfdf27cc72086d64757705a5bb5abd3b5524afd"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/backend-version-only-source-check.json",
+      "bytes": 415,
+      "sha256": "7f4a387060a89f2d0cbb75ed8ca6b8411fb9a1f8afb394e224e35a3ca295b1a8"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/browser-cleanup-222.json",
+      "bytes": 401,
+      "sha256": "4d607202101eae01f6477a91c83c936edf6fd14848617620d72ea151c4dea7b7"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/day-colour-contrast-final.json",
+      "bytes": 950,
+      "sha256": "527eb62c7cd0b1e07c267f438174bc27049f1e469997a5c3d8af0f048a6f1dbe"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/desktop-person-stable-final.png",
+      "bytes": 132529,
+      "sha256": "25e4a4e1a1c25e6714b8bd37b27103fcd0f4d90453c80dac8d15947070d52f97"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/desktop-task-expanded-final.png",
+      "bytes": 136447,
+      "sha256": "16cc8d584bc57ab56b29ef7e3de82f61a6edbbad71b842670d831e90c8e5b209"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/frontend-node22-final-source-check.json",
+      "bytes": 1182,
+      "sha256": "3402c37c16396df13991e6eaa11ba0459e2df98e260d2ac3ec4c2819094add09"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/frontend-node22-pre-lock-source-check-fac2.json",
+      "bytes": 1182,
+      "sha256": "aca73700ce7127a3b2aba7bcff5b6ef4672eaa705b65ffab00f035c07deff731"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/frontend-node22-pre-person-context-source-check-221.json",
+      "bytes": 1182,
+      "sha256": "d34f51b175df6760d592514d03498ebbd82a58eaa6393909d6b09a3595a2aa04"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/launcher-222-public-proof.json",
+      "bytes": 399,
+      "sha256": "2ecb530ed5679f4867184e002cefa634cb2c08427de786e29798d33e9a140059"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/mobile-all-adjust-buttons-final.json",
+      "bytes": 580,
+      "sha256": "0279a9c16bb0d6efd92058968f363b7a88adbb905aebbb914e26373a398ab487"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/mobile-all-adjust-buttons-final.png",
+      "bytes": 53919,
+      "sha256": "ba64f6a472fef283b9d88ba7701f4fe3cb2205909987282baba14a33c6834340"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/mobile-task-date-preview-final.json",
+      "bytes": 1447,
+      "sha256": "8e5fb466091dd5d411c97c0f26660071ca5ea036680b708e0e108767c062edd8"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/mobile-task-date-preview-final.png",
+      "bytes": 95663,
+      "sha256": "7fdc31a3b1c15631c2972ccaeaa52a1137847a47f58d2a9648f910c9cf0aac91"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/offline-image-222-public-proof.json",
+      "bytes": 1015,
+      "sha256": "8831171611d683730b7591dbf7f049f2d3267aef6a98ba4cb7fefe619152a6bf"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/qa-single-edit-restored.json",
+      "bytes": 1263,
+      "sha256": "ff48cdfb06f3c4cedde0303937a14bd71ea123247a4986a62313b6b71ebfa8ab"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/qa-single-edit-saved.json",
+      "bytes": 1292,
+      "sha256": "d8c7a6dd0787289f74e0d756787dad153ea8f08e15dbcf278aee5a12fe704b10"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/qa-task-date-cancel-readback.json",
+      "bytes": 212,
+      "sha256": "0ae1c44a2b3924644d8927f65cf305f60d821b915564cbf597c9014ac78a4271"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/schedule-browser-final-check.json",
+      "bytes": 2520,
+      "sha256": "d9c8d6a38e765ae932db888f5e6b8dfeb88b33ba3ff3e6055325b601fec5b2e7"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/schedule-calendar-1440-final.json",
+      "bytes": 1309,
+      "sha256": "2b1eec6f1613be0d5c91795e46596f6413c872f8c32fe9228c4301e05425da06"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/schedule-calendar-1440-final.png",
+      "bytes": 162719,
+      "sha256": "310c3eeab67e01405873b5b49a59d9620b67a1e26fe372793df576df523a33e3"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/schedule-calendar-390-final.json",
+      "bytes": 4875,
+      "sha256": "c050559b0363ab2e76bd9d887a2fce21b1bb500ef574eed2ee043c22684a1650"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/schedule-calendar-390-final.png",
+      "bytes": 70369,
+      "sha256": "3a0ecafea029540e7cccf68ee839082b89c6c5cea07f1b4e5526233d4afc626d"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/schedule-day-details-1440-final.json",
+      "bytes": 489,
+      "sha256": "8fb8ca448a31e9dd2188e40832985853e592f0223c1a8ba8cdf305dd036b0253"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/schedule-day-details-390.json",
+      "bytes": 3228,
+      "sha256": "a025ff2eea3c737e8a27b2632e065b928d7accfe3b895f1a793b1018f7a78638"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/schedule-day-details-390.png",
+      "bytes": 50395,
+      "sha256": "e1391ca82c0008efbd3135c2bd16e1b60f11f977138f24b55eb67c6e07c3e477"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/schedule-list-1100-final.json",
+      "bytes": 2575,
+      "sha256": "7bccaf602d0c551809c5811155ce5550e2c1dc4e306c7cc8c0556585371d93cb"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/schedule-list-1100-final.png",
+      "bytes": 115335,
+      "sha256": "59c16ca91da0080d8f0226e79bfde0020c76e9f6c28897189d95e48a8d3e9fb2"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/schedule-list-390-after.json",
+      "bytes": 2016,
+      "sha256": "579cb7e7862dfd29f1d779034c57b210bb27522ad925760891b129d133deddda"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/schedule-list-390-after.png",
+      "bytes": 67484,
+      "sha256": "1737e628b67fa1fdbc780021054068e98f7743d2b9290fc1c41766f1b7c74af7"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/schedule-settings-footer-before.json",
+      "bytes": 857,
+      "sha256": "989739439e70c52b6653cb790df227067bd36695bd3074f4b0fbd3cea0b3e87f"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/schedule-settings-interaction-390.json",
+      "bytes": 466,
+      "sha256": "dfdd4093f59f5f961d2e35525abd32acef31e2dcb29f28d47189c74bf0d53e76"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/schedule-settings-label-390-after.png",
+      "bytes": 63583,
+      "sha256": "5d6449783a5acaf0de02c28c110dfb12782ead81b69040404770d592ddd6253a"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/schedule-settings-layout-390-after.json",
+      "bytes": 858,
+      "sha256": "9665488cc6eba0a15830d67854186e3e7575fc61e40b016f8533227a1917ac6f"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/schedule-work-detail-entry-390.json",
+      "bytes": 610,
+      "sha256": "d8fac9fe57db12660fb7eda9facc5b27113dbd424d4b2d91467d305206e54cc3"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/upgrade-2.2.2-public-receipt.json",
+      "bytes": 2151,
+      "sha256": "9e0b1d72d291696023bbe0337fc1b66d2c9f8a0648bc62a0cdd70b3a2f12271b"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/worker-browser-final-check.json",
+      "bytes": 13208,
+      "sha256": "7e6ad98e4ead7cae570fcac9ca6850f0976730822295ce69b6822d5427f2bf70"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/worker-final-widths.json",
+      "bytes": 4368,
+      "sha256": "312048e0f61cf5aa3e7af318ea31528064159298b10493aa5d774f52b494b9ec"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/worker-mobile-compact-final.png",
+      "bytes": 58932,
+      "sha256": "4d29302d45c4c2edbef0b1898a27e6152571c66d6b7bb7fc1fc4bf1e4b0aef7f"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/worker-mobile-standard-final.png",
+      "bytes": 62243,
+      "sha256": "1da3736b36bd8642fd627bb7447b83e229bdfb0d036f5ae9be57c7a57443ec80"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/worker-mobile-targets-final.json",
+      "bytes": 2662,
+      "sha256": "00ad4c93d4d00222106bd913dc6057a27a00718b03b1cfb8415deabb2ccb7135"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/worker-month-boundary-final.png",
+      "bytes": 62260,
+      "sha256": "d731dea7159bf95291f3897c40aa54852dbd93e073eaef682a950715bdf0b934"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/worker-month-november-final.png",
+      "bytes": 62008,
+      "sha256": "cb201b0f1d6ed696e8e96414c885530526d78e946bed296a7dbae8d7f70664fd"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/worker-months-final.json",
+      "bytes": 606,
+      "sha256": "4f40f2fc5038056501b8ce4f634d2290cac41ec63ffcb35bd91de08b9cb1ef29"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/worker-person-context-1100-mixed-after.png",
+      "bytes": 105384,
+      "sha256": "2f0003c012a7196493233c465f802ae333e98260f791e78fcff798425917204e"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/worker-person-context-1100-single-after.png",
+      "bytes": 112626,
+      "sha256": "d0a164d5fc0ac4865e39a1d874a61f7eec1da07ebc81d128efe9c0523ad0999f"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/worker-person-context-390-mixed-after.png",
+      "bytes": 58735,
+      "sha256": "326941d14056f6321a35c510cd8a2d97eb15a0121c620c4840348ab23223c3b9"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/worker-person-context-390-single-after.png",
+      "bytes": 61345,
+      "sha256": "f394564cea348caff5dd45dec8569a0d1b1c519e776b93374508ad0fd9304725"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/worker-person-context-after.json",
+      "bytes": 29453,
+      "sha256": "22935815217e4b0787d2d181e96281ce4caf529556266a20b4e2349ea818b8e4"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/worker-person-context-before.json",
+      "bytes": 1486,
+      "sha256": "25e849c19e91a8a421fa80c636a80566b8e69fdb888de804c5481e5dcbc8ef69"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/worker-person-context-before.png",
+      "bytes": 101737,
+      "sha256": "99956070cf9e06c665382720072be6a5680a33f42ac461ddd8e9d370d106839e"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/worker-person-context-final-check-222.json",
+      "bytes": 5813,
+      "sha256": "56fc544eb6765464d426ab777a4572082f9e89df1a4c6677a1a9e53df4c16235"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/worker-task-1100-light-final.png",
+      "bytes": 108055,
+      "sha256": "f77655210a7f06fc577b69c487f307fb04fd7362f24fab834d46c74543dbe2aa"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/worker-task-1440-light-final.png",
+      "bytes": 115577,
+      "sha256": "b426170456d4afb192ed7e77375c8387f5ef01ad3f7e56ddf6ded4052f4dc7e9"
+    },
+    {
+      "path": "docs/qa-gantt-multi-2026-10-07/worker-task-700-light-final.png",
+      "bytes": 85359,
+      "sha256": "e6d1b016f81b7f439f07ae492bed6053e46cac4c5d9fc750c86286a7ddea3638"
+    },
+    {
+      "path": "docs/qa-gantt-print-after-page1.png",
+      "bytes": 133590,
+      "sha256": "c003b98346885191a4a0ff5bee0dc8646112ce44a4a0129d62d4b7c6cce140b4"
+    },
+    {
+      "path": "docs/qa-gantt-print-after-page2.png",
+      "bytes": 125600,
+      "sha256": "c46d7c8040b3cff8dcb859d29cda3f07035fcfa1dc4519f27d9c9b588290d976"
+    },
+    {
+      "path": "docs/qa-gantt-print-after-page3.png",
+      "bytes": 82938,
+      "sha256": "f64db50d946a3c5dabe1d20c4169fdc4903f01b5c89f9656f7b6ead577a6f60c"
+    },
+    {
+      "path": "docs/qa-gantt-print-after.pdf",
+      "bytes": 547240,
+      "sha256": "09f847f1755c3e0d41806b0c70ccde9988afaffe5fb68626f344c470f2058e46"
+    },
+    {
+      "path": "docs/qa-gantt-print-after.txt",
+      "bytes": 984,
+      "sha256": "0885baf314c5dae94b0e56891e190f04f75d5011a4eefc5c7460520733f50540"
+    },
+    {
+      "path": "docs/qa-gantt-print-before-page1.png",
+      "bytes": 102347,
+      "sha256": "3346d8aed43aff0b9729903201ed4100794b058e35ec1b1a62ae6ff282d4475e"
+    },
+    {
+      "path": "docs/qa-gantt-print-before-page2.png",
+      "bytes": 59444,
+      "sha256": "67d197869d5ae2207069728a697461b4b824a762987f56bf40476c1f193ceec8"
+    },
+    {
+      "path": "docs/qa-gantt-print-dark-mobile-after-page1.png",
+      "bytes": 133590,
+      "sha256": "c003b98346885191a4a0ff5bee0dc8646112ce44a4a0129d62d4b7c6cce140b4"
+    },
+    {
+      "path": "docs/qa-gantt-print-dark-mobile-after-page2.png",
+      "bytes": 125600,
+      "sha256": "c46d7c8040b3cff8dcb859d29cda3f07035fcfa1dc4519f27d9c9b588290d976"
+    },
+    {
+      "path": "docs/qa-gantt-print-dark-mobile-after-page3.png",
+      "bytes": 82938,
+      "sha256": "f64db50d946a3c5dabe1d20c4169fdc4903f01b5c89f9656f7b6ead577a6f60c"
+    },
+    {
+      "path": "docs/qa-gantt-print-empty-after-page1.png",
+      "bytes": 20445,
+      "sha256": "d50779d078d708223d7508ecfb00611e559a8e0538190922274eb4029bb16047"
+    },
+    {
+      "path": "docs/qa-import-schedule-final-evidence.txt",
+      "bytes": 114415,
+      "sha256": "57a496f4ee93eee4026e6450cadc2fa8e74198477fa7232cc8917c16728c9bc4"
+    },
+    {
+      "path": "docs/qa-inventory-desktop.png",
+      "bytes": 97725,
+      "sha256": "54c1a4d9055a32133c9981d0285e68737eee5f90627d16603502b822496fcb98"
+    },
+    {
+      "path": "docs/qa-inventory-time-browser-evidence.txt",
+      "bytes": 14343,
+      "sha256": "c68a495c7fe84ac291f664f5d214282118f504abbf82ffd5df220528473e8ad0"
+    },
+    {
+      "path": "docs/qa-item-application.docx",
+      "bytes": 37017,
+      "sha256": "a06eaef5c2810997f9b0c57fde67c4821bec29d9c5e38bc8975a2fe77c227708"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/actual-pg-homepage-public-summary-215.json",
+      "bytes": 565,
+      "sha256": "930ea7299482d02ce8c65fd0c6dc207dc34cacc00be37a9dcfd0f00573de832f"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/backend-business-source-unchanged.json",
+      "bytes": 1039,
+      "sha256": "15820fb51bfdcc0d20d1f264a81cc7e3db4573e7e819b308b8ec14211d9717c2"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/browser-cleanup-215.json",
+      "bytes": 161,
+      "sha256": "994b9ce422df99d5d239cc8dddce64dc77125e5402769b95987c68bcba5fbae7"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/browser-dark-confirm-colors-first.json",
+      "bytes": 359,
+      "sha256": "db148176e5c7a1ebfdcf85f162bf4eb51b8a392ea7aa9dde865e32981c0e1782"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/browser-dark-confirm-final.json",
+      "bytes": 1324,
+      "sha256": "e2fadea9418174df8f62db76f8256d98768f06870bce44b5378307e359ec731f"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/browser-directory-height-final.json",
+      "bytes": 1379,
+      "sha256": "92cc58e4cef8c5a6c6c068e6ffecca95e65e6e1815eb49c547da403f5291fa72"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/browser-directory-height-red.json",
+      "bytes": 1074,
+      "sha256": "c17ee6d2cf60a95b4f8d982eb06a8bebaa021d7e3675dab8977d2343c6e80bfa"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/browser-mobile-directory-search.json",
+      "bytes": 537,
+      "sha256": "3adf6868668c363470043ef98928ec7727ce9cfc5836dd0eff72512364bcc417"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/browser-mobile-sticky-directory-final.json",
+      "bytes": 476,
+      "sha256": "487166cea2441567d243da143176e5849e6ffc5a9bd79b62e2ce13c58ae9d477"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/browser-nested-task-link.json",
+      "bytes": 957,
+      "sha256": "5581f8e46c8ab73232b931239493cef9a5f6c0acac5e2e2a114a450eb39199d9"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/browser-overview-final.json",
+      "bytes": 1029,
+      "sha256": "856fbf6cb0f3b335565080c1d014b73d518757987e431662e48659505bab2483"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/browser-preparation-filter-recovery.json",
+      "bytes": 287,
+      "sha256": "ff1fd53570de7b19d9aef56fe03972caa837a57ae08c5c948022417161b0d2e0"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/browser-project-desktop-destinations.json",
+      "bytes": 11107,
+      "sha256": "4b1a8701daaee9a28457ae37cc4aa44fc728dee24dd2d4b91a210a2c11267b9d"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/browser-project-mobile-destinations-final-326fba6.json",
+      "bytes": 8739,
+      "sha256": "dc68c38630f627478298d29ff59ff89b7d098fd27b237874b73990ca5c820758"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/browser-project-mobile-destinations.json",
+      "bytes": 9370,
+      "sha256": "5e84fda85e86eb5ea009547269b168807ac1efdda3c4f3a2b16f68e4ba86e2e2"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/browser-report-print-layout.json",
+      "bytes": 508,
+      "sha256": "baa32fdc96977487b0139eba55b459c081ffb616e42d4cb73f92c68f27b92cbd"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/browser-worker-reading-permissions.json",
+      "bytes": 1183,
+      "sha256": "5bdba2868f4ae4ce48f888b6f1e176188e4448af6b99118caf4d5bf74ab44c48"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/directory-height-before.png",
+      "bytes": 151246,
+      "sha256": "ee4cca9a9f42b1399cdb1025ded64ccffd7dffc803766993ec1ef6d82d8f7b19"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/frontend-fb44-baseline-source-and-build.json",
+      "bytes": 1838,
+      "sha256": "aa226376bfe127fbb1d0d82a953454c80678c106dda2aa2e2b2c1bd263297dc6"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/frontend-final-source-and-build.json",
+      "bytes": 1348,
+      "sha256": "aafd228f624b310bb09d31a7d85a60525edf25b3592acd6a1f09dde11a75a368"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/global-layout-browser-summary.json",
+      "bytes": 6584,
+      "sha256": "7795cc51f9ab53a2532575ed46e58251a4959a533189770ba8001fc3f3e21111"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/guard-mobile-dark-final.png",
+      "bytes": 24120,
+      "sha256": "9d259506f19c9c364e12e5e37c6ad8758d458eb05d770e998ce67e64757936c1"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/image-2.1.5-build-proof.json",
+      "bytes": 836,
+      "sha256": "5c5fe92c2bff79e039c8b15cd14fe03db1f7ddff5aeaa8a1a73835de27eb0c42"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/inbox-mobile-after.png",
+      "bytes": 67549,
+      "sha256": "39eb4ebe4902dc88c4c9267e3c42e9a66535fa506e12fd21d29736904c44d2ef"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/mobile-sticky-directory-final.png",
+      "bytes": 29839,
+      "sha256": "7603e8fcfcdae9f17e1dab005fefdec4bfea03b682389c672fe722464a152ede"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/overview-desktop-light-final.png",
+      "bytes": 118912,
+      "sha256": "aa710098b42c496b63c313fccbcb880e12e8742d616b0edd4d7d3f29ae5490e6"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/overview-mobile-dark-final.png",
+      "bytes": 52491,
+      "sha256": "b86e5a88de0af791b6afa4c85cb25f34cad39315286b31f143bad5a0d6f5db2c"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/overview-mobile-light-final.png",
+      "bytes": 50553,
+      "sha256": "bf1c5ae0f003ad08e03dc5bcd6606932e15c7d1bb1c4f2d751d1be51d5b67ef0"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/people-desktop-after.png",
+      "bytes": 198923,
+      "sha256": "fc5278205b1425f7bf3495aeaa465459a842b3371e12ce98786ce51794a4b37c"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/people-mobile-after.png",
+      "bytes": 66419,
+      "sha256": "37e924801217e314ebafc057f9d3b9cb0bd377b7a17f34f8fdf3e3cc3957e831"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/projects-mobile-search-final.png",
+      "bytes": 58445,
+      "sha256": "d1092cb11241b0731164aa436367d495fd282daddd046fd84564c95c2c8dd6ec"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/sidebar-last-leaf-1100-final.png",
+      "bytes": 82233,
+      "sha256": "9b06f72048c0b956b5791f5eb2788ac2734b018908de37fb6720800d8bfe018d"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/sidebar-last-leaf-1440-final.png",
+      "bytes": 112549,
+      "sha256": "641ca874fc31158deef253198b541eb4f351bca96374cc3b7a122900ab921da8"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/upgrade-2.1.5-public-receipt.json",
+      "bytes": 2857,
+      "sha256": "8163a93b14ce433ff2571e38045729f97521e94e0039abed140b6c27919898cb"
+    },
+    {
+      "path": "docs/qa-layout-2026-10-07/validation-summary.json",
+      "bytes": 8704,
+      "sha256": "b36c51fc7164a63739737d46d7304dd5bbfc239196875bbece23489e924cbb7d"
+    },
+    {
+      "path": "docs/qa-login-mobile.png",
+      "bytes": 27227,
+      "sha256": "e133a2e263b13a3756375ce55d689ee82b873605583e56a2ded9857d7e73c384"
+    },
+    {
+      "path": "docs/qa-login-next-final-evidence.txt",
+      "bytes": 10113,
+      "sha256": "5de84ca4c30601e7f5ca0b8988f3bdc76ed98d2721c4cd7e19f611c970ad18ee"
+    },
+    {
+      "path": "docs/qa-messages-dark-mobile.png",
+      "bytes": 32354,
+      "sha256": "76a67bed3a0256ab2c7e72a2ac5330d387c404fc6c60f1b9f69b33eee3a4b356"
+    },
+    {
+      "path": "docs/qa-messages-desktop.png",
+      "bytes": 74177,
+      "sha256": "64a9271af49e62e3e4a350a5074b761f209ceebf126df74eb4910a5b12f13d08"
+    },
+    {
+      "path": "docs/qa-messages-immediate-read-after.png",
+      "bytes": 77430,
+      "sha256": "8fe4166000e9b31bc47026c5124b3c8f71b2f66a106203c05b554ddfccfac591"
+    },
+    {
+      "path": "docs/qa-messages-mobile-detail.png",
+      "bytes": 46501,
+      "sha256": "a084cabca80432c1dbcbb48c7800cf6f5858c5996ed436d112f74813c0720c13"
+    },
+    {
+      "path": "docs/qa-mobile-global-nav.png",
+      "bytes": 25713,
+      "sha256": "6bf0382edc7b61861a637a4b930348bd12e47fe3ec24098a074751dc43eefb67"
+    },
+    {
+      "path": "docs/qa-my-schedule-count-after.png",
+      "bytes": 58629,
+      "sha256": "fcd1d12f1b8647ca00eb10374dcfd95550ea70d20b543b3ee0426297c60c8a54"
+    },
+    {
+      "path": "docs/qa-my-schedule-count-before.png",
+      "bytes": 27576,
+      "sha256": "d688dfc2e641c0b3028754e5b11f8e56d50f65a750d5087ee7d084302f8f84e7"
+    },
+    {
+      "path": "docs/qa-my-schedule-mobile.png",
+      "bytes": 19054,
+      "sha256": "9609b402a14883861dae3b4eaf0bc21a6565e8c1a52be4b7894db9e037f681cc"
+    },
+    {
+      "path": "docs/qa-people-overview-mobile.png",
+      "bytes": 54915,
+      "sha256": "9c6fe1482e0adb71c098d6e2e358bf7a43b14b5d84d29709c0979b2ba25e27eb"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/actual-pg-permissions-readback-230.json",
+      "bytes": 564,
+      "sha256": "1be4b76ab39d8c07b4847753c8654dc4519e4ad312608756a502e2823cd56dad"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/backend-full-receipt.json",
+      "bytes": 504,
+      "sha256": "8acb4e7ae334ab474786ddf8e0c9ee2298729970f02ba2f4c01bbbe352972ba5"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/browser-archive-denial.json",
+      "bytes": 127,
+      "sha256": "cfd2b2ef2af1ed84588f557d222071c82bdaf15812746326883fc8dda6ba3d55"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/browser-audit-denial.json",
+      "bytes": 94,
+      "sha256": "dc82d6f7ddb497c19165d7705bac65e5c4c922ba423be06c08c73c569fad3091"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/browser-cas-merge.json",
+      "bytes": 136,
+      "sha256": "a8e4568e5dbd3553dc50b815c8dd796c4d7a0cc7f20df4cd9b2dc75a4e56a454"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/browser-cleanup-230.json",
+      "bytes": 338,
+      "sha256": "63403cbcd7cd842f11293a6b349a3ec933cb369fd5cab878c30452f218f74eeb"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/browser-field-independent.json",
+      "bytes": 476,
+      "sha256": "280a9cff345e652bf0f59807f415155434b4ae2320580a9b5a34a89b9e367c27"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/browser-grant-revoke.json",
+      "bytes": 316,
+      "sha256": "2c665af40248c3ab516af061eefb1722a545ff37dfad736f3509a7cdf55f57f0"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/browser-mobile-dirty-save.json",
+      "bytes": 259,
+      "sha256": "b1dfc0475ffe8a16be34556af61aa9ab2deb41ee2f4c6da58f0863bff5e0b1aa"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/browser-qa-restore.json",
+      "bytes": 118,
+      "sha256": "184ebc642445bcbfec0e3462d683e9de5a9b614e38c2d60b45dedb2057b4f2a6"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/browser-unsaved-protection.json",
+      "bytes": 97,
+      "sha256": "a7a8d8b305cc12a2c93b24e28d2c11bcc279aa1157afb25a6e917b7059d9b09b"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/browser-vehicle-view-only.json",
+      "bytes": 163,
+      "sha256": "54ebbe9b120b3003b3d73b787133f0fb9d4f9794783c5df73af372a198a76430"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/frontend-fresh-npm-ci-fc07-proof.json",
+      "bytes": 1220,
+      "sha256": "27266e44b8ed0f033e6c544edfdb367456c63496bfb0a360a1b69eb05227e5eb"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/frontend-node22-final-source-check.json",
+      "bytes": 1073,
+      "sha256": "56c651652f6d8fbea0836773de64e83d89eb7b6764af08cf0e8e0910879d5c1c"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/image-load-proof-2.3.0.json",
+      "bytes": 2582,
+      "sha256": "cfc44c280d5ee9588d795f209cef1d141b58d21aecbdd46bdfbae371976bf04d"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/launcher-230-public-proof.json",
+      "bytes": 435,
+      "sha256": "0cbdd2472ac8d3d805a5f6d56fef88d3e15c84f28aefcc8f6837608d846f9fe9"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/offline-image-230-public-proof.json",
+      "bytes": 788,
+      "sha256": "032c3d7c6d630cd8ac99f0ebafcce1321ac92309311925353a65cc82ae0aba63"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/pg-after-browser-2.3.0-comparison.json",
+      "bytes": 1138,
+      "sha256": "e54cbe91d97ad630046eb8446aeb6e0d1912d0353618664d90f3e2828e817e08"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/qa-mobile-dirty-save.png",
+      "bytes": 91278,
+      "sha256": "821062d22b07ec03386bd1c7a4452d515c767d439c67f6b84d6eb5409cc74925"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/qa-visual-desktop-1280-dark.png",
+      "bytes": 188064,
+      "sha256": "9e20d03136561d471fd9861e6c67bdc2ac6dd9a7544dfaa280772d68fe0f7cdb"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/qa-visual-desktop-1280-light.png",
+      "bytes": 183392,
+      "sha256": "5938a553e8b563d4f2572bc5d29dcedb8561bc0eca4487c5f358441c70948e63"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/qa-visual-final-check.json",
+      "bytes": 3169,
+      "sha256": "9db283d5d1bfe01e75a84a1411c20f15864c1e4cdfa36a0d1ff417d45a972a55"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/qa-visual-mobile-390-dark-final.png",
+      "bytes": 76905,
+      "sha256": "0ffd7e04f9e8773c7481eb438e72a99e8578dae79806eeb071bc35743fadef0e"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/qa-visual-mobile-390-dark-row.png",
+      "bytes": 77269,
+      "sha256": "66a9b9a81d46df6afe981f5190a9fcacc1a44ba9dfaeb75c89e311fcc9f7766d"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/qa-visual-mobile-390-light-row.png",
+      "bytes": 74316,
+      "sha256": "eb4a4b802dfc16528797dd8d9af80bc08294074f9b106e6da0632c05ca5122a5"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/qa-visual-mobile-390-light-top.png",
+      "bytes": 86648,
+      "sha256": "4652565e54bb7ad9d05c8cb5b6485fa64b1469a487845333280a1f3f49c1af98"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/qa-visual-sticky-after-390-dark.png",
+      "bytes": 71391,
+      "sha256": "e9b5149f3568fb7c79270d97fd956354159005d18b363eeea18779bf7b201439"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/qa-visual-sticky-after-390-light.png",
+      "bytes": 69307,
+      "sha256": "828572e73973fac47451873b9b0280d7e8e8852ae87ffe7edd242827d2ee1650"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/qa-visual-sticky-final-check.json",
+      "bytes": 1493,
+      "sha256": "213b4f646ae9440c7e2cd3a8f2f88bae6906edcb68246ed183c537ca50e8f524"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/qa-visual-sticky-last-focus-390-dark.png",
+      "bytes": 71936,
+      "sha256": "9c649ca464142fbdc372044818bbd3d3f59986abd84effbb99c956124a459658"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/qa-visual-tablet-700-dark.png",
+      "bytes": 116304,
+      "sha256": "cbbaef1f88bfe3455530dafd52a2ad50988bf9677a5785f92281a31943058623"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/qa-visual-tablet-700-light.png",
+      "bytes": 114878,
+      "sha256": "e2ed1263d48bcf828a98e742cd2be2e0a010e3ea14948ba13e687ec9c15ab7a0"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/rollback-223-schema-compatible-image-proof.json",
+      "bytes": 622,
+      "sha256": "3c3c7eb81d5f0201733bbcdd7a73c1168f17ba7ec3104561c53615a4cf700640"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/scheduler-watermark-after-browser-proof-230.json",
+      "bytes": 903,
+      "sha256": "3e82fda1a6b6039cda03224d5a33a89ac552185e61c598f4965d689b5f647d04"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/upgrade-2.3.0-public-receipt.json",
+      "bytes": 2914,
+      "sha256": "bcc2e4434a4cdb080db112b8fd8e5f16294d3649f814f4f6525d7b5e6b01b0dc"
+    },
+    {
+      "path": "docs/qa-permissions-2026-10-08/validation-summary.json",
+      "bytes": 5872,
+      "sha256": "c8a2b422dd04e9981e01622cfa03511b2c74cb4b8aa3aa67a5257cfc7e232164"
+    },
+    {
+      "path": "docs/qa-pm-account-keyboard-before.txt",
+      "bytes": 381,
+      "sha256": "e5a56f942e7d85c2f6ece742ce1747cfaae15fe7eaaa5051c9d1a7edaddd02ad"
+    },
+    {
+      "path": "docs/qa-proactive-2026-10-12/actual-login-238.png",
+      "bytes": 36228,
+      "sha256": "9ff37895296662642a225ed71a6a0207df697b387ecd23defa6d764f0d63a7b5"
+    },
+    {
+      "path": "docs/qa-proactive-2026-10-12/actual-old-page-refresh-238.json",
+      "bytes": 695,
+      "sha256": "22280fce67c6ab1b4a4b3ee642fd4da55462cc6882f6a487f06ec59e1a29a571"
+    },
+    {
+      "path": "docs/qa-proactive-2026-10-12/browser-notifications-failure.json",
+      "bytes": 179,
+      "sha256": "955cf3a0c6b50ec24221fc133e8deb0535cde4bf02f6f745c7b54fb049b5b833"
+    },
+    {
+      "path": "docs/qa-proactive-2026-10-12/browser-project-progress-failure.json",
+      "bytes": 2311,
+      "sha256": "5198a699b4603d8d60d188bdd210051eb0325e87a882b1f9d3deafa9bef0bbb8"
+    },
+    {
+      "path": "docs/qa-proactive-2026-10-12/browser-qa-238.json",
+      "bytes": 2743,
+      "sha256": "d82a5ae1c1a6d666af9598cd1792f2a3095129dcfb968c01a94e5a98ef207400"
+    },
+    {
+      "path": "docs/qa-proactive-2026-10-12/browser-report-uncertain.json",
+      "bytes": 1677,
+      "sha256": "38aa169d808bd593bfe1f3079c26a9fbf20937d00043b1b25da96819f5a763c4"
+    },
+    {
+      "path": "docs/qa-proactive-2026-10-12/dashboard-mobile-dark.png",
+      "bytes": 32526,
+      "sha256": "41dada947340daefb2bd961911c687438ba36753f85d47b0cdd2e1dc697c1204"
+    },
+    {
+      "path": "docs/qa-proactive-2026-10-12/ego-cleanup.json",
+      "bytes": 213,
+      "sha256": "479e1de36549605021c5b18fa660e2ab0f77d3aada5d6f5fac7a043ba1f7ef8b"
+    },
+    {
+      "path": "docs/qa-proactive-2026-10-12/frontend-node22-dist-recovery.json",
+      "bytes": 30420,
+      "sha256": "44d3c10a8932f3b837705d560b5b311e4f8c66f668c6ca7fd473cab47a69e684"
+    },
+    {
+      "path": "docs/qa-proactive-2026-10-12/frontend-node22-final-source-check.json",
+      "bytes": 606,
+      "sha256": "b92a23f31166f1de47e0f0de86c63b4266944ab1d893c068ac751d1ffea9e8ef"
+    },
+    {
+      "path": "docs/qa-proactive-2026-10-12/frontend-node22-final-source-manifest.json",
+      "bytes": 44831,
+      "sha256": "231fd2835f321e83ac291988f4eb11d859466362b1248e83d89dba22d61559c9"
+    },
+    {
+      "path": "docs/qa-proactive-2026-10-12/frontend-node22-production-build-final.log",
+      "bytes": 23443,
+      "sha256": "61f8c8456b6307df9706209f4bd56fa48096fcaeb957990824b9232f5bb2423a"
+    },
+    {
+      "path": "docs/qa-proactive-2026-10-12/frontend-node22-typecheck-final.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/qa-proactive-2026-10-12/frontend-node22-utc-final.log",
+      "bytes": 201212,
+      "sha256": "863d4b6fb4278931fa678be072e7612f4ea965b361880db5e6224ad16192ea45"
+    },
+    {
+      "path": "docs/qa-proactive-2026-10-12/frontend-validation-238.json",
+      "bytes": 99370,
+      "sha256": "c04eb038c3228ab629378d75f21810e1dc6bdf5520af9a734306a5acbc2dd0a4"
+    },
+    {
+      "path": "docs/qa-proactive-2026-10-12/image-2.3.8-build-proof.json",
+      "bytes": 2780,
+      "sha256": "25f440082630361aa2cb06035a4f562f96ba667b7e95454938fb2f52c68ea7c4"
+    },
+    {
+      "path": "docs/qa-proactive-2026-10-12/image-2.3.8-delta-lineage.json",
+      "bytes": 2599,
+      "sha256": "a27593b61c76d8c2d3cfc19796f0c9d5967ca81d5414e41800cef185468d88a8"
+    },
+    {
+      "path": "docs/qa-proactive-2026-10-12/launcher-login-version-update-238.json",
+      "bytes": 625,
+      "sha256": "3e8e4094a917cae3307e7494701c7e0a53709f98b2fa0b4e77a263b88e57036d"
+    },
+    {
+      "path": "docs/qa-proactive-2026-10-12/live-source-static-services-238.json",
+      "bytes": 1041,
+      "sha256": "3f9956e45b2dc0a470bbb4ef600ce21d67e8399c7c8f8ee46e08d154f7d9dd4e"
+    },
+    {
+      "path": "docs/qa-proactive-2026-10-12/manifest.json",
+      "bytes": 4731,
+      "sha256": "e88dcced9681f7a4b4220af35271aa27a4f7c5aaf5d5af7c55ae73ea43ef3da5"
+    },
+    {
+      "path": "docs/qa-proactive-2026-10-12/migration-backup-initial-preservation-238.json",
+      "bytes": 716,
+      "sha256": "a5405d766f890a3f3c82cbb184657b5497b60925a4edb68fd5a390f3a0860d7d"
+    },
+    {
+      "path": "docs/qa-proactive-2026-10-12/migration-backup-restart-preservation-238.json",
+      "bytes": 716,
+      "sha256": "a57798ed8afd48629c854ae0adf85bffa583528aa317e946415c49603997ad0c"
+    },
+    {
+      "path": "docs/qa-proactive-2026-10-12/notifications-desktop-light.png",
+      "bytes": 74338,
+      "sha256": "7a2fa6cbcca54f15dfd92a080279ba07f06f6ac3eaba3d33bbcd7a01f19a7dad"
+    },
+    {
+      "path": "docs/qa-proactive-2026-10-12/notifications-mobile-dark.png",
+      "bytes": 40535,
+      "sha256": "8043af880ff10ba638b26540967fb3fa5861c25fe9f741c15a3cec584ba24c32"
+    },
+    {
+      "path": "docs/qa-proactive-2026-10-12/projects-mobile-light.png",
+      "bytes": 31921,
+      "sha256": "7dc4bd4962cb8152033320828a121eee11cc3a46ece08c0ac66c2eae76fa15b4"
+    },
+    {
+      "path": "docs/qa-proactive-2026-10-12/qa-server-cleanup.json",
+      "bytes": 245,
+      "sha256": "e79609f9e2f94f31b8220653a775e290b6034e3ef6e48587732e5f8da08bdfe7"
+    },
+    {
+      "path": "docs/qa-proactive-2026-10-12/scheduler-watermark-time-proof-2.3.8.json",
+      "bytes": 910,
+      "sha256": "b3d557ec0fa93ec1ae2a01febb9628fef94c256aad82b523c7e138bde9d3bf0e"
+    },
+    {
+      "path": "docs/qa-proactive-2026-10-12/upgrade-2.3.8-restart-proof.json",
+      "bytes": 2529,
+      "sha256": "0d98c0198640ff3dcbacf982cfef5edd925958b192241bb47cd14812df4e9117"
+    },
+    {
+      "path": "docs/qa-production-account-focus-after.txt",
+      "bytes": 2615,
+      "sha256": "b70527eca2644e61e3e02dc791da2a1c25f6db57a7a160b23946eb5dbbfe54b6"
+    },
+    {
+      "path": "docs/qa-production-archive-unknown-fallbacks.json",
+      "bytes": 29207,
+      "sha256": "e541eb57c00136221c053314f0a59853389a806be79bb3cb404845a57d0f7f8f"
+    },
+    {
+      "path": "docs/qa-production-archived-export-after.txt",
+      "bytes": 88,
+      "sha256": "258529af8440066f35b98875d89c21f22c66da163209f2b368eb6be028ccff0f"
+    },
+    {
+      "path": "docs/qa-production-archived-export-before.txt",
+      "bytes": 5430,
+      "sha256": "aecad54ce07b30ba57a7cb3c1b03ca373cf44e9c3d0c62d54e9cd3ab1fc3392b"
+    },
+    {
+      "path": "docs/qa-production-global-routes.json",
+      "bytes": 33721,
+      "sha256": "ed20eb61ae31ac3033d908bffd48bbb58fb20fa56cbd22a2463d87782523c5e0"
+    },
+    {
+      "path": "docs/qa-production-project-routes.json",
+      "bytes": 41264,
+      "sha256": "367b41fd534edf2197a84780791cc187e051c3c5198123cbd53384cef6da5499"
+    },
+    {
+      "path": "docs/qa-production-worker-routes.json",
+      "bytes": 14034,
+      "sha256": "b4b9040719418bd311c171ca60fca9a55a0eac3e013d7954c2212248333c61ef"
+    },
+    {
+      "path": "docs/qa-project-history-after.txt",
+      "bytes": 13634,
+      "sha256": "3b5a258ee30b46dedd9120f53c90b9f92bbaa42a09ffc60be405189bbbd03251"
+    },
+    {
+      "path": "docs/qa-project-history-final.txt",
+      "bytes": 14054,
+      "sha256": "2ba8896a2d6d270acdb179fbad83fcf4d8acdd83659952c67aa19dc2431bedc3"
+    },
+    {
+      "path": "docs/qa-project-list-desktop.png",
+      "bytes": 87405,
+      "sha256": "07f3ed1eb3a2031422ea802ce468b29d3662f64759a732024e83e7a14e482e37"
+    },
+    {
+      "path": "docs/qa-project-list-mobile.png",
+      "bytes": 58098,
+      "sha256": "7e1ad51e86075dd3cc33b5f4a110e99a7b7884c6edeefcfb4f8f8905759b972e"
+    },
+    {
+      "path": "docs/qa-project-recovery-2026-10-08/actual-browser-231.json",
+      "bytes": 624,
+      "sha256": "e7be720a14c703699120732277ff1aade0ad826531f374218dc45408b31bfe65"
+    },
+    {
+      "path": "docs/qa-project-recovery-2026-10-08/browser-acceptance-231.json",
+      "bytes": 685,
+      "sha256": "c23608da5ebb388a9f44a077eda7fcbe354345a744532657c323779274aedcaf"
+    },
+    {
+      "path": "docs/qa-project-recovery-2026-10-08/browser-layout-231.json",
+      "bytes": 4971,
+      "sha256": "0570f5fb4fca049a0b5b60b6b37c2cbb7891bb44dbbce04ae26345ecab075c45"
+    },
+    {
+      "path": "docs/qa-project-recovery-2026-10-08/browser-postgresql-231.json",
+      "bytes": 755,
+      "sha256": "128c05d16402920989843b5de961e0cc2f12ac91272cd5cc08c991bdc3031753"
+    },
+    {
+      "path": "docs/qa-project-recovery-2026-10-08/browser-sqlite-231.json",
+      "bytes": 1514,
+      "sha256": "e940b07f3da0ee24bd8970722628861b8ef20c6a3c36bd06cbb42073109143c2"
+    },
+    {
+      "path": "docs/qa-project-recovery-2026-10-08/deployment-defaults-231.json",
+      "bytes": 1800,
+      "sha256": "3b7010241a7b5680075bc50ef550dc0c41271dbde29b5eef7f9f2ceb3314d84e"
+    },
+    {
+      "path": "docs/qa-project-recovery-2026-10-08/launcher-cleanup-231.json",
+      "bytes": 851,
+      "sha256": "b7f25b40fe7c2a81a42e7888a4bb51ae72f2d8e26e1130d84d3b82b775431519"
+    },
+    {
+      "path": "docs/qa-project-recovery-2026-10-08/offline-image-231-public-proof.json",
+      "bytes": 1303,
+      "sha256": "b6d75d09d89427928623cea915b6e78262aea3cc15a778ca0a7fea3792eb0589"
+    },
+    {
+      "path": "docs/qa-project-recovery-2026-10-08/screenshots/delete-1280-dark.png",
+      "bytes": 101463,
+      "sha256": "03abea22ca3297f8497b2bc8693ba3793d32726aff10331a97d986a3012d622e"
+    },
+    {
+      "path": "docs/qa-project-recovery-2026-10-08/screenshots/delete-1280-light-stable.png",
+      "bytes": 100841,
+      "sha256": "6391497196c7f92ad69e567d8f5e5dc078034f268078b4e1f5f15efb6995926e"
+    },
+    {
+      "path": "docs/qa-project-recovery-2026-10-08/screenshots/delete-390-dark.png",
+      "bytes": 65459,
+      "sha256": "4363d3f2f6fd7082e744d3205dd024289b1045c545a41e74b93c5e8853fddaef"
+    },
+    {
+      "path": "docs/qa-project-recovery-2026-10-08/screenshots/delete-390-light-stable.png",
+      "bytes": 63417,
+      "sha256": "66cdd346f4d8c3bd56e3bf63444a265cd39b0055cdba06f1621f630ade74f4ef"
+    },
+    {
+      "path": "docs/qa-project-recovery-2026-10-08/screenshots/delete-700-dark.png",
+      "bytes": 79570,
+      "sha256": "007f6f417bef5e4f2b8b8f7d08c1eb29cca52ac940799f7903855bbcfd2d2fae"
+    },
+    {
+      "path": "docs/qa-project-recovery-2026-10-08/screenshots/delete-700-light.png",
+      "bytes": 77911,
+      "sha256": "c260802490c36a5ddea93df74745fe75da984d22bfaaf0351793da7190a51a79"
+    },
+    {
+      "path": "docs/qa-project-recovery-2026-10-08/screenshots/edit-1280-dark.png",
+      "bytes": 94881,
+      "sha256": "285b68bc6c9fc6cb9cd775e4ad72656574e9ba458ee1ac7230e3f91fa1e57f2d"
+    },
+    {
+      "path": "docs/qa-project-recovery-2026-10-08/screenshots/edit-1280-light.png",
+      "bytes": 94266,
+      "sha256": "1d23562e95b2b36c8ce54111932aac72d58cfe50c805f7d37a4ed62534bce4be"
+    },
+    {
+      "path": "docs/qa-project-recovery-2026-10-08/screenshots/edit-390-dark.png",
+      "bytes": 54824,
+      "sha256": "c84b57160cfade1a3705dfce19825952161235eb3b063e502c000c807ea4921c"
+    },
+    {
+      "path": "docs/qa-project-recovery-2026-10-08/screenshots/edit-390-light.png",
+      "bytes": 58463,
+      "sha256": "48de60c6dcbc3c06ef862e67faf214ee917e20185a768d7ccc0714d77e336c68"
+    },
+    {
+      "path": "docs/qa-project-recovery-2026-10-08/screenshots/edit-700-dark.png",
+      "bytes": 71321,
+      "sha256": "be00047447026135ad750c5b6b61eb53ffe0fd87071910eacff792996dbf3546"
+    },
+    {
+      "path": "docs/qa-project-recovery-2026-10-08/screenshots/edit-700-light.png",
+      "bytes": 75230,
+      "sha256": "5c07c16809cdb1bf396337c0fbca33bddfff30c9b5b9db024a43effa6c67abfd"
+    },
+    {
+      "path": "docs/qa-project-recovery-2026-10-08/screenshots/recycle-1280-dark.png",
+      "bytes": 80065,
+      "sha256": "79df3b61d6dc514fed0c711feb09186a7f4a7c6c52d13a6cea25bba40aa4ace2"
+    },
+    {
+      "path": "docs/qa-project-recovery-2026-10-08/screenshots/recycle-1280-light.png",
+      "bytes": 76877,
+      "sha256": "8e8f52c74f55a479630429601f93bf694f51143ee9ae949e112e4f193085a1ef"
+    },
+    {
+      "path": "docs/qa-project-recovery-2026-10-08/screenshots/recycle-390-dark.png",
+      "bytes": 65344,
+      "sha256": "dee76a7b6bd8d397f8b4e8b5b4fbf49f3a63a2622de22ec7e4dfd69a8908ba2d"
+    },
+    {
+      "path": "docs/qa-project-recovery-2026-10-08/screenshots/recycle-390-light.png",
+      "bytes": 63203,
+      "sha256": "28275cc411870f2e0c21d05f55561cc86a2865c74fe302076106f1ee0f405095"
+    },
+    {
+      "path": "docs/qa-project-recovery-2026-10-08/screenshots/recycle-700-dark.png",
+      "bytes": 69385,
+      "sha256": "8785fee5658c7158652d782d6c547fb3bc276ba2b77b11083f0998a6f0be61c1"
+    },
+    {
+      "path": "docs/qa-project-recovery-2026-10-08/screenshots/recycle-700-light.png",
+      "bytes": 66858,
+      "sha256": "c4512e81368444364b16baa3e1cb6178df6f45b92a1db1ec355e02c177e24d59"
+    },
+    {
+      "path": "docs/qa-project-recovery-2026-10-08/source-validation-231.json",
+      "bytes": 932,
+      "sha256": "b2680003508bd7ce67b76e6dc80bc41311c87af8db15ae71b8ce14b02e119bf5"
+    },
+    {
+      "path": "docs/qa-project-recovery-2026-10-08/upgrade-2.3.1-public-receipt.json",
+      "bytes": 1537,
+      "sha256": "5e133a287ea10183e5b8d0910276a7f770131f1f0abc032288daf3fc5b4feafc"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/accounts-mobile-final.png",
+      "bytes": 56121,
+      "sha256": "e04c49a14d7fa99e292e3fcf3aa58f2b89fec6b97d4ed2e9162c62420cbfc525"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/actual-pg-browser-readback-220.json",
+      "bytes": 753,
+      "sha256": "4f454ea2bcb1984dd52f2f3614027ef0770b9e7ab566a07f47058628618fc733"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/backend-business-source-reuse.json",
+      "bytes": 604,
+      "sha256": "3602bea62bfa1bd70e4062728c1d1881747d30d24c251ce9245a92ca7a1a47d1"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/browser-accounts-validation-cancel-mobile.json",
+      "bytes": 171,
+      "sha256": "6e2728fdb3c09b61c895dd4526c39159f02008426ae2f391bfc329a90fdaeaea"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/browser-backup-restore-cancel-mobile.json",
+      "bytes": 354,
+      "sha256": "b176828facda089045936c564aa14dd5c49f75bb3f6e05aa45d427922877ef07"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/browser-cleanup-220.json",
+      "bytes": 279,
+      "sha256": "99745fa135aae177ebef7d668223bda24f7f9a69fe0bfc83321257fae206db2e"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/browser-feedback-submit-mobile.json",
+      "bytes": 121,
+      "sha256": "d33475660e3fd99419d1e1d0f9edcc997936ecc8621919e85463d8316912f8a4"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/browser-governance-cancel-mobile.json",
+      "bytes": 57,
+      "sha256": "4cf3b9f8ae30309edb68cc3bccd63e06e4f5529c20d631a0e6bc12403c987f3f"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/browser-inbox-cancel-and-header-mobile.json",
+      "bytes": 665,
+      "sha256": "0a5012f20bbaee9db002bfaaa8d213207c61e1d9842720d9bcc10c085d239d9b"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/browser-inventory-overview-mobile.json",
+      "bytes": 131,
+      "sha256": "c45fabe72c2b3ba19a9b3681858762a17998eed5e4d1fb835cdcc7c991223400"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/browser-messages-mobile-detail-focus.json",
+      "bytes": 626,
+      "sha256": "87e615240dc193f6e8139c161955c683fce2ac8c08aba5afc15e2e792a6acea4"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/browser-nine-global-1440.json",
+      "bytes": 5866,
+      "sha256": "fb545dc04ed4ff1a1a425452e63bcf8a5ddd8747261945b06fd6c89b943a58d0"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/browser-nine-global-390.json",
+      "bytes": 14913,
+      "sha256": "a247980dccc5c7a7dfef5847a44e6ffc583e6d1f8725ea2f92a9e08d3aba7b06"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/browser-notifications-config-cancel-mobile.json",
+      "bytes": 166,
+      "sha256": "cb648292aaf3cfe0b5a77c655dcdda0bf73536b7b351b392df7ec9513390191f"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/browser-owner-qa-file-cleanup.json",
+      "bytes": 115,
+      "sha256": "6bfd3ffc2320dbed1a932ad57d2e47de54ece14216ae2c25c9e4270985c2f29c"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/browser-project-contact-search-before-focus-fix.json",
+      "bytes": 482,
+      "sha256": "fef9ab32e40c1e9c4d5ed5b105290753ba35d82ea6a86459a7be2d4bfd527f40"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/browser-rapid-menu-close-focus-mobile.json",
+      "bytes": 215,
+      "sha256": "6bcf7f6fb94c16a2bf81163f3e3d47de5c12aff0588620c297e7fb91101f884b"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/browser-statistics-mobile.json",
+      "bytes": 330,
+      "sha256": "c6efa8444609a86c4b6e893b39d8de42e9c46e20572fdd16fa837512589bc5bf"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/browser-template-edit-cancel-mobile.json",
+      "bytes": 157,
+      "sha256": "b74a4ca47e119ce9bfe4f4d442275f578796235f16871263d8fd410a904f6f66"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/browser-token-cancel-mobile.json",
+      "bytes": 372,
+      "sha256": "b7b294f94899b87d235621bb1fb606adc174921927610621223684130f399605"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/browser-vehicle-types-cancel-mobile.json",
+      "bytes": 117,
+      "sha256": "1816e7f012522a557eb2c76ee23c039cde357d2d77fe18809ea8e54058f266e6"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/core-operation-pages-public-summary.json",
+      "bytes": 1592,
+      "sha256": "2cd1b0ea5e7fb772b1c02c0ca4e29f2f4c76f011f352076982851372e21deeb8"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/create-details-final.png",
+      "bytes": 167631,
+      "sha256": "c3009235abc88a5014972580657bc9699d1b9eb0ceb104ff667b1b3c0cdde453"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/creation-first-use-qa.json",
+      "bytes": 842,
+      "sha256": "628dc2d33fa4500b5d540cf1d072b50c0b1d76c725332aa3ab3b5f625c395c9c"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/dashboard-final-53b6bde.png",
+      "bytes": 132061,
+      "sha256": "87afc96b075a97877e775d559707dda69037aaba34851be8ea8915e4371dee3f"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/dashboard-mobile-final-53b6bde.png",
+      "bytes": 69248,
+      "sha256": "5c27ee7194b43b82cc539c8496826d89b9e120256da29048f106dcf1b07c2a00"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/delivery-after-1440.png",
+      "bytes": 138409,
+      "sha256": "74e0c9e50dd983735eddad2f6df19c215fa2dda05dcf11184fd927563781b0e2"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/delivery-default-filter-after.json",
+      "bytes": 173,
+      "sha256": "3b77210a0c52b8f2e362269fa2f4341f60b2d539f11ffc4d7a157f9eb795ac96"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/delivery-task-link-after.json",
+      "bytes": 668,
+      "sha256": "2b80abd3abf0f94fca5a413e62ec994629e199a0451ff8e56f9fc21b6a8f8e62"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/field-pages-public-summary.json",
+      "bytes": 1321,
+      "sha256": "fc6fe4186a26065a1b4972352939db5eb83b8396af2b80c54d51cac57b8f1b75"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/files-after-1440.png",
+      "bytes": 76377,
+      "sha256": "20625035e7b86c8733c16aee6f1f7dbaf187ecddd7a9774592f48c69aeacd532"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/frontend-final-source-and-build.json",
+      "bytes": 1098,
+      "sha256": "8d1f362960d33bef8fbf47469e9ae14d463c718e8584fcbc5f36db0548c4f063"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/frontend-regression-diagnostics.json",
+      "bytes": 1908,
+      "sha256": "c25b5aa4c3a24302b58199a1a434e063937fa3b66c793c8a1438b8f2ef092009"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/global-inbox-mobile-final.png",
+      "bytes": 78550,
+      "sha256": "9db432f53147fc160d7810e074258365d5630c0fb3d7cd417399691abaa8bc10"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/image-2.2.0-build-proof.json",
+      "bytes": 837,
+      "sha256": "3a2210cc82158db07a4be5e256524327d1a78b336018f83eda9114c8603ea495"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/image-historical-layer-scan-2.2.0.json",
+      "bytes": 6275,
+      "sha256": "1f094541a65c0118b00c1cdb657a17104446ba0435ac34093c9457e6c99e77d4"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/image-load-proof-2.2.0.json",
+      "bytes": 1565,
+      "sha256": "df2d56e5223c5ffc8f15681d681c0d1b586708b14f8ebf3dc0804c9d34aff4fd"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/inventory-after-1440.png",
+      "bytes": 97238,
+      "sha256": "87fe0381b9bc5334a57456259e52a50442765d8a3eb25c8045c56edb36525370"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/inventory-overview-mobile-final.png",
+      "bytes": 76558,
+      "sha256": "39222e34456bead24b22229ccd045c7ea5c107f8a97a3f2a8d3c1eb061c50782"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/issues-after-1440.png",
+      "bytes": 90623,
+      "sha256": "9109cea3d7b476b6538f1e56074aa1153582d35d032ecd06c8945bca855cff6f"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/launcher-220-proof.json",
+      "bytes": 284,
+      "sha256": "1d194f3d9582638daca559920bb85e4222abd4b16ca966e911f954297081cad0"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/messages-detail-mobile-final.png",
+      "bytes": 29612,
+      "sha256": "cde1e291e63232288a3e3e9db9ef566f167b6ae393e14c93b9946c1a32604496"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/navigation-and-global-pages-receipt.json",
+      "bytes": 2929,
+      "sha256": "49cb45591e0dcab421ab3c3a7837b9da292e51f9a41aa9a969010575bf26c5f3"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/notification-settings-mobile-final.png",
+      "bytes": 48332,
+      "sha256": "810e6f6d50901d3ce8ab979b9c1361e6445e89566f19dc997544995184f10678"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/overview-draft-after.png",
+      "bytes": 123043,
+      "sha256": "4ad78f98604929d69e47efe2c425ec95adf8093beecc2c481f8489e71c848475"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/preparation-desktop-after.png",
+      "bytes": 145343,
+      "sha256": "4f37d4fccd9501a73d7bd7dead8f60d1b1b2b3478413f0470f96cc8d3f554026"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/preparation-mobile-after.png",
+      "bytes": 71401,
+      "sha256": "535d147a4dedbeaeee79b73c9e81e182f5e96f0e9ad7908123be04ba466f0e96"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/root-project-journeys.json",
+      "bytes": 349,
+      "sha256": "09f5b2a635316653734398f94c15b88a470dd88e1f883f5cde004defcd7fc8c4"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/root-worker-today-dark-final.png",
+      "bytes": 49510,
+      "sha256": "febbd2c1ca26550ce6e46c37feb665632fcc47faea9632184e4448bfc6a10280"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/schedule-desktop-after.png",
+      "bytes": 106782,
+      "sha256": "f2999602df2cafb739f631700627d2dc115eb608631916d5882e51d5ffcfb95d"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/selected-product-photos.json",
+      "bytes": 3491,
+      "sha256": "4d28ce19f910e6f23a0bbbce4eb1a28b19cebaac3326072c67154ad80de25cc6"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/statistics-mobile-final.png",
+      "bytes": 53478,
+      "sha256": "754bb0f317bc152cfc33d94486b6a02f3d4825f26849cc3749620d3312763811"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/tasks-desktop-after.png",
+      "bytes": 122133,
+      "sha256": "4c83e352848b1d9365977fee35ca0caf3b85dd32e337cd7c27bf372feb1f05b2"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/upgrade-2.2.0-public-receipt.json",
+      "bytes": 3857,
+      "sha256": "330752b8396b2eddf4d96da458e36ec35ebc67397467820bd2db040c29a9f836"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/validation-summary.json",
+      "bytes": 3025,
+      "sha256": "4b5d1e5304790a7d60b013af4be8df862d1663ab0aeae79e52b7c02fbf2b7456"
+    },
+    {
+      "path": "docs/qa-redesign-2026-10-07/worker-dark-contrast-green.json",
+      "bytes": 142,
+      "sha256": "b098ba5e900f8c721d585d7b24452368b32436743965e9981d9777cb3740d21c"
+    },
+    {
+      "path": "docs/qa-replan-2026-10-07/actual-pg-replan-readback-223.json",
+      "bytes": 1423,
+      "sha256": "f1fe702d90c611a74084de3358deb64d8a16957a77fabeaa1b131fc4d74b8624"
+    },
+    {
+      "path": "docs/qa-replan-2026-10-07/backend-version-only-source-check.json",
+      "bytes": 415,
+      "sha256": "cd03b4242191db2c575a2563908c5786421ff0ab2a926311526f9f590fd15eb0"
+    },
+    {
+      "path": "docs/qa-replan-2026-10-07/browser-cleanup-223.json",
+      "bytes": 338,
+      "sha256": "5c3a5cf729582adfe6550b2f712b31b38c49a90693b54b3fec973b5679013c7e"
+    },
+    {
+      "path": "docs/qa-replan-2026-10-07/frontend-node22-final-source-check.json",
+      "bytes": 1186,
+      "sha256": "fd5dd58c060478d971c057e0553f9225ebad8768e4db9b6922e2d4b40dcf9782"
+    },
+    {
+      "path": "docs/qa-replan-2026-10-07/launcher-223-public-proof.json",
+      "bytes": 429,
+      "sha256": "530faa1f5138bef65bcb2783f3f0df87c63c1598aed751e451c22b8a86cb2295"
+    },
+    {
+      "path": "docs/qa-replan-2026-10-07/offline-image-223-public-proof.json",
+      "bytes": 1181,
+      "sha256": "271ed4d96acfacf6d22700ecc569ca87392fadaf673d14988e493499101ad70d"
+    },
+    {
+      "path": "docs/qa-replan-2026-10-07/qa-replan-browser-final-check.json",
+      "bytes": 1463,
+      "sha256": "b511cc04973900ad41b54ba14bad2361f7d63b0254ad0538900b74f36bafd44e"
+    },
+    {
+      "path": "docs/qa-replan-2026-10-07/qa-replan-header-1440-final.png",
+      "bytes": 128431,
+      "sha256": "8efa4fd6c1ad40c6bc6dbfe3c5cd83383b70f17a2b605cac21c4e76214aa92e7"
+    },
+    {
+      "path": "docs/qa-replan-2026-10-07/qa-replan-header-390-final.png",
+      "bytes": 70496,
+      "sha256": "3f3e2ba81a93df7fc0299d234fad0740155bd2cf5e28d81ecbc1c1f1bc475c6b"
+    },
+    {
+      "path": "docs/qa-replan-2026-10-07/qa-replan-header-dimensions.json",
+      "bytes": 7246,
+      "sha256": "43d2f8734fe8573b6c3aed7941372908999a42b35b0173df736c419af73d37fb"
+    },
+    {
+      "path": "docs/qa-replan-2026-10-07/qa-replan-more-menu.json",
+      "bytes": 174,
+      "sha256": "ddc488089aaa6aa47b2b71349fc8c0c8ea6cb6ebdbdc60a34626270f40b50d95"
+    },
+    {
+      "path": "docs/qa-replan-2026-10-07/qa-replan-preview-390-final.png",
+      "bytes": 95745,
+      "sha256": "18ca36ad1c41168b30bc738f08c0ce40ba566e263a1e4657d22591a9766e1866"
+    },
+    {
+      "path": "docs/qa-replan-2026-10-07/qa-replan-preview-cancel.json",
+      "bytes": 2286,
+      "sha256": "46aa3514479c6cb45198a71b7c49c766d7b7723dec0e55179ddfa03c0ed9462c"
+    },
+    {
+      "path": "docs/qa-replan-2026-10-07/qa-replan-settings-explanation.json",
+      "bytes": 381,
+      "sha256": "e63d8725626dad0d0bc91690e2fbbe9f93ecfd0d60ff0b4031fa81e597666e15"
+    },
+    {
+      "path": "docs/qa-replan-2026-10-07/upgrade-2.2.3-public-receipt.json",
+      "bytes": 2291,
+      "sha256": "fc4937af79d4408d1824a1bb650df28611d7be609c789fb1dda6e51cefa94960"
+    },
+    {
+      "path": "docs/qa-report-month-after-page1.png",
+      "bytes": 100198,
+      "sha256": "7b6f1f1234ecfc5a297fa3bdc13086bfec0e326430dc3f2ea6ff809f7b3d3628"
+    },
+    {
+      "path": "docs/qa-report-month-after-page2.png",
+      "bytes": 76601,
+      "sha256": "221b2d920ed6c5fbb19929e1c23da9952c5b9e6d98cfd21081fdccb025a4acbf"
+    },
+    {
+      "path": "docs/qa-report-month-after.pdf",
+      "bytes": 471038,
+      "sha256": "c0197838a7bdeaeef8bc34d190000bc573f53f316d3f0646a5ab3faad242d55c"
+    },
+    {
+      "path": "docs/qa-report-month-dark-mobile-after-page1.png",
+      "bytes": 100220,
+      "sha256": "0b59deaacdccb2f8550f9a09b9a343d28b59a8ac5f0406f53446f09dc3a1c3b8"
+    },
+    {
+      "path": "docs/qa-report-month-dark-mobile-after-page2.png",
+      "bytes": 76601,
+      "sha256": "221b2d920ed6c5fbb19929e1c23da9952c5b9e6d98cfd21081fdccb025a4acbf"
+    },
+    {
+      "path": "docs/qa-report-print-before-page1.png",
+      "bytes": 127277,
+      "sha256": "288aa41c14c20afbcd58d41ddf3ac5f9537e73befeb95acf18a99e600c288dc6"
+    },
+    {
+      "path": "docs/qa-report-type-keyboard-after.txt",
+      "bytes": 384,
+      "sha256": "3f7ff5c827ef24c2d01b77a185dda66ed8a4c6722a0a5426bbf50a9681f3a585"
+    },
+    {
+      "path": "docs/qa-report-type-keyboard-before.txt",
+      "bytes": 593,
+      "sha256": "1c3e74e815fc2adfcb1262552aa6717be741b60fa214a33dc89df0967ce813a7"
+    },
+    {
+      "path": "docs/qa-report-week-after-page1.png",
+      "bytes": 100234,
+      "sha256": "53d2b4afed7843d32334f0ce906699f6b47466c697ae6c2b06ca4ad8aad504de"
+    },
+    {
+      "path": "docs/qa-report-week-after-page2.png",
+      "bytes": 100991,
+      "sha256": "650161e84e5cc636990d9246a46cd7d006dd4592e7164a7549fc21a2563af3cf"
+    },
+    {
+      "path": "docs/qa-software-updates-2026-10-19/README.md",
+      "bytes": 4782,
+      "sha256": "9f014f90eff301d7cce3af25db14a22b5ff6bb4b43f65838bf6d16153c667049"
+    },
+    {
+      "path": "docs/qa-software-updates-2026-10-19/upgrade-2.4.0-public-receipt.json",
+      "bytes": 3368,
+      "sha256": "0417a955a510df40ae80f100103848abdeb8ff65e596152bf0a48da7ca98017b"
+    },
+    {
+      "path": "docs/qa-software-updates-2026-10-19/verification.json",
+      "bytes": 5218,
+      "sha256": "471afc1f6580fd8d4f0fa4184d602d7f430a34f21f92910ebbd52bedfe55496d"
+    },
+    {
+      "path": "docs/qa-stats-mobile.png",
+      "bytes": 64562,
+      "sha256": "5fa963960299503a07b8a1854aeb77cf8f5bd2a7cf6b6b1006c8f140acb0fe84"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/actual-runtime-browser-final-234.json",
+      "bytes": 643,
+      "sha256": "c13766ca4138eb559ded837d52eb6b050323e006ab016742cb10943c8d20d6f5"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/actual-runtime-login-final-234-1280.png",
+      "bytes": 40085,
+      "sha256": "6eadcdfef8981d6ea1cc11152cc5c11729c55659717c49ced9bdabc91430f7ac"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/admin-coverage.json",
+      "bytes": 6297,
+      "sha256": "10cb2dc9365bc13dc0b5c5c23ede0987cb5ad37a99da83cf6c35e40ab93b7846"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/admin-feedback-mobile.png",
+      "bytes": 40641,
+      "sha256": "4605e72467566a09989c9240fba11a63bd7cda30ad2478c579b9fa398e8acafb"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/admin-findings.md",
+      "bytes": 4118,
+      "sha256": "cd52dc5e122510f60031bcd382b79055105de338308221e2f97a6bbbf923c50c"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/admin-governance-approved-mobile.png",
+      "bytes": 82734,
+      "sha256": "a29293814adb1c5a9bdd1a62fa2cbfb65f6ce94183c74006fbbd670e71c14eea"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/admin-layout.json",
+      "bytes": 247079,
+      "sha256": "22dac3193dff7527d44b09b4717b67d99f371bd9c19726ccc60d7cbfd1c9ac4e"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/admin-permissions-mobile.png",
+      "bytes": 68716,
+      "sha256": "a32c2245acb5805c88e184b7a6aa7fe8808d5bd5767ed7e5d1fabb8b39b1689e"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/admin-recycle-restored-mobile.png",
+      "bytes": 57566,
+      "sha256": "763169d1f9b28b1e547d7388a1a652280ab8877d534a95409e8482dc98a2f1a5"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/admin-stats-mobile.png",
+      "bytes": 47483,
+      "sha256": "4c62b68132e0ff84c395d34e67ad3fc4d38879cea0f474e5bc7ee9e6f6b2cd9f"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/admin-template-save-readback.png",
+      "bytes": 114601,
+      "sha256": "401c9e633d1861a3eec42092f2792f5de6e74aaa5521f139c6942116d8dfc4c5"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/audit-plan.json",
+      "bytes": 3578,
+      "sha256": "a334fd52e14a76fec3f34c3d1ec36095b4c52f72d30bfa83cd0692185575c5a4"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/backend-full-receipt.json",
+      "bytes": 400,
+      "sha256": "11989327ac05bcd863cdb71a5f8810e200aad1ce69e84191114bf23ec8bdada2"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/backend-source-after.json",
+      "bytes": 29944,
+      "sha256": "93d830e0dc6d84de062076fb375a301d1f662b04e8fe20793bd13aa243291834"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/backend-source-before.json",
+      "bytes": 29944,
+      "sha256": "93d830e0dc6d84de062076fb375a301d1f662b04e8fe20793bd13aa243291834"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/evidence-manifest.json",
+      "bytes": 14204,
+      "sha256": "269352a9b3f756a6df0defe153cc03064ee69c93e086b1e59a21b46d2868a5f3"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/field-archive-linked-file.png",
+      "bytes": 71703,
+      "sha256": "8f4834097d2758c16fa1be5a6c11edd7967f3039af407480061cb3d7136571d5"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/field-coverage.json",
+      "bytes": 7560,
+      "sha256": "f3a9561439ae75e3fc9c97009194d8d93645d24e081b3c633238d4632eaaf3c6"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/field-delivery-approved-mobile.png",
+      "bytes": 61727,
+      "sha256": "90e383b689888e9faa71d2e1397e9604fd37a4591933ff3645efce394d906c5b"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/field-findings.md",
+      "bytes": 3692,
+      "sha256": "49b02f9491af7ec7d83d9e817b9e042c97f62c3a2dd0525203308ffa0e5f5542"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/field-import-preview-mobile.png",
+      "bytes": 140706,
+      "sha256": "663aafcf8cae3e87a49f87ededaa5fbe898e3ccf467ce015737d26feb5564e39"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/field-inbox-project-files-readback.png",
+      "bytes": 119979,
+      "sha256": "98d07edadb37ce01c5b02cdefaf403d4ce3052c8a4f9b7f3f3e9ef0561be4697"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/field-layout.json",
+      "bytes": 166335,
+      "sha256": "a2629109416b133789a1dd0263e971a16759c12c36d9bd042908d9f2ffb11bc0"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/field-self-review-after.png",
+      "bytes": 80053,
+      "sha256": "7650a3b3ab84e51a849795fb2c2156c49a34e08972134f51e0fe445659a0adac"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/field-self-review-before.png",
+      "bytes": 79895,
+      "sha256": "8aeb728110329f06c92cafcc958e34443c9e840543ca01d9bedec40b54c96f29"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/field-vehicles-mobile-after.png",
+      "bytes": 50454,
+      "sha256": "d7bd7ddfdcaac781b24975d2e54b31079735599ef0f6d07e3e739e0e6e0cb23b"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/field-vehicles-mobile.png",
+      "bytes": 50537,
+      "sha256": "5751ebf506442213d667b527256624afed9955ddde52eca29ea427db8f325618"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/frontend-node22-dist-recovery.json",
+      "bytes": 29141,
+      "sha256": "655b910506309664ca82de86f286e7e34ba13c0d4458d6858dfbfe65e3cdd09c"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/frontend-node22-final-source-check.json",
+      "bytes": 605,
+      "sha256": "f76f9adc3d63dc97e7ec1a83c0574d83f92ad1d89c4dc4dc528c6fa67e329770"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/frontend-node22-final-source-manifest.json",
+      "bytes": 43117,
+      "sha256": "9eca5cedd28ebfa3ec38bc9afde72d60cbb70070792ef4d18e9426943c4675f4"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/image-2.3.4-build-proof.json",
+      "bytes": 2621,
+      "sha256": "6402766372d7e9437accc051cfaa51edae6e4d6e2e6492dc357a0f568be87392"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/image-2.3.4-delta-lineage.json",
+      "bytes": 3025,
+      "sha256": "0a4130331671bb47c1c61e39c385f8fa8c8bde4d981bd7b60802da1bd973d59f"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/launcher-login-version-update-234.json",
+      "bytes": 460,
+      "sha256": "6b2940811b08bb43b04300b14ecf950fd14ac9b27c7246a91e75ba17a9d1d5a1"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/live-source-static-services-234.json",
+      "bytes": 924,
+      "sha256": "62389052859ae73c79481a9a0eb81c6cb62f38bf38d06eb10729f4d6a783a375"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/login-contrast-browser-final.json",
+      "bytes": 977,
+      "sha256": "5943a34f46b9d2fdd7a9d3f4311f77416480e8605408a85a5e6d6de5ef344881"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/login-contrast-css-derivation.json",
+      "bytes": 699,
+      "sha256": "d90f0293121d938d51c5ee59a926cc0049cdc37f51f77827daee643e0750305f"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/login-dark-footer-after-1280.png",
+      "bytes": 38744,
+      "sha256": "026708b7cd55df83625afd619397e6f1bae5e4da43aa3087542c6175151d0f9c"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/login-dark-labels-after-390.png",
+      "bytes": 17585,
+      "sha256": "f805f9e4bb2e2f0753f97c1e3a4d7e5c42a1572be64aac1d90e46f4652d8ab73"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/login-dark-labels-before-390.png",
+      "bytes": 27964,
+      "sha256": "6418e5d3a9e52a2283f13692775911e1a8760b5b4ea681d5466768f330746bfd"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/root-actions.json",
+      "bytes": 2691,
+      "sha256": "49561f373d39157bd8235406fbcb8ccd6e6d67bdf4d2ae269bcad3bc2d5b1af4"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/root-create-step-scroll-after.json",
+      "bytes": 424,
+      "sha256": "76d8e919542b6ee0c66f8e53edf58044590fda2571001ad0fef4e9dbf6320325"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/root-create-step2-after-390.png",
+      "bytes": 70162,
+      "sha256": "f57b28f9380b312d7cb742a96e6186cae8d65e83fd151db315209d82a10276e7"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/root-create-step2-before-390.png",
+      "bytes": 59941,
+      "sha256": "8d9f4c8e7eaca7fd325b8133fbb0e52d78395a035e24bbde523fb0460c23d8a8"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/root-datepicker-after-390.png",
+      "bytes": 50488,
+      "sha256": "c697a5d8226de390b334d9e8187f85844ce3c8cd85cb72fa8ef20070981ba64a"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/root-datepicker-open-before-390.png",
+      "bytes": 70731,
+      "sha256": "16d2d24abd2dcdcbfe17590ff9594e37cef1bc3f2189b6e13c1aca5150de805b"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/root-datepicker-selection-after.json",
+      "bytes": 40,
+      "sha256": "8a3f9391cedd557a25388fac9db66ee4e2da4268508060e62fd640c56ae4a1e9"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/root-datepicker-shortscreen-after.json",
+      "bytes": 424,
+      "sha256": "0d48431ca6be0740bf9f51520034739e03ea5663d09fde8fd33c85b24ae2e9f1"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/root-layout.json",
+      "bytes": 430347,
+      "sha256": "2d1d3fb4062807e9f9a191c083ba021b43d64a8a56a13c9f7a6a2d1a28e58344"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/root-review-touch-after-390.png",
+      "bytes": 79524,
+      "sha256": "1a5d93418aa53c995dc9f1268fce8e9087143eb1dbc277e3ea567c7f80293a39"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/root-review-touch-after.json",
+      "bytes": 2395,
+      "sha256": "06594c2f32d0eaa2b740a761101cc0e06b2e0f7c315fc8eedda93d9e3945a7d3"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/root-schedule-1280.png",
+      "bytes": 110898,
+      "sha256": "dd34dd856e7f769c94711979d70969fc2634f530daea05745c2bc56e3d8b675a"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/root-schedule-700.png",
+      "bytes": 84121,
+      "sha256": "21d8bdb5a8b9d885a9f38bcd5dc37edcd22bd0c9ca358a316ebe42869374a361"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/root-task-drawer-after-dark.png",
+      "bytes": 35202,
+      "sha256": "239010cf646a14f7014d7229bd3002e3bd999c603916a4c2f0e276c56ec9a5f7"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/source-validation-summary.json",
+      "bytes": 1447,
+      "sha256": "cb7f435fe109f0eb5c8ef797e3aef582c99387466e7790225392b206dace9d01"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/upgrade-2.3.4-public-receipt.json",
+      "bytes": 1796,
+      "sha256": "acedc7e594111620ca3f4f2cae52bdc79aaaa93c234cc23411724a397bbf2638"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/worker-checks-dark-390-after.png",
+      "bytes": 54758,
+      "sha256": "e823b10f407ff0e4759cfbe4c8bb10c07e97ed5a0af2ceffe41f318eea69871b"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/worker-coverage.json",
+      "bytes": 5793,
+      "sha256": "1d4c713d83cc98a21da2c7c3cf2b1b7854bb380e5f1b3d7c7d647aa2be15f42c"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/worker-delivery-390-after.png",
+      "bytes": 52082,
+      "sha256": "a0df1c8ed6d0de3d8885d09cc733090f78f4903f1bc977c310ffb57a35b83076"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/worker-download-after.json",
+      "bytes": 105,
+      "sha256": "f7e3f85c046481a37f6d0b76069b9079b87d48638598367a7bc00c12a08066cd"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/worker-findings.md",
+      "bytes": 9269,
+      "sha256": "0806156d3e2444f4bf0d71340a38a69478a22961d18dc0758152a6ca0041b96b"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/worker-guest-404-return-after.png",
+      "bytes": 27703,
+      "sha256": "edc9134207b93f4e764fecdcc58fbe65c1582ee835234c2249a6e3f011b705d3"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/worker-layout.json",
+      "bytes": 157805,
+      "sha256": "202b26fff5312c11833f5814d8c5cb70d919b68c7670fcfd1abf58653728e126"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/worker-nav-dark-messages-after.png",
+      "bytes": 52731,
+      "sha256": "c58cc8d4b38b55f0412c38d05d176f4f56df4b74edee92dd58474ac718a4a221"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/worker-offline-after.json",
+      "bytes": 474,
+      "sha256": "7544963e87d8c53a38a481facf563048f008e91e5b004158f0372025be2e4db1"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/worker-offline-baseline.json",
+      "bytes": 2,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/worker-offline-queued-390.png",
+      "bytes": 76413,
+      "sha256": "7dacbafa644a96971d9d8668332b9c91719767a371e10320160b71c014e1e5a7"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/worker-offline-queued.json",
+      "bytes": 455,
+      "sha256": "dcd48ccb2a03d06363ec4ce4967eb84f58d35f68411b66675636e5097c115fe9"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/worker-offline-records-390.png",
+      "bytes": 65910,
+      "sha256": "1c168dab32d9a6eecfcf0a1640b771592c6c9d4e673563efdf6f0bf11fac55fa"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/worker-offline-synced-today-390.png",
+      "bytes": 73800,
+      "sha256": "0a714ca4ebe434e9db13c7f3ff829a8e4d97db349ba164f35d7d9024b8c429fd"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/worker-pm-404-390.png",
+      "bytes": 27168,
+      "sha256": "f2b432fe853acf4a5fd6159f5e90c2ba37ca29152fb2f5d79295b03d4a579afe"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/worker-pm-404-return-after.png",
+      "bytes": 58242,
+      "sha256": "b5dca526b96da57ec345374ff06b4d08c0d770fb42d0a66bfadd20d243c7a3a7"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/worker-pm-edit-redo-390.png",
+      "bytes": 57690,
+      "sha256": "35f2d60a14ca71fca9f02ae0365496fae086c12bbc7ea22f7a72f01528293d45"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/worker-pm-edit-undo-390.png",
+      "bytes": 57855,
+      "sha256": "5ae7d1092c3016968a502d92b5dfad02281f27f98d1be228b11616018e0d155a"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/worker-pm-message-destination-after.png",
+      "bytes": 54638,
+      "sha256": "75010d01626e6ebb96d7796835e99cef613e6e227bf2f7a7c6452b9040087a6e"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/worker-pm-message-destination-before.png",
+      "bytes": 76344,
+      "sha256": "db1db712a2dc2ef5496a5e27245978071e7254f804895ba03c0450d1504a53b9"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/worker-pm-personal-deleted-390.png",
+      "bytes": 16889,
+      "sha256": "201bd1a2503c232fdac4b5004ae19a436ac430971ec38fc7c6226155b1670944"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/worker-pm-personal-edited-390.png",
+      "bytes": 25350,
+      "sha256": "1521a4be7497c6c402d84bec9fae9d37948c1117ef97ed7ce0101ce7a789fb0c"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/worker-pm-report-message-after.png",
+      "bytes": 133091,
+      "sha256": "3ce637cb01fb4fa80d93f1e46c89a5521555bd032a3dba4da3d5f508969b5171"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/worker-pm-team-work-390.png",
+      "bytes": 39621,
+      "sha256": "097871a5f3c749c8846b2a539bd9143a64b31dbfde2eb0b187f6cb8e7e525f73"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/worker-project-detail-390-after.png",
+      "bytes": 60616,
+      "sha256": "82e5c8ef62b53f7b521fa7e83f64b5c5b38fbc340ffe630610036d29c0ce0528"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/worker-project-detail-390-before.png",
+      "bytes": 63013,
+      "sha256": "d3f5e52331903e8f0e8706944bcd3ea6692877b33419f9f95ba435c5e4b3ab25"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/worker-schedule-day-390-after.png",
+      "bytes": 18300,
+      "sha256": "1d0b482e2affcc05525cdc7806d59a8a8a30509b6edf73de0820492be157b0f7"
+    },
+    {
+      "path": "docs/qa-system-recheck-2026-10-12/worker-today-390-after.png",
+      "bytes": 73340,
+      "sha256": "5a0a10f507b2c10a7cb74ffa03532aa9a8219d6cbbd50544dbee5449da036198"
+    },
+    {
+      "path": "docs/qa-team-schedule-mobile.png",
+      "bytes": 34499,
+      "sha256": "d5bdb8da713cbbc5d08ce6b04f0e6ca710b89086068dfc79873b5b4639da00d9"
+    },
+    {
+      "path": "docs/qa-ui-2026-10-12/actual-old-page-refresh-236.json",
+      "bytes": 351,
+      "sha256": "1bb1421afe066841a730cc970c75ad6cdf173a1341e5dff317ca612e506f9074"
+    },
+    {
+      "path": "docs/qa-ui-2026-10-12/browser-qa-236.json",
+      "bytes": 1524,
+      "sha256": "d8d284bd8e8d3a7767bf4876aab755830913b34011728a303638269c82fa25ef"
+    },
+    {
+      "path": "docs/qa-ui-2026-10-12/dashboard-desktop-light.png",
+      "bytes": 59958,
+      "sha256": "2895e9eb22365dde39efbdc5cd238c25460a4d8d361404a20c6c3674d1028705"
+    },
+    {
+      "path": "docs/qa-ui-2026-10-12/dashboard-mobile-dark.png",
+      "bytes": 32610,
+      "sha256": "bc267018e69968cc3587e3117834af2122a1a2d43ab393a1264f574c6d011b72"
+    },
+    {
+      "path": "docs/qa-ui-2026-10-12/evidence-manifest.json",
+      "bytes": 3545,
+      "sha256": "533d49c2abb74c7b216d1e444ff181071905505c267df471a0cbf4e9433cf812"
+    },
+    {
+      "path": "docs/qa-ui-2026-10-12/frontend-build-summary.json",
+      "bytes": 690,
+      "sha256": "0fcd5043f095c9f6805a1e80e404d56ab5e82c2f0ced7f649e9a4d9a6c2454e3"
+    },
+    {
+      "path": "docs/qa-ui-2026-10-12/frontend-node22-final-source-check.json",
+      "bytes": 604,
+      "sha256": "730616c4b9654fd71f8123cde30592494036c3e5a32ee99b21dacd0c6f59faa6"
+    },
+    {
+      "path": "docs/qa-ui-2026-10-12/frontend-node22-final-source-manifest.json",
+      "bytes": 44365,
+      "sha256": "b493f21a597012ccbd33e144c46a79c74fec82ae16f96c81fcc9f1ef5fb2cb20"
+    },
+    {
+      "path": "docs/qa-ui-2026-10-12/image-2.3.6-build-proof.json",
+      "bytes": 2870,
+      "sha256": "d4a704719e04567532dc528d305be1391587ecdcba2b7e0c828fc883b43dadff"
+    },
+    {
+      "path": "docs/qa-ui-2026-10-12/image-2.3.6-delta-lineage.json",
+      "bytes": 2598,
+      "sha256": "6d20b8e97fe9cc3764f1dd40d41e31bdf06c22bb7426cb03b5f02a3aaa5c5352"
+    },
+    {
+      "path": "docs/qa-ui-2026-10-12/launcher-login-version-update-236.json",
+      "bytes": 625,
+      "sha256": "ed4aaa021e1afe53886ff7795905d288193c0f5402220615243f0bd90581fe6c"
+    },
+    {
+      "path": "docs/qa-ui-2026-10-12/live-source-static-services-236.json",
+      "bytes": 1041,
+      "sha256": "a20a098d92bd6796edc8f2c6cc22d254d530510621dbeca4f62cf971417713bb"
+    },
+    {
+      "path": "docs/qa-ui-2026-10-12/project-desktop-light.png",
+      "bytes": 64269,
+      "sha256": "1df0f8ab3c5b0661ba3aebf896d163d17812763499408b199ed4f1f89745dd06"
+    },
+    {
+      "path": "docs/qa-ui-2026-10-12/project-menu-mobile-dark.png",
+      "bytes": 23605,
+      "sha256": "14524dd6b259180ae04879c2bcb53fc7bfce208d080c1fb71ef7dd6c7529a9cf"
+    },
+    {
+      "path": "docs/qa-ui-2026-10-12/projects-mobile-dark.png",
+      "bytes": 32626,
+      "sha256": "0f4da40497f05bb5c1bdcfb558aca49c90f54ba9346824df802c42eaf5709ba3"
+    },
+    {
+      "path": "docs/qa-ui-2026-10-12/runtime-preservation-236.json",
+      "bytes": 2469,
+      "sha256": "0441bad307da06bfe894f578e179c90a9e7e13a4f94e03e0b8fb855bacd796b5"
+    },
+    {
+      "path": "docs/qa-ui-2026-10-12/selected-color-contrast.json",
+      "bytes": 557,
+      "sha256": "00aaed8677e4d5cc41bf865f0cb77c9c305346dd26b2607e3dc5e400b4ee5936"
+    },
+    {
+      "path": "docs/qa-ui-2026-10-12/today-desktop-light.png",
+      "bytes": 30800,
+      "sha256": "a4b246c467e3e5656003fc84ffd13548d3193061a36665a6690c23cfaa64e1c9"
+    },
+    {
+      "path": "docs/qa-ui-2026-10-12/today-mobile-dark.png",
+      "bytes": 34934,
+      "sha256": "b4be7dac50da143f6feab20ea50d994ee8aa23dcb4078816eb2414309984f9f2"
+    },
+    {
+      "path": "docs/qa-ui-2026-10-12/today-mobile-light.png",
+      "bytes": 34040,
+      "sha256": "e02b6202d1adfbe575e7475299bb16010df5093ecba588c3345b0bb75c05cf7c"
+    },
+    {
+      "path": "docs/qa-ui-2026-10-12/worker-my-mobile-dark.png",
+      "bytes": 35108,
+      "sha256": "d83c004329d6265590cba99913bf13a4b263e6b05ecc3ff7e70f6233e8cdce9d"
+    },
+    {
+      "path": "docs/qa-ui-2026-10-12/worker-projects-mobile-dark.png",
+      "bytes": 30641,
+      "sha256": "251764ede85bdfdb3f1716b72d218741911ff8c0acc414f6d9d11fc8db374840"
+    },
+    {
+      "path": "docs/qa-update-sources-2026-10-19/README.md",
+      "bytes": 3432,
+      "sha256": "47721efc4e0b66a8b82ad1a8a1c7a8f51aaa0c998ce14e0974e4e2641f90db70"
+    },
+    {
+      "path": "docs/qa-update-sources-2026-10-19/upgrade-2.4.1-public-receipt.json",
+      "bytes": 3058,
+      "sha256": "0d9ed7a635dbcc15b56f9937c7c91d9f118ca89376343141eda93dac37c84807"
+    },
+    {
+      "path": "docs/qa-update-sources-2026-10-19/verification.json",
+      "bytes": 1439,
+      "sha256": "2980e5295d4983ae4e1f0167142074094d6408e471e07639f2d5686ef9892aa6"
+    },
+    {
+      "path": "docs/qa-update-ui-2026-10-19/README.md",
+      "bytes": 4320,
+      "sha256": "685b3b6ea8eaaca92e69ce8be1849c0678607e4df43f8356c66ae4331275138d"
+    },
+    {
+      "path": "docs/qa-update-ui-2026-10-19/archive-candidate-public.json",
+      "bytes": 325,
+      "sha256": "5f369ba302401c801b91d353ed63564740b8a0719e3bd82edb8025c271775304"
+    },
+    {
+      "path": "docs/qa-update-ui-2026-10-19/automatic-backup-public.json",
+      "bytes": 282,
+      "sha256": "3af2e377f2777b1b62c2b4b30506050870ef710569ff50731b7d0a0427894d72"
+    },
+    {
+      "path": "docs/qa-update-ui-2026-10-19/data-after-web-update-public.json",
+      "bytes": 979,
+      "sha256": "e096d7dba343bd06ffb02ed135e1b658208e5b2ce01b7c453169c32f98a31a34"
+    },
+    {
+      "path": "docs/qa-update-ui-2026-10-19/published-ui-2.4.3-public.json",
+      "bytes": 392,
+      "sha256": "f72dec5080f94563553711efde3b01e6ff34df84ca112bfaa43275c95a6d5136"
+    },
+    {
+      "path": "docs/qa-update-ui-2026-10-19/smoke-archive-source-public.json",
+      "bytes": 961,
+      "sha256": "ba7e596f9ef03c2494c6a27520fddc2c53015f6fe876e6ae747d2f3c88102ab0"
+    },
+    {
+      "path": "docs/qa-update-ui-2026-10-19/smoke-restore-upgrade-public.json",
+      "bytes": 1017,
+      "sha256": "488c60aab362d42f4597700da0b65a5000916b7b72be337fdd79897b918da759"
+    },
+    {
+      "path": "docs/qa-update-ui-2026-10-19/source-validation-public.json",
+      "bytes": 517,
+      "sha256": "8dbde668ff888c0aa82bcd0961ab5c586dd46f59c88bb52a16e44bc2551b5cdc"
+    },
+    {
+      "path": "docs/qa-update-ui-2026-10-19/update-ui-320-light.png",
+      "bytes": 72960,
+      "sha256": "7100292c61f5d6df81a1e71fab171c63db86288e1788c9087bd0e728fdcdd3a5"
+    },
+    {
+      "path": "docs/qa-update-ui-2026-10-19/update-ui-before.png",
+      "bytes": 122231,
+      "sha256": "1819b41284cc3f2631d4832b6d6ff21dbe25a0b976527eac188beab0e3e06d23"
+    },
+    {
+      "path": "docs/qa-update-ui-2026-10-19/update-ui-dark-final.png",
+      "bytes": 88832,
+      "sha256": "ad31bb92667422d210489fb7834689c6344a198ab1485653401f13760d7e1c39"
+    },
+    {
+      "path": "docs/qa-update-ui-2026-10-19/update-ui-installed-dark.png",
+      "bytes": 85380,
+      "sha256": "f1d93b7ff46e584d64febd319b9db81b8c4e0b6e23004414bf7469dbbe37757a"
+    },
+    {
+      "path": "docs/qa-update-ui-2026-10-19/update-ui-installed-light.png",
+      "bytes": 87336,
+      "sha256": "d726fe31d5a515e98b4346d901ee46b70438704a78289d786903cc25e5f60156"
+    },
+    {
+      "path": "docs/qa-update-ui-2026-10-19/update-ui-installed-mobile.png",
+      "bytes": 72136,
+      "sha256": "119303704c3c4a4f53d79fc050836c40e70f39b1a66a1252d90fdddf086a0607"
+    },
+    {
+      "path": "docs/qa-update-ui-2026-10-19/update-ui-light-final.png",
+      "bytes": 90666,
+      "sha256": "920a406104bebdae13d9a5fc16eb331a1e2dbf52f285334e431c44be86dca9ce"
+    },
+    {
+      "path": "docs/qa-update-ui-2026-10-19/update-ui-mobile-source-modal.png",
+      "bytes": 63386,
+      "sha256": "3ebede3f84f1ca618a13257efb0f30fa1dc10e99b1f919e4fde4bc6bc651c156"
+    },
+    {
+      "path": "docs/qa-update-ui-2026-10-19/web-update-runtime-public.json",
+      "bytes": 1179,
+      "sha256": "1eeb25915e8138fce90e1f6b1aba762908a08728a72d5d0ddaa27cb69131ac44"
+    },
+    {
+      "path": "docs/qa-updater-connection-2026-10-19/README.md",
+      "bytes": 5193,
+      "sha256": "f6016230b62416b3664242d986701bd4d61701d278c93f0a82420a4190e05cdc"
+    },
+    {
+      "path": "docs/qa-updater-connection-2026-10-19/archive-candidate-public.json",
+      "bytes": 330,
+      "sha256": "df633146a133ebb06f44dc1a2c3b0b1b4f0ea2ddce77d39680dea6d083d5f649"
+    },
+    {
+      "path": "docs/qa-updater-connection-2026-10-19/browser-update-public.json",
+      "bytes": 451,
+      "sha256": "a9e9b6b2b6268046efd966cd072df77355238d352b8f5b403476e5ddc3181055"
+    },
+    {
+      "path": "docs/qa-updater-connection-2026-10-19/compose-enrollment-public-receipt.json",
+      "bytes": 1568,
+      "sha256": "b2922cd88c3cca173540bc630e391d09952c8763dfbb78cf6416d3c363ba58b2"
+    },
+    {
+      "path": "docs/qa-updater-connection-2026-10-19/data-after-web-update-public.json",
+      "bytes": 886,
+      "sha256": "79933a61a03e26ba6367206c2e1f8b52caa9520226d37b302f90666db050cca4"
+    },
+    {
+      "path": "docs/qa-updater-connection-2026-10-19/full-build-public.json",
+      "bytes": 492,
+      "sha256": "6704d30314650aff7e699a47983d8cc9461a80bf73532d244ebb4a90462d29db"
+    },
+    {
+      "path": "docs/qa-updater-connection-2026-10-19/published-repair-2.4.2-public.json",
+      "bytes": 272,
+      "sha256": "ed125f36910bbfd208ab7bacaa1a9295f144de7ff509800d15556ad8c44b8725"
+    },
+    {
+      "path": "docs/qa-updater-connection-2026-10-19/recovery-backup-table-verification.json",
+      "bytes": 440,
+      "sha256": "f7219ba2da2d1753d07032572e56357869614235c9d2a700ca871e497eb3347c"
+    },
+    {
+      "path": "docs/qa-updater-connection-2026-10-19/recovery-history-verification.json",
+      "bytes": 41,
+      "sha256": "e5946fbac11724fb3863d4f18a15b9d95651c5083da190cddc832c3dfe644cf8"
+    },
+    {
+      "path": "docs/qa-updater-connection-2026-10-19/retry-backup-public.json",
+      "bytes": 188,
+      "sha256": "0c2efcef9d7eda14e5356279f770355899817b760b4cd7638305d7385e22cb8c"
+    },
+    {
+      "path": "docs/qa-updater-connection-2026-10-19/smoke-archive-source-public.json",
+      "bytes": 966,
+      "sha256": "a55839f9d9bc8c0a2dc771311a6790854a8b7d9dc0fd26a3eb756e59304c4a8a"
+    },
+    {
+      "path": "docs/qa-updater-connection-2026-10-19/smoke-public.json",
+      "bytes": 913,
+      "sha256": "59cc816e4b072f32d9e8290f86b30ff111c7345c5e086e420786f75fc851e56e"
+    },
+    {
+      "path": "docs/qa-updater-connection-2026-10-19/web-update-runtime-public.json",
+      "bytes": 1179,
+      "sha256": "485193092e97d76709886a61eaeeb11c7a78bdf4b11db922e9d8b4c402081fa2"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/backend-final-source-check.json",
+      "bytes": 148,
+      "sha256": "4b23e16f168f4923c6fd48adf89f9d8d1225d9606cd53dc2c4c63772ba1c72bc"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/browser-cleanup-receipt.json",
+      "bytes": 122,
+      "sha256": "4cb39294c48bff4263e6760b00568ddf1cf09b6e6ac9aecf35911e51659bdb89"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/create-default-preparing-before.txt",
+      "bytes": 13242,
+      "sha256": "ce0ae4ab6832555dadf439cb7c091f6f68274062b74cf1c9fe8d6368e24ec4e4"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/create-draft-overview-after.txt",
+      "bytes": 6571,
+      "sha256": "628042db9d8f0a85ac2bfe751b6cacdf38930250e0c9f8b21273ebfb7f4d4012"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/draft-preplan-after.txt",
+      "bytes": 11319,
+      "sha256": "98d94496622b707ddde3901cb4fe9abe85fd9764bb0c23124d4672d352d6f83a"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/draft-refreshed.txt",
+      "bytes": 4816,
+      "sha256": "1b95f8600e7907976e4e43f8470c550202a77d031ff2fffded52b5e398283a62"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/duration-half-preview.txt",
+      "bytes": 12986,
+      "sha256": "16c98149a3b59bdb42af9e55118768fde88426b3132abda22363b0c0f3ee4d5c"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/final-image-archive-proof.json",
+      "bytes": 383,
+      "sha256": "9dc8c99effbe8827dc4bd4ffbd2a887328b3990c27a1bb65b507f031986a3cbc"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/final-tips-permissions-browser.json",
+      "bytes": 924,
+      "sha256": "f90d12eb1f5dce1e68cb91d9b02462deb8a5efb81472015f87e34b5cd4b1a6ba"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/frontend-node22-tips-final-source-check.json",
+      "bytes": 583,
+      "sha256": "3148063e00e84cb63ae7db9ec7843bc12b5b5aafac9086ef9a8011e1aca2eedb"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/gantt-before.txt",
+      "bytes": 11989,
+      "sha256": "74d5dc2d4fea816f365864b0792bb96de0103b2df81fa62db3a33cde8f6ce7c9"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/gantt-desktop.png",
+      "bytes": 105398,
+      "sha256": "1847ea16fcc2af3c9ded828c2690cd0cd0a79792f44793caf57af298e195bd82"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/gantt-left-resize-preview.txt",
+      "bytes": 12555,
+      "sha256": "1d73e245f63a66a1a7e24b3b6b1073d5d907783e851195753636fd85cbdda2f1"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/gantt-middle-shift-preview.txt",
+      "bytes": 13302,
+      "sha256": "ba1068bb5a6088a98353a643f35bc44221faada73fd8ff9f9f03f8af9b273394"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/gantt-mobile-preview.png",
+      "bytes": 100330,
+      "sha256": "831237147e2496e58bd0de0ed3074f74146bf866eaf0dbc91ee16edfc3759793"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/gantt-mobile-preview.txt",
+      "bytes": 11937,
+      "sha256": "d48396afe7ed9f38056945cd056d8607aa3335b1b974f9b55817390de671c34e"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/gantt-pointer-resize-preview.txt",
+      "bytes": 15358,
+      "sha256": "8a41c22a70e7a7b7e5e2f7a741edbd68eae95707221080232cd837765003a05c"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/gantt-reported-task-protection.json",
+      "bytes": 87,
+      "sha256": "3c452e43469d07c2ec76a42c98515403ac1d4ca0c2a71ca8b0bdb01c3653ebf5"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/gantt-resize-reloaded.txt",
+      "bytes": 11320,
+      "sha256": "573f039a70c1c4434376c03e923d9f628631efa7687f1fbf29f3ee73929674e2"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/gantt-shift-reloaded.txt",
+      "bytes": 11419,
+      "sha256": "cd872269fa2b399fc421fdc886c62382b34717774c2986e6ffa2810e46ab5d1a"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/image-2.1.3-final-build-proof.json",
+      "bytes": 223,
+      "sha256": "0b35a2423c745ee71d6103a1b478f37e0fa433f5aa2434dc0b93ea83bfc0cf79"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/inventory-quick-status-reloaded.json",
+      "bytes": 316,
+      "sha256": "2403d601f1bc16bf874d2ee87b0215cf08aae67835fc740dde0b42daf52bb326"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/issues-closed-after.txt",
+      "bytes": 8621,
+      "sha256": "fc023585e5820a0baef3eaeafda35457a3090eab4cd799805bfdca03405fc5ed"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/issues-quick-assignment-after.txt",
+      "bytes": 9984,
+      "sha256": "6f087ed859c30f6e76e251a76efd5dc263c8d41bead96c3d334efab120486e56"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/issues-reason-required.txt",
+      "bytes": 9284,
+      "sha256": "263f64e8f7202f90d325e19ff32d5416efc109a88b209334d633242e1eb9ec6d"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/lifecycle-entry-blocked.txt",
+      "bytes": 4926,
+      "sha256": "f64003da01634f5b8a7a751af35af9dbe81ffef0acd38dfcc43a7e328ef55afd"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/lifecycle-executing-after.txt",
+      "bytes": 4600,
+      "sha256": "3bf13eec967d3f93dad4873ea6521189456fa6e8cf6dde97ada334cfe3de102a"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/navigation-keyboard-search.txt",
+      "bytes": 9167,
+      "sha256": "4efd9d67de6810ee678055ccfc56b63db4c8f549eabfeeb56d058d2fbf0b3f9f"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/pg-final-browser-download.json",
+      "bytes": 131,
+      "sha256": "66598139504b6901487c65e0fdecc786fc1f1d0f92bfee28826d0784e25f9d3c"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/pg-final-files-after-restart.txt",
+      "bytes": 4588,
+      "sha256": "c99822a0bb799a8b13941fea60cb6122346bdba2b1ef24f31ccbefeed7d350bc"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/pg-final-gantt-quick-controls.txt",
+      "bytes": 10645,
+      "sha256": "543e4122ae4e2371fe5c8421d61f1669bc1453340b320cdb31dacf3cf4acd46f"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/pg-final-overview-after-restart.txt",
+      "bytes": 4417,
+      "sha256": "1a0eee55dbef21452aa1ecaeaaf4574ad9f0fa36253cb3f3fe58918c4fc1dd9f"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/pg-final-plan-quick-controls.txt",
+      "bytes": 12439,
+      "sha256": "9c674b6fc20d62a3e2fc7bcc542ffc3a41113a211b379cffd496b34ca73047f4"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/pg-final-preparation-desktop.png",
+      "bytes": 141052,
+      "sha256": "8991471c958cf46bae0ec119c73a8bf0977ba707000befb3a96fd1610a761ccb"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/pg-final-preparation-readback.json",
+      "bytes": 456,
+      "sha256": "2257622af88d3da6e656c7f4d3288f68fea09049abbbf7b45c8f0b77e9f2d4d0"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/pg-final-project-list.txt",
+      "bytes": 6488,
+      "sha256": "f2020314977ccacd5958b7bc5baabe8e4d4c43b1971c5e23d0dfe14b6123ad3f"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/preparation-before.txt",
+      "bytes": 10599,
+      "sha256": "7e2474561b1524fc7290573a44ab42930ae89bfebf27aab103b3488519cb12b0"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/preparation-mobile-card.png",
+      "bytes": 52776,
+      "sha256": "d155abb892b48f7f2fbb50139ed127db6d8a19656096034b22d0a712eebef465"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/preparation-mobile-layout.json",
+      "bytes": 237,
+      "sha256": "621e06d81c09792c5e92b930376666a02af978923255d8ce7cdd31a256735f6a"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/preparation-offline-error.json",
+      "bytes": 74,
+      "sha256": "7b880bf89fafb1c3da6c3152bac10542dc8dfce857dab3efa29e823fd8add82f"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/preparation-passed-fields-after.json",
+      "bytes": 152,
+      "sha256": "20d8bad9c347d2ece6a9eaa0e71d8dfa0791d2643a12249982c0e9e0f219d002"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/preparation-quick-fields-after.txt",
+      "bytes": 31629,
+      "sha256": "f0aef7e141deba41c52bc2ba03438123f613b3ada4eb8c0e8b0f4a9491996bca"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/preparation-retry-reloaded.json",
+      "bytes": 24,
+      "sha256": "4f5f6f093564c86aec82dd3c2c9132d1abe3f28a60bb63d94d0ad6877f6587ce"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/readonly-plan.txt",
+      "bytes": 9030,
+      "sha256": "331ebc61b849a64f766908066be0258b7d6cf85405f6779faa9f15493471b097"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/readonly-preparation.txt",
+      "bytes": 8232,
+      "sha256": "e3b4a86fcde218bf0909d3fc4f2ae4e8440a8fbd4563d6d8ae16011baa9fd2b1"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/readonly-schedule.txt",
+      "bytes": 5451,
+      "sha256": "9d57c0001b6264e5af6b9319f59a5a39af7899e1ba04a8f73a8fc21719d4c6bd"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/readonly-worker-controls.json",
+      "bytes": 259,
+      "sha256": "f10238c52bd132ba99e9ab2428a69e12350ae10713815d05245f0b3ca54bb408"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/target-inline-reloaded.json",
+      "bytes": 104,
+      "sha256": "c6b4621557b41d9b1f6a488b3d65c89e44432cfd77860d18c2ee15948f1f6f8a"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/team-day-work-detail.txt",
+      "bytes": 22622,
+      "sha256": "2c9cbd5d8d9c56adaaaaed74f8512057a30b0549301755d6480e9b2d9cb1f04f"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/tip-dismissed-reloaded.txt",
+      "bytes": 8621,
+      "sha256": "b8d5bdfcedcceb130a325b280e8378ddff0d408ae8772413878e7754bf4e78b4"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/upgrade-2.1.3-data-preservation-proof.json",
+      "bytes": 600,
+      "sha256": "bb0712561d024353a0c905b41af099338b03622778c5d166d61bfb0a8ed243b7"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/validation-summary.json",
+      "bytes": 1743,
+      "sha256": "38ee1596cd095f990c3268dd4cf8f8b5ccf72144b827a6e060c55612f2dd1140"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/vehicle-history-after-location.txt",
+      "bytes": 9515,
+      "sha256": "bf5f44c7348f1ad162b43d8c08b73ef4304851c06487ce1093405aa331af60ad"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-06/vehicle-location-reloaded.json",
+      "bytes": 115,
+      "sha256": "748fa296e7fd018ce52a9cd1cb41f770b36e125de08808ee2cbcc2ffad243502"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/actual-browser.json",
+      "bytes": 2091,
+      "sha256": "35387de2b09e29d20638b8c465dcbaa1cd02376302a473d6ed7092f687dbd37a"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/archive-action-final-390.json",
+      "bytes": 365,
+      "sha256": "4d4cf7ab35ea5252bd4e9822294f44b5a0db90621686433770aca4c987bda51b"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/archive-action-final-390.png",
+      "bytes": 60844,
+      "sha256": "b3e13a51cf4e32087a1e3f1fc148fced2a65d482ad82534cc34f526eee28e5e5"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/archive-browser-flow.json",
+      "bytes": 330,
+      "sha256": "33368d1d575c2c8b91c9bde2d3b8b65e9e37e14bc82b824eff4b5ce5e03a5463"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/browser-cleanup.json",
+      "bytes": 152,
+      "sha256": "e4e0ca401ba1d4644a83f912fc96c84f89ee2b5f1334c0cb6795dc6929ba1897"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/dashboard-final-390-dark.png",
+      "bytes": 59386,
+      "sha256": "990f16085881e7404c8abb5ec9b35137f1345b21e9b9d11b25fbeac749a7aeb9"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/dashboard-final-390.json",
+      "bytes": 1314,
+      "sha256": "a762aa3a82149364d69f54a194760518e3ca05ac1eb6e9bffd99fbf8b0853fd0"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/dashboard-final-390.png",
+      "bytes": 56313,
+      "sha256": "0017fd94976accfa945de3b48f9c4b94836dc485726d0e7c634193f7e07762d4"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/edit-sticky-after.json",
+      "bytes": 1964,
+      "sha256": "056e9b9d6c22ea31a5fd5acadd38b9734063117584ac3654b8d3acfe410fd3fc"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/edit-sticky-before.json",
+      "bytes": 2775,
+      "sha256": "4f42dfc4e84b42fa5d4deea58daee17eca87356a553bb8904f915442d527eb2b"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/image-build.json",
+      "bytes": 2398,
+      "sha256": "f2f25835fb0af58d0122cd18f1bd287c07a678b1491ee943806e8c6d6a0f83a3"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/launcher-version-update.json",
+      "bytes": 460,
+      "sha256": "d67f3607ff8cae6fc99d179a311ec93f162e463e275e8ab2df82288617f80c56"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/live-source-static-services.json",
+      "bytes": 924,
+      "sha256": "fc38dd84a2909045f2f0a492f13cf3ede036e240956ff7c44a6d4a15983e206b"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/overview-before-390.json",
+      "bytes": 1591,
+      "sha256": "a3c14165d2d792f2903db6a5573733899e167ac0c259a1fc5ed78d30523ace40"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/overview-before-390.png",
+      "bytes": 49172,
+      "sha256": "4e9678abfe5ae96e5462faefab169f481c7b06b6e329b1dd91ef82c5528d89dd"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/overview-final-1280-light.png",
+      "bytes": 101438,
+      "sha256": "216410e3ffbbf1c40fcbb3121a974ff9f8f91da79b135f6e101209d80c46f768"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/overview-final-390-dark.png",
+      "bytes": 62917,
+      "sha256": "eeae845fbc058e397edb1236173f8ae80a8a03333174cfec2b6c8d3b36d880dd"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/overview-final-390-light.png",
+      "bytes": 70934,
+      "sha256": "957ffd114d19c22268a3ed60ab31e83a71eff1f0e07551516cec3c6d939ecfda"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/overview-final-matrix.json",
+      "bytes": 683,
+      "sha256": "c32826ea50a9a7f3a33484efbd814a4d9c43950d265b92e57702b2f7b3c06ae5"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/permissions-sticky-after-950.json",
+      "bytes": 459,
+      "sha256": "3b0c8300194f59fb19981d36f9bd9788a242a780c6ccdc354b6a27a9aee46924"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/permissions-sticky-before-950.json",
+      "bytes": 431,
+      "sha256": "14767b021cab93dfa7225170663b48e62f9af5bf150c8ca07862e34c484f33dd"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/preparation-before-390.json",
+      "bytes": 3953,
+      "sha256": "0a941ba1f9055d10d03a0247fb30e978938e5f902b5c0dfce0ee8ac661217795"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/preparation-before-390.png",
+      "bytes": 74391,
+      "sha256": "c866a1a2e5361cc7cae8d2dfe61aed215674d919882aa3f06adbf0606c04e4b5"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/preparation-completed-filter-after.json",
+      "bytes": 151,
+      "sha256": "6b2f2fb1da82c8b51f1c3b9a66bf8752a2a21b40cbda755354f72e503b1cc7fc"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/preparation-completed-filter-before.json",
+      "bytes": 220,
+      "sha256": "c720d1ea5e62aaa816cbfcf4af6c6f725847816bc5907eb49057b837158f43e9"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/preparation-layout-final-1280-dark.png",
+      "bytes": 146370,
+      "sha256": "81faef67d7b89923c625f5665b8212d9aef17218d5a209cf4a45aebbbca30bd1"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/preparation-layout-final-390-light.png",
+      "bytes": 70945,
+      "sha256": "ed0aef4f8e78b1be80a5bdd20a1098e0d81065b102ac442f41f62d8a4a7c1235"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/preparation-layout-final.json",
+      "bytes": 4832,
+      "sha256": "779922e59164a4969bf2133b151fe3b5b6aaa102fbbb404b67bcaeb60e49cec4"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/preparation-review-locate-after.json",
+      "bytes": 311,
+      "sha256": "2589d4e1749413a6bcb7818fce8a5a85d900fe5831892d2440dada4a66ad8371"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/projects-final-390.json",
+      "bytes": 915,
+      "sha256": "f6677022d0751f022bbe63958a38c9f6d86922093c40c1c96807be6e25837f9f"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/projects-final-390.png",
+      "bytes": 65229,
+      "sha256": "319a5da8916053e5f8ea34104e658f84a113ff81500326232e6fb6f6bba6b35c"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/qa-runtime-cleanup.json",
+      "bytes": 418,
+      "sha256": "a36908e52770d665f83e63513e9de3ca756f9d7cf2acd034d5452d31d7302efd"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/responsive-navigation-aria.json",
+      "bytes": 226,
+      "sha256": "aabf3cead57e9bdfcfbf22dc058fad7e52f9dc5b081d40ea133ca6e4ceaf1f09"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/restart-public.json",
+      "bytes": 1022,
+      "sha256": "f4a5879da41863f9913cc4c0daaf441175ce0cd208e0e708d12f4b905451a01d"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/root-navigation-flows.json",
+      "bytes": 347,
+      "sha256": "822bfb426b237e1e82a08e11710685ab812be86624e8d672a53b46c48c4bd291"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/source-validation.json",
+      "bytes": 1810,
+      "sha256": "89e15d2a436d8b5e04da9b2df80c5d9ce5266acf23bea6b96388efe084dedd11"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/template-sticky-check-900.json",
+      "bytes": 382,
+      "sha256": "008ab2ba8ad34586dfe23599cd6b80ce47fc5dfdd6b5bee25242bfc86016a66d"
+    },
+    {
+      "path": "docs/qa-usability-2026-10-12/upgrade-public.json",
+      "bytes": 2488,
+      "sha256": "91077cc254bcf3ccd0538871d777624514bed82c5ae3ddcf830cb9a2f681d8b1"
+    },
+    {
+      "path": "docs/qa-vehicle-lifecycle-after-mobile.png",
+      "bytes": 92874,
+      "sha256": "2f48e3b126c0f37e2920f2e763dec8bcffc4244b114971785f345aa1f99211d4"
+    },
+    {
+      "path": "docs/qa-vehicle-lifecycle-after.xlsx",
+      "bytes": 5916,
+      "sha256": "319e0a1b2845e946af1479e83790cd2cd04e3c9dd400968ed08444578655b15a"
+    },
+    {
+      "path": "docs/qa-vehicle-lifecycle.xlsx",
+      "bytes": 5717,
+      "sha256": "f078fd951d34478bb2813f70c74b4a092c72d4dde73939fa3ecc95b0118d2342"
+    },
+    {
+      "path": "docs/qa-vehicle-repair-form-mobile.png",
+      "bytes": 78200,
+      "sha256": "8e4c22830009896232107b3549fe7fea773dc49e345cb482faf14c127b3c8203"
+    },
+    {
+      "path": "docs/qa-vehicle-stale-after-close.png",
+      "bytes": 71758,
+      "sha256": "6a17ee123b30f7c8a8daf49a6821c11260492b1d3dde28752cabbd97db430cb5"
+    },
+    {
+      "path": "docs/qa-worker-account-keyboard-before.txt",
+      "bytes": 262,
+      "sha256": "64ac627d08fcd7f71fecfa4aaaec7bd98118e250750de3335112071845950eda"
+    },
+    {
+      "path": "docs/qa-worker-check-controls-before.png",
+      "bytes": 61344,
+      "sha256": "2cd2a9c51f29463e2f1ed011b07b32f987395312d521de667c5d645e3f82c2dc"
+    },
+    {
+      "path": "docs/qa-worker-delivery-approved-mobile.png",
+      "bytes": 31329,
+      "sha256": "b4be301d5910252c99962d6dfd85ac9fbca8848455a4c2fed9c1f18c03d59493"
+    },
+    {
+      "path": "docs/qa-worker-demo-progress-after.txt",
+      "bytes": 7419,
+      "sha256": "345c0dfba8c179fc68e9e7d8aecf2577118f58e8b7b34a223078bc9e4fb87057"
+    },
+    {
+      "path": "docs/qa-worker-desktop-dark-after.txt",
+      "bytes": 4741,
+      "sha256": "0380e5bb546c47dc63a90d875e530c36e5090d0177de222b5889bbe1a42b7b0c"
+    },
+    {
+      "path": "docs/qa-worker-first-use-after.txt",
+      "bytes": 1902,
+      "sha256": "458aa37fddaf19b1bbbba4e4b153545a9715a123ace96f298d2c0be823d15cfd"
+    },
+    {
+      "path": "docs/qa-worker-offline-sync-after.png",
+      "bytes": 71375,
+      "sha256": "33b2274ce72f8b530cef6130581818cdc7908a494b13637602d0cd165c48a92d"
+    },
+    {
+      "path": "docs/qa-worker-schedule-mobile.png",
+      "bytes": 56429,
+      "sha256": "9bddf50f220651efc3b588b530b51555746a77285a1f9db41b619aec689a912a"
+    },
+    {
+      "path": "docs/qa-worker-stats-units-after.png",
+      "bytes": 39981,
+      "sha256": "1ac2184bf060cbdee1eeae4d46363ac9b857963d675e6123d982f99ce3640da6"
+    },
+    {
+      "path": "docs/qa-worker-today-race-after.txt",
+      "bytes": 368,
+      "sha256": "21d3fdda8dbc7628d537a2bd323b3378cba99a4546aa35c038318fc64e38264f"
+    },
+    {
+      "path": "docs/qa-worker-today-race-before.txt",
+      "bytes": 1033,
+      "sha256": "39b748479e7857b3bb8203780d10fb6cdec1123a847b89402d4f916d466739f0"
+    },
+    {
+      "path": "docs/screenshots/focus-2026-09-16/dashboard-desktop.png",
+      "bytes": 116200,
+      "sha256": "a165b569eb94dbc749e45fd3132d58be8ce8f8c34acd00e42c22de2241924335"
+    },
+    {
+      "path": "docs/screenshots/focus-2026-09-16/preparation-desktop.png",
+      "bytes": 159351,
+      "sha256": "46b423d23ed47b2f608214e95ec62934916a5ad625735517e6906ac763f0b88d"
+    },
+    {
+      "path": "docs/screenshots/focus-2026-09-16/project-dark.png",
+      "bytes": 72668,
+      "sha256": "8ed190f87f45ffbdba5c5b38e939321f8c2184b45a1feef88993fda32023fc4c"
+    },
+    {
+      "path": "docs/screenshots/focus-2026-09-16/project-desktop.png",
+      "bytes": 76017,
+      "sha256": "dcee3673f31d6d6ce3084837c7c93fda8fc9fb4301303d88b8c0efac30058d19"
+    },
+    {
+      "path": "docs/screenshots/focus-2026-09-16/project-mobile.png",
+      "bytes": 58438,
+      "sha256": "4d8566345724a08e35333885ddad65d2ca2033fcb636f41dc1703891268d1310"
+    },
+    {
+      "path": "docs/screenshots/focus-2026-09-16/schedule-desktop.png",
+      "bytes": 62201,
+      "sha256": "e598c199912d4f700721d3a7b2fa5af8f1fe6d156bb21a164fff2bd538ebef96"
+    },
+    {
+      "path": "docs/screenshots/focus-2026-09-16/schedule-mobile.png",
+      "bytes": 57219,
+      "sha256": "00023926e3a8136acd72b672ffcec21b4f887a499d9f1da9db3225d0bfb9c6ef"
+    },
+    {
+      "path": "docs/screenshots/focus-2026-09-16/tasks-desktop.png",
+      "bytes": 111876,
+      "sha256": "baf8a0a7b97676254048d2c7c7f13b3973b3fff83f014f8aff80e09b64a9173b"
+    },
+    {
+      "path": "docs/screenshots/focus-2026-09-16/templates-desktop.png",
+      "bytes": 93094,
+      "sha256": "bf4fb0eacfc6a2ed12a653c99229226b2d730cf57154399a8cbaa47bfe53c425"
+    },
+    {
+      "path": "docs/screenshots/focus-2026-09-16/templates-mobile.png",
+      "bytes": 66742,
+      "sha256": "9089df28ef29f0df064635acbb8a2069c7a82b7b96fa868d1ce6b2e65db38a68"
+    },
+    {
+      "path": "docs/screenshots/layout-2026-09-16/create-mobile.png",
+      "bytes": 73708,
+      "sha256": "53b25f57b045271fa3224dce718fe0cef6b52b38c216d53aa5ad75ba648ef614"
+    },
+    {
+      "path": "docs/screenshots/layout-2026-09-16/project-desktop.png",
+      "bytes": 174915,
+      "sha256": "87455d418b4e10b5329be992cf77815b37de191dfa241d068769278ea9e4a620"
+    },
+    {
+      "path": "docs/screenshots/layout-2026-09-16/projects-dark.png",
+      "bytes": 104979,
+      "sha256": "41bf153ad2f65676c1098f55e9b650495383e3f62a3d6fd575f0d312b7d908b4"
+    },
+    {
+      "path": "docs/screenshots/layout-2026-09-16/projects-mobile.png",
+      "bytes": 61472,
+      "sha256": "fef03b2478e9c303ee122ad702b5683f2fa10d61c493c00874cb78a12b0987e7"
+    },
+    {
+      "path": "docs/screenshots/layout-2026-09-16/templates-mobile.png",
+      "bytes": 77045,
+      "sha256": "150e4e544bec26f3dddb4ecd66b922f8c543ac0bdd61078998e9f03880e5c214"
+    },
+    {
+      "path": "docs/screenshots/navigation-2026-09-16/project-desktop.png",
+      "bytes": 107929,
+      "sha256": "7109d8442495aef8bc31ed846a00299c4b3279a4e91f24e7aa7f85756c29abc4"
+    },
+    {
+      "path": "docs/screenshots/navigation-2026-09-16/project-mobile.png",
+      "bytes": 55894,
+      "sha256": "4d27e2c32f504ce56766423b259d23f9fae5a748e82cf7c7f84b02de524ae43e"
+    },
+    {
+      "path": "docs/screenshots/preparation-flow-2026-09-16/confirm-mobile.png",
+      "bytes": 85358,
+      "sha256": "d6f30ecc498c7b5ca04512e0c8bb9a3616155239951ee6b3cc1114cb816da7f2"
+    },
+    {
+      "path": "docs/screenshots/reference-study-2026-09-16/current-mobile-schedule.png",
+      "bytes": 64397,
+      "sha256": "c509864e63d5b6a2851e83b8c7b7cdb5e26b93f4776ad3b8f192f745230799dc"
+    },
+    {
+      "path": "docs/screenshots/review-2026-09-15/create-vehicles-mobile.png",
+      "bytes": 51815,
+      "sha256": "ece4845d5212869d85d7b9326df7219a8366f7b841f79ff76dc3f926321d135b"
+    },
+    {
+      "path": "docs/screenshots/review-2026-09-15/issue-detail-mobile.png",
+      "bytes": 34283,
+      "sha256": "80a0f942ea6addb5137a46f421fb39a73b8e9e2c9a30ed874ec094e2bdbff97b"
+    },
+    {
+      "path": "docs/screenshots/review-2026-09-15/issues-mobile.png",
+      "bytes": 65276,
+      "sha256": "89e207d74c026c0dd30275be0440b8a7e72c9e0468ccbc916842699ac3025715"
+    },
+    {
+      "path": "docs/screenshots/review-2026-09-15/overview-desktop.png",
+      "bytes": 175033,
+      "sha256": "2a64b16342ef09b170551b31e8f5a718eed752634fcfbac5ed84ab2ccb815f83"
+    },
+    {
+      "path": "docs/screenshots/review-2026-09-15/worker-report-mobile.png",
+      "bytes": 81727,
+      "sha256": "1ba620fb4b5bf9accd7377ed1e7707acac0036bbf9890e598c015fa3574bede1"
+    },
+    {
+      "path": "docs/screenshots/review-2026-09-16/solution-review-desktop.png",
+      "bytes": 157607,
+      "sha256": "059b2fd0dc53303760380ea7a71e1cf23385cf41f2d4327fe73f812caa08a12c"
+    },
+    {
+      "path": "docs/screenshots/review-2026-09-16/startup-desktop.png",
+      "bytes": 190422,
+      "sha256": "814f1b8f7e9b5b720401069d85ec46560353302fe4dcb9e9a34f8fd20bd48c16"
+    },
+    {
+      "path": "docs/screenshots/review-2026-09-16/startup-mobile.png",
+      "bytes": 69699,
+      "sha256": "7c01405ae4638d53047036b951502dab974c90531a6bf919fcb372b1aa63cf10"
+    },
+    {
+      "path": "docs/screenshots/shot-dashboard.png",
+      "bytes": 144096,
+      "sha256": "11ccb819b418109098a04a2601be08e35ef1a6e3176e86c2cdc7e5da408c2e59"
+    },
+    {
+      "path": "docs/screenshots/shot-people-mobile.png",
+      "bytes": 46332,
+      "sha256": "b9be843c18fd1dbbbab4b0de833b5143fe999b94040afdc114171f384c146a9d"
+    },
+    {
+      "path": "docs/screenshots/shot-people.png",
+      "bytes": 71097,
+      "sha256": "9b097e1e67ce0a1bfa7c84a019d729ad7747e2fa14b9e9299b4946322c42b77d"
+    },
+    {
+      "path": "docs/screenshots/shot-projects.png",
+      "bytes": 88445,
+      "sha256": "d8772a27ec887e99f228dc518955daba26104049c17d3ddd44f6f29145441616"
+    },
+    {
+      "path": "docs/screenshots/shot-schedule.png",
+      "bytes": 149325,
+      "sha256": "b8c84155e6d9665391701dc853e330f674c6e6d3875d47aa411839b038bb7061"
+    },
+    {
+      "path": "docs/screenshots/shot-worker-today-mobile.png",
+      "bytes": 19580,
+      "sha256": "eb86dd45e760984254c9b0b8f2a22d0da85e0a177f4ee164b09e6271dfb281fe"
+    },
+    {
+      "path": "docs/screenshots/submenus-2026-09-16/settings-mobile.png",
+      "bytes": 53675,
+      "sha256": "1865f694005dc5fc20a05034d48514dec47a4072b52fcb483cba6b995c1ad3f2"
+    },
+    {
+      "path": "docs/screenshots/submenus-2026-09-16/task-mobile.png",
+      "bytes": 23627,
+      "sha256": "39ea0a41242d92e368142ef186ac9221a3eed150323193048848ff8ca668b6fe"
+    },
+    {
+      "path": "docs/screenshots/workflow-redesign-2026-09-16/schedule-desktop.png",
+      "bytes": 178574,
+      "sha256": "6fd7adda5b4414f49e8ab4e877bc410c37d4d2f57ed02ff02df3b78d1a87b1e2"
+    },
+    {
+      "path": "docs/screenshots/workflow-redesign-2026-09-16/start-desktop.png",
+      "bytes": 150992,
+      "sha256": "306cfa3c43aa8307bd67b443751f6e4f78a6a79f8a7b9500e6480ef2f8a68f70"
+    },
+    {
+      "path": "docs/screenshots/workflow-redesign-2026-09-16/start-mobile.png",
+      "bytes": 69239,
+      "sha256": "d42d99778dafc75e6b247f7d70857cb9075382455032aa4d529963116db582c5"
+    },
+    {
+      "path": "docs/screenshots/workflow-redesign-2026-09-16/tasks-mobile.png",
+      "bytes": 59712,
+      "sha256": "68c8a8f5dba66c1fc94aed0143aa2163d6253d510d35be413f5eaa8c75869e6f"
+    },
+    {
+      "path": "docs/scripts/qa_ai_provider.py",
+      "bytes": 5964,
+      "sha256": "bbe1d6f361f2d0fd46b7512c21c0f997d97955ec631201d8e523165b14f1554a"
+    },
+    {
+      "path": "docs/scripts/t023_npm_proxy.py",
+      "bytes": 2249,
+      "sha256": "ad8df2a9da79687bf01d36317baf260b7ccb662053a6a0b96fdc0cc5a03e2786"
+    },
+    {
+      "path": "docs/scripts/t023_npm_test.py",
+      "bytes": 6239,
+      "sha256": "1e7a57afea316ba572c4c4403f386b22b697acfdc1ccdaeb0e884da8392279d4"
+    },
+    {
+      "path": "docs/scripts/t024_proxy_security_test.py",
+      "bytes": 5963,
+      "sha256": "0363f950f2c5e921ba02eafc1a5f0ab3a2c7dc21f939d46633f07e51e6738ab9"
+    },
+    {
+      "path": "docs/scripts/t025_login_limit_test.py",
+      "bytes": 6618,
+      "sha256": "c25b466d666a5e3f80a3e07894ef27a9862574592c43c387486161ea8dd66323"
+    },
+    {
+      "path": "docs/user-guide.md",
+      "bytes": 24352,
+      "sha256": "35dddec010e56cebd5be0c8329f98d508514a82ac7e4cc6eabd67f189fd0736e"
+    }
+  ]
+}

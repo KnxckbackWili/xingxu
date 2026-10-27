@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+backend/.venv/
+
+# Frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# Runtime data and secrets
+data/
+backend/data/
+*.db
+*.db-shm
+*.db-wal
+secret.key
+.env
+.env.*
+!.env.example
+.secrets/
+
+# Local tooling
+.DS_Store
+.idea/
+.vscode/
+coverage/
+.coverage
+htmlcov/
+backups/
+/dist/
+
+# Backup archives (DB dumps)
+backups/
+
+# 附件核对用本地副本（表单导入导出验证材料，不入库）
+attachments/

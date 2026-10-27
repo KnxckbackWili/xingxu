@@ -1,0 +1,84 @@
+.field-work-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; }
+.field-work-page > .work-section { margin-bottom: 0; }
+.field-work-page .work-section:not(:has(.work-section-heading)) > .work-section-filters { padding-top: 20px; }
+.field-work-page .work-section-filters > * { min-width: 0; }
+.field-work-page .ant-table-content { overflow-x: auto; overscroll-behavior-x: contain; }
+.field-work-page .ant-table-cell { overflow-wrap: anywhere; }
+.field-work-page .work-page-actions > .ant-space { flex-wrap: wrap; }
+.field-work-page .work-section-filters > .ant-input-affix-wrapper,
+.field-work-page .work-section-filters > .ant-input-search { max-width: 360px; }
+.field-work-page .work-section-filters > .ant-select { min-width: 140px; }
+.field-result-count { color: var(--agv-text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; padding: 6px 10px; border-radius: 8px; background: var(--agv-bg-subtle); }
+.field-wrap { overflow-wrap: anywhere; }
+.field-subline { display: block; margin-top: 4px; color: var(--agv-text-secondary); font-size: 12px; }
+.field-card-list { display: grid; gap: 12px; }
+.field-record-card { padding: 16px; border: 1px solid var(--agv-border); border-radius: 14px; background: var(--agv-bg-container); min-width: 0; overflow-wrap: anywhere; }
+.field-record-card h3 { margin: 0 0 10px; font-size: 16px; overflow-wrap: anywhere; }
+.field-record-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; color: var(--agv-text-secondary); font-size: 13px; }
+.field-record-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--agv-border-soft); }
+.field-label { display: block; margin-bottom: 8px; }
+.field-upload-result { display: flex; align-items: flex-start; gap: 8px; overflow-wrap: anywhere; }
+.field-upload-result > .ant-tag { flex-shrink: 0; }
+.field-details { border: 1px solid var(--agv-border); border-radius: 14px; padding: 0 14px; background: var(--agv-bg-container); }
+.field-details > summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; gap: 8px; font-weight: 500; }
+.field-details[open] > summary { margin-bottom: 12px; }
+@media (max-width: 767px) {
+  .field-work-page .work-section:not(:has(.work-section-heading)) > .work-section-filters { padding-top: 16px; }
+  .field-work-page .work-section-filters > .ant-input-search,
+  .field-work-page .work-section-filters > .ant-input-affix-wrapper { max-width: none; width: 100%; }
+  .field-work-page .work-section-filters > .ant-select { min-width: 140px; flex: 1 1 140px; }
+  .field-work-page .ant-btn, .field-work-page .ant-select-single .ant-select-selector { min-height: 44px; height: auto; }
+  .field-work-page .ant-select-single .ant-select-selection-item { line-height: 42px; }
+  .field-record-card { padding: 14px; }
+}
+
+.field-record-error { color: var(--agv-danger, #d4380d); font-size: 13px; overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+  .field-work-modal .ant-btn, .field-work-modal .ant-select-single .ant-select-selector { min-height: 44px; height: auto; }
+  .field-work-page .ant-segmented { max-width: 100%; overflow-x: auto; }
+  .field-work-page .ant-segmented-item-label { min-height: 44px; display: flex; align-items: center; }
+}
+.field-acceptance-record { padding: 12px 0; }
+.field-checklist-row { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 12px 0; border-top: 1px solid var(--agv-border-soft); }
+.field-checklist-name { flex: 1; min-width: 180px; }
+.field-checklist-name .ant-checkbox-wrapper { min-height: 44px; align-items: center; }
+.field-checklist-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.field-checklist-tools .ant-select { width: 220px; }
+.field-text-link { display: inline-flex; align-items: center; min-height: 44px; }
+#project-retrospective { scroll-margin-top: 100px; }
+@media (max-width: 767px) {
+  .field-checklist-name, .field-checklist-tools { width: 100%; }
+  .field-checklist-tools .ant-select { flex: 1; min-width: 150px; }
+}
+
+.field-secondary-actions { display: grid; gap: 10px; min-width: 180px; max-width: min(300px, calc(100vw - 56px)); }
+.field-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 0; }
+.field-facts div { min-width: 0; }
+.field-facts dt { color: var(--agv-text-secondary); font-size: 13px; margin-bottom: 6px; }
+.field-facts dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 767px) { .field-facts { grid-template-columns: 1fr; } }
+
+.field-contact-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 12px; }
+.field-contact-facts { margin-bottom: 0; }
+.field-contact-facts dt { color: var(--agv-text-secondary); font-size: 12px; margin-top: 8px; }
+.field-contact-facts dd { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+@media (max-width: 767px) { .field-work-page .task-name-link { min-height: 44px; } }
+
+@media (max-width: 767px) {
+  .field-work-modal .ant-drawer-close, .field-work-modal .ant-modal-close { min-width: 44px; min-height: 44px; width: 44px; height: 44px; }
+  .field-work-modal .ant-input:not(textarea),
+  .field-work-modal .ant-input-number-input,
+  .field-work-modal .ant-picker { min-height: 44px; }
+  .field-work-modal .ant-checkbox-wrapper { min-height: 44px; align-items: center; }
+  .field-work-page .ant-pagination { display: flex; justify-content: center; flex-wrap: wrap; gap: 4px; }
+  .field-work-page .ant-alert { flex-wrap: wrap; row-gap: 10px; }
+  .field-work-page .ant-alert-action { margin-inline-start: auto; }
+}
+
+.field-work-modal .ant-modal-title,
+.field-work-modal .ant-drawer-title { overflow-wrap: anywhere; }
+.field-work-modal .ant-modal-title { padding-inline-end: 24px; }
+.field-file-name { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 8px; }
+.field-file-name > .anticon { margin-top: 4px; color: var(--agv-text-secondary); }
+.field-files-content.ant-card > .ant-card-body { padding: 0; }

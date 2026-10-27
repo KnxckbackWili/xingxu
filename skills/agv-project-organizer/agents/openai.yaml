@@ -1,0 +1,4 @@
+interface:
+  display_name: "AGV 项目整理助手"
+  short_description: "将合同、方案和纪要整理为可校验的 AGV 项目草稿"
+  default_prompt: "使用 $agv-project-organizer 把我的项目资料整理成可导入 AGV 项目管理系统的完整草稿。"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "AGV 现场物品整理"
+  short_description: "整理物品归属、数量、位置和保管信息"
+  default_prompt: "将这些现场资料整理成 AGV 项目物品台账，标出缺失和冲突信息。"

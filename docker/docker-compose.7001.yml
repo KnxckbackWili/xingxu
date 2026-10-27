@@ -1,0 +1,38 @@
+# 与 docker-compose.yml 一起使用；7001 数据只在 Docker Linux 卷内读写。
+# 首次迁移按 docs/incident-governance-2026-09-17.md 执行，禁止直接打开运行中的 SQLite 文件。
+services:
+  agv-pm:
+    container_name: agv-pm-7001
+    image: agv-pm:7001
+    build:
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
+        # 防止 Docker 将宿主机回环代理带入构建容器。
+        HTTP_PROXY: ""
+        HTTPS_PROXY: ""
+        ALL_PROXY: ""
+        http_proxy: ""
+        https_proxy: ""
+        all_proxy: ""
+        NO_PROXY: "*"
+        no_proxy: "*"
+    ports: !override
+      - "0.0.0.0:7001:8000"
+    volumes: !override
+      - agv7001-data:/app/data
+    environment:
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-}
+      WEB_CONCURRENCY: 1
+    # SQLite 实例不启动 PostgreSQL，避免无用进程尝试切换用户。
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        sed '/program:postgres/,/program:web/s/autostart=true/autostart=false/' /app/supervisord.conf > /tmp/supervisord-7001.conf
+        exec supervisord -c /tmp/supervisord-7001.conf
+
+# External prevents silently starting with an empty directory when the expected volume is missing.
+volumes:
+  agv7001-data:
+    name: agv-pm-7001-data
+    external: true

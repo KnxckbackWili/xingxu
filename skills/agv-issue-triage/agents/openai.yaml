@@ -1,0 +1,4 @@
+interface:
+  display_name: "AGV 问题研判"
+  short_description: "分类项目问题与车辆故障并整理处理闭环"
+  default_prompt: "分析这些问题资料，区分项目问题与单车故障并给出待确认项。"

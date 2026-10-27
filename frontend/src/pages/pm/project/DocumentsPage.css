@@ -1,0 +1,10 @@
+.project-documents-page .documents-stages { margin-top: 12px; }
+.project-documents-page .documents-note { margin-top: 4px; font-size: 12px; color: var(--ant-color-text-secondary, inherit); overflow-wrap: anywhere; }
+.project-documents-page .field-record-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.project-documents-page .ant-table-cell { overflow-wrap: anywhere; }
+.project-documents-page .ant-btn-link { white-space: normal; text-align: left; height: auto; max-width: 100%; overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+  .project-documents-page .ant-segmented { max-width: 100%; overflow-x: auto; }
+  .project-documents-page .ant-collapse-content-box { padding: 10px 0 !important; }
+  .project-documents-page .field-record-card h3 { overflow-wrap: anywhere; margin-top: 0; }
+}

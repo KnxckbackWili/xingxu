@@ -1,0 +1,20 @@
+.vehicle-location-trigger { max-width: 100%; height: auto; white-space: normal; overflow-wrap: anywhere; text-align: left; padding-inline: 0; }
+.vehicle-location-editor { width: min(260px, calc(100vw - 56px)); display: flex; flex-direction: column; gap: 10px; }
+.vehicle-event-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.vehicle-part-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 90px auto; gap: 8px; align-items: start; margin-bottom: 4px; }
+.vehicle-part-fields .ant-input-number { width: 100%; }
+.vehicle-history-entry { padding: 16px 0; border-bottom: 1px solid var(--agv-border-soft); overflow-wrap: anywhere; }
+.field-work-modal .vehicle-state-strip { border-color: var(--agv-border); border-radius: 12px; background: var(--agv-bg-subtle); }
+.field-work-modal .vehicle-state-strip span { border-color: var(--agv-border-soft); color: var(--agv-text-secondary); }
+.field-work-modal .vehicle-state-strip b { color: var(--agv-text); white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+  .vehicle-location-editor .ant-input,
+  .vehicle-location-editor .ant-btn { min-height: 44px; }
+  .vehicle-event-fields { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .vehicle-part-fields { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding: 12px; border-radius: 12px; border: 1px solid var(--agv-border-soft); margin-bottom: 12px; }
+  .vehicle-part-fields .ant-form-item { margin-bottom: 0; }
+  .vehicle-part-fields > .ant-btn { justify-self: end; }
+  .field-work-modal .vehicle-state-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .field-work-modal .vehicle-state-strip > span:nth-child(2) { border-right: 0; }
+  .field-work-modal .vehicle-state-strip > span:last-child { grid-column: 1 / -1; border-top: 1px solid var(--agv-border-soft); }
+}
