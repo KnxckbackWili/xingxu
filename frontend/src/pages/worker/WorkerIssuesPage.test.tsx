@@ -235,3 +235,16 @@ it('starts with unresolved issues and exposes reported history without changing 
  fireEvent.click(screen.getByText('全部',{selector:'.ant-segmented-item-label'}))
  expect(screen.getByText('分给我处理')).toBeInTheDocument()
 })
+
+it('sends the vehicle or device the field engineer names with the report', async () => {
+  vi.mocked(api.get).mockImplementation(async (url) => ({ data: url === '/projects' ? [{ id: 'p1', name: '现场项目', status: 'executing' }]
+    : url === '/projects/p1/vehicle-units' ? [{ id: 'u1', asset_code: 'AGV-003', fleet_no: '3号车' }] : { items: [] } }) as any)
+  vi.mocked(api.post).mockResolvedValue({ data: { id: 'i1' } })
+  render(<WorkerIssuesPage />)
+  fireEvent.click(await screen.findByRole('button', { name: /上报问题/ }))
+  fireEvent.change(screen.getByLabelText('问题标题'), { target: { value: '急停后无法复位' } })
+  fireEvent.change(screen.getByLabelText('涉及车辆/设备（可选）'), { target: { value: '3号车 前防撞条' } })
+  fireEvent.click(screen.getByRole('button', { name: '提交上报' }))
+  await waitFor(() => expect(api.post).toHaveBeenCalledWith('/projects/p1/issues',
+    expect.objectContaining({ title: '急停后无法复位', extra: expect.objectContaining({ device: '3号车 前防撞条' }) })))
+})
