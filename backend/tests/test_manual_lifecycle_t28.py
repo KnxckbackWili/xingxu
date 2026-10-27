@@ -1,4 +1,5 @@
 """Human lifecycle decisions and business dates on actual submitted sign-offs."""
+from tests.lifecycle_helpers import versioned
 from datetime import date, datetime
 import json
 
@@ -72,7 +73,7 @@ def test_wrong_event_future_date_and_conflict_reject_entire_upload_without_losin
             assert db.query(DocumentVersion).filter_by(project_document_id=sign['id']).count()==0
         assert set(UPLOAD_DIR.iterdir())==before
     response=client.put(f'/api/projects/{pid}/events/commissioning_done',headers=admin_headers,
-        json={'actual_at':'2026-01-03T10:00:00+08:00'})
+        json=versioned(pid, {'actual_at':'2026-01-03T10:00:00+08:00'}))
     assert response.status_code==200,response.text
     response=client.post(f'/api/projects/{pid}/documents/files',headers=admin_headers,
         files={'file':('contradiction.txt',b'not committed')},data={'document_ids':json.dumps([sign['id']]),'milestone_dates':json.dumps({'commissioning_done':'2026-01-02'})})
@@ -136,7 +137,7 @@ def test_date_only_kickoff_creates_lifetime_and_same_submission_captures_real_de
     assert sign['due_at']=='2026-01-03T16:00:00+00:00' and not sign['due_is_estimated']
     assert sign['due_basis']['precision']=='date' and sign['due_basis']['actual_date']=='2026-01-03'
     # A later correction is not allowed to move already submitted deadlines.
-    response=client.put(f'/api/projects/{pid}/events/commissioning_done',headers=admin_headers,json={'actual_date':'2026-01-04','reason':'核对签单更正'})
+    response=client.put(f'/api/projects/{pid}/events/commissioning_done',headers=admin_headers,json=versioned(pid, {'actual_date':'2026-01-04','reason':'核对签单更正'}))
     assert response.status_code==200,response.text
     current=next(row for row in documents(client,admin_headers,pid)['documents'] if row['id']==sign['id'])
     assert (current['due_at'],current['due_basis'])==(sign['due_at'],sign['due_basis'])

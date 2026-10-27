@@ -95,7 +95,7 @@ def test_partial_registry_cannot_become_all_arrived_and_clear_is_atomic(client, 
     assert all_arrived['actual_at'] == '2026-10-02T16:00:00+00:00'
     assert all_arrived['derived'] and all_arrived['actual_precision'] == 'date'
     assert client.put(f'/api/projects/{pid}/events/arrival_all', headers=pm_headers,
-                      json={'actual_at': None, 'reason': '绕过逐台记录'}).status_code == 400
+                      json=versioned(pid, {'actual_at': None, 'reason': '绕过逐台记录'})).status_code == 400
     assert client.put(path, headers=pm_headers, json={'unit_ids': [first, second], 'arrived_at': None}).status_code == 400
     assert all(x['arrived_at'] for x in client.get(f'/api/projects/{pid}/vehicle-units', headers=pm_headers).json())
     assert client.put(path, headers=pm_headers, json={'unit_ids': [first, second], 'arrived_at': None, 'reason': '误录到场'}).status_code == 200
@@ -124,7 +124,7 @@ def test_batch_does_not_write_foreign_vehicle_and_member_cannot_change_events(cl
     assert client.get(f'/api/projects/{pid}/vehicle-units', headers=pm_headers).json()[0]['arrived_at'] is None
     client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': ['user-worker-001']}))
     assert client.put(f'/api/projects/{pid}/events/ship', headers=worker_headers,
-                      json={'actual_at': '2026-10-01T10:30:00Z'}).status_code == 403
+                      json=versioned(pid, {'actual_at': '2026-10-01T10:30:00Z'})).status_code == 403
     assert client.put(f'/api/projects/{pid}/vehicle-arrivals', headers=worker_headers,
                       json=versioned(pid, {'unit_ids': [own], 'arrived_at': '2026-10-01'})).status_code == 403
     for payload in ({'planned_entry_date': None}, {'entry_plan': {'entry_date': '2026-10-01'}}):
@@ -138,7 +138,7 @@ def test_portable_json_and_excel_preserve_event_precision_and_vehicle_arrival(cl
     client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'dispatch_platform': 'GRACE', 'event_plans': {'ship': '2026-09-30'}}))
     uid = unit(client, pm_headers, pid, vid, 'AGV-001')
     client.put(f'/api/projects/{pid}/vehicle-arrivals', headers=pm_headers, json=versioned(pid, {'unit_ids': [uid], 'arrived_at': '2026-10-03'}))
-    client.put(f'/api/projects/{pid}/events/ship', headers=pm_headers, json={'actual_at': '2026-10-01T14:30:00+08:00'})
+    client.put(f'/api/projects/{pid}/events/ship', headers=pm_headers, json=versioned(pid, {'actual_at': '2026-10-01T14:30:00+08:00'}))
     snapshot = client.get(f'/api/projects/{pid}/export/json', headers=pm_headers).json()
     assert snapshot['vehicle_units'][0]['arrived_at'] == '2026-10-03'
     assert snapshot['project']['dispatch_platform'] == 'GRACE'
@@ -176,7 +176,7 @@ def test_plan_grant_can_record_arrival_without_receiving_event_update_authority(
     assert client.put(f'/api/projects/{pid}/vehicle-arrivals', headers=worker_headers,
                       json=versioned(pid, {'unit_ids': [uid], 'arrived_at': '2026-10-03'})).status_code == 200
     assert client.put(f'/api/projects/{pid}/events/ship', headers=worker_headers,
-                      json={'actual_at': '2026-10-01T10:30:00Z'}).status_code == 403
+                      json=versioned(pid, {'actual_at': '2026-10-01T10:30:00Z'})).status_code == 403
     overview = client.get(f'/api/projects/{pid}/overview', headers=worker_headers).json()
     assert overview['project_events']['events'] == list(events(client, worker_headers, pid).values())
 
@@ -207,7 +207,7 @@ def test_readonly_legacy_date_survives_handover_clear_and_clone_keeps_only_plans
     cleared = client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'entry_plan': None}))
     assert cleared.status_code == 200, cleared.text
     assert cleared.json()['entry_plan'] == {'entry_date': '2026-10-03'}
-    client.put(f'/api/projects/{pid}/events/ship', headers=pm_headers, json={'actual_at': '2026-10-01T10:00:00Z'})
+    client.put(f'/api/projects/{pid}/events/ship', headers=pm_headers, json=versioned(pid, {'actual_at': '2026-10-01T10:00:00Z'}))
     cloned = client.post(f'/api/projects/{pid}/clone', headers=pm_headers, json={'name': '只复制计划'})
     assert cloned.status_code == 200, cloned.text
     detail = client.get(f"/api/projects/{cloned.json()['id']}", headers=pm_headers).json()

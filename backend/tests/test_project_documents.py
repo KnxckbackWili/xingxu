@@ -34,7 +34,7 @@ def test_new_project_snapshot_platform_and_real_event_seams(client,admin_headers
     assert any(row['code']=='8.2' for row in state['documents'])
     assert not any(row['timing_type'] in {'weekly','on_trigger','lifetime'} for row in state['documents'])
     assert any(row['timing_type']=='weekly' and row['waiting_reason'] for row in state['definitions'])
-    assert client.put(f'/api/projects/{pid}/events/internal_kickoff',headers=admin_headers,json={'actual_at':'2026-10-01T01:02:03Z'}).status_code==200
+    assert client.put(f'/api/projects/{pid}/events/internal_kickoff',headers=admin_headers,json=versioned(pid, {'actual_at':'2026-10-01T01:02:03Z'})).status_code==200
     assert {row['code'] for row in view(client,admin_headers,pid)['documents']} >= {'9.1','9.2'}
     assert client.get(f'/api/projects/{pid}/archive-checklist',headers=admin_headers).status_code==404
     assert client.get(f'/api/projects/{pid}/attachments',headers=admin_headers).status_code==404
@@ -94,7 +94,7 @@ def test_vehicle_document_instances_and_inventory_generation(client,admin_header
     assert unit.status_code==200,unit.text
     rows=[row for row in view(client,admin_headers,pid)['documents'] if row['code']=='6.1']
     assert len(rows)==1 and rows[0]['vehicle_unit_id']==unit.json()['id']
-    client.put(f'/api/projects/{pid}/events/internal_kickoff',headers=admin_headers,json={'actual_at':'2026-10-01T00:00:00Z'})
+    client.put(f'/api/projects/{pid}/events/internal_kickoff',headers=admin_headers,json=versioned(pid, {'actual_at':'2026-10-01T00:00:00Z'}))
     inventory=next(row for row in view(client,admin_headers,pid)['documents'] if row['code']=='9.2')
     generated=client.post(f'/api/projects/{pid}/documents/{inventory["id"]}/generate-inventory',headers=admin_headers,json={})
     assert generated.status_code==200,generated.text

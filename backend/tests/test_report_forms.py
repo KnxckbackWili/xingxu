@@ -688,7 +688,7 @@ def test_legacy_repair_keeps_already_applied_event_schema_and_dates(client, pm_h
     changed = client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'dispatch_platform': 'NDC'}))
     assert changed.status_code == 200, changed.text
     dated = client.put(f'/api/projects/{pid}/events/ship', headers=pm_headers,
-                       json={'planned_date': '2026-10-27'})
+                       json=versioned(pid, {'planned_date': '2026-10-27'}))
     assert dated.status_code == 200, dated.text
     def state():
         with engine.connect() as connection:

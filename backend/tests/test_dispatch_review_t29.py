@@ -1,4 +1,5 @@
 """Stage-five evidence replaces legacy preparations and gates every field write."""
+from tests.lifecycle_helpers import versioned
 from datetime import timedelta
 from uuid import uuid4
 import pytest
@@ -99,7 +100,7 @@ def test_new_overdue_condition_needs_reapproval_and_legacy_review_grants_no_curr
             row.timing_type='before_event'; row.timing_event='ship'; row.timing_offset_hours=1
         db.commit()
     from app.time_utils import project_today
-    response=client.put(f'/api/projects/{pid}/events/ship', headers=pm_headers, json={'planned_date': (project_today('Asia/Shanghai')+timedelta(days=10)).isoformat()})
+    response=client.put(f'/api/projects/{pid}/events/ship', headers=pm_headers, json=versioned(pid, {'planned_date': (project_today('Asia/Shanghai')+timedelta(days=10)).isoformat()}))
     assert response.status_code == 200, response.text
     assert preview(client, pm_headers, pid)['entry_unmet'][0]['due_at'] is not None
     assert confirm(client, pm_headers, pid).status_code == 200

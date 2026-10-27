@@ -1,4 +1,5 @@
 """Real generated evidence, project-local weeks, source ACLs and atomic failure."""
+from tests.lifecycle_helpers import versioned
 import io,hashlib
 from zipfile import ZipFile
 from datetime import datetime,date
@@ -22,6 +23,7 @@ def weekly(client,headers,monkeypatch,pid=None):
     if pid is None:pid=create(client,headers,start_date='2025-01-01',timezone='Pacific/Auckland')['id']
     with SessionLocal() as db:
         project=db.get(models.Project,pid);project.start_date=date(2025,1,1);project.timezone='Pacific/Auckland'
+        project.status='executing'  # site-stage weekly documents exist once on site
         rule=db.query(models.ProjectDocumentDefinition).filter_by(project_id=pid,code='6.2').one();rule.created_at=NOW
         db.flush();deadlines.generate_weekly(db,project,now=NOW,actor_id=project.manager);db.commit()
     document=next(row for row in view(client,headers,pid)['documents'] if row['code']=='6.2' and row['period_key']=='2026-W01')
@@ -176,7 +178,7 @@ def test_archived_or_explicitly_denied_generation_creates_no_evidence(client,pm_
 
 def test_inventory_shared_generation_preserves_original_movement_time_and_source(client,pm_headers):
     pid=create(client,pm_headers)['id']
-    assert client.put(f'/api/projects/{pid}/events/internal_kickoff',headers=pm_headers,json={'actual_at':'2026-01-02T01:00:00Z'}).status_code==200
+    assert client.put(f'/api/projects/{pid}/events/internal_kickoff',headers=pm_headers,json=versioned(pid, {'actual_at':'2026-01-02T01:00:00Z'})).status_code==200
     document=next(row for row in view(client,pm_headers,pid)['documents'] if row['code']=='9.2')
     with SessionLocal() as db:
         item=models.ProjectInventoryItem(project_id=pid,name='真实工具',quantity=2,unit='个');db.add(item);db.flush()
