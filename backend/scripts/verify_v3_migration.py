@@ -16,7 +16,7 @@ import hashlib
 import io
 import json
 import logging
-from math import floor, fsum, isclose
+from math import floor, fsum, isclose, isfinite
 import os
 from pathlib import Path, PurePosixPath
 import re
@@ -38,10 +38,12 @@ class VerificationError(Exception):
 
 
 def normalized(value):
+    if isinstance(value, float) and not isfinite(value):
+        return {"invalid_original_number": str(value)}
     if isinstance(value, (datetime, date)):
         return value.isoformat()
     if isinstance(value, Decimal):
-        return float(value)
+        return normalized(float(value))
     if isinstance(value, bytes):
         return {"bytes_sha256": hashlib.sha256(value).hexdigest(), "size": len(value)}
     if isinstance(value, dict):
@@ -211,7 +213,7 @@ def encrypted_exports(data):
             raise VerificationError("RETIREMENT_EXPORT_PAYLOAD_SHA_MISMATCH")
         with zipfile.ZipFile(io.BytesIO(payload)) as archive:
             for name, rows in json.loads(archive.read("records.json")).items():
-                records[name].extend(rows)
+                records[name].extend(normalized(rows))
             for member in archive.infolist():
                 if not member.filename.startswith("files/") or member.is_dir():
                     continue
@@ -499,6 +501,252 @@ def verify_t34(before, after, enabled):
                 for key in manual_keys:
                     verified[("tasks", task["id"], key)] = "t34_original_snapshot_and_independent_verified_completion_audit"
     return dispositions, failures, verified
+
+
+def exact_decimal_sum(numbers):
+    """Add finite old numeric values using integer scaling, without context rounding."""
+    if not numbers:
+        return Decimal(0)
+    minimum = min(0, *(number.as_tuple().exponent for number in numbers))
+    if abs(minimum) > 10000 or any(abs(number.adjusted()) > 10000 for number in numbers):
+        raise VerificationError("T40_ORIGINAL_NUMBER_EXPONENT_OUT_OF_BOUNDS")
+    total = 0
+    for number in numbers:
+        sign, digits, exponent = number.as_tuple()
+        coefficient = int(''.join(str(digit) for digit in digits))
+        total += (-coefficient if sign else coefficient) * 10 ** (exponent - minimum)
+    return Decimal((int(total < 0), tuple(int(digit) for digit in str(abs(total))), minimum))
+
+
+def verify_t40(before, after, enabled):
+    """Rebuild weekly obligations from original rows, never from claimed source.
+
+    This verification uses the pre-g01 database snapshot. The new cell's source
+    is evidence to compare, not input from which to derive its expected values.
+    Retired projects remain subject to the independent encrypted-export check.
+    """
+    if not enabled:
+        return [], []
+    from datetime import timedelta
+    from decimal import InvalidOperation
+    source_kind = 't40_legacy_daily_rollup'
+    original_columns = {'id', 'project_id', 'task_id', 'work_date', 'assignee_id',
+                        'planned_quantity', 'status', 'notes', 'is_confirmed', 'is_locked', 'version'}
+    source_tasks = {r['id']: r for r in before.get('tasks', [])}
+    current_tasks = {r['id']: r for r in after.get('tasks', [])}
+    source_projects = {r['id'] for r in before.get('projects', [])}
+    surviving = source_projects & {r['id'] for r in after.get('projects', [])}
+    modules = {r['id']: r for r in before.get('modules', [])}
+    phases = {r['id']: r for r in before.get('phases', [])}
+    groups, actual, audits = defaultdict(list), defaultdict(list), defaultdict(list)
+    failures, records = [], []
+    current_originals = {r['id']: r for r in after.get('schedule_entries', [])}
+    source_ids = {r['id'] for r in before.get('schedule_entries', [])}
+
+    def fail(kind, **details):
+        failures.append({'kind': kind, **details})
+
+    def boolean(value):
+        return value is None or type(value) is bool or type(value) is int and value in (0, 1)
+
+    for row in before.get('schedule_entries', []):
+        if row.get('project_id') not in surviving:
+            continue
+        retained_row = current_originals.get(row.get('id'))
+        if retained_row is None:
+            fail('t40_original_live_row_missing', entry_id=row.get('id'))
+        else:
+            for column, value in row.items():
+                if column not in retained_row or encoded(retained_row[column]) != encoded(value):
+                    fail('t40_original_live_field_changed', entry_id=row.get('id'), column=column)
+        task = source_tasks.get(row.get('task_id'))
+        if not original_columns.issubset(row) or not task or task.get('project_id') != row['project_id']:
+            fail('t40_invalid_original_columns_or_owner', entry_id=row.get('id'))
+            continue
+        if not boolean(row['is_confirmed']) or not boolean(row['is_locked']):
+            fail('t40_invalid_original_boolean', entry_id=row['id'])
+            continue
+        try:
+            day = date.fromisoformat(row['work_date']) if isinstance(row['work_date'], str) else row['work_date']
+            if type(day) is not date:
+                raise ValueError
+            monday = (day - timedelta(days=day.weekday())).isoformat()
+        except (ValueError, TypeError, AttributeError):
+            fail('t40_invalid_original_date', entry_id=row['id'])
+            continue
+        key = (row['project_id'], row['task_id'], monday, bool(row['is_confirmed']), row['status'] == 'skipped')
+        groups[key].append(row)
+    for row in after.get('schedule_entries', []):
+        if row['id'] not in source_ids:
+            fail('t40_unexplained_new_daily_row', entry_id=row['id'])
+    for cell in after.get('weekly_plan_cells', []):
+        if type(cell.get('published')) is not bool or type(cell.get('is_cancelled')) is not bool:
+            fail('t40_invalid_weekly_boolean', cell_id=cell.get('id'))
+            continue
+        key = (cell.get('project_id'), cell.get('task_id'), cell.get('week_start'), cell['published'], cell['is_cancelled'])
+        actual[key].append(cell)
+    for event in after.get('change_logs', []):
+        if event.get('action') == 'migrate_weeks':
+            audits[event.get('project_id')].append(event)
+
+    verified_cell_ids = defaultdict(list)
+    covered_entry_ids = set()
+    for key, original_rows in groups.items():
+        pid, tid, monday, published, cancelled = key
+        rows = sorted(original_rows, key=lambda r: (r['work_date'], r['id']))
+        cells = actual.pop(key, [])
+        if len(cells) != 1:
+            fail('t40_missing_weekly_cell' if not cells else 't40_duplicate_weekly_cell',
+                 project_id=pid, task_id=tid, week_start=monday, count=len(cells))
+            continue
+        cell, task = cells[0], source_tasks[tid]
+        start_errors = len(failures)
+        verified_cell_ids[pid].append(cell.get('id'))
+        phase = phases.get(modules.get(task.get('module_id'), {}).get('phase_id'))
+        expected_step = 'legacy_' + tid if task.get('quantity_type') == 'per_vehicle' and phase and phase.get('name') != '项目准备' else None
+        current = current_tasks.get(tid)
+        if not current or current.get('project_id') != pid or current.get('quantity_type') != task.get('quantity_type') or current.get('vehicle_step_key') != expected_step:
+            fail('t40_changed_work_scope', cell_id=cell.get('id'), task_id=tid)
+        numbers, nulls, invalid = [], 0, 0
+        for row in rows:
+            value = row['planned_quantity']
+            if value is None:
+                nulls += 1
+                continue
+            try:
+                if isinstance(value, dict) or isinstance(value, bool):
+                    raise InvalidOperation
+                number = Decimal(str(value))
+                if not number.is_finite():
+                    raise InvalidOperation
+                numbers.append(number)
+            except (InvalidOperation, ValueError, TypeError):
+                invalid += 1
+        known = exact_decimal_sum(numbers)
+        unknown = nulls + invalid
+        vehicle = task.get('quantity_type') == 'per_vehicle'
+        positive = not unknown and known > 0
+        target = int(known) if vehicle and positive and known == known.to_integral_value() and known <= 2147483647 else None
+        expected_mode = 'finish' if unknown or positive else 'in_progress'
+        review_required = bool(unknown or vehicle and positive and target is None)
+        expected = {
+            'scope_key': f"all:legacy:{'published' if published else 'draft'}:{'cancelled' if cancelled else 'active'}",
+            'scope': {'vehicle_unit_ids': []}, 'vehicle_step_key': expected_step,
+            'mode': expected_mode, 'target_count': target,
+            'assignee_ids': sorted({row['assignee_id'] for row in rows if row['assignee_id']}),
+            'published_at': None, 'published_by': None, 'created_by': None, 'updated_by': None,
+            'version': 0, 'intent_review_required': review_required,
+        }
+        for field, value in expected.items():
+            if field not in cell or cell[field] != value:
+                fail('t40_wrong_weekly_cell_field', cell_id=cell.get('id'), column=field)
+        if type(cell.get('version')) is not int or target is not None and type(cell.get('target_count')) is not int:
+            fail('t40_invalid_weekly_numeric_type', cell_id=cell.get('id'))
+        try:
+            created = datetime.fromisoformat(cell['created_at'])
+            updated = datetime.fromisoformat(cell['updated_at'])
+            if updated < created:
+                raise ValueError
+        except (KeyError, ValueError, TypeError):
+            fail('t40_invalid_creation_chronology', cell_id=cell.get('id'))
+        source = cell.get('source_metadata')
+        required = {'kind', 'original_entries', 'original_entry_ids', 'original_planned_sum',
+                    'migration_review_required', 'publication_time', 'publication_actor'}
+        required |= {'known_planned_sum', 'unknown_quantity_count', 'null_quantity_count', 'invalid_quantity_count'}
+        if not isinstance(source, dict) or set(source) != required:
+            fail('t40_missing_or_unexplained_source_shape', cell_id=cell.get('id'))
+            continue
+        expected_source = {'kind': source_kind, 'original_entry_ids': [row['id'] for row in rows],
+            'original_planned_sum': None if unknown else str(known),
+            'migration_review_required': review_required,
+            'publication_time': 'unknown', 'publication_actor': 'unknown',
+            'known_planned_sum': str(known), 'unknown_quantity_count': unknown,
+            'null_quantity_count': nulls, 'invalid_quantity_count': invalid}
+        for field, value in expected_source.items():
+            if field not in source or source[field] != value:
+                fail('t40_incorrect_quantity_or_source_disposition', cell_id=cell.get('id'), column=field)
+        if type(source.get('migration_review_required')) is not bool or any(type(source.get(k)) is not int for k in ('unknown_quantity_count', 'null_quantity_count', 'invalid_quantity_count')) or type(cell.get('intent_review_required')) is not bool:
+            fail('t40_invalid_source_numeric_type', cell_id=cell.get('id'))
+        originals = source.get('original_entries')
+        if not isinstance(originals, list) or len(originals) != len(rows):
+            fail('t40_original_entry_coverage_mismatch', cell_id=cell.get('id'))
+        else:
+            for original, retained in zip(rows, originals):
+                if not isinstance(retained, dict) or set(retained) != set(original):
+                    fail('t40_original_entry_columns_mismatch', entry_id=original['id'])
+                    continue
+                for column, value in original.items():
+                    candidate = retained[column]
+                    if column in ('is_confirmed', 'is_locked') and value is not None:
+                        equal = boolean(candidate) and candidate is not None and bool(candidate) == bool(value)
+                    else:
+                        try:
+                            equal = encoded(candidate) == encoded(value)
+                        except (ValueError, TypeError):
+                            equal = isinstance(candidate, dict) and candidate == {'invalid_original_number': str(value)}
+                    if not equal:
+                        fail('t40_changed_original_entry_field', entry_id=original['id'], column=column)
+                if original['id'] in covered_entry_ids:
+                    fail('t40_duplicate_original_entry', entry_id=original['id'])
+                covered_entry_ids.add(original['id'])
+        if len(failures) == start_errors:
+            records.append({'cell_id': cell['id'], 'project_id': pid, 'task_id': tid,
+                'week_start': monday, 'published': published, 'cancelled': cancelled,
+                'original_entry_ids': [row['id'] for row in rows], 'known_planned_sum': str(known),
+                'unknown_quantity_count': unknown, 'target_count': target, 'mode': expected_mode,
+                'intent_review_required': review_required,
+                'destination': 'weekly_plan_cells_with_exact_immutable_original_rows'})
+    for cells in actual.values():
+        for cell in cells:
+            fail('t40_unexplained_weekly_cell', cell_id=cell.get('id'))
+    expected_projects = {key[0] for key in groups}
+    for pid in expected_projects | set(audits):
+        events = audits[pid]
+        expected_ids = verified_cell_ids.get(pid, [])
+        valid = pid in expected_projects and len(events) == 1
+        if valid:
+            event = events[0]
+            value = event.get('new_value')
+            valid = (event.get('entity_type') == 'weekly_plan' and event.get('entity_id') == pid
+                and event.get('operator_id') is None and event.get('created_at') is not None
+                and event.get('old_value') == {'source': 'schedule_entries', 'unchanged': True}
+                and isinstance(value, dict) and set(value) == {'cell_ids', 'source_kind'}
+                and value['source_kind'] == source_kind and isinstance(value['cell_ids'], list)
+                and all(isinstance(identity, str) for identity in value['cell_ids'])
+                and len(value['cell_ids']) == len(expected_ids) and set(value['cell_ids']) == set(expected_ids))
+        if not valid:
+            fail('t40_missing_or_incorrect_system_audit', project_id=pid)
+    review_cells = defaultdict(list)
+    for record in records:
+        if record['intent_review_required']:
+            review_cells[record['project_id']].append(record)
+    review_audits = defaultdict(list)
+    for event in after.get('change_logs', []):
+        if event.get('action') == 'review_plan_intent':
+            review_audits[event.get('project_id')].append(event)
+    for pid in set(review_cells) | set(review_audits):
+        cells, events = review_cells[pid], review_audits[pid]
+        valid = bool(cells) and len(events) == 1
+        if valid:
+            event = events[0]
+            old, new = event.get('old_value'), event.get('new_value')
+            expected_old = [{'id': row['cell_id'], 'previous_mode': row['mode'],
+                'previous_target_count': row['target_count'], 'previous_version': 0,
+                'unknown_quantity_count': row['unknown_quantity_count']} for row in cells]
+            valid = (event.get('project_id') == pid and event.get('entity_id') == pid
+                and event.get('entity_type') == 'weekly_plan' and event.get('operator_id') is None
+                and event.get('created_at') is not None and isinstance(old, dict) and set(old) == {'cells'}
+                and isinstance(old['cells'], list) and all(isinstance(row, dict) for row in old['cells'])
+                and encoded(sorted(old['cells'], key=lambda row: str(row.get('id', '')))) == encoded(sorted(expected_old, key=lambda row: row['id']))
+                and isinstance(new, dict) and set(new) == {'cell_ids', 'intent_review_required'}
+                and new['intent_review_required'] is True and isinstance(new['cell_ids'], list)
+                and all(isinstance(identity, str) for identity in new['cell_ids'])
+                and len(new['cell_ids']) == len(cells) and set(new['cell_ids']) == {row['cell_id'] for row in cells})
+        if not valid:
+            fail('t40_missing_or_incorrect_intent_review_audit', project_id=pid)
+    if after.get('field_operations'):
+        fail('migration_fabricated_actual_field_operation', count=len(after['field_operations']))
+    return records, failures
 
 
 def verify_fields(before, after, exported, verified_fields=None):
@@ -819,6 +1067,8 @@ def run(args):
     t34_records, t34_failures, t34_fields = verify_t34(baseline, after, "g3a34b000001" in applied_chain)
     destinations, failures = verify_fields(baseline, after, exported, t34_fields)
     failures.extend(t34_failures)
+    weekly, weekly_failures = verify_t40(before, after, "g3a40b000001" in applied_chain)
+    failures.extend(weekly_failures)
     failures.extend(t01_failures)
     documents, unclassified, document_failures = document_dispositions(baseline, after)
     failures.extend(document_failures)
@@ -874,7 +1124,7 @@ def run(args):
                "frozen_data_sha256": file_sha(BACKEND / "migrations" / "v243_data.py"),
                "preserved_transformations": destinations, "original_files": original_files, "retirement_exports": export_proof,
                "document_destinations": documents, "unclassified_files": unclassified, "unknown_vehicle_assignments": credits,
-               "work_item_destinations": t34_records,
+               "work_item_destinations": t34_records, "weekly_plan_destinations": weekly,
                "progress_before": old_progress, "progress_t01": frozen_progress(baseline), "progress_after": new_progress,
                "schema_difference_count": len(schema_differences), "repeat_upgrade_unchanged": repeated,
                "foreign_key_violation_count": foreign_key_violations,
@@ -913,6 +1163,10 @@ def run(args):
               "source_field_count": sum(len(r) for k, v in before.items() if k != "alembic_version" for r in v),
               "t01_added_rows_by_table": dict(Counter(r["table"] for r in additions)),
               "unknown_vehicle_assignments": {"rows": len(credits), "units": sum(r["unassigned_count"] for r in credits)},
+              "weekly_plans": {"source_entries_verified": sum(len(r["original_entry_ids"]) for r in weekly),
+                               "cells_verified": len(weekly), "unknown_quantity_sources": sum(r["unknown_quantity_count"] for r in weekly),
+                               "published_cells": sum(r["published"] for r in weekly), "cancelled_cells": sum(r["cancelled"] for r in weekly),
+                               "intent_review_cells": sum(r["intent_review_required"] for r in weekly)},
               "work_items": {"source_snapshots_verified": len(t34_records), "effective_completion_converted": sum(r["effective_completion_converted"] for r in t34_records)},
               "progress_comparisons": [{"project": i + 1, "before_percent": old_progress.get(p["id"], {}).get("percent"),
                                         "after_percent": new_progress[p["id"]]["percent"],

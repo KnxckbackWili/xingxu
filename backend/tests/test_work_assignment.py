@@ -1,86 +1,69 @@
-"""One field assignment flows through project, staffing and personal calendars."""
-
-def setup_work(client, headers):
-    p = client.post('/api/projects', headers=headers, json={'name':'现场追加安排', 'status':'planning', 'start_date':'2026-09-01','end_date':'2026-12-31'}).json()['id']
-    assert client.put(f'/api/projects/{p}', headers=headers, json={'members':['user-worker-001','user-worker-002']}).status_code == 200
-    u = client.post(f'/api/projects/{p}/vehicle-units', headers=headers, json={'asset_code':'AGV-900','current_stage':'planned'}).json()['id']
-    e = client.post(f'/api/projects/{p}/vehicle-units/{u}/events', headers=headers, json={'event_type':'fault','event_date':'2026-09-16','title':'驱动轮故障','is_closed':False,'status_after':'fault'}).json()['id']
-    return p,u,e
+"""维修周安排保留同一真实问题，改派不会冒充实际处理人。"""
+from datetime import timedelta
+import pytest
+from app.db import SessionLocal
+from app.models import Project,User,Task,WeeklyPlanCell,VehicleLifecycleEvent,FieldOperation
+from app.time_utils import project_today
 
 
-def test_repair_shared_id_survives_regeneration_and_reassigns(client, pm_headers, worker_headers):
-    p,u,e = setup_work(client, pm_headers)
-    url = f'/api/projects/{p}/vehicle-units/{u}/events/{e}/schedule'
-    body = {'assignee_id':'user-worker-001','work_date':'2026-09-16','estimated_hours':5,'notes':'携带驱动轮'}
-    first = client.post(url, headers=pm_headers, json=body)
-    assert first.status_code == 200, first.text
-    ids = first.json()
-    assert ids['created'] is True
-    duplicate = client.post(url, headers=pm_headers, json={**body, 'estimated_hours': 9, 'notes': '重复请求不应覆盖原备注'})
-    assert duplicate.status_code == 200, duplicate.text
-    assert duplicate.json()['created'] is False
-    assert duplicate.json()['entry_id'] == ids['entry_id']
-    assert duplicate.json()['task_id'] == ids['task_id']
-    entry = next(x for x in client.get(f'/api/projects/{p}/schedule',headers=pm_headers).json() if x['id']==ids['entry_id'])
-    assert entry['source_vehicle_event_id']==e and entry['is_confirmed'] and entry['is_locked']
-    assert entry['notes'] == body['notes']
-    personal = client.get('/api/dashboard/people-plan?from_date=2026-09-14&to_date=2026-09-20', headers=worker_headers).json()['entries']
-    assert next(x for x in personal if x['entry_id']==ids['entry_id'])['assignee_id']=='user-worker-001'
-    board = client.get('/api/dashboard/staffing?from_date=2026-09-14&to_date=2026-09-20',headers=pm_headers)
-    assert board.status_code==200,board.text
-    assert next(x for x in board.json()['entries'] if x['entry_id']==ids['entry_id'])['estimated_hours']==5
-    assert client.post(f'/api/projects/{p}/schedule/generate',headers=pm_headers).status_code==200
-    preserved = next(x for x in client.get(f'/api/projects/{p}/schedule',headers=pm_headers).json() if x['id']==ids['entry_id'])
-    update={'assignee_id':'user-worker-002','work_date':'2026-09-17','version':preserved['version']}
-    assert client.put(f"/api/schedule/{ids['entry_id']}",headers=pm_headers,json=update).status_code==200
-    assert client.put(f"/api/schedule/{ids['entry_id']}",headers=pm_headers,json=update).status_code==409
-    updated=client.get('/api/dashboard/people-plan?from_date=2026-09-14&to_date=2026-09-20',headers=pm_headers).json()['entries']
-    updated=[x for x in updated if x['entry_id']==ids['entry_id']]
-    assert len(updated)==1 and updated[0]['work_date']=='2026-09-17' and updated[0]['assignee_id']=='user-worker-002'
+def setup_work(client,headers):
+    from tests.test_vehicle_progress import setup_fleet
+    pid,units=setup_fleet(client,headers,1)
+    with SessionLocal() as db:
+        p=db.get(Project,pid);p.members=[u.id for u in db.query(User).filter(User.username.in_(['worker1','worker2']))];db.commit()
+    unit=units[0]
+    response=client.post(f'/api/projects/{pid}/vehicle-units/{unit}/events',headers=headers,
+        json={'event_type':'fault','event_date':'2026-09-16','title':'驱动轮故障','handler':'原实际处理人','is_closed':False,'status_after':'fault'})
+    assert response.status_code==200,response.text
+    return pid,unit,response.json()['id']
+
+
+def repair(client,headers,pid,unit,event,assignees):
+    today=project_today('Asia/Shanghai');start=today-timedelta(days=today.weekday())
+    return client.post(f'/api/projects/{pid}/vehicle-units/{unit}/events/{event}/weekly-plans',headers=headers,
+        json={'week_start':start.isoformat(),'assignee_ids':assignees,'mode':'finish','notes':'携带驱动轮'})
+
+
+def test_repair_shared_work_survives_weekly_publication_and_reassignment(client,pm_headers,worker_headers):
+    from tests.test_weekly_plans import publish
+    pid,unit,event=setup_work(client,pm_headers)
+    with SessionLocal() as db:ids={u.username:u.id for u in db.query(User)}
+    response=repair(client,pm_headers,pid,unit,event,[ids['worker1']]);assert response.status_code==200,response.text
+    first=response.json();cell=first['cell'];assert first['created'] and not cell['published']
+    assert publish(client,pm_headers,pid,cell).status_code==200
+    url=f"/api/projects/{pid}/weekly-plans/{cell['id']}"
+    changed=client.put(url,headers=pm_headers,json={'version':1,'assignee_ids':[ids['worker2']]})
+    assert changed.status_code==200 and changed.json()['assignee_ids']==[ids['worker2']]
+    assert client.put(url,headers=pm_headers,json={'version':1,'assignee_ids':[ids['worker1']]}).status_code==409
+    next_week=(project_today('Asia/Shanghai')+timedelta(weeks=1));next_week-=timedelta(days=next_week.weekday())
+    another=client.post(f'/api/projects/{pid}/vehicle-units/{unit}/events/{event}/weekly-plans',headers=pm_headers,
+        json={'week_start':next_week.isoformat(),'assignee_ids':[ids['worker2']],'mode':'in_progress'})
+    assert another.status_code==200 and not another.json()['created'] and another.json()['task_id']==first['task_id']
+    with SessionLocal() as db:
+        assert db.get(Task,first['task_id']).source_vehicle_event_id==event
+        assert db.query(Task).filter_by(project_id=pid,source_vehicle_event_id=event).count()==1
+        assert db.query(WeeklyPlanCell).filter_by(task_id=first['task_id']).count()==2
+        original=db.get(VehicleLifecycleEvent,event);assert original.handler=='原实际处理人' and not original.is_closed
+        assert not db.query(FieldOperation).filter_by(project_id=pid).count()
 
 
 def test_repair_rejects_wrong_person_scope_and_closed_fault(client,pm_headers,worker_headers):
-    p,u,e=setup_work(client,pm_headers)
-    url=f'/api/projects/{p}/vehicle-units/{u}/events/{e}/schedule'
-    body={'assignee_id':'user-worker-001','work_date':'2026-09-16'}
-    assert client.post(url,headers=worker_headers,json=body).status_code==403
-    assert client.post(url,headers=pm_headers,json={**body,'assignee_id':'missing'}).status_code==400
-    assert client.post(f'/api/projects/{p}/vehicle-units/missing/events/{e}/schedule',headers=pm_headers,json=body).status_code==404
-    close=client.put(f'/api/projects/{p}/vehicle-units/{u}/events/{e}',headers=pm_headers,json={'is_closed':True,'verification':'试运行正常','status_after':'normal'})
-    assert close.status_code==200,close.text
-    assert client.post(url,headers=pm_headers,json=body).status_code==400
+    pid,unit,event=setup_work(client,pm_headers)
+    with SessionLocal() as db:wid=db.query(User).filter_by(username='worker1').one().id
+    assert repair(client,worker_headers,pid,unit,event,[wid]).status_code==403
+    assert repair(client,pm_headers,pid,unit,event,['missing']).status_code==400
+    assert repair(client,pm_headers,pid,'missing',event,[wid]).status_code==404
+    closed=client.put(f'/api/projects/{pid}/vehicle-units/{unit}/events/{event}',headers=pm_headers,
+        json={'is_closed':True,'verification':'试运行正常','status_after':'normal'})
+    assert closed.status_code==200,closed.text
+    assert repair(client,pm_headers,pid,unit,event,[wid]).status_code==400
 
 
-def test_manual_work_and_bounded_board(client,pm_headers,worker_headers):
-    p,_,_=setup_work(client,pm_headers)
-    response=client.post(f'/api/projects/{p}/schedule/manual',headers=pm_headers,json={'title':'客户联调','assignee_id':'user-worker-001','work_date':'2026-09-18','estimated_hours':3})
-    assert response.status_code==200,response.text
-    ids = response.json()
-    assert ids['created'] is True
-    duplicate = client.post(f'/api/projects/{p}/schedule/manual', headers=pm_headers, json={
-        'task_id': ids['task_id'], 'assignee_id': 'user-worker-001', 'work_date': '2026-09-18',
-        'planned_quantity': 7, 'notes': '重复请求不应覆盖数量或备注',
-    })
-    assert duplicate.status_code == 200, duplicate.text
-    assert duplicate.json()['created'] is False
-    assert duplicate.json()['entry_id'] == ids['entry_id']
-    assert duplicate.json()['task_id'] == ids['task_id']
-    entries = client.get(f'/api/projects/{p}/schedule', headers=pm_headers).json()
-    entry = next(x for x in entries if x['id'] == ids['entry_id'])
-    assert sum(x['id'] == ids['entry_id'] for x in entries) == 1
-    assert entry['planned_quantity'] == 1 and entry['notes'] == ''
-    assert entry['is_confirmed'] and entry['is_locked']
-    assert client.get('/api/dashboard/staffing?from_date=2026-09-01&to_date=2026-12-31',headers=pm_headers).status_code==400
-    assert client.get('/api/dashboard/staffing?from_date=2026-09-14&to_date=2026-09-20',headers=worker_headers).status_code==403
-    assert client.post(f'/api/projects/{p}/schedule/manual',headers=pm_headers,json={'title':'   ','assignee_id':'user-worker-001','work_date':'2026-09-18'}).status_code==400
-
-
-def test_cannot_issue_invisible_work_for_paused_or_draft_projects(client,pm_headers):
-    from app.db import SessionLocal
-    from app.models import Project
-    p,_,_=setup_work(client,pm_headers)
-    for status in ('draft','suspended','completed','archived'):
-        with SessionLocal() as db:
-            project=db.get(Project,p);project.status=status;db.commit()
-        response=client.post(f'/api/projects/{p}/schedule/manual',headers=pm_headers,json={'title':'不可见安排','assignee_id':'user-worker-001','work_date':'2026-09-18'})
-        assert response.status_code==400,response.text
+@pytest.mark.parametrize('status',['suspended','completed','archived'])
+def test_repair_weekly_plan_rejects_terminal_or_paused_project_without_writes(client,pm_headers,status):
+    pid,unit,event=setup_work(client,pm_headers)
+    with SessionLocal() as db:p=db.get(Project,pid);p.status=status;db.commit()
+    response=repair(client,pm_headers,pid,unit,event,[]);assert response.status_code==400,response.text
+    with SessionLocal() as db:
+        assert not db.query(WeeklyPlanCell).filter_by(project_id=pid).count()
+        assert not db.query(Task).filter_by(project_id=pid,source_vehicle_event_id=event).count()

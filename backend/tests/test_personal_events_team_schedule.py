@@ -1,236 +1,63 @@
-"""HYPE-88：个人临时日程 CRUD 与团队日程可见性（只读）。"""
-
-from datetime import date, timedelta
-
-
-def _auth(client, username, password):
-    r = client.post("/api/auth/login", json={"username": username, "password": password})
-    assert r.status_code == 200, r.text
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+"""旧个人事项只读归原所有者；新安排只来自已发布周计划。"""
+from datetime import date
+from sqlalchemy import text
+from app.db import SessionLocal,engine
+from app.models import User,PersonalEvent,ChangeLog,Notification,NotificationOutbox
+from tests.test_project_lifecycle_boundaries import project
 
 
-def _managed_project_with_entry(client, pm_headers, name="团队日程项目"):
-    """PM 建项目（自己为经理）并生成一条排班指派给 worker。返回 (pid, entry)。"""
-    today = date.today()
-    r = client.post("/api/projects", headers=pm_headers, json={
-        "name": name,
-        "start_date": (today - timedelta(days=5)).isoformat(),
-        "end_date": (today + timedelta(days=20)).isoformat(),
-    })
-    pid = r.json()["id"]
-    client.put(f"/api/projects/{pid}", headers=pm_headers, json={"members": ["user-worker-001"]})
-    client.post(f"/api/projects/{pid}/status", headers=pm_headers, json={"status": "ready"})
-    from tests.lifecycle_helpers import approve_risk_entry
-    approve_risk_entry(client, pm_headers, pid)
-    client.post(f"/api/projects/{pid}/status", headers=pm_headers, json={"status": "executing"})
-    client.post(f"/api/projects/{pid}/vehicles", headers=pm_headers, json={
-        "vehicle_type": "潜伏式", "model_name": "AGV-500", "quantity": 2})
-    client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers,
-                json={"module_ids": ["mod-03"]})
-    client.post(f"/api/projects/{pid}/schedule/generate", headers=pm_headers)
-    r = client.get(f"/api/projects/{pid}/schedule", headers=pm_headers)
-    entry = r.json()[0]
-    client.put(f"/api/schedule/{entry['id']}", headers=pm_headers,
-               json={"assignee_id": "user-worker-001"})
-    return pid, entry
+def old_event(client,headers,*,owner='pm',name='原个人事项归属',title='原私密事项',notes='原私密备注'):
+    pid=project(client,headers,name)
+    with SessionLocal() as db:
+        uid=db.query(User).filter_by(username=owner).one().id
+        row=PersonalEvent(user_id=uid,project_id=pid,work_date=date(2026,9,1),title=title,notes=notes)
+        db.add(row);db.commit();return row.id,pid,uid
 
 
-# ===== A. 个人临时日程 =====
-
-def test_personal_event_crud_roundtrip(client, pm_headers, worker_headers):
-    """PM 创建/查/改/删本人临时日程；worker 角色一律 403；extra 字段 422。"""
-    d1 = (date.today() + timedelta(days=1)).isoformat()
-    # 归属项目（pm 自建 → 对自己可见）
-    pid = client.post("/api/projects", headers=pm_headers, json={
-        "name": "临时日程归属项目",
-        "start_date": (date.today() - timedelta(days=5)).isoformat(),
-        "end_date": (date.today() + timedelta(days=5)).isoformat(),
-    }).json()["id"]
-    r = client.post("/api/dashboard/personal-events", headers=pm_headers, json={
-        "project_id": pid, "work_date": d1, "title": "处理突发故障", "notes": "3 号仓"})
-    assert r.status_code == 200, r.text
-    eid = r.json()["event"]["id"]
-
-    r = client.get("/api/dashboard/personal-events", headers=pm_headers)
-    items = [e for e in r.json() if e["id"] == eid]
-    assert items and items[0]["title"] == "处理突发故障" and items[0]["notes"] == "3 号仓"
-    # HYPE-89：返回体含 project_id 与 project_name
-    assert items[0]["project_id"] == pid and items[0]["project_name"] == "临时日程归属项目"
-
-    r = client.put(f"/api/dashboard/personal-events/{eid}", headers=pm_headers, json={
-        "project_id": pid, "work_date": (date.today() + timedelta(days=2)).isoformat(),
-        "title": "处理突发故障（改期）", "notes": ""})
-    assert r.status_code == 200 and r.json()["event"]["work_date"] == (date.today() + timedelta(days=2)).isoformat()
-
-    # extra=forbid：不接受任何额外字段
-    r = client.post("/api/dashboard/personal-events", headers=pm_headers, json={
-        "project_id": pid, "work_date": d1, "title": "x", "notes": "", "user_id": "someone"})
-    assert r.status_code == 422
-
-    # worker/intern 不在 PM 端角色集 → 403（读写删都是）
-    body = {"project_id": pid, "work_date": d1, "title": "x", "notes": ""}
-    assert client.post("/api/dashboard/personal-events", headers=worker_headers, json=body).status_code == 403
-    assert client.get("/api/dashboard/personal-events", headers=worker_headers).status_code == 403
-    assert client.put(f"/api/dashboard/personal-events/{eid}", headers=worker_headers, json=body).status_code == 403
-    assert client.delete(f"/api/dashboard/personal-events/{eid}", headers=worker_headers).status_code == 403
-
-    r = client.delete(f"/api/dashboard/personal-events/{eid}", headers=pm_headers)
-    assert r.status_code == 200
-    r = client.get("/api/dashboard/personal-events", headers=pm_headers)
-    assert all(e["id"] != eid for e in r.json())
+def test_owner_history_get_preserves_original_and_excludes_other_users(client,pm_headers,admin_headers):
+    identity,pid,_=old_event(client,pm_headers)
+    other,_,_=old_event(client,admin_headers,owner='admin',title='ADMIN-PRIVATE',notes='ADMIN-PRIVATE-NOTE')
+    response=client.get('/api/dashboard/personal-events',headers=pm_headers);assert response.status_code==200,response.text
+    row=next(r for r in response.json() if r['id']==identity)
+    assert row['title']=='原私密事项' and row['notes']=='原私密备注' and row['project_id']==pid
+    assert 'ADMIN-PRIVATE' not in response.text and other not in {r['id'] for r in response.json()}
+    admin=client.get('/api/dashboard/personal-events',headers=admin_headers)
+    assert admin.status_code==200 and identity not in {r['id'] for r in admin.json()}
 
 
-def test_personal_event_other_user_entry_404(client, pm_headers, lead_headers, admin_headers):
-    """他人条目与不存在条目统一 404（即使 admin 也不能动别人的）。"""
-    d1 = (date.today() + timedelta(days=1)).isoformat()
-    pid = client.post("/api/projects", headers=pm_headers, json={
-        "name": "他人条目项目",
-        "start_date": (date.today() - timedelta(days=5)).isoformat(),
-        "end_date": (date.today() + timedelta(days=5)).isoformat(),
-    }).json()["id"]
-    r = client.post("/api/dashboard/personal-events", headers=pm_headers, json={
-        "project_id": pid, "work_date": d1, "title": "pm 的事项", "notes": ""})
-    eid = r.json()["event"]["id"]
-
-    for headers in (lead_headers, admin_headers):
-        assert client.put(f"/api/dashboard/personal-events/{eid}", headers=headers, json={
-            "project_id": "whatever", "work_date": d1, "title": "越权", "notes": ""}).status_code == 404
-        assert client.delete(f"/api/dashboard/personal-events/{eid}", headers=headers).status_code == 404
-        # 与不存在条目同一响应
-        assert client.delete("/api/dashboard/personal-events/not-exist", headers=headers).status_code == 404
-    # 本人仍可读
-    assert any(e["id"] == eid for e in client.get("/api/dashboard/personal-events", headers=pm_headers).json())
+def test_history_does_not_disclose_current_name_of_invisible_project(client,pm_headers,admin_headers):
+    identity,pid,_=old_event(client,admin_headers,owner='pm',name='HIDDEN-CURRENT-PROJECT',title='所有者原文仍可读',notes='所有者原备注')
+    response=client.get('/api/dashboard/personal-events',headers=pm_headers);assert response.status_code==200,response.text
+    row=next(r for r in response.json() if r['id']==identity)
+    assert row['title']=='所有者原文仍可读' and row['notes']=='所有者原备注'
+    assert not row['project_name'] and 'HIDDEN-CURRENT-PROJECT' not in response.text
 
 
-def test_personal_event_project_binding_hype89(client, pm_headers, worker_headers, lead_headers):
-    """HYPE-89：项目必填、不可见项目 404、PUT 允许改绑项目。"""
-    pid = client.post("/api/projects", headers=pm_headers, json={
-        "name": "绑定项目A",
-        "start_date": (date.today() - timedelta(days=5)).isoformat(),
-        "end_date": (date.today() + timedelta(days=5)).isoformat(),
-    }).json()["id"]
-    pid_b = client.post("/api/projects", headers=pm_headers, json={
-        "name": "绑定项目B",
-        "start_date": (date.today() - timedelta(days=5)).isoformat(),
-        "end_date": (date.today() + timedelta(days=5)).isoformat(),
-    }).json()["id"]
-    d1 = (date.today() + timedelta(days=1)).isoformat()
-
-    # 缺 project_id → 422
-    assert client.post("/api/dashboard/personal-events", headers=pm_headers, json={
-        "work_date": d1, "title": "x", "notes": ""}).status_code == 422
-    # 不可见项目（lead 非该项目经理/技术/协同）与不存在项目 → 404；worker 先被角色闸门 403
-    body = {"project_id": pid, "work_date": d1, "title": "x", "notes": ""}
-    assert client.post("/api/dashboard/personal-events", headers=worker_headers, json=body).status_code == 403
-    assert client.post("/api/dashboard/personal-events", headers=lead_headers, json=body).status_code == 404
-    assert client.post("/api/dashboard/personal-events", headers=pm_headers, json={
-        **body, "project_id": "not-exist-project"}).status_code == 404
-
-    r = client.post("/api/dashboard/personal-events", headers=pm_headers, json=body)
-    eid = r.json()["event"]["id"]
-    # PUT 改绑到项目 B，返回新项目名
-    r = client.put(f"/api/dashboard/personal-events/{eid}", headers=pm_headers, json={
-        **body, "project_id": pid_b})
-    assert r.status_code == 200
-    assert r.json()["event"]["project_id"] == pid_b
-    assert r.json()["event"]["project_name"] == "绑定项目B"
-    # 改绑：worker 先被角色闸门拦截（403）
-    assert client.put(f"/api/dashboard/personal-events/{eid}", headers=worker_headers, json={
-        **body, "project_id": pid_b}).status_code == 403
+def test_retired_personal_mutations_change_no_rows_audit_or_outbox(client,pm_headers,admin_headers):
+    from app.services.project_retention import _row
+    identity,pid,_=old_event(client,pm_headers)
+    models=(PersonalEvent,ChangeLog,Notification,NotificationOutbox)
+    with SessionLocal() as db:before={m.__tablename__:[_row(r) for r in db.query(m).order_by(m.id)] for m in models}
+    body={'project_id':pid,'work_date':'2026-09-02','title':'不得再新增或修改','notes':'原文必须保持'}
+    for headers in (pm_headers,admin_headers):
+        for method,path in [('POST','/api/dashboard/personal-events'),('PUT','/api/dashboard/personal-events/'+identity),('DELETE','/api/dashboard/personal-events/'+identity)]:
+            response=client.request(method,path,headers=headers,json=body);assert response.status_code==410,response.text
+    with SessionLocal() as db:assert {m.__tablename__:[_row(r) for r in db.query(m).order_by(m.id)] for m in models}==before
+    client.cookies.clear()
+    for method,path in [('POST','/api/dashboard/personal-events'),('PUT','/api/dashboard/personal-events/'+identity),('DELETE','/api/dashboard/personal-events/'+identity)]:
+        assert client.request(method,path).status_code==401
 
 
-def test_personal_event_migration_backfill_path(client, pm_headers, upgrade_legacy_schema):
-    """存量库补列路径：用「无 project_id 的旧表」模拟存量库，重跑幂等迁移后功能可用
-    （新库路径由 Alembic 完整迁移链覆盖，即其余用例）。"""
-    from sqlalchemy import text
-    from sqlalchemy.orm import Session
-    from app.db import engine
-
-    with engine.begin() as conn:
-        conn.execute(text("DROP TABLE personal_events"))
-        # 旧表结构：无 project_id 列（模拟 HYPE-88 首版的存量库）
-        conn.execute(text("""
-            CREATE TABLE personal_events (
-                id VARCHAR(36) PRIMARY KEY,
-                user_id VARCHAR(36) NOT NULL,
-                work_date DATE NOT NULL,
-                title VARCHAR(100) NOT NULL,
-                notes VARCHAR(500) DEFAULT '',
-                created_at TIMESTAMP
-            )
-        """))
+def test_personal_event_missing_project_column_migration_preserves_owner_original(client,pm_headers,upgrade_legacy_schema):
+    with SessionLocal() as db:uid=db.query(User).filter_by(username='pm').one().id
+    with engine.begin() as connection:
+        connection.execute(text('DROP TABLE personal_events'))
+        connection.execute(text('CREATE TABLE personal_events (id VARCHAR(36) PRIMARY KEY,user_id VARCHAR(36) NOT NULL,work_date DATE NOT NULL,title VARCHAR(100) NOT NULL,notes VARCHAR(500),created_at TIMESTAMP)'))
+        connection.execute(text("INSERT INTO personal_events (id,user_id,work_date,title,notes) VALUES ('original-personal-event',:uid,'2026-09-01','原无项目私密事项','原备注不猜归属')"),{'uid':uid})
     upgrade_legacy_schema()
-
-    pid = client.post("/api/projects", headers=pm_headers, json={
-        "name": "补列路径项目",
-        "start_date": (date.today() - timedelta(days=5)).isoformat(),
-        "end_date": (date.today() + timedelta(days=5)).isoformat(),
-    }).json()["id"]
-    r = client.post("/api/dashboard/personal-events", headers=pm_headers, json={
-        "project_id": pid, "work_date": (date.today() + timedelta(days=1)).isoformat(),
-        "title": "补列后创建", "notes": ""})
-    assert r.status_code == 200, r.text
-
-
-# ===== B. 团队日程（只读） =====
-
-def _create_pm_user(client, admin_headers, username, display_name):
-    r = client.post("/api/users", headers=admin_headers, json={
-        "username": username, "password": "Test1234!",
-        "display_name": display_name, "role": "pm"})
-    assert r.status_code == 200, r.text
-    return _auth(client, username, "Test1234!")
-
-
-def test_team_schedule_visibility_and_negative(client, admin_headers, pm_headers, worker_headers):
-    """PM 只看自己管辖项目的人；仅作为他人项目普通成员的项目不计入；worker 403。"""
-    from datetime import timedelta as td
-    today = date.today()
-    frm = (today - td(days=7)).isoformat()
-    to = (today + td(days=30)).isoformat()
-
-    # 甲（默认 pm 账号 user-pm-001）的管辖项目：worker 被排班
-    pid_a, _ = _managed_project_with_entry(client, pm_headers, name="甲的项目")
-
-    # 乙：另一个 PM 的项目，甲只是普通成员；乙项目里排班的是 worker2（若存在）或乙自己
-    pm_b = _create_pm_user(client, admin_headers, "pm_b_hype88", "项目经理乙")
-    pid_b, entry_b = _managed_project_with_entry(client, pm_b, name="乙的项目")
-    # 甲加入乙项目作为普通成员（非经理/技术/协同）
-    r = client.put(f"/api/projects/{pid_b}", headers=pm_b, json={"members": ["user-pm-001", "user-worker-001"]})
-    assert r.status_code == 200, r.text
-    # 乙项目排班指派给乙自己（保证乙项目有可被「看到」的人，若甲口径错误就会看到）
-    client.put(f"/api/schedule/{entry_b['id']}", headers=pm_b,
-               json={"assignee_id": "user-pm-001"})
-
-    # 甲的团队日程：只见甲项目的人；乙项目条目（即便 assignee 是甲本人也不属于甲管辖项目）
-    r = client.get(f"/api/dashboard/team-schedule?from={frm}&to={to}", headers=pm_headers)
-    assert r.status_code == 200, r.text
-    data = r.json()
-    assert all(e["project_id"] == pid_a for e in data["entries"])
-    assert all(e["project_id"] != pid_b for e in data["entries"])
-    people_ids = {p["id"] for p in data["people"]}
-    assert "user-worker-001" in people_ids  # 甲项目被排班的人
-    # 「项目经理乙」不是甲管辖项目里被排班/成员的人 → 甲看不到乙
-    pm_b_id = next(u["id"] for u in client.get("/api/users/all-active", headers=admin_headers).json()
-                   if u["display_name"] == "项目经理乙")
-    assert pm_b_id not in people_ids
-
-    # user_id 过滤：只留该人的条目
-    r = client.get(f"/api/dashboard/team-schedule?from={frm}&to={to}&user_id=user-worker-001",
-                   headers=pm_headers)
-    assert all(e["assignee_id"] == "user-worker-001" for e in r.json()["entries"])
-
-    # worker 403
-    assert client.get(f"/api/dashboard/team-schedule?from={frm}&to={to}",
-                      headers=worker_headers).status_code == 403
-
-
-def test_team_schedule_admin_sees_all(client, admin_headers, pm_headers):
-    """admin 可见全部用户/全部项目条目。"""
-    _managed_project_with_entry(client, pm_headers, name="admin视野项目")
-    today = date.today()
-    frm = (today - timedelta(days=7)).isoformat()
-    to = (today + timedelta(days=30)).isoformat()
-    r = client.get(f"/api/dashboard/team-schedule?from={frm}&to={to}", headers=admin_headers)
-    assert r.status_code == 200
-    assert any(e["project_name"] == "admin视野项目" for e in r.json()["entries"])
+    with SessionLocal() as db:
+        row=db.get(PersonalEvent,'original-personal-event')
+        assert row.user_id==uid and row.project_id is None and row.title=='原无项目私密事项' and row.notes=='原备注不猜归属'
+    response=client.get('/api/dashboard/personal-events',headers=pm_headers);assert response.status_code==200,response.text
+    row=next(r for r in response.json() if r['id']=='original-personal-event')
+    assert not row['project_id'] and not row['project_name'] and row['title']=='原无项目私密事项'

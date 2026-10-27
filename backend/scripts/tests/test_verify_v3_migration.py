@@ -263,6 +263,188 @@ class MigrationVerificationGuards(unittest.TestCase):
         self.assertEqual({r['kind'] for r in failures},
                          {'unexplained_migrated_document', 'unexplained_migrated_document_definition'})
 
+    def t40_fixture(self):
+        def entry(identity, task='t', day='2026-12-31', amount=1.0, confirmed=True, status='planned', owner='u'):
+            return {'id': identity, 'project_id': 'p', 'task_id': task, 'work_date': day,
+                'assignee_id': owner, 'planned_quantity': amount, 'status': status,
+                'notes': None if identity == 'cancelled' else 'original-' + identity,
+                'is_confirmed': confirmed, 'is_locked': identity == 'one', 'version': 4}
+        rows = [entry('one'), entry('two', day='2027-01-01', amount=2.0, owner='v'),
+            entry('fraction', amount=0.5, confirmed=False), entry('cancelled', amount=4.0, status='skipped', owner=None),
+            entry('zero', task='other', day='2027-01-04', amount=0.0),
+            entry('known-part', day='2027-01-04'), entry('unknown-part', day='2027-01-05', amount=None),
+            entry('out-of-range', day='2027-01-11', amount=2147483648.0)]
+        before = {'projects': [{'id': 'p'}], 'tasks': [
+            {'id': 't', 'project_id': 'p', 'module_id': 'm', 'quantity_type': 'per_vehicle'},
+            {'id': 'other', 'project_id': 'p', 'module_id': 'm', 'quantity_type': 'fixed'}],
+            'modules': [{'id': 'm', 'phase_id': 'ph'}], 'phases': [{'id': 'ph', 'name': '现场'}],
+            'schedule_entries': rows}
+        cells = []
+        def cell(identity, entries, known, target, *, week='2026-12-28', mode='finish', review=False, nulls=0):
+            first = entries[0]
+            published, cancelled = first['is_confirmed'], first['status'] == 'skipped'
+            cells.append({'id': identity, 'project_id': 'p', 'task_id': first['task_id'],
+                'scope_key': f"all:legacy:{'published' if published else 'draft'}:{'cancelled' if cancelled else 'active'}",
+                'scope': {'vehicle_unit_ids': []}, 'vehicle_step_key': 'legacy_t' if first['task_id'] == 't' else None,
+                'week_start': week, 'mode': mode, 'target_count': target,
+                'assignee_ids': sorted({row['assignee_id'] for row in entries if row['assignee_id']}),
+                'published': published, 'is_cancelled': cancelled, 'published_at': None, 'published_by': None,
+                'created_by': None, 'updated_by': None, 'version': 0, 'intent_review_required': review,
+                'created_at': '2026-10-27T00:00:00', 'updated_at': '2026-10-27T00:00:00',
+                'source_metadata': {'kind': 't40_legacy_daily_rollup', 'original_entries': deepcopy(entries),
+                    'original_entry_ids': [row['id'] for row in entries], 'original_planned_sum': None if nulls else known,
+                    'known_planned_sum': known, 'unknown_quantity_count': nulls, 'null_quantity_count': nulls,
+                    'invalid_quantity_count': 0, 'migration_review_required': review,
+                    'publication_time': 'unknown', 'publication_actor': 'unknown'}})
+        cell('integer', rows[:2], '3.0', 3)
+        cell('fraction-cell', rows[2:3], '0.5', None, review=True)
+        cell('cancelled-cell', rows[3:4], '4.0', 4)
+        cell('zero-cell', rows[4:5], '0.0', None, week='2027-01-04', mode='in_progress')
+        cell('mixed-null-cell', rows[5:7], '1.0', None, week='2027-01-04', review=True, nulls=1)
+        cell('range-cell', rows[7:8], '2147483648.0', None, week='2027-01-11', review=True)
+        after = {'projects': deepcopy(before['projects']), 'tasks': [
+            {**before['tasks'][0], 'vehicle_step_key': 'legacy_t'}, {**before['tasks'][1], 'vehicle_step_key': None}],
+            'schedule_entries': deepcopy(rows), 'weekly_plan_cells': cells, 'field_operations': [],
+            'change_logs': [{'id': 'audit', 'project_id': 'p', 'entity_id': 'p', 'entity_type': 'weekly_plan',
+                'action': 'migrate_weeks', 'operator_id': None, 'created_at': '2026-10-27T00:00:00',
+                'old_value': {'source': 'schedule_entries', 'unchanged': True},
+                'new_value': {'cell_ids': [row['id'] for row in cells], 'source_kind': 't40_legacy_daily_rollup'}},
+                {'id': 'intent-audit', 'project_id': 'p', 'entity_id': 'p', 'entity_type': 'weekly_plan',
+                'action': 'review_plan_intent', 'operator_id': None, 'created_at': '2026-10-27T00:00:01',
+                'old_value': {'cells': [{'id': row['id'], 'previous_mode': row['mode'], 'previous_target_count': row['target_count'],
+                    'previous_version': 0, 'unknown_quantity_count': row['source_metadata']['unknown_quantity_count']}
+                    for row in cells if row['intent_review_required']]},
+                'new_value': {'cell_ids': [row['id'] for row in cells if row['intent_review_required']], 'intent_review_required': True}}]}
+        return before, after
+
+    def test_t40_exact_sources_iso_weeks_publication_cancel_fraction_and_unknown(self):
+        before, after = self.t40_fixture()
+        records, failures = verify.verify_t40(before, after, True)
+        self.assertFalse(failures)
+        self.assertEqual(len(records), 6)
+        self.assertEqual(sum(len(row['original_entry_ids']) for row in records), 8)
+        self.assertEqual(next(row for row in records if row['cell_id'] == 'integer')['week_start'], '2026-12-28')
+        self.assertEqual(next(row for row in records if row['cell_id'] == 'mixed-null-cell')['unknown_quantity_count'], 1)
+        self.assertIsNone(next(row for row in records if row['cell_id'] == 'range-cell')['target_count'])
+        # Raw SQLite SQL retains 0/1 booleans; reflected before/after are bool.
+        for cell in after['weekly_plan_cells']:
+            for row in cell['source_metadata']['original_entries']:
+                row['is_confirmed'] = int(row['is_confirmed'])
+                row['is_locked'] = int(row['is_locked'])
+        self.assertFalse(verify.verify_t40(before, after, True)[1])
+
+    def test_t40_missing_extra_duplicate_and_wrong_cell_fields_are_rejected(self):
+        for mutation in ('missing_one', 'missing_all', 'duplicate', 'extra', 'quantity', 'owner', 'week',
+                         'published', 'cancelled', 'scope', 'step', 'actor', 'version', 'intent_flag'):
+            with self.subTest(mutation=mutation):
+                before, after = self.t40_fixture()
+                cell = after['weekly_plan_cells'][0]
+                if mutation == 'missing_one':
+                    after['weekly_plan_cells'].pop()
+                elif mutation == 'missing_all':
+                    after['weekly_plan_cells'] = []
+                elif mutation in ('extra', 'duplicate'):
+                    clone = deepcopy(cell); clone['id'] = 'extra'
+                    if mutation == 'extra': clone['week_start'] = '2027-01-25'
+                    after['weekly_plan_cells'].append(clone)
+                elif mutation == 'quantity': cell['target_count'] = 2
+                elif mutation == 'owner': cell['assignee_ids'] = ['u']
+                elif mutation == 'week': cell['week_start'] = '2027-01-04'
+                elif mutation == 'published': cell['published'] = False
+                elif mutation == 'cancelled': cell['is_cancelled'] = True
+                elif mutation == 'scope': cell['scope'] = {'vehicle_unit_ids': None}
+                elif mutation == 'step': cell['vehicle_step_key'] = 'arrival_inspection'
+                elif mutation == 'actor': cell['published_by'] = 'guessed-publisher'
+                elif mutation == 'version': cell['version'] = True
+                else: after['weekly_plan_cells'][4]['intent_review_required'] = False
+                self.assertTrue(verify.verify_t40(before, after, True)[1])
+
+    def test_t40_source_single_field_loss_and_colluding_metadata_are_rejected(self):
+        for mutation in ('source_notes', 'missing_null', 'source_id', 'source_sum', 'source_bool',
+                         'live_field', 'live_missing', 'new_daily', 'audit_missing', 'audit_owner',
+                         'intent_audit_missing', 'intent_audit_snapshot', 'colluding_owner', 'fabricated_actual'):
+            with self.subTest(mutation=mutation):
+                before, after = self.t40_fixture()
+                cell = after['weekly_plan_cells'][0]; source = cell['source_metadata']
+                if mutation == 'source_notes': source['original_entries'][0]['notes'] = 'changed'
+                elif mutation == 'missing_null': del after['weekly_plan_cells'][2]['source_metadata']['original_entries'][0]['notes']
+                elif mutation == 'source_id': source['original_entry_ids'].reverse()
+                elif mutation == 'source_sum': source['original_planned_sum'] = '0'
+                elif mutation == 'source_bool': source['original_entries'][0]['is_confirmed'] = None
+                elif mutation == 'live_field': after['schedule_entries'][0]['notes'] = 'changed'
+                elif mutation == 'live_missing': after['schedule_entries'].pop()
+                elif mutation == 'new_daily': after['schedule_entries'].append({**after['schedule_entries'][0], 'id': 'fabricated'})
+                elif mutation == 'audit_missing': after['change_logs'].pop(0)
+                elif mutation == 'audit_owner': after['change_logs'][0]['operator_id'] = 'guessed-actor'
+                elif mutation == 'intent_audit_missing': after['change_logs'].pop()
+                elif mutation == 'intent_audit_snapshot': after['change_logs'][1]['old_value']['cells'][0]['previous_target_count'] = 5
+                elif mutation == 'colluding_owner':
+                    cell['assignee_ids'] = ['rogue']
+                    for row in source['original_entries']: row['assignee_id'] = 'rogue'
+                else: after['field_operations'] = [{'id': 'fabricated', 'actor_id': 'u'}]
+                self.assertTrue(verify.verify_t40(before, after, True)[1])
+
+    def test_t40_null_does_not_become_zero_or_known_positive_target(self):
+        before, after = self.t40_fixture()
+        cell = after['weekly_plan_cells'][4]
+        source = cell['source_metadata']
+        # Recreate the original bug while retaining the exact NULL source row.
+        cell.update(target_count=1, intent_review_required=False)
+        source.update(original_planned_sum='1.0', unknown_quantity_count=0,
+                      null_quantity_count=0, migration_review_required=False)
+        failures = verify.verify_t40(before, after, True)[1]
+        self.assertTrue(failures)
+        self.assertTrue(any(row['kind'] == 't40_incorrect_quantity_or_source_disposition' for row in failures))
+        before, after = self.t40_fixture()
+        cell = after['weekly_plan_cells'][4]
+        # Isolate a correct non-vehicle unknown cell before changing one field.
+        before['tasks'] = [{**before['tasks'][0], 'quantity_type': 'fixed'}]
+        before['schedule_entries'] = before['schedule_entries'][5:7]
+        after['tasks'] = [{**before['tasks'][0], 'vehicle_step_key': None, 'manually_completed': True}]
+        after['schedule_entries'] = deepcopy(before['schedule_entries'])
+        cell['vehicle_step_key'] = None
+        after['weekly_plan_cells'] = [cell]
+        after['change_logs'][0]['new_value']['cell_ids'] = [cell['id']]
+        after['change_logs'][1]['old_value']['cells'] = [row for row in after['change_logs'][1]['old_value']['cells'] if row['id'] == cell['id']]
+        after['change_logs'][1]['new_value']['cell_ids'] = [cell['id']]
+        self.assertFalse(verify.verify_t40(before, after, True)[1])
+        # NULL remains an explicitly unknown intent even with a completed work bit.
+        cell['mode'] = 'in_progress'
+        failures = verify.verify_t40(before, after, True)[1]
+        self.assertTrue(any(row['kind'] == 't40_wrong_weekly_cell_field' and row['column'] == 'mode' for row in failures))
+
+    def test_t40_decimal_sums_do_not_round_large_known_parts_or_nonfinite_sources(self):
+        from decimal import Decimal
+        self.assertEqual(str(verify.exact_decimal_sum([Decimal('1e30'), Decimal('0.25')])),
+                         '1000000000000000000000000000000.25')
+        self.assertEqual(str(verify.exact_decimal_sum([Decimal('0.1'), Decimal('0.2')])), '0.3')
+        self.assertEqual(verify.normalized(float('inf')), {'invalid_original_number': 'inf'})
+        self.assertEqual(verify.normalized(float('nan')), {'invalid_original_number': 'nan'})
+        self.assertNotIn(b'Infinity', verify.encoded({'value': float('inf')}))
+
+    def test_t40_large_and_nonfinite_original_quantities_are_independently_recomputed(self):
+        for special, known, invalid, review in ((1e30, '1000000000000000000000000000000.25', 0, True),
+                                                (float('inf'), '0.25', 1, True)):
+            with self.subTest(invalid=invalid):
+                before, after = self.t40_fixture()
+                before['schedule_entries'][0]['planned_quantity'] = verify.normalized(special)
+                before['schedule_entries'][1]['planned_quantity'] = 0.25
+                after['schedule_entries'] = deepcopy(before['schedule_entries'])
+                cell = after['weekly_plan_cells'][0]
+                cell.update(target_count=None, intent_review_required=review)
+                source = cell['source_metadata']
+                source.update(original_entries=deepcopy(before['schedule_entries'][:2]),
+                    known_planned_sum=known, original_planned_sum=None if invalid else known,
+                    unknown_quantity_count=invalid, invalid_quantity_count=invalid,
+                    migration_review_required=review)
+                audit = after['change_logs'][1]
+                audit['old_value']['cells'].append({'id':cell['id'], 'previous_mode':'finish',
+                    'previous_target_count':None, 'previous_version':0, 'unknown_quantity_count':invalid})
+                audit['new_value']['cell_ids'].append(cell['id'])
+                self.assertFalse(verify.verify_t40(before, after, True)[1])
+                source['known_planned_sum'] = '1E+30' if not invalid else '0'
+                self.assertTrue(verify.verify_t40(before, after, True)[1])
+
     def test_full_sqlite_fixture_runs_real_chain_and_preserves_unknown_car_and_old_done(self):
         import sqlalchemy as sa
         from migrations.v243_schema import metadata
@@ -289,6 +471,15 @@ class MigrationVerificationGuards(unittest.TestCase):
                 connection.execute(t["daily_progress"].insert().values(id="dp", client_uuid="fixture-report", project_id="p", task_id="t", user_id="u", work_date=date(2026, 1, 2), completed_quantity=2))
                 connection.execute(t["tasks"].insert().values(id="completed-work", module_id="m", project_id="p", name="已达到原目标的非车辆工作", target_quantity=1, quantity_type="fixed"))
                 connection.execute(t["daily_progress"].insert().values(id="dp2", client_uuid="fixture-report2", project_id="p", task_id="completed-work", user_id="u", work_date=date(2026, 1, 2), completed_quantity=1))
+                for identity, task, day, amount, confirmed, status in (
+                    ('plan-one', 't', date(2026,12,31), 1.0, True, 'planned'),
+                    ('plan-two', 't', date(2027,1,1), 0.25, True, 'done'),
+                    ('plan-null', 't', date(2027,1,1), None, False, 'planned'),
+                    ('plan-zero', 'completed-work', date(2027,1,1), 0.0, True, 'planned'),
+                    ('plan-other-null', 'completed-work', date(2027,1,1), None, True, 'skipped')):
+                    connection.execute(t['schedule_entries'].insert().values(id=identity, project_id='p',
+                        task_id=task, work_date=day, planned_quantity=amount, assignee_id='u',
+                        is_confirmed=confirmed, is_locked=False, status=status, notes=None, version=3))
                 connection.execute(t["attachments"].insert().values(id="a", project_id="p", entity_type="task", entity_id="t", filename="source.bin", stored_name="file.bin", file_size=21,
                                                                    uploaded_by="u", uploaded_at=datetime(2026, 1, 3, 2, 4, 5)))
                 connection.execute(t["archive_checklists"].insert().values(id="ar", project_id="p", category="验收文件", item_name="旧done但无原件", is_done=True, done_by="u", done_at=datetime(2026, 1, 3)))
@@ -310,6 +501,10 @@ class MigrationVerificationGuards(unittest.TestCase):
             self.assertEqual(summary["unknown_vehicle_assignments"]["units"], 2)
             self.assertEqual(summary["work_items"]["effective_completion_converted"], 1)
             self.assertEqual(summary["vehicles"], {"before": 1, "after": 1})
+            self.assertEqual(summary['weekly_plans']['source_entries_verified'], 5)
+            self.assertEqual(summary['weekly_plans']['cells_verified'], 4)
+            self.assertEqual(summary['weekly_plans']['unknown_quantity_sources'], 2)
+            self.assertEqual(summary['weekly_plans']['intent_review_cells'], 3)
             sources = {r["source_key"]: r for r in report["document_destinations"]}
             self.assertEqual(sources["task:t:0"]["status"], "submitted")
             self.assertEqual(sources["task:t:1"]["status"], "pending")
