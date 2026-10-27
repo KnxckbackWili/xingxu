@@ -23,15 +23,52 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pytest  # noqa: E402
 
 
+_SQLITE_SNAPSHOT = os.path.join(TEST_DIR, "migrated-seed-snapshot.db")
+
+
+def _sqlite_restore(engine):
+    """Copy the freshly migrated + seeded snapshot over the test database.
+
+    Equivalent to drop_all + a full Alembic upgrade + seed, without replaying
+    the whole migration chain for every test. The page-level backup replaces
+    schema and rows, including any table a previous test altered.
+    """
+    import sqlite3
+    engine.dispose()
+    source = sqlite3.connect(_SQLITE_SNAPSHOT)
+    target = sqlite3.connect(engine.url.database)
+    try:
+        source.backup(target)
+    finally:
+        target.close()
+        source.close()
+
+
+def _sqlite_save(engine):
+    import sqlite3
+    source = sqlite3.connect(engine.url.database)
+    target = sqlite3.connect(_SQLITE_SNAPSHOT)
+    try:
+        source.backup(target)
+    finally:
+        target.close()
+        source.close()
+
+
 @pytest.fixture()
 def client():
     """Fresh tables + seed per test."""
-    from app.db import engine, Base
+    from app.db import engine, Base, _is_sqlite
     import app.models  # Register metadata before deleting a reused external test DB.
-    Base.metadata.drop_all(bind=engine)
-    from sqlalchemy import text
-    with engine.begin() as connection:
-        connection.execute(text("DROP TABLE IF EXISTS alembic_version"))
+    file_sqlite = _is_sqlite and bool(engine.url.database)
+    restored = file_sqlite and os.path.exists(_SQLITE_SNAPSHOT)
+    if restored:
+        _sqlite_restore(engine)
+    else:
+        Base.metadata.drop_all(bind=engine)
+        from sqlalchemy import text
+        with engine.begin() as connection:
+            connection.execute(text("DROP TABLE IF EXISTS alembic_version"))
     # 限流状态按用户全局累计，跨用例会误伤导出/登录测试 → 每个用例清空
     from app.services.rate_limit import reset_rate_limits
     reset_rate_limits()
@@ -43,6 +80,8 @@ def client():
     from fastapi.testclient import TestClient
     from app.main import app
     with TestClient(app) as c:
+        if file_sqlite and not restored:
+            _sqlite_save(engine)
         # Business fixtures represent a configured isolated installation. #85
         # requires encrypted project evidence before deletion; missing-password
         # behavior has dedicated tests with their own fresh DATA_DIR.

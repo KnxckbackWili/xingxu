@@ -81,8 +81,8 @@ def test_active_or_conflicting_terminal_job_cannot_be_overridden(attended, statu
 
 
 @pytest.mark.parametrize("field,value", [
-    ("confirm", False), ("confirm", 1), ("runner_id", str(uuid.uuid4())),
-    ("job_id", str(uuid.uuid4())), ("expected_version", "2.3.7"),
+    ("confirm", False), ("confirm", 1), ("runner_id", "00000000-0000-4000-8000-0000000000a1"),
+    ("job_id", "00000000-0000-4000-8000-0000000000a2"), ("expected_version", "2.3.7"),
     ("expected_commit", "unknown"), ("expected_commit", "abcdef0"),
     ("expected_commit", "c" * 40), ("outcome", "installing"),
 ])
@@ -241,7 +241,7 @@ def test_host_syncs_same_job_atomically_and_preserves_runner_identity(host_store
     assert host_store.calls[0][1]["confirm"] is True
 
 
-@pytest.mark.parametrize("overrides", [{"confirmed": False}, {"job_id": str(uuid.uuid4())}, {"expected_commit": "unknown"}])
+@pytest.mark.parametrize("overrides", [{"confirmed": False}, {"job_id": "00000000-0000-4000-8000-0000000000a3"}, {"expected_commit": "unknown"}])
 def test_host_rejects_unconfirmed_wrong_journal_or_short_commit_before_docker(host_store, overrides):
     with pytest.raises(host.RecoveryError):
         call_host(host_store, **overrides)
