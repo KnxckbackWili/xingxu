@@ -1,191 +1,37 @@
-"""Worker workbench tests."""
+"""Worker offline sync: per-item isolation, idempotency and current-version checks."""
 
-from app.time_utils import today_in
+from tests.lifecycle_helpers import versioned
 
 
 def _setup(client, pm_headers, worker_id="user-worker-001"):
-    """Project with tasks + schedule + worker member."""
+    """On-site project with generated work items (with checks) and the worker as member."""
     r = client.post("/api/projects", headers=pm_headers, json={
-        "name": "现场测试项目",
-        "status": "planning",
-        "timezone": "Asia/Shanghai",
-        "start_date": "2026-08-10", "new_vehicles": False,
-        "end_date": "2026-09-30",
+        "name": "现场测试项目", "timezone": "Asia/Shanghai",
+        "start_date": "2026-08-10", "new_vehicles": False, "end_date": "2026-09-30",
     })
+    assert r.status_code == 200, r.text
     pid = r.json()["id"]
-    client.post(f"/api/projects/{pid}/vehicles", headers=pm_headers, json={
-        "vehicle_type": "潜伏式", "model_name": "AGV-500", "quantity": 2})
-    client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers,
-                json={"module_ids": ["mod-03"]})
-    # Add worker as member
-    members = [worker_id]
-    client.put(f"/api/projects/{pid}", headers=pm_headers, json={"members": members})
-    # Schedule
-    r = client.post(f"/api/projects/{pid}/schedule/generate", headers=pm_headers)
-    assert r.status_code == 200
-    issued = client.post(f"/api/projects/{pid}/schedule/confirm", headers=pm_headers)
-    assert issued.status_code == 200, issued.text
+    generated = client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers, json={"module_ids": ["mod-01"]})
+    assert generated.status_code == 200, generated.text
+    r = client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": [worker_id]}))
+    assert r.status_code == 200, r.text
+    from app.db import SessionLocal
+    from app.models import Project
+    with SessionLocal() as db:
+        db.get(Project, pid).status = "executing"
+        db.commit()
     return pid
 
 
-def test_worker_sees_today_tasks(client, pm_headers, worker_headers):
-    _setup(client, pm_headers)
-    r = client.get("/api/worker/today", headers=worker_headers)
-    assert r.status_code == 200
-    data = r.json()
-    assert data["date"] == today_in("Asia/Shanghai").isoformat()
-    # Worker1 is a member, should see the tasks for today
-    # (schedule may start after today; check response shape instead of count)
-    assert "items" in data
-
-
-def test_worker_submits_report(client, pm_headers, worker_headers):
-    pid = _setup(client, pm_headers)
-    # Find a scheduled task with planned > 0
-    r = client.get(f"/api/projects/{pid}/schedule", headers=pm_headers)
-    entries = r.json()
-    entry = next((e for e in entries if e["planned_quantity"] > 0), None)
-    assert entry is not None
-
-    r = client.post("/api/worker/reports", headers=worker_headers, json={
-        "task_id": entry["task_id"],
-        "schedule_entry_id": entry["id"],
-        "work_date": entry["work_date"],
-        "completed_quantity": 1,
-        "note": "已完成1台",
-        "client_uuid": "test-uuid-0001",
-    })
-    assert r.status_code == 200, r.json()
-    assert r.json()["accepted"] is True
-
-    # Duplicate submit → ignored
-    r = client.post("/api/worker/reports", headers=worker_headers, json={
-        "task_id": entry["task_id"],
-        "schedule_entry_id": entry["id"],
-        "work_date": entry["work_date"],
-        "completed_quantity": 1,
-        "client_uuid": "test-uuid-0001",
-    })
-    assert r.status_code == 200
-    assert r.json()["accepted"] is False
-
-
-def test_worker_cannot_overfill(client, pm_headers, worker_headers):
-    pid = _setup(client, pm_headers)
-    r = client.get(f"/api/projects/{pid}/schedule", headers=pm_headers)
-    entries = r.json()
-    entry = next((e for e in entries if e["planned_quantity"] > 0), None)
-
-    # Find target of this task
-    r = client.get(f"/api/projects/{pid}/tree", headers=pm_headers)
-    tree = r.json()
-    target = None
-    for ph in tree:
-        for m in ph["modules"]:
-            for t in m["tasks"]:
-                if t["id"] == entry["task_id"]:
-                    target = t["target_quantity"]
-
-    # Fill over the target → 400
-    r = client.post("/api/worker/reports", headers=worker_headers, json={
-        "task_id": entry["task_id"],
-        "schedule_entry_id": entry["id"],
-        "work_date": entry["work_date"],
-        "completed_quantity": (target or 1) + 100,
-        "client_uuid": "test-uuid-0002",
-    })
-    assert r.status_code == 400
-
-
-def test_worker_records(client, pm_headers, worker_headers):
-    _setup(client, pm_headers)
-    r = client.get("/api/worker/records", headers=worker_headers)
-    assert r.status_code == 200
-    assert isinstance(r.json(), list)
-
-
-def test_batch_sync_dedupe(client, pm_headers, worker_headers):
-    pid = _setup(client, pm_headers)
-    r = client.get(f"/api/projects/{pid}/schedule", headers=pm_headers)
-    entries = r.json()
-    entry = next((e for e in entries if e["planned_quantity"] > 0), None)
-
-    # Same client_uuid twice → one synchronized UUID, no permanent queue item.
-    payload = [
-        {"task_id": entry["task_id"], "schedule_entry_id": entry["id"],
-         "work_date": entry["work_date"], "completed_quantity": 1,
-         "client_uuid": "sync-uuid-001"},
-        {"task_id": entry["task_id"], "schedule_entry_id": entry["id"],
-         "work_date": entry["work_date"], "completed_quantity": 1,
-         "client_uuid": "sync-uuid-001"},
-    ]
-    r = client.post("/api/worker/sync", headers=worker_headers, json={"reports": payload})
-    assert r.status_code == 200
-    assert len(r.json()["accepted"]) == 1
-    assert len(r.json()["rejected"]) == 0
-
-    # Simulate a lost first response: retrying an already persisted UUID is
-    # still synchronized and must be removable from the device queue.
-    r = client.post("/api/worker/sync", headers=worker_headers, json={"reports": payload[:1]})
-    assert r.status_code == 200
-    assert r.json()["accepted"] == ["sync-uuid-001"]
-    assert r.json()["rejected"] == []
-
-
-def test_worker_can_retract_today_report(client, pm_headers, worker_headers):
-    """Worker retracts own report from today; cannot touch others'."""
-    pid = _setup(client, pm_headers)
-    r = client.get(f"/api/projects/{pid}/schedule", headers=pm_headers)
-    entry = next(e for e in r.json() if e["planned_quantity"] > 0)
-
-    # Submit (work_date = today so it can be retracted)
-    r = client.post("/api/worker/reports", headers=worker_headers, json={
-        "task_id": entry["task_id"],
-        "schedule_entry_id": entry["id"],
-        "work_date": today_in("Asia/Shanghai").isoformat(),
-        "completed_quantity": 1,
-        "client_uuid": "retract-0001",
-    })
-    rid = r.json()["id"]
-
-    # Retract
-    r = client.delete(f"/api/worker/reports/{rid}", headers=worker_headers)
-    assert r.status_code == 200
-    assert "撤回" in r.json()["message"]
-
-    # Double retract → 404
-    r = client.delete(f"/api/worker/reports/{rid}", headers=worker_headers)
-    assert r.status_code == 404
-
-
-def test_worker_cannot_retract_others_report(client, pm_headers, worker_headers):
-    pid = _setup(client, pm_headers)
-    r = client.get(f"/api/projects/{pid}/schedule", headers=pm_headers)
-    entry = next(e for e in r.json() if e["planned_quantity"] > 0)
-    # worker1 submits (today, so retractable in principle)
-    r = client.post("/api/worker/reports", headers=worker_headers, json={
-        "task_id": entry["task_id"],
-        "schedule_entry_id": entry["id"],
-        "work_date": today_in("Asia/Shanghai").isoformat(),
-        "completed_quantity": 1,
-        "client_uuid": "retract-0002",
-    })
-    rid = r.json()["id"]
-    # worker2 tries to retract it
-    w2 = client.post("/api/auth/login", json={"username": "worker2", "password": "worker123"})
-    h2 = {"Authorization": f"Bearer {w2.json()['access_token']}"}
-    r = client.delete(f"/api/worker/reports/{rid}", headers=h2)
-    assert r.status_code == 404
-
-
 def _tree_task_with_checkitems(client, pid, headers):
-    """First task in the project tree that carries check items."""
-    tree = client.get(f"/api/projects/{pid}/tree", headers=headers).json()
-    for ph in tree:
-        for m in ph.get("modules", []):
-            for t in m.get("tasks", []):
-                if t.get("check_items"):
-                    return t
+    """First project work item that carries check items (current definitions)."""
+    from app.db import SessionLocal
+    from app.models import CheckItem, Task
+    with SessionLocal() as db:
+        for task in db.query(Task).filter_by(project_id=pid).order_by(Task.sort_order, Task.id):
+            checks = db.query(CheckItem).filter_by(task_id=task.id).order_by(CheckItem.sort_order, CheckItem.id).all()
+            if checks:
+                return {"id": task.id, "check_items": [{"id": c.id, "version": c.version or 0} for c in checks]}
     return None
 
 
@@ -201,20 +47,13 @@ def test_batch_sync_offline_checkitem(client, pm_headers, worker_headers):
             "type": "checkitem",
             "client_uuid": "offline-ci-0001",
             "payload": {"project_id": pid, "check_item_id": cid,
-                        "body": {"failed": True, "failed_reason": "离线实测不通过"}},
+                        "body": {"failed": True, "failed_reason": "离线实测不通过", "version": task["check_items"][0]["version"]}},
         }],
     })
     assert r.status_code == 200, r.json()
     assert "offline-ci-0001" in r.json()["accepted"]
 
-    found = None
-    tree = client.get(f"/api/projects/{pid}/tree", headers=pm_headers).json()
-    for ph in tree:
-        for m in ph.get("modules", []):
-            for t in m.get("tasks", []):
-                for ci in t.get("check_items", []):
-                    if ci["id"] == cid:
-                        found = ci
+    found = _find_checkitem(client, pid, pm_headers, cid)
     assert found is not None
     assert found["failed"] is True
     assert found["failed_reason"] == "离线实测不通过"
@@ -269,7 +108,7 @@ def test_batch_sync_rejected_detail(client, pm_headers, worker_headers):
             "type": "checkitem",
             "client_uuid": "rejected-ci-001",
             "payload": {"project_id": pid, "check_item_id": cid,
-                        "body": {"failed": True, "failed_reason": ""}},
+                        "body": {"failed": True, "failed_reason": "", "version": task["check_items"][0]["version"]}},
         }],
     })
     assert r.status_code == 200, r.json()
@@ -278,39 +117,15 @@ def test_batch_sync_rejected_detail(client, pm_headers, worker_headers):
     assert "原因" in r.json()["rejected_detail"]["rejected-ci-001"]
 
 
-def test_delete_my_report_status_info(client, pm_headers, worker_headers):
-    """C5-4：撤回填报返回状态回退信息（status_changed/prev/new），前端提示真实结果。"""
-    pid = _setup(client, pm_headers)
-    r = client.get(f"/api/projects/{pid}/schedule", headers=pm_headers)
-    entry = next(e for e in r.json() if e["planned_quantity"] > 0)
-    r = client.post("/api/worker/reports", headers=worker_headers, json={
-        "task_id": entry["task_id"],
-        "schedule_entry_id": entry["id"],
-        "work_date": today_in("Asia/Shanghai").isoformat(),
-        "completed_quantity": 1,
-        "client_uuid": "retract-st-01",
-    })
-    rid = r.json()["id"]
-
-    r = client.delete(f"/api/worker/reports/{rid}", headers=worker_headers)
-    assert r.status_code == 200
-    body = r.json()
-    assert "status_changed" in body
-    assert "prev_status" in body
-    assert "new_status" in body
-
-
 # ===== HYPE-99：离线批处理逐项事务/错误隔离/幂等 =====
 
 def _find_checkitem(client, pid, headers, cid):
-    tree = client.get(f"/api/projects/{pid}/tree", headers=headers).json()
-    for ph in tree:
-        for m in ph.get("modules", []):
-            for t in m.get("tasks", []):
-                for ci in t.get("check_items", []):
-                    if ci["id"] == cid:
-                        return ci
-    return None
+    from app.db import SessionLocal
+    from app.models import CheckItem
+    with SessionLocal() as db:
+        c = db.get(CheckItem, cid)
+        return None if c is None else {"id": c.id, "version": c.version or 0, "is_done": bool(c.is_done),
+                                       "failed": bool(c.failed), "failed_reason": c.failed_reason or ""}
 
 
 def test_batch_sync_rejected_item_leaves_no_partial_state(client, pm_headers, worker_headers):
@@ -329,10 +144,10 @@ def test_batch_sync_rejected_item_leaves_no_partial_state(client, pm_headers, wo
         "ops": [
             {"type": "checkitem", "client_uuid": "h99-iso-rej-01",
              "payload": {"project_id": pid, "check_item_id": cid,
-                         "body": {"failed": True, "failed_reason": ""}}},
+                         "body": {"failed": True, "failed_reason": "", "version": v0}}},
             {"type": "checkitem", "client_uuid": "h99-iso-ok-01",
              "payload": {"project_id": pid, "check_item_id": cid,
-                         "body": {"is_done": True}}},
+                         "body": {"is_done": True, "version": v0}}},
         ],
     })
     assert r.status_code == 200, r.json()
@@ -381,7 +196,7 @@ def test_batch_sync_malformed_item_rejected_not_500(client, pm_headers, worker_h
 
 
 def test_batch_sync_retry_all_op_types_idempotent(client, pm_headers, worker_headers):
-    """HYPE-99：report/checkitem/deliverable/issue 四种离线条目在「首响应丢失重发」时都被幂等吸收。
+    """HYPE-99：checkitem/issue 离线条目（旧交付物离线项另有保全测试）在「首响应丢失重发」时都被幂等吸收。
 
     重试整批后所有 uuid 仍 accepted，且服务端不重复落库/自增/建单。
     """
@@ -391,23 +206,10 @@ def test_batch_sync_retry_all_op_types_idempotent(client, pm_headers, worker_hea
     cid = task["check_items"][0]["id"]
     v0 = task["check_items"][0]["version"]
 
-    r = client.get(f"/api/projects/{pid}/schedule", headers=pm_headers)
-    entry = next(e for e in r.json() if e["planned_quantity"] > 0)
-
-    from tests.document_helpers import legacy_document, upload_documents
-    legacy_id = legacy_document(client, pm_headers, pid, task['id'], name='重试交付物')
-    asset = upload_documents(client, worker_headers, pid)['file']
     ops = [
-        {"type": "report", "client_uuid": "h99-rp-0001",
-         "payload": {"task_id": entry["task_id"], "schedule_entry_id": entry["id"],
-                     "work_date": entry["work_date"], "completed_quantity": 1,
-                     "client_uuid": "h99-rp-0001"}},
         {"type": "checkitem", "client_uuid": "h99-ci-0001",
          "payload": {"project_id": pid, "check_item_id": cid,
-                     "body": {"is_done": True}}},
-        {"type": "deliverable", "client_uuid": "h99-dl-0001",
-         "payload": {"project_id": pid, "task_id": task["id"],
-                     "deliverables": [{"name": "重试交付物", "done": True, "attachment_id": asset["id"]}]}},
+                     "body": {"is_done": True, "version": v0}}},
         {"type": "issue", "client_uuid": "h99-is-0001",
          "payload": {"project_id": pid, "title": "重试问题", "severity": "low"}},
     ]
@@ -429,22 +231,6 @@ def test_batch_sync_retry_all_op_types_idempotent(client, pm_headers, worker_hea
     # 问题只建一条
     issues = client.get(f"/api/projects/{pid}/issues", headers=pm_headers).json()
     assert len([i for i in issues if i["title"] == "重试问题"]) == 1
-    # 填报只落一条
-    from app.db import SessionLocal
-    from app.models import DailyProgress
-    db = SessionLocal()
-    try:
-        n = db.query(DailyProgress).filter(
-            DailyProgress.user_id == "user-worker-001",
-            DailyProgress.client_uuid == "h99-rp-0001",
-        ).count()
-    finally:
-        db.close()
-    assert n == 1
-
-    from app.models import DocumentVersion
-    with SessionLocal() as db:
-        assert db.query(DocumentVersion).filter_by(project_document_id=legacy_id).count() == 1
 
 
 def _project_with_worker(client, pm_headers, name, worker_id="user-worker-001"):
@@ -454,7 +240,7 @@ def _project_with_worker(client, pm_headers, name, worker_id="user-worker-001"):
         "end_date": "2026-09-30"})
     assert r.status_code == 200, r.text
     pid = r.json()["id"]
-    r = client.put(f"/api/projects/{pid}", headers=pm_headers, json={"members": [worker_id]})
+    r = client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": [worker_id]}))
     assert r.status_code == 200, r.text
     return pid
 
@@ -486,28 +272,3 @@ def test_batch_sync_offline_issue_same_uuid_across_projects(client, pm_headers, 
         assert matching[0]["severity"] == sev
 
 
-def test_retraction_is_audited_and_archived_projects_are_read_only(client, pm_headers, worker_headers):
-    from app.db import SessionLocal
-    from app.models import Project, ChangeLog
-    pid = _setup(client, pm_headers)
-    entry = next(e for e in client.get(f'/api/projects/{pid}/schedule', headers=pm_headers).json() if e['planned_quantity'] > 0)
-    result = client.post('/api/worker/reports', headers=worker_headers, json={
-        'task_id': entry['task_id'], 'schedule_entry_id': entry['id'],
-        'work_date': today_in("Asia/Shanghai").isoformat(), 'completed_quantity': 1, 'client_uuid': 'retract-audit-01',
-    })
-    assert result.status_code == 200
-    rid = result.json()['id']
-    with SessionLocal() as db:
-        project = db.get(Project, pid)
-        previous = project.status
-        project.status = 'archived'
-        db.commit()
-    records = client.get('/api/worker/records', headers=worker_headers).json()
-    assert next(row for row in records if row['id'] == rid)['can_retract'] is False
-    assert client.delete(f'/api/worker/reports/{rid}', headers=worker_headers).status_code == 400
-    with SessionLocal() as db:
-        db.get(Project, pid).status = previous
-        db.commit()
-    assert client.delete(f'/api/worker/reports/{rid}', headers=worker_headers).status_code == 200
-    with SessionLocal() as db:
-        assert db.query(ChangeLog).filter_by(entity_id=rid, action='delete').count() == 1

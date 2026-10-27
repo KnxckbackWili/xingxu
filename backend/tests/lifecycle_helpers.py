@@ -65,3 +65,17 @@ def project_version(client, headers, project_id):
     response = client.get(f'/api/projects/{project_id}', headers=headers)
     assert response.status_code == 200, response.text
     return response.json()['version']
+
+
+def versioned(entity_id, body, model='Project'):
+    """Edit body carrying the entity's current version, as a real client would.
+
+    Leaves an explicit version untouched so stale-version tests keep their intent.
+    """
+    if not isinstance(body, dict) or 'version' in body:
+        return body
+    import app.models as models
+    from app.db import SessionLocal
+    with SessionLocal() as db:
+        row = db.get(getattr(models, model), entity_id)
+        return {**body, 'version': (row.version or 0) if row is not None else 0}
