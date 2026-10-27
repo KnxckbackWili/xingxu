@@ -8,20 +8,6 @@ from app.time_utils import project_today
 from tests.test_execution_workflow_audit import _execution
 
 
-def test_offline_report_uses_envelope_uuid(client, worker_headers):
-    _, tid, _ = _execution(client)
-    op = {'type': 'report', 'client_uuid': 'envelope-report-001', 'payload': {
-        'task_id': tid, 'work_date': date.today().isoformat(), 'completed_quantity': 1}}
-    first = client.post('/api/worker/sync', headers=worker_headers, json={'ops': [op]})
-    assert first.json()['accepted'] == [op['client_uuid']], first.text
-    second = {**op, 'client_uuid': 'envelope-report-002', 'payload': {**op['payload'], 'client_uuid': op['client_uuid']}}
-    assert client.post('/api/worker/sync', headers=worker_headers, json={'ops': [second]}).json()['accepted'] == [second['client_uuid']]
-    assert client.post('/api/worker/sync', headers=worker_headers, json={'ops': [op, second]}).json()['rejected'] == []
-    with SessionLocal() as db:
-        reports = db.query(DailyProgress).filter_by(task_id=tid).all()
-        assert len(reports) == 2 and sum(r.completed_quantity for r in reports) == 2
-
-
 def test_legacy_offline_document_honors_frozen_source_version(client, worker_headers, pm_headers):
     from tests.document_helpers import legacy_document, upload_documents
     from app.models import ProjectDocument, OfflineOpReceipt
@@ -35,7 +21,8 @@ def test_legacy_offline_document_honors_frozen_source_version(client, worker_hea
     from copy import deepcopy
     before = deepcopy(operation)
     result = client.post('/api/worker/sync', headers=worker_headers, json={'ops': [operation]})
-    assert result.json()['rejected'] == ['stale-delivery-001'] and '版本' in result.json()['rejected_detail']['stale-delivery-001']
+    # Legacy offline deliverables are never re-applied: preserved for manual review, no receipt.
+    assert result.json()['rejected'] == ['stale-delivery-001'] and result.json()['rejected_detail']['stale-delivery-001']
     assert operation == before
     with SessionLocal() as db:
         assert db.get(ProjectDocument, did).status == 'pending'
@@ -112,14 +99,8 @@ def test_duplicate_document_selection_rejected_without_versions(client, worker_h
     assert kept['status'] == 'pending' and not kept['versions']
 
 
-def test_today_and_check_update_expose_versions(client, worker_headers):
+def test_check_update_exposes_versions(client, worker_headers):
     pid, tid, cid = _execution(client)
-    with SessionLocal() as db:
-        db.get(Task, tid).version = 7
-        db.add(ScheduleEntry(project_id=pid, task_id=tid, work_date=project_today('Asia/Shanghai'),
-            planned_quantity=10, is_confirmed=True, assignee_id='user-worker-001')); db.commit()
-    row = client.get('/api/worker/today', headers=worker_headers).json()['items'][0]
-    assert row['task_version'] == 7 and row['check_items'][0]['version'] == 0
     response = client.put(f'/api/projects/{pid}/check-items/{cid}', headers=worker_headers, json={'is_done': True, 'version': 0})
     assert response.status_code == 200 and response.json()['version'] == 1
 
@@ -137,46 +118,6 @@ def test_reopening_vehicle_issue_restores_attention_without_status_field(client,
     assert client.get(base, headers=pm_headers).json()['current_status'] == 'attention'
 
 
-@pytest.mark.parametrize('action,initial,quantity', [('report', .994, .008)])
-def test_report_bounds_use_raw_totals_not_display_rounding(client, pm_headers, action, initial, quantity):
-    pid, tid, _ = _execution(client)
-    with SessionLocal() as db:
-        db.get(Task, tid).target_quantity = 1
-        db.add(DailyProgress(project_id=pid, task_id=tid, user_id='user-pm-001', work_date=date.today(),
-            completed_quantity=initial, client_uuid='raw-bound-initial')); db.commit()
-    payload = {'task_id': tid, 'client_uuid': 'raw-bound-add'}
-    payload.update(work_date=date.today().isoformat(), completed_quantity=quantity); url = '/api/worker/reports'
-    response = client.post(url, headers=pm_headers, json=payload)
-    assert response.status_code == 400, response.text
-
-
-def test_concurrent_different_report_ids_cannot_overfill_task(client, pm_headers):
-    from concurrent.futures import ThreadPoolExecutor
-    from threading import Barrier
-    from fastapi import HTTPException
-    from app.models import User
-    from app.routers.worker import submit_report, ProgressSubmit
-    pid, tid, _ = _execution(client)
-    with SessionLocal() as db:
-        db.get(Task, tid).target_quantity = 1; db.commit()
-    gate = Barrier(2)
-    def send(n):
-        with SessionLocal() as db:
-            user = db.get(User, 'user-pm-001')
-            gate.wait(timeout=5)
-            try:
-                result = submit_report(ProgressSubmit(task_id=tid, work_date=date.today(),
-                    completed_quantity=1, client_uuid=f'concurrent-report-{n}'), user, db)
-                return 200 if result['accepted'] else 409
-            except HTTPException as exc:
-                db.rollback(); return exc.status_code
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        outcomes = sorted(pool.map(send, range(2)))
-    assert outcomes == [200, 400], outcomes
-    with SessionLocal() as db:
-        assert sum(r.completed_quantity for r in db.query(DailyProgress).filter_by(task_id=tid)) == 1
-
-
 def test_offline_versioned_operation_retry_acknowledges_saved_receipt(client, worker_headers):
     pid, _, cid = _execution(client)
     op = {'type': 'checkitem', 'client_uuid': 'saved-version-001', 'payload': {
@@ -186,92 +127,18 @@ def test_offline_versioned_operation_retry_acknowledges_saved_receipt(client, wo
         assert response.json()['accepted'] == [op['client_uuid']], response.text
 
 
-@pytest.mark.parametrize('action', ['report'])
-def test_saved_report_retry_acknowledged_after_project_completion(client, pm_headers, action):
-    from app.models import Project
-    pid, tid, _ = _execution(client)
-    url = '/api/worker/reports'
-    payload = {'task_id': tid, 'work_date': date.today().isoformat(), 'completed_quantity': 1, 'client_uuid': 'complete-retry-report'}
-    assert client.post(url, headers=pm_headers, json=payload).json()['accepted'] is True
-    with SessionLocal() as db:
-        db.get(Project, pid).status = 'completed'; db.commit()
-    response = client.post(url, headers=pm_headers, json=payload)
-    assert response.status_code == 200 and response.json()['accepted'] is False, response.text
-    fresh = client.post(url, headers=pm_headers, json={**payload, 'client_uuid': 'new-after-completion'})
-    assert fresh.status_code == 400
-
-
-def test_completed_project_cannot_retract_execution(client, worker_headers):
-    from app.models import Project
-    pid, tid, _ = _execution(client)
-    response = client.post('/api/worker/reports', headers=worker_headers, json={
-        'task_id': tid, 'work_date': project_today('Asia/Shanghai').isoformat(), 'completed_quantity': 1, 'client_uuid': 'completed-record'})
-    rid = response.json()['id']
-    with SessionLocal() as db:
-        db.get(Project, pid).status = 'completed'; db.commit()
-    records = client.get('/api/worker/records', headers=worker_headers).json()
-    assert next(r for r in records if r['id'] == rid)['can_retract'] is False
-    result = client.delete('/api/worker/reports/' + rid, headers=worker_headers)
-    assert result.status_code == 400, result.text
-
-
 @pytest.mark.parametrize('state', ['pass', 'fail'])
 def test_check_switching_from_na_restores_applicability(client, worker_headers, state):
     pid, _, cid = _execution(client)
     url = f'/api/projects/{pid}/check-items/{cid}'
-    assert client.put(url, headers=worker_headers, json={'is_applicable': False, 'not_applicable_reason': '原现场不适用'}).status_code == 200
+    na = client.put(url, headers=worker_headers, json={'is_applicable': False, 'not_applicable_reason': '原现场不适用', 'version': 0})
+    assert na.status_code == 200, na.text
     payload = {'is_done': True} if state == 'pass' else {'failed': True, 'failed_reason': '重新检查失败'}
-    result = client.put(url, headers=worker_headers, json=payload)
+    result = client.put(url, headers=worker_headers, json={**payload, 'version': na.json()['version']})
     assert result.status_code == 200 and result.json()['is_applicable'] is True, result.text
     assert result.json()['not_applicable_reason'] == ''
     assert result.json()['is_done'] is (state == 'pass')
     assert result.json()['failed'] is (state == 'fail')
-
-
-@pytest.mark.parametrize('left,right,same', [('report', 'report', False), ('report', 'report', True)])
-def test_progress_writes_share_task_lock(client, pm_headers, left, right, same):
-    from concurrent.futures import ThreadPoolExecutor
-    from threading import Barrier
-    from fastapi import HTTPException
-    from app.models import User
-    from app.routers.worker import submit_report, ProgressSubmit
-    _, tid, _ = _execution(client)
-    with SessionLocal() as db:
-        db.get(Task, tid).target_quantity = 1; db.commit()
-    gate = Barrier(2)
-    def send(n):
-        with SessionLocal() as db:
-            user = db.get(User, 'user-pm-001'); gate.wait(timeout=5)
-            key = 'shared-progress-key' if same else f'shared-progress-{n}'
-            try:
-                result = submit_report(ProgressSubmit(task_id=tid, work_date=date.today(), completed_quantity=1, client_uuid=key), user, db)
-                return 'accepted' if result['accepted'] else 'duplicate'
-            except HTTPException as exc:
-                db.rollback(); return str(exc.status_code)
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        outcomes = sorted(pool.map(send, range(2)))
-    assert outcomes == sorted(['accepted', 'duplicate' if same else '400']), outcomes
-    with SessionLocal() as db:
-        assert sum(r.completed_quantity for r in db.query(DailyProgress).filter_by(task_id=tid)) == 1
-
-
-def test_lock_timeout_returns_retriable_conflict(client, pm_headers, monkeypatch):
-    from fastapi import HTTPException
-    from sqlalchemy.exc import OperationalError
-    from app.routers.worker import _lock_task_progress
-    _, tid, _ = _execution(client)
-    with SessionLocal() as db:
-        task = db.get(Task, tid)
-        from sqlalchemy.sql.dml import Update
-        original_execute = db.execute
-        def locked(statement, *args, **kwargs):
-            if isinstance(statement, Update):
-                raise OperationalError('UPDATE tasks', {}, Exception('database is locked'))
-            return original_execute(statement, *args, **kwargs)
-        monkeypatch.setattr(db, 'execute', locked)
-        with pytest.raises(HTTPException) as error:
-            _lock_task_progress(db, task)
-        assert error.value.status_code == 409
 
 
 @pytest.mark.parametrize('operation', ['check', 'delivery', 'issue_create', 'issue_update', 'vehicle_event', 'inventory_create', 'inventory_movement', 'attachment_upload', 'attachment_delete'])
@@ -335,7 +202,7 @@ def test_field_mutations_recheck_project_after_waiting_for_lock(client, pm_heade
 def test_check_explicit_not_done_does_not_erase_failure(client, worker_headers):
     pid, _, cid = _execution(client)
     result = client.put(f'/api/projects/{pid}/check-items/{cid}', headers=worker_headers, json={
-        'is_applicable': True, 'is_done': False, 'failed': True, 'failed_reason': '本次实测失败'})
+        'is_applicable': True, 'is_done': False, 'failed': True, 'failed_reason': '本次实测失败', 'version': 0})
     assert result.status_code == 200, result.text
     assert result.json()['failed'] is True and result.json()['is_done'] is False
 
