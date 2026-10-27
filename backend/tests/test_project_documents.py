@@ -361,7 +361,7 @@ def test_agent_document_read_has_scope_and_project_isolation(client,admin_header
 
 
 def test_acceptance_scope_survives_structural_migration_but_detects_real_changes(client,admin_headers):
-    from .test_startup_targets import setup_project
+    from tests.lifecycle_helpers import setup_project
     from app.db import SessionLocal
     from app.models import Task,ProjectDocument
     from app.services.acceptance import acceptance_scope_fingerprint

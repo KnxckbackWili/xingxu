@@ -121,9 +121,12 @@ def test_before_execution_all_checks_and_manual_and_quantity_and_offline_ops_are
         db.get(Task, tid).quantity_type='fixed'; db.commit()
     assert write(client, pm_headers, pid, units).status_code == 400
     assert client.put(f'/api/projects/{pid}/check-items/{cid}', headers=pm_headers, json={'is_done': True, 'version': 0}).status_code == 400
-    assert client.post(f'/api/worker/tasks/{tid}/complete', headers=pm_headers, json={'reason': '不能提前填报'}).status_code == 400
+    with SessionLocal() as db: version = db.get(Task, tid).version or 0
+    early = client.put(f'/api/projects/{pid}/work-items/{tid}/completion', headers=pm_headers,
+                       json={'version': version, 'is_completed': True, 'reason': '不能提前填报'})
+    assert early.status_code == 400 and '现场实施前' in early.json()['detail']
     body = {'task_id': tid, 'work_date': '2026-01-01', 'completed_quantity': 1, 'client_uuid': str(uuid4())}
-    assert client.post('/api/worker/reports', headers=pm_headers, json=body).status_code == 400
+    assert client.post('/api/worker/reports', headers=pm_headers, json=body).status_code == 410  # 按日报量已退役
     response = client.post('/api/worker/sync', headers=pm_headers, json={'ops': [{'type': 'checkitem', 'client_uuid': str(uuid4()), 'payload': {'project_id': pid, 'check_item_id': cid, 'body': {'is_done': True, 'version': 0}}}]})
     assert response.status_code == 200 and len(response.json()['rejected']) == 1
     with SessionLocal() as db:

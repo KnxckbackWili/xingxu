@@ -52,7 +52,9 @@ def test_safety_is_exact_car_step_atomic_and_never_na_or_manual_cover(client,pm_
 def test_pending_never_covered_failed_only_exact_current_snapshot(client,pm_headers):
     pid,ids=setup_fleet(client,pm_headers,2);tid=work(pid,ids,safety=False)
     rows=[checks(client,pm_headers,pid,i)[0] for i in ids]
-    assert client.post(f'/api/worker/tasks/{tid}/complete',headers=pm_headers,json={'reason':'不能跳过待检'}).status_code==400
+    with SessionLocal() as db:version=db.get(Task,tid).version or 0
+    blocked=client.put(f'/api/projects/{pid}/work-items/{tid}/completion',headers=pm_headers,json={'version':version,'is_completed':True,'reason':'不能跳过待检'})
+    assert blocked.status_code==400 and '车辆进度' in blocked.json()['detail']
     with SessionLocal() as db:
         t=db.get(Task,tid);t.manually_completed=True;t.manual_completed_reason='普通检查明确原因';db.commit()
     assert write(client,pm_headers,pid,[ids[0]]).status_code==400
@@ -231,8 +233,10 @@ def test_source_definition_version_and_check_cas_cannot_be_bypassed(client,pm_he
     pid,ids=setup_fleet(client,pm_headers,1);tid=work(pid,ids)
     row=checks(client,pm_headers,pid,ids[0])[0]
     assert client.put(f"/api/projects/{pid}/check-items/{row['id']}",headers=pm_headers,json={'is_done':True}).status_code==400
-    assert client.put(f'/api/projects/{pid}/tasks/{tid}',headers=pm_headers,json=versioned(tid, {'vehicle_step_key':'go_live'}, 'Task')).status_code==400
+    assert client.put(f'/api/projects/{pid}/tasks/{tid}',headers=pm_headers,json={'vehicle_step_key':'go_live'}).status_code==428
     assert mark(client,pm_headers,pid,row,is_done=True).status_code==200
+    rebind=client.put(f'/api/projects/{pid}/tasks/{tid}',headers=pm_headers,json=versioned(tid, {'vehicle_step_key':'go_live'}, 'Task'))
+    assert rebind.status_code==400 and '检查事实' in rebind.json()['detail']
     with SessionLocal() as db:
         definition=db.query(VehicleCheckDefinition).filter_by(task_id=tid).one();definition.version=2;db.commit()
     assert write(client,pm_headers,pid,ids).status_code==400

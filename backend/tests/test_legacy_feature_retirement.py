@@ -231,7 +231,7 @@ def test_retirement_preserves_normal_projects_accounts_and_all_historical_bytes(
     with engine.connect() as connection:
         assert connection.execute(
             sa.text("SELECT id,name,status FROM projects")
-        ).all() == [("normal", "真实项目", "planning")]
+        ).all() == [("normal", "真实项目", "preparing")]  # v3 生命周期迁移把旧 planning 映射为筹备
         assert connection.execute(
             sa.text(
                 "SELECT role,password_hash,token_version,permission_version FROM users"
@@ -456,3 +456,20 @@ def test_corrupt_export_prevents_all_source_file_cleanup(legacy_db):
     assert {
         path.name: path.read_bytes() for path in (directory / "uploads").iterdir()
     } == original_files
+
+
+def test_retired_daily_schedule_quantity_and_people_views_return_410(client, admin_headers, pm_headers):
+    """按日排程、数量统计、人员看板与个人临时日程写入均已退役：认证后统一 410，不读写历史行。"""
+    retired = [
+        ("GET", "/api/dashboard/stats"), ("GET", "/api/dashboard/metrics"), ("GET", "/api/dashboard/trend"),
+        ("GET", "/api/dashboard/people-summary"), ("GET", "/api/dashboard/people-overview"),
+        ("GET", "/api/dashboard/people-workload"), ("GET", "/api/dashboard/assignment-pool"),
+        ("GET", "/api/dashboard/decision-view"), ("GET", "/api/schedule/assignment-check"),
+        ("POST", "/api/projects/missing/schedule/generate"),
+        ("POST", "/api/dashboard/personal-events"), ("PUT", "/api/dashboard/personal-events/missing"),
+        ("DELETE", "/api/dashboard/personal-events/missing"),
+        ("POST", "/api/projects/missing/governance-requests"),
+    ]
+    for method, path in retired:
+        response = client.request(method, path, headers=pm_headers, json={})
+        assert response.status_code == 410, (path, response.status_code, response.text)

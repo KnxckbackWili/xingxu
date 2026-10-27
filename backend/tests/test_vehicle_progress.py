@@ -80,11 +80,15 @@ def test_template_steps_are_frozen_and_old_lifecycle_is_independent(client,pm_he
     from app.db import SessionLocal
     from app.models import VehicleUnit,VehicleLifecycleEvent
     pid,ids=setup_fleet(client,pm_headers,1)
+    # 默认模板工作已关联环节：不能直接删掉被关联的环节。
     r=client.put('/api/templates/default/vehicle-steps',headers=admin_headers,json={'steps':[{'key':'custom','name':'现场自定义环节'}]})
+    assert r.status_code==400 and '工作关联' in r.json()['detail']
+    current=client.get('/api/templates/default/vehicle-steps',headers=admin_headers).json()
+    r=client.put('/api/templates/default/vehicle-steps',headers=admin_headers,json={'steps':current+[{'key':'custom','name':'现场自定义环节'}]})
     assert r.status_code==200,r.text
     assert len(matrix(client,pm_headers,pid)['steps'])==5
     next_pid,next_ids=setup_fleet(client,pm_headers,1)
-    assert [s['key'] for s in matrix(client,pm_headers,next_pid)['steps']]==['custom']
+    assert [s['key'] for s in matrix(client,pm_headers,next_pid)['steps']]==[s['key'] for s in current]+['custom']
     assert write(client,pm_headers,pid,ids,key='go_live').status_code==200
     assert write(client,pm_headers,pid,ids,key='arrival_inspection',done_on=project_today('Asia/Shanghai').isoformat()).status_code==200
     assert client.put(f'/api/projects/{pid}/vehicle-units/{ids[0]}',headers=pm_headers,json={'current_stage':'retired'}).status_code==400
@@ -151,7 +155,8 @@ def test_portable_matrix_restores_real_vehicle_links_and_clone_has_no_actuals(cl
     pid,ids=setup_fleet(client,pm_headers,2)
     assert write(client,pm_headers,pid,[ids[0]]).status_code==200
     with SessionLocal() as db:
-        snapshot=project_to_json(db,pid)
+        from app.models import User
+        snapshot=project_to_json(db,pid,actor=db.get(User,db.get(Project,pid).manager))
         assert parse_snapshot(snapshot)['units'][0]['id'] in ids
     snapshot['project']['status']='preparing'  # portable import keeps the existing fresh-project lifecycle contract
     imported=client.post('/api/projects/import/json',headers=pm_headers,json=snapshot)
@@ -212,11 +217,10 @@ def test_state_and_membership_are_rechecked_after_waiting_for_project_lock(clien
     assert matrix(client,pm_headers,pid)['summary']['completed']==0
 
 
-def test_portfolio_weekly_trend_reads_cells_not_mixed_report_quantities(client,pm_headers):
+def test_portfolio_weekly_trend_is_retired_and_matrix_reads_cells(client,pm_headers):
+    """旧按周数量趋势已退役；车辆环节进度只从逐车格子读取。"""
     pid,ids=setup_fleet(client,pm_headers,1)
     assert write(client,pm_headers,pid,ids).status_code==200
-    response=client.get('/api/dashboard/trend',headers=pm_headers)
-    assert response.status_code==200,response.text
-    data=response.json()
-    assert data['period']=='week' and data['unit']=='车辆环节'
-    assert sum(sum(row['data']) for row in data['series'])==1
+    assert client.get('/api/dashboard/trend',headers=pm_headers).status_code==410
+    assert matrix(client,pm_headers,pid)['summary']['completed']==1
+

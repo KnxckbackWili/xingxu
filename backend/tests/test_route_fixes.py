@@ -57,52 +57,38 @@ def _project_with_schedule(client, pm_headers, name="回归-进度总览"):
         db.close()
 
 
+CONTRACT_KEYS = ("progress", "timeline", "overdue", "issues", "tree", "logs", "preparations",
+                 "weekly_plans", "document_progress", "document_actions", "project")
+
+
 def test_project_overview_200_with_contract(client, pm_headers):
-    """有项目数据（任务+日程）时 GET overview 必须 200，且返回契约完整。"""
+    """有旧日程与日报来源时 GET overview 仍 200；v3 契约不再输出按日日程，逾期按资料计算。"""
     pid = _project_with_schedule(client, pm_headers)
     r = client.get(f"/api/projects/{pid}/overview", headers=pm_headers)
     assert r.status_code == 200, r.text
-
     body = r.json()
-    # 聚合端点返回结构（routers/progress.project_overview 注释：progress/timeline/overdue/issues/tree/logs/preparations/schedule）
-    for key in ("progress", "timeline", "overdue", "issues", "tree", "logs", "preparations", "schedule", "project"):
+    for key in CONTRACT_KEYS:
         assert key in body, f"overview 响应缺少契约键: {key}"
-
-    # schedule 必须带稳定序号且按 work_date 升序（替代原 sort_order 列的兜底契约）
-    schedule = body["schedule"]
-    assert len(schedule) == 2, schedule
-    dates = [item["work_date"] for item in schedule]
-    assert dates == sorted(dates), f"schedule 未按 work_date 稳定排序: {dates}"
-    for idx, item in enumerate(schedule):
-        assert item["sort_order"] == idx, f"sort_order 应为稳定序号 {idx}: {item}"
-        assert item["task_id"], item
-        assert item["task_name"], item
-
-    # completed_quantity 必须存在且按 DailyProgress 聚合（原 e.completed_quantity 同属缺失列）
-    assert [item["completed_quantity"] for item in schedule] == [4, 0], [
-        item["completed_quantity"] for item in schedule
-    ]
-
-    # overdue 聚合同样携带聚合后的 completed_quantity（两个过去日期条目都会命中）
-    overdue_items = body["overdue"]["items"]
-    assert len(overdue_items) == 2, overdue_items
-    completed_by_id = {item["id"]: item["completed_quantity"] for item in overdue_items}
-    assert set(completed_by_id.values()) == {4, 0}, completed_by_id
-
+    assert "schedule" not in body  # 按日排程已退役，旧条目只读保留，不再进入总览
+    # 逾期只来自资料截止，不把旧日程条目算作逾期
+    assert all(item["id"] == item["document_id"] for item in body["overdue"]["items"])
     assert body["project"]["id"] == pid
     assert body["project"]["name"] == "回归-进度总览"
+    with SessionLocal() as db:
+        assert db.query(ScheduleEntry).filter_by(project_id=pid).count() == 2
+        assert db.query(DailyProgress).filter_by(project_id=pid).count() == 2
 
 
-def test_project_overview_200_empty_schedule(client, pm_headers):
-    """即使没有日程条目，overview 也必须 200（空 schedule 数组 + 完整契约）。"""
+def test_project_overview_200_without_legacy_schedule(client, pm_headers):
+    """没有任何旧日程来源时 overview 也必须 200 且契约完整。"""
     r = client.post("/api/projects", headers=pm_headers, json={
         "name": "回归-空排程", "start_date": "2026-08-01", "new_vehicles": False, "end_date": "2026-09-30",
     })
     assert r.status_code == 200, r.text
     pid = r.json()["id"]
-
     r = client.get(f"/api/projects/{pid}/overview", headers=pm_headers)
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["schedule"] == []
+    assert all(key in body for key in CONTRACT_KEYS)
     assert body["project"]["id"] == pid
+

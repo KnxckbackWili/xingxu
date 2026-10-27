@@ -155,7 +155,7 @@ def test_legacy_acceptance_remains_history_without_fabricated_scope(client, pm_h
     assert client.get(f'/api/projects/{pid}', headers=pm_headers).json()['status'] == 'acceptance'
 
 
-@pytest.mark.parametrize('state', ['executing', 'commissioning', 'pilot', 'acceptance'])
+@pytest.mark.parametrize('state', ['ready', 'executing', 'acceptance', 'completed'])
 def test_progress_evaluators_never_move_human_milestones(client, pm_headers, monkeypatch, state):
     from app.services.status_flow import advance_project_status, regress_project_status
     pid = ready_project(client, pm_headers)
@@ -228,20 +228,15 @@ def test_repeated_startup_migration_never_rewrites_valid_lifecycle_positions(cli
             assert {db.get(Project, 'migration-' + status).status for status in PROJECT_STATUSES} == set(PROJECT_STATUSES)
 
 
-def test_unknown_legacy_status_remains_readable_but_cannot_be_edited(client, pm_headers):
+def test_unknown_legacy_status_is_rejected_by_database_constraint(client, pm_headers):
+    """v3 六状态 + 停工由数据库约束保证：旧状态名无法写入，迁移前已映射。"""
+    from sqlalchemy.exc import IntegrityError
     pid = ready_project(client, pm_headers)
     with SessionLocal() as db:
         db.get(Project, pid).status = 'closed'
-        db.commit()
-    assert client.get(f'/api/projects/{pid}', headers=pm_headers).json()['status'] == 'closed'
-    blocked = client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'name': '不得修改旧归档'}))
-    assert blocked.status_code == 400 and '历史状态' in blocked.json()['detail']
-    blocked = client.post(f'/api/projects/{pid}/procurements', headers=pm_headers, json={'name': '新增'})
-    assert blocked.status_code == 400 and '历史状态' in blocked.json()['detail']
-    blocked = client.post(f'/api/projects/{pid}/schedule/generate', headers=pm_headers)
-    assert blocked.status_code == 400 and '历史状态' in blocked.json()['detail']
-    with SessionLocal() as db:
-        assert db.get(Project, pid).status == 'closed'
+        with pytest.raises(IntegrityError):
+            db.commit()
+    assert client.get(f'/api/projects/{pid}', headers=pm_headers).json()['status'] == 'ready'
 
 
 def test_legacy_null_recorded_time_is_older_than_a_same_day_current_decision(client, pm_headers):
@@ -291,6 +286,6 @@ def test_full_init_preserves_archived_lock_and_planning(client, pm_headers, monk
     for _ in range(2):
         init_db()
         assert client.get(f'/api/projects/{pid}', headers=pm_headers).json()['status'] == 'archived'
-        assert client.get(f'/api/projects/{planning}', headers=pm_headers).json()['status'] == 'planning'
+        assert client.get(f'/api/projects/{planning}', headers=pm_headers).json()['status'] == 'preparing'
         blocked = client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'name': '重启不能解锁'}))
         assert blocked.status_code == 400 and '归档' in blocked.json()['detail']

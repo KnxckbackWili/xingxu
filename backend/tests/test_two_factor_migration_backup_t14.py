@@ -91,6 +91,9 @@ def test_encrypted_full_backup_restores_totp_seed_and_one_use_code_state(client,
         database_url = 'sqlite'
     else:
         database_url = config.DATABASE_URL
+    # The snapshot references seeded template originals; a full backup refuses to omit them.
+    import shutil
+    shutil.copytree(config.UPLOAD_DIR, data / 'uploads')
     archive = tmp_path / 'full.agvenc'
     password = 'isolated-t14-backup-password'
     codec.create_archive(data, archive, database_url, password)

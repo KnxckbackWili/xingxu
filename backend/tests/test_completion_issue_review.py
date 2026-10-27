@@ -47,7 +47,7 @@ def test_worker_can_find_resolved_issues_for_reopen(client, pm_headers, worker_h
     assert client.put(f"/api/issues/{issue['id']}", headers=pm_headers, json=versioned(issue['id'], {'status': 'resolved'}, 'Issue')).status_code == 200
     assert not client.get('/api/dashboard/issues', headers=worker_headers).json()['items']
     rows = client.get('/api/dashboard/issues?include_closed=true', headers=worker_headers).json()['items']
-    assert rows[0]['id'] == issue['id'] and rows[0]['project_status'] == 'draft'
+    assert rows[0]['id'] == issue['id'] and rows[0]['project_status'] == 'preparing'
     assert client.post(f"/api/issues/{issue['id']}/reopen", headers=worker_headers).status_code == 200
 
 
@@ -80,9 +80,10 @@ def test_vehicle_notes_edit_preserves_manual_target(client, pm_headers):
     assert client.put(path, headers=pm_headers, json={'notes': 'updated', 'quantity': 2}).status_code == 200
     with SessionLocal() as db:
         assert db.get(Task, tid).target_quantity == 17
+    # v3：工作项的旧数量只读保留，车型数量变化不再回写目标。
     assert client.put(path, headers=pm_headers, json={'quantity': 3}).status_code == 200
     with SessionLocal() as db:
-        assert db.get(Task, tid).target_quantity == 3
+        assert db.get(Task, tid).target_quantity == 17
 
 
 def test_document_review_is_metadata_and_does_not_erase_submitted_file(client, pm_headers, worker_headers):

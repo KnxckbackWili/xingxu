@@ -50,12 +50,12 @@ def test_owner_delete_restore_redelete_original_identity_and_independent_backups
     assert all(x['id'] != p['id'] for x in client.get('/api/projects', headers=pm_headers).json())
     rows = client.get('/api/project-recycle-bin/projects', headers=pm_headers).json()
     row = next(x for x in rows if x['id'] == p['id'])
-    assert row['can_restore'] and row['deleted_by_name'] and row['status_before_delete'] == 'draft'
+    assert row['can_restore'] and row['deleted_by_name'] and row['status_before_delete'] == 'preparing'
     restored = client.post(f"/api/project-recycle-bin/projects/{p['id']}/restore", headers=pm_headers,
         json={'version': row['version'], 'deletion_id': row['deletion_id']})
     assert restored.status_code == 200, restored.text
     original = client.get(f"/api/projects/{p['id']}", headers=pm_headers).json()
-    assert original['id'] == p['id'] and original['status'] == 'draft'
+    assert original['id'] == p['id'] and original['status'] == 'preparing'
     second = _delete(client, pm_headers, original)
     assert second.status_code == 200 and second.json()['deletion_id'] != first['deletion_id']
     with SessionLocal() as db:
@@ -213,14 +213,14 @@ def test_legacy_pending_delete_not_approved_or_automatically_modified(client, pm
     p = _project(client, pm_headers)
     request = client.post(f"/api/projects/{p['id']}/governance-requests", headers=pm_headers,
                          json={'request_type': 'delete', 'reason': '重复项目清理'})
-    assert request.status_code == 400 and '直接删除' in request.json()['detail']
+    assert request.status_code == 410 and '退役' in request.json()['detail']
     with SessionLocal() as db:
         legacy = ProjectGovernanceRequest(project_id=p['id'], project_name=p['name'], request_type='delete',
             requested_by='user-pm-001', source_manager_id='user-pm-001', reason='历史删除申请')
         db.add(legacy); db.commit(); rid = legacy.id
     denied = client.post(f'/api/projects/governance/requests/{rid}/review', headers=admin_headers,
                          json={'decision': 'approved'})
-    assert denied.status_code == 400
+    assert denied.status_code == 410
     with SessionLocal() as db:
         assert db.get(ProjectGovernanceRequest, rid).status == 'pending'
         assert db.get(Project, p['id']).deleted_at is None
@@ -354,7 +354,7 @@ def test_formal_delete_requires_explicit_version(client, pm_headers):
 
 
 
-@pytest.mark.parametrize('status', ['archived', 'legacy_unknown'])
+@pytest.mark.parametrize('status', ['archived', 'suspended'])
 def test_deleted_terminal_or_historical_project_restores_original_status(client, pm_headers, status):
     p = _project(client, pm_headers)
     with SessionLocal() as db:

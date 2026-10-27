@@ -42,7 +42,7 @@ def test_old_issue_fields_bytes_and_review_are_preserved_without_new_trigger(mon
         def insert(table_name,**values):
             table=sa.Table(table_name,meta,autoload_with=connection,extend_existing=True);connection.execute(table.insert().values(**values))
         insert('users',id='u',username='original',password_hash='opaque',display_name='原报告人',role='pm')
-        insert('projects',id='p',name='旧项目',manager='u',status='planning',start_date=date(2026,1,1),end_date=date(2026,12,31))
+        insert('projects',id='p',name='旧项目',manager='u',status='preparing',start_date=date(2026,1,1),end_date=date(2026,12,31))
         insert('issues',id='i',project_id='p',title='原质量反馈',issue_type='hardware',created_at=datetime(2025,1,2,3,4,5),
             reporter_id='u',status='resolved',resolution='原处理结果',extra={'nature':'quality','feedback_date':'2024-05-08','nested':{'original':['A']}})
         insert('attachments',id='a',project_id='p',filename='原件.bin',stored_name='original.bin',file_size=len(content),

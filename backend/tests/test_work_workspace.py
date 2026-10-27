@@ -1,37 +1,34 @@
 """Shared work detail is one permission-scoped view of existing records."""
-from tests.test_work_assignment import setup_work
+from tests.test_work_assignment import setup_work, repair
 
 
 def assigned_repair(client, headers):
+    """Fault repair placed into this week's plan (v3: weekly plans replace daily repair scheduling)."""
     p, unit, event = setup_work(client, headers)
-    result = client.post(f'/api/projects/{p}/vehicle-units/{unit}/events/{event}/schedule', headers=headers,
-        json={'assignee_id':'user-worker-001','work_date':'2026-09-17','estimated_hours':4})
+    result = repair(client, headers, p, unit, event, ['user-worker-001'])
     assert result.status_code == 200, result.text
     return p, unit, event, result.json()
 
 
-def test_detail_report_and_repair_update_original_records(client, pm_headers, worker_headers):
+def test_detail_and_repair_update_original_records(client, pm_headers, worker_headers):
     p, unit, event, ids = assigned_repair(client, pm_headers)
     path = f'/api/projects/{p}/tasks/{ids["task_id"]}/workspace'
     worker = client.get(path, headers=worker_headers).json()
     assert worker['can_report'] and not worker['can_schedule'] and not worker['can_update_repair']
-    assert worker['entries'][0]['id'] == ids['entry_id']
     assert worker['repair']['id'] == event
-    body = {'task_id':ids['task_id'],'schedule_entry_id':ids['entry_id'],'work_date':'2026-09-17',
-            'completed_quantity':1,'note':'更换驱动轮并试运行','client_uuid':'workspace-retry-001'}
-    assert client.post('/api/worker/reports',headers=worker_headers,json=body).json()['accepted']
-    assert not client.post('/api/worker/reports',headers=worker_headers,json=body).json()['accepted']
-    detail = client.get(path,headers=pm_headers).json()
-    assert detail['can_schedule'] and detail['can_update_repair']
-    assert len(detail['reports']) == 1 and detail['task']['completed'] == 1
-    assert detail['reports'][0]['note'] == body['note']
+    assert worker['entries'] == [] and worker['reports'] == []
+    # 按日报量已退役：旧入口不再写入新事实。
+    retired = client.post('/api/worker/reports', headers=worker_headers, json={
+        'task_id': ids['task_id'], 'work_date': '2026-09-17', 'completed_quantity': 1, 'client_uuid': 'workspace-retry-001'})
+    assert retired.status_code == 410
+    detail = client.get(path, headers=pm_headers).json()
+    assert detail['can_schedule'] and detail['can_update_repair'] and detail['reports'] == []
     assert client.put(f'/api/projects/{p}/vehicle-units/{unit}/events/{event}', headers=pm_headers,
         json={'action_taken':'更换驱动轮','verification':'带载运行正常','is_closed':True,'status_after':'normal'}).status_code == 200
     detail = client.get(path,headers=worker_headers).json()
     assert detail['repair']['is_closed'] and detail['repair']['current_status'] == 'normal'
-    assert detail['entries'][0]['id'] == ids['entry_id']
     summary = client.get(f'/api/projects/{p}/handover-summary',headers=pm_headers).json()
-    assert summary['counts']['tasks'] == 0 and summary['counts']['faults'] == 0
+    assert summary['counts']['faults'] == 0
 
 
 def test_detail_and_handover_cannot_leak_another_project(client, pm_headers, worker_headers):
@@ -58,10 +55,10 @@ def test_handover_counts_material_instances_without_copying_tasks(client, pm_hea
         db.get(Task, ids['task_id']).manually_completed = True
         db.add(Issue(project_id=p, title='客户网络未就绪', status='open', reporter_id='user-pm-001'))
         db.commit()
-    rows = documents(client, pm_headers, p)['documents']
-    upload_documents(client, pm_headers, p, [row['id'] for row in rows if row['applicable']])
     doc = requirement(client, pm_headers, p, name='验收记录', code='6.99', required=True)
     optional = requirement(client, pm_headers, p, name='选填资料', code='6.98', required=False)
+    rows = documents(client, pm_headers, p)['documents']
+    upload_documents(client, pm_headers, p, [row['id'] for row in rows if row['applicable'] and row['id'] not in (doc['id'], optional['id'])])
     result = client.get(f'/api/projects/{p}/handover-summary', headers=pm_headers)
     assert result.status_code == 200, result.text
     summary = result.json()

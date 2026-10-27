@@ -7,7 +7,7 @@ from app.services.lifecycle_gates import check_transition
 
 
 def project_work(client, headers):
-    from tests.test_startup_targets import setup_project
+    from tests.lifecycle_helpers import setup_project
     pid, tasks = setup_project(client, headers)
     tid = tasks[0]['id']
     with SessionLocal() as db:
@@ -22,15 +22,28 @@ def project_work(client, headers):
     return pid, tid, cid
 
 
+def complete(client, headers, pid, tid, reason, *, done=True, override=None):
+    """v3 work completion: reason required; ordinary failures need an explicit, versioned owner override."""
+    with SessionLocal() as db:
+        version = db.get(Task, tid).version or 0
+    body = {'version': version, 'is_completed': done, 'reason': reason}
+    if override is not None:
+        body.update(override_failed=True, failed_checks=override)
+    return client.put(f'/api/projects/{pid}/work-items/{tid}/completion', headers=headers, json=body)
+
+
 def test_reason_required_for_failed_ordinary_check_and_exact_snapshot_is_audited(client, admin_headers):
     pid, tid, cid = project_work(client, admin_headers)
     with SessionLocal() as db:
         check=db.get(CheckItem,cid);check.failed=True;check.is_done=False;check.failed_reason='接口复测未通过';check.version=3;db.commit()
-    path=f'/api/worker/tasks/{tid}/complete'
-    denied=client.post(path,headers=admin_headers,json={'reason':'   '})
+    denied=complete(client,admin_headers,pid,tid,'   ',override=[{'id':cid,'version':3}])
     assert denied.status_code==400 and '必须填写理由' in denied.text
+    implicit=complete(client,admin_headers,pid,tid,'未确认覆盖')
+    assert implicit.status_code==400 and '明确确认覆盖' in implicit.text
+    stale=complete(client,admin_headers,pid,tid,'旧版本覆盖',override=[{'id':cid,'version':2}])
+    assert stale.status_code==409
     with SessionLocal() as db:assert not db.get(Task,tid).manually_completed
-    accepted=client.post(path,headers=admin_headers,json={'reason':'已隔离风险，合同约定后续独立复测'})
+    accepted=complete(client,admin_headers,pid,tid,'已隔离风险，合同约定后续独立复测',override=[{'id':cid,'version':3}])
     assert accepted.status_code==200,accepted.text
     with SessionLocal() as db:
         task=db.get(Task,tid)
@@ -41,16 +54,15 @@ def test_reason_required_for_failed_ordinary_check_and_exact_snapshot_is_audited
     assert result.status_code==200,result.text
     override=result.json()['ordinary_check_overrides'][0]
     assert override['reason']=='已隔离风险，合同约定后续独立复测' and override['checks'][0]['still_current']
-    assert client.post(path,headers=admin_headers,json={}).json()['accepted'] is False
 
 
 def test_changed_failure_does_not_inherit_a_previous_override(client,admin_headers):
     pid,tid,cid=project_work(client,admin_headers)
     with SessionLocal() as db:
-        c=db.get(CheckItem,cid);c.failed=True;c.is_done=False;c.failed_reason='第一次失败';db.commit()
-    assert client.post(f'/api/worker/tasks/{tid}/complete',headers=admin_headers,json={'reason':'明确覆盖第一次失败'}).status_code==200
+        c=db.get(CheckItem,cid);c.failed=True;c.is_done=False;c.failed_reason='第一次失败';db.commit();version=c.version or 0
+    assert complete(client,admin_headers,pid,tid,'明确覆盖第一次失败',override=[{'id':cid,'version':version}]).status_code==200
     with SessionLocal() as db:
-        c=db.get(CheckItem,cid);c.version+=1;c.failed_reason='新出现的失败';db.commit()
+        c=db.get(CheckItem,cid);c.version=(c.version or 0)+1;c.failed_reason='新出现的失败';db.commit()
         assert any(row.type=='tasks' for row in check_transition(db,db.get(Project,pid),'completed'))
     response=client.get(f'/api/projects/{pid}/completion-review',headers=admin_headers)
     assert response.json()['ordinary_check_overrides'][0]['checks'][0]['still_current'] is False
@@ -59,13 +71,13 @@ def test_changed_failure_does_not_inherit_a_previous_override(client,admin_heade
 def test_safety_failure_can_never_be_overridden_and_reopen_clears_active_snapshot(client,admin_headers):
     pid,tid,cid=project_work(client,admin_headers)
     with SessionLocal() as db:
-        c=db.get(CheckItem,cid);c.failed=True;c.is_done=False;c.is_safety_critical=True;db.commit()
-    response=client.post(f'/api/worker/tasks/{tid}/complete',headers=admin_headers,json={'reason':'任何理由都不能覆盖安全'})
-    assert response.status_code==400 and '安全检查' in response.text
+        c=db.get(CheckItem,cid);c.failed=True;c.is_done=False;c.is_safety_critical=True;db.commit();version=c.version or 0
+    response=complete(client,admin_headers,pid,tid,'任何理由都不能覆盖安全',override=[{'id':cid,'version':version}])
+    assert response.status_code==400 and '必需检查尚未满足' in response.text
     with SessionLocal() as db:
         c=db.get(CheckItem,cid);c.is_safety_critical=False;db.commit()
-    assert client.post(f'/api/worker/tasks/{tid}/complete',headers=admin_headers,json={'reason':'明确覆盖普通失败'}).status_code==200
-    assert client.post(f'/api/worker/tasks/{tid}/reopen',headers=admin_headers,json={}).status_code==200
+    assert complete(client,admin_headers,pid,tid,'明确覆盖普通失败',override=[{'id':cid,'version':version}]).status_code==200
+    assert complete(client,admin_headers,pid,tid,'复测前重新打开',done=False).status_code==200
     with SessionLocal() as db:
         t=db.get(Task,tid);assert not t.manually_completed and t.manual_check_overrides==[]
         assert db.query(ChangeLog).filter_by(entity_id=tid,action='complete').one().new_value['ordinary_check_overrides']

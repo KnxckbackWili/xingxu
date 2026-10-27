@@ -121,3 +121,29 @@ def complete_all_work(client, headers, project_id, *, recorder_headers=None):
                               json={'version': version, 'is_completed': True, 'reason': '现场完成并自检'})
         assert response.status_code == 200, response.text
     return tasks
+
+
+def read_tasks(client, headers, pid):
+    tree = client.get(f'/api/projects/{pid}/tree', headers=headers).json()
+    return [task for phase in tree for module in phase['modules'] for task in module['tasks']]
+
+
+def setup_project(client, headers):
+    """Project created from the default template with module mod-01; returns (pid, work items)."""
+    response = client.post('/api/projects', headers=headers, json={
+        'name': '开工安排测试', 'client': '客户', 'start_date': '2026-09-16',
+        'end_date': '2026-10-30', 'new_vehicles': False,
+        'template_id': 'default', 'module_ids': ['mod-01'],
+    })
+    assert response.status_code == 200, response.text
+    pid = response.json()['id']
+    return pid, read_tasks(client, headers, pid)
+
+
+def put_check(client, headers, pid, check_id, body):
+    """Check-item registration with the row's current version (required by the API)."""
+    from app.db import SessionLocal
+    from app.models import CheckItem
+    with SessionLocal() as db:
+        version = db.get(CheckItem, check_id).version or 0
+    return client.put(f"/api/projects/{pid}/check-items/{check_id}", headers=headers, json={**body, "version": version})

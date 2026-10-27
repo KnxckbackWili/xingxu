@@ -109,8 +109,13 @@ def test_worker_project_co_manager_grant_is_scoped_and_expires(client, pm_header
                       json=versioned(project_id, {"description": "由实施工程师协管"})).status_code == 200
 
     # 协管不能转移负责人，也不能继续委派其他协管。
-    assert client.put(f"/api/projects/{project_id}", headers=worker_headers,
-                      json=versioned(project_id, {"manager_id": "user-worker-001"})).status_code == 403
+    via_edit = client.put(f"/api/projects/{project_id}", headers=worker_headers,
+                          json=versioned(project_id, {"manager_id": "user-worker-001"}))
+    assert via_edit.status_code == 400 and "更换负责人入口" in via_edit.json()["detail"]
+    from tests.lifecycle_helpers import project_version
+    transfer = client.post(f"/api/projects/{project_id}/transfer", headers=worker_headers, json={
+        "target_manager_id": "user-worker-001", "reason": "协管尝试转移负责人", "version": project_version(client, pm_headers, project_id)})
+    assert transfer.status_code == 403, transfer.text
     assert client.put(f"/api/projects/{project_id}", headers=worker_headers,
                       json=versioned(project_id, {"co_managers": []})).status_code == 403
 
@@ -124,13 +129,14 @@ def test_worker_project_co_manager_grant_is_scoped_and_expires(client, pm_header
                       json=versioned(project_id, {"description": "过期后不可管理"})).status_code == 403
 
 
-def test_ai_drafts_require_matching_project_capability(client, pm_headers, worker_headers):
+def test_ai_organize_drafts_are_retired_for_every_role(client, pm_headers, worker_headers):
+    """AI 整理草稿已退役：无论项目能力如何都返回 410，不生成草稿。"""
     project_id = _project(client, pm_headers, "AI 权限项目")
     client.put(f"/api/projects/{project_id}", headers=pm_headers, json=versioned(project_id, {"members": ["user-worker-001"]}))
-    response = client.post("/api/ai-projects/organize/jobs", headers=worker_headers, json={
-        "skill": "issues", "project_id": project_id, "source_text": "整理现场问题",
-    })
-    assert response.status_code == 403
-    assert client.post("/api/ai-projects/organize/jobs", headers=worker_headers, json={
-        "skill": "project", "source_text": "创建项目",
-    }).status_code == 403
+    for headers in (worker_headers, pm_headers):
+        assert client.post("/api/ai-projects/organize/jobs", headers=headers, json={
+            "skill": "issues", "project_id": project_id, "source_text": "整理现场问题",
+        }).status_code == 410
+        assert client.post("/api/ai-projects/organize/jobs", headers=headers, json={
+            "skill": "project", "source_text": "创建项目",
+        }).status_code == 410

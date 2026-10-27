@@ -18,18 +18,6 @@ def _create_project(client, pm_headers, timezone="Asia/Shanghai", name="时区�
     return r.json()
 
 
-def _schedule_project(client, pm_headers, pid, worker_id="user-worker-001"):
-    client.post(f"/api/projects/{pid}/vehicles", headers=pm_headers, json={
-        "vehicle_type": "潜伏式", "model_name": "AGV-500", "quantity": 2})
-    client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers,
-                json={"module_ids": ["mod-03"]})
-    client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": [worker_id]}))
-    r = client.post(f"/api/projects/{pid}/schedule/generate", headers=pm_headers)
-    assert r.status_code == 200, r.json()
-    issued = client.post(f"/api/projects/{pid}/schedule/confirm", headers=pm_headers)
-    assert issued.status_code == 200, issued.text
-
-
 def test_project_timezone_default_and_read(client, pm_headers):
     p = _create_project(client, pm_headers)
     assert p["timezone"] == "Asia/Shanghai"

@@ -173,7 +173,7 @@ def test_reports_run_on_local_sunday_once_and_scheduler_catchup_uses_real_db(cli
 
 
 def test_quantity_backlog_does_not_become_overdue_and_on_demand_is_separate(client,admin_headers):
-    from .test_startup_targets import setup_project
+    from tests.lifecycle_helpers import setup_project
     from app.models import ScheduleEntry
     pid,tasks=setup_project(client,admin_headers)
     with SessionLocal() as db:
@@ -305,13 +305,14 @@ def test_weekly_report_restart_recovers_every_period_after_its_real_cursor(clien
 
 
 def test_project_plan_edit_updates_document_deadline_without_moving_schedule(client,admin_headers):
-    from .test_startup_targets import setup_project
+    from tests.lifecycle_helpers import setup_project
     from app.models import ScheduleEntry
     pid,tasks=setup_project(client,admin_headers)
     with SessionLocal() as db:
         entry=ScheduleEntry(project_id=pid,task_id=tasks[0]['id'],work_date=date(2026,11,1),planned_quantity=1)
         db.add(entry);db.commit();identity=entry.id
-    result=client.put('/api/projects/'+pid,headers=admin_headers,json={'event_plans':{'ship':'2026-11-20'}})
+    from tests.lifecycle_helpers import versioned
+    result=client.put('/api/projects/'+pid,headers=admin_headers,json=versioned(pid,{'event_plans':{'ship':'2026-11-20'}}))
     assert result.status_code==200,result.text
     document=next(row for row in view(client,admin_headers,pid)['documents'] if row['code']=='5.1.1')
     assert document['due_at']=='2026-11-12T16:00:00+00:00' and document['due_is_estimated']
