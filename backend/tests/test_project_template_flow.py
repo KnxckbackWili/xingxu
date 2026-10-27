@@ -22,7 +22,7 @@ def test_custom_solution_scope_and_snapshot_survive_template_deletion(client, ad
     tid, phase_id, mid, manual, vehicle = make_template()
     result = client.post('/api/projects', headers=pm_headers, json={
         'name': '真实窄巷道项目', 'start_date': '2026-09-16', 'end_date': '2026-12-31',
-        'template_id': tid, 'module_ids': [mid], 'task_quantities': {manual: 12},
+        'template_id': tid, 'module_ids': [mid],
         'vehicles': [{'vehicle_type': '潜伏式', 'model_name': 'T6', 'quantity': 3}],
     })
     assert result.status_code == 200, result.text
@@ -34,22 +34,18 @@ def test_custom_solution_scope_and_snapshot_survive_template_deletion(client, ad
     tree = client.get(f'/api/projects/{pid}/tree', headers=pm_headers).json()
     assert tree[0]['id'] != phase_id
     tasks = tree[0]['modules'][0]['tasks']
-    assert {task['name']: task['target_quantity'] for task in tasks} == {'站点确认': 12, '单车检查': 3}
+    assert {task['name'] for task in tasks} == {'站点确认', '单车检查'}
     assert client.delete(f'/api/templates/{tid}', headers=admin_headers).status_code == 200
     assert client.get(f'/api/projects/{pid}/tree', headers=pm_headers).json() == tree
     progress = client.get(f'/api/projects/{pid}/progress', headers=pm_headers).json()
-    assert progress['target'] == 15
     assert progress['phases'][0]['name'] == '现场安装'
-    schedule = client.post(f'/api/projects/{pid}/schedule/generate', headers=pm_headers)
-    assert schedule.status_code == 200, schedule.text
-    assert client.get(f'/api/projects/{pid}/schedule', headers=pm_headers).json()
 
 
 def test_excluded_work_can_be_added_later_from_same_source(client, pm_headers):
     tid, _, mid, manual, vehicle = make_template()
     result = client.post('/api/projects', headers=pm_headers, json={
         'name': '分批实施', 'start_date': '2026-09-16', 'end_date': '2026-12-31',
-        'template_id': tid, 'module_ids': [mid], 'exclude_task_ids': [vehicle], 'task_quantities': {manual: 7},
+        'template_id': tid, 'module_ids': [mid], 'exclude_task_ids': [vehicle],
     })
     assert result.status_code == 200, result.text
     pid = result.json()['id']
@@ -60,7 +56,7 @@ def test_excluded_work_can_be_added_later_from_same_source(client, pm_headers):
     assert added.json()['tasks'] == 1
     after = client.get(f'/api/projects/{pid}/tree', headers=pm_headers).json()
     assert len(after[0]['modules'][0]['tasks']) == 2
-    assert next(task for task in after[0]['modules'][0]['tasks'] if task['source_task_id'] == manual)['target_quantity'] == 7
+    assert {task['source_task_id'] for task in after[0]['modules'][0]['tasks']} == {manual, vehicle}
 
 
 def test_stale_scope_rolls_back_creation(client, pm_headers):
@@ -82,25 +78,6 @@ def test_presets_have_real_content_and_selection(client, pm_headers):
     assert sum(len(module['tasks']) for phase in phases for module in phase['modules']) > 20
 
 
-def test_legacy_phase_migration_is_idempotent(client, pm_headers):
-    from app.models import Project
-    from app.services.project_templates import detach_project_phases
-    pid = client.post('/api/projects', headers=pm_headers, json={'name': '旧项目迁移', 'start_date': '2026-09-16', 'end_date': '2026-12-31', 'module_ids': ['mod-03']}).json()['id']
-    before = client.get(f'/api/projects/{pid}/tree', headers=pm_headers).json()
-    with SessionLocal() as db:
-        module = db.query(Module).filter(Module.project_id == pid).first()
-        module.phase_id = db.get(Module, 'mod-03').phase_id
-        module.source_module_id = None
-        db.flush()
-        detach_project_phases(db)
-        phase_id = module.phase_id
-        detach_project_phases(db)
-        assert module.phase_id == phase_id
-        assert db.get(Phase, phase_id).project_id == pid
-        db.commit()
-    assert client.get(f'/api/projects/{pid}/tree', headers=pm_headers).json() == before
-
-
 def test_template_edit_keeps_identity_documents_and_project_customization(client, admin_headers, pm_headers):
     tid, phase_id, mid, manual, vehicle = make_template()
     doc = client.post(f'/api/templates/{tid}/tasks/{manual}/reference-docs', headers=admin_headers,
@@ -109,7 +86,7 @@ def test_template_edit_keeps_identity_documents_and_project_customization(client
     tree = client.get(f'/api/templates/{tid}/tree', headers=pm_headers).json()
     pid = client.post('/api/projects', headers=pm_headers, json={
         'name': '方案更新前项目', 'start_date': '2026-09-16', 'end_date': '2026-12-31',
-        'template_id': tid, 'module_ids': [mid], 'task_quantities': {manual: 8},
+        'template_id': tid, 'module_ids': [mid],
     }).json()['id']
     project_tree = client.get(f'/api/projects/{pid}/tree', headers=pm_headers).json()
     tree[0]['name'] = '新现场安装标准'
@@ -136,7 +113,6 @@ def test_clone_keeps_project_scope_and_local_edits(client, pm_headers):
     response = client.post('/api/projects', headers=pm_headers, json={
         'name': '一期方案', 'start_date': '2026-09-16', 'end_date': '2026-12-31',
         'template_id': tid, 'module_ids': [mid], 'exclude_task_ids': [vehicle],
-        'task_quantities': {manual: 12},
     })
     assert response.status_code == 200, response.text
     pid = response.json()['id']
@@ -151,6 +127,5 @@ def test_clone_keeps_project_scope_and_local_edits(client, pm_headers):
     with SessionLocal() as db:
         copied = db.query(Task).filter_by(project_id=new_id).one()
         assert copied.name == '现场定制站点'
-        assert copied.target_quantity == 12
         assert copied.source_task_id == manual
         assert not copied.manually_completed

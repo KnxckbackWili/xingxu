@@ -111,30 +111,17 @@ def test_project_export_excel_sheets(client, pm_headers, worker_headers):
         "name": "7Sheet导出项目",
         "start_date": "2026-08-10", "new_vehicles": False, "end_date": "2026-09-30"})
     pid = r.json()["id"]
-    assert client.post(f"/api/projects/{pid}/status", headers=pm_headers,
-                       json={"status": "preparing"}).status_code == 200
     client.post(f"/api/projects/{pid}/vehicles", headers=pm_headers,
                 json={"vehicle_type": "潜伏式", "model_name": "AGV-500", "quantity": 2})
     client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers,
                 json={"module_ids": ["mod-03"]})
-    client.post(f"/api/projects/{pid}/schedule/generate", headers=pm_headers)
 
-    # worker 加入项目（成员校验）后填报一条（填报流水 + 日程已完成数）
+    # worker 加入项目（成员校验）
     r = client.get("/api/auth/me", headers=worker_headers)
     wid = r.json()["id"]
     r = client.get(f"/api/projects/{pid}", headers=pm_headers)
     client.put(f"/api/projects/{pid}", headers=pm_headers,
                json=versioned(pid, {"members": [*r.json()["members"], wid]}))
-    # 下达后现场成员填报，导出断言仍验证真实填报与日程关联。
-    r = client.post(f"/api/projects/{pid}/schedule/confirm", headers=pm_headers)
-    assert r.status_code == 200, r.json()
-    r = client.get(f"/api/projects/{pid}/schedule", headers=pm_headers)
-    entry = r.json()[0]
-    r = client.post("/api/worker/reports", headers=worker_headers, json={
-        "task_id": entry["task_id"], "schedule_entry_id": entry["id"],
-        "work_date": entry["work_date"], "completed_quantity": 2,
-        "client_uuid": "io-export-sheet-0001"})
-    assert r.status_code == 200, r.json()
 
     # 一个问题（含分类专属字段）
     client.post(f"/api/projects/{pid}/issues", headers=pm_headers, json={
@@ -321,8 +308,6 @@ def test_ai_quick_import_template_preview_and_full_import(client, pm_headers):
     source = client.get(f'/api/projects/{project_id}/documents', headers=pm_headers).json()
     assert any(row['name'] == '测试记录' and row['stage_key'] == 'legacy' for row in source['definitions'])
     assert all(row['status'] != 'submitted' for row in source['documents'])
-    schedule = client.get(f"/api/projects/{project_id}/schedule", headers=pm_headers).json()
-    assert any(item["planned_quantity"] == 1 for item in schedule)
     inventory = client.get(f"/api/projects/{project_id}/inventory", headers=pm_headers).json()
     assert inventory["items"][0]["ownership"] == "client"
     assert inventory["items"][0]["serial_number"] == "PC-SN-01"
@@ -339,56 +324,17 @@ def test_ai_quick_import_preview_reports_structural_errors(client, pm_headers):
     assert len(preview["errors"]) >= 4
 
 
-def test_ai_assistant_status_skill_and_mocked_organize(client, pm_headers, monkeypatch):
+def test_ai_assistant_is_text_only_and_structured_drafting_is_retired(client, pm_headers):
+    """D-5: AI only organizes text; structured project drafting and skill bundles are retired."""
     status = client.get("/api/ai-projects/status", headers=pm_headers)
     assert status.status_code == 200
-    assert "available" in status.json()
-    assert {item["id"] for item in status.json()["providers"]} == {"deepseek", "mimo", "minimax", "custom"}
-    assert {item["id"] for item in status.json()["skills"]} == {"project", "planning", "inventory", "issues", "handover"}
-    assert not {"supported_files", "max_file_mb", "max_files"} & set(status.json())
-
-    bundle = client.get("/api/ai-projects/skill-bundle", headers=pm_headers)
-    assert bundle.status_code == 200
-    assert bundle.content.startswith(b"PK")
-    inventory_bundle = client.get("/api/ai-projects/skill-bundle?skill=inventory", headers=pm_headers)
-    assert inventory_bundle.status_code == 200
-    assert b"agv-site-inventory" in inventory_bundle.content
-
-    valid_draft = client.get("/api/projects/import/template", headers=pm_headers).json()
-    valid_draft["project"].update({"name": "AI 草稿", "start_date": "2026-09-01", "end_date": "2026-10-01"})
-    selected = {}
-
-    def mocked_organize(*_args, **_kwargs):
-        selected["provider"] = _args[3]
-        return {
-        "draft": valid_draft, "missing_fields": [], "conflicts": [],
-        "assumptions": [], "change_summary": ["创建项目基础信息"],
-        }
-
-    monkeypatch.setattr("app.routers.ai_projects.organize_project", mocked_organize)
-    organized = client.post("/api/ai-projects/organize", headers=pm_headers, json={
-        "source_text": "项目资料", "provider": "mimo",
-    })
-    assert organized.status_code == 200, organized.text
-    assert selected["provider"] == "mimo"
-    assert organized.json()["validation"]["valid"] is True
-    assert organized.json()["draft"]["version"] == "2.3"
-
-    job = client.post("/api/ai-projects/organize/jobs", headers=pm_headers, json={
-        "source_text": "项目资料", "provider": "mimo", "skill": "project",
-    })
-    assert job.status_code == 200, job.text
-    job_status = client.get(f"/api/ai-projects/organize/jobs/{job.json()['id']}", headers=pm_headers)
-    assert job_status.status_code == 200
-    assert job_status.json()["status"] == "completed"
-    assert job_status.json()["percent"] == 100
-
-    monkeypatch.setattr("app.routers.ai_projects.test_connection", lambda provider: {
-        "ok": True, "provider": provider, "model": "mock-model",
-    })
-    tested = client.post("/api/ai-projects/test-connection", headers=pm_headers, json={"provider": "minimax"})
-    assert tested.status_code == 200
-    assert tested.json()["provider"] == "minimax"
+    body = status.json()
+    assert body["available"] is False and body["skills"] == [] and body["drafting_enabled"] is False
+    assert body["external_agent_readonly"] is True
+    assert {item["id"] for item in body["providers"]} == {"deepseek", "mimo", "minimax", "custom"}
+    for method, path in (("get", "/api/ai-projects/skill-bundle"), ("post", "/api/ai-projects/organize"),
+                         ("post", "/api/ai-projects/organize/jobs"), ("post", "/api/ai-projects/test-connection")):
+        assert getattr(client, method)(path, headers=pm_headers).status_code == 410
 
 
 def test_ai_response_parser_accepts_reasoning_wrapper():
@@ -454,40 +400,6 @@ def test_quick_import_rejects_invalid_inventory_movements(client, pm_headers):
     assert any("occurred_at" in error for error in result["errors"])
 
 
-def test_ai_domain_job_and_issue_bulk_apply(client, pm_headers, monkeypatch):
-    project = client.post("/api/projects", headers=pm_headers, json={
-        "name": "问题整理项目", "start_date": "2026-09-01", "end_date": "2026-10-01",
-    }).json()
-
-    def mocked_domain(skill, *_args, **_kwargs):
-        assert skill == "issues"
-        return {
-            "draft": {"issues": [{
-                "title": "充电桩无法握手", "description": "两台车均无法启动充电",
-                "issue_type": "hardware", "severity": "high", "extra": {"scope": "2 台车"},
-            }]},
-            "missing_fields": [], "conflicts": [], "assumptions": [], "change_summary": [],
-        }
-
-    monkeypatch.setattr("app.routers.ai_projects.organize_domain", mocked_domain)
-    created = client.post("/api/ai-projects/organize/jobs", headers=pm_headers, json={
-        "source_text": "现场反馈充电异常", "provider": "deepseek", "skill": "issues",
-        "project_id": project["id"],
-    })
-    assert created.status_code == 200, created.text
-    job = client.get(f"/api/ai-projects/organize/jobs/{created.json()['id']}", headers=pm_headers).json()
-    assert job["status"] == "completed"
-    assert job["result"]["validation"]["valid"] is True
-    applied = client.post(
-        f"/api/projects/{project['id']}/issues/import", headers=pm_headers,
-        json={"items": job["result"]["draft"]["issues"]},
-    )
-    assert applied.status_code == 200, applied.text
-    rows = client.get(f"/api/projects/{project['id']}/issues", headers=pm_headers).json()
-    assert rows[0]["title"] == "充电桩无法握手"
-    assert rows[0]["severity"] == "high"
-
-
 def test_quick_import_requires_initial_status_and_preserves_original_payload(client, pm_headers):
     """New project import cannot restore lifecycle authority without its evidence."""
     for status in ("draft", "completed", "archived"):
@@ -501,9 +413,10 @@ def test_quick_import_requires_initial_status_and_preserves_original_payload(cli
         }
         r = client.post("/api/projects/import/json", headers=pm_headers, json=payload)
         if status == "draft":
+            # A legacy draft maps to the v3 starting state.
             assert r.status_code == 200, r.text
             project = client.get(f"/api/projects/{r.json()['id']}", headers=pm_headers).json()
-            assert project["status"] == status
+            assert project["status"] == "preparing"
         else:
             assert r.status_code == 400, r.text
             assert "新建项目导入" in r.json()["detail"]
