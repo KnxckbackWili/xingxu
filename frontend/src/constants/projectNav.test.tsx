@@ -2,7 +2,7 @@ import { describe,expect,it } from 'vitest'
 import { PROJECT_NAV_ITEMS,PROJECT_PRIMARY_SECTIONS,PROJECT_MORE_KEYS,PROJECT_PAGE_INFO,PROJECT_NAV_GROUPS,PROJECT_ITEM_BY_KEY,PROJECT_CHILD_BY_SEGMENT,resolveProjectNav,childSegment,defaultChildKey,filterProjectNav,filterProjectActions,PROJECT_ACTIONS } from './projectNav'
 describe('project navigation',()=>{
  it('has exactly six daily destinations and four More destinations from one definition',()=>{
-  expect(PROJECT_PRIMARY_SECTIONS.map(row=>row.label)).toEqual(['概况','资料','车辆','计划','问题','现场'])
+  expect(PROJECT_PRIMARY_SECTIONS.map(row=>row.label)).toEqual(['概况','计划','车辆','资料','问题','现场'])
   expect(PROJECT_MORE_KEYS).toEqual(['reports','history','export','edit'])
   expect(PROJECT_NAV_GROUPS.flatMap(group=>group.items)).toEqual(PROJECT_NAV_ITEMS)
   expect(Object.values(PROJECT_PAGE_INFO).every(row=>row.aliases.length===0)).toBe(true)

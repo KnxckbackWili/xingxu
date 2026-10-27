@@ -46,7 +46,7 @@ it('shows signed dates without inventing midnight and preserves date precision w
   const dateOnly={...data,events:[{event_key:'commissioning_done',label:'调试完工',actual_at:null,actual_date:'2026-01-02',actual_precision:'date',derived:false,source_description:'签单明确记录的实际日期，仅精确到日'}]}
   get.mockResolvedValue({data:dateOnly})
   render(<ProjectEventsTimeline projectId="p1" canEdit />)
-  expect(await screen.findByText(/实际：2026-01-02/)).toBeVisible()
+  expect(await screen.findByRole('cell', { name: '2026-01-02' })).toBeVisible()
   expect(screen.queryByText(/2026-01-02 00:00/)).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole('button',{name:'更正调试完工时间'}))
   fireEvent.click(screen.getByRole('button',{name:/^保 存$|^保存$/}))

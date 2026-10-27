@@ -9,7 +9,7 @@ async function more(){fireEvent.click(screen.getByRole('button',{name:'更多'})
 beforeEach(()=>{nav.mockClear();h.user={id:'a',role:'admin',permission_overrides:{}}})
 it('shows exactly six daily destinations and More on every viewport',async()=>{
  const view=show();const common=within(screen.getByRole('navigation',{name:'项目常用功能'}))
- expect(common.getAllByRole('button').map(button=>button.textContent)).toEqual(['概况','资料','车辆','计划','问题','现场','更多'])
+ expect(common.getAllByRole('button').map(button=>button.textContent)).toEqual(['概况','计划','车辆','资料','问题','现场','更多'])
  expect(view.container.querySelector('.project-navigation-sidebar')).toBeNull()
  const extra=await more();for(const label of ['报告','操作记录','导出','项目设置'])expect(extra.getByRole('button',{name:label})).toBeVisible()
  for(const old of ['任务','日程','人员','开工向导'])expect(screen.queryByRole('button',{name:old})).toBeNull()

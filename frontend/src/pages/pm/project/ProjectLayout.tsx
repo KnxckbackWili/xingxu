@@ -8,7 +8,7 @@ import { projectApi, type Project } from '../../../api'
 import { errMsg } from '../../../api/client'
 import { useAuth } from '../../../stores/auth'
 import { hasSystemPermission } from '../../../constants/systemPermissions'
-import { isProjectStatus, projectStatusMeta } from '../../../constants/status'
+import { STATUS_LABEL, isProjectStatus, projectStatusMeta } from '../../../constants/status'
 import Tabs from '../../../components/VisibleTabs'
 import { childSegment, resolveProjectNav } from '../../../constants/projectNav'
 import { ProjectMenuContent } from './ProjectMenu'
@@ -42,6 +42,18 @@ const PAGE_PREFETCH: Record<string, () => void> = {
   report: () => void import('./IssuesPage'),
   edit: () => void import('./EditPage'),
   export: () => void import('./ExportPage'),
+}
+
+const STAGES = ['preparing', 'ready', 'executing', 'acceptance', 'completed', 'archived']
+/** Six manual project stages at a glance; a stop-work keeps the stage it interrupted. */
+function ProjectStageBar({ status, statusBefore }: { status: string; statusBefore: string | null }) {
+  const suspended = status === 'suspended'
+  const current = STAGES.indexOf(suspended ? statusBefore ?? '' : status)
+  return <ol className={`project-stage-bar${suspended ? ' is-suspended' : ''}`} aria-label={`项目阶段：${suspended ? '突发停工' : STATUS_LABEL[status] ?? status}`}>
+    {STAGES.map((stage, index) => <li key={stage} className={index < current ? 'is-past' : index === current ? 'is-current' : ''} aria-current={index === current ? 'step' : undefined}>
+      <span className="project-stage-track" aria-hidden="true" /><span className="project-stage-label">{STATUS_LABEL[stage]}{index === current && suspended ? '（停工）' : ''}</span>
+    </li>)}
+  </ol>
 }
 
 export default function ProjectLayout() {
@@ -222,6 +234,7 @@ export default function ProjectLayout() {
           <span className="project-context-summary" title={[project.client, project.location].filter(Boolean).join(' · ') || project.manager_name}>{[project.client, project.location].filter(Boolean).join(' · ') || (project.manager_name ? `负责人 ${project.manager_name}` : '客户与地点待补充')}</span>
           <Button className="project-info-trigger" type="text" onClick={() => setInfoOpen(true)}>项目信息</Button>
         </div>
+        {!unknownStatus && <ProjectStageBar status={project.status} statusBefore={project.suspension?.status_before ?? null} />}
       </div>
       {project.legacy_lifecycle?.requires_repair && (activeTab === 'overview'
         ? <LegacyLifecycleRepair project={project} onChanged={load} />

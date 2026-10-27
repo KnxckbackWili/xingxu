@@ -1,0 +1,10 @@
+.events-table-wrap { overflow-x: auto; }
+.events-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.events-table thead th { text-align: left; font-size: 13px; font-weight: 500; color: var(--agv-text-secondary); background: var(--agv-bg-subtle); padding: 8px 12px; }
+.events-table tbody th, .events-table td { padding: 10px 12px; border-top: 1px solid var(--agv-border-soft); vertical-align: top; text-align: left; }
+.events-table tbody th { font-weight: 400; }
+.events-table-name { display: block; font-weight: 500; }
+.events-table tbody th small { display: block; color: var(--agv-text-secondary); font-size: 12px; line-height: 1.5; }
+.events-table td { color: var(--agv-text-secondary); white-space: nowrap; }
+.events-table tr.is-done td:nth-child(3) { color: var(--agv-success, #067647); }
+.events-table-actions { text-align: right !important; white-space: nowrap; }

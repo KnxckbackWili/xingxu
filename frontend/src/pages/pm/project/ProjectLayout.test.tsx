@@ -153,7 +153,7 @@ describe('project direct URL capability boundary', () => {
     expect(screen.queryByTestId('mock-overview')).not.toBeInTheDocument()
     expect(screen.queryByText('项目已删除')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '返回项目列表' }))
-    expect(navigateMock).toHaveBeenCalledWith('/worker/projects')
+    expect(navigateMock).toHaveBeenCalledWith('/pm/projects') // 两端已合并，现场人员同样回到项目列表
   })
   it('retries a server failure and restores the project once the request succeeds', async () => {
     route.pathname = '/pm/projects/p1/overview'
@@ -225,7 +225,8 @@ describe('persistent project directory during route refresh', () => {
     resolveRefresh({data:{...PROJECT,name:'已更新项目名称',status:'ready'}})
     await screen.findByText('已更新项目名称')
     expect(screen.getByRole('navigation',{name:'项目常用功能'})).toBe(directory)
-    expect(screen.getByText('待进场')).toBeVisible()
+    expect(screen.getByText('待进场', { selector: '.ant-tag' })).toBeVisible()
+    expect(screen.getByRole('list', { name: '项目阶段：待进场' })).toBeVisible()
   })
   it('never displays cached project data after changing project and ignores the aborted prior-page response', async () => {
     let oldSignal: AbortSignal|undefined

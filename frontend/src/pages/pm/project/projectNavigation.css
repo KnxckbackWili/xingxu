@@ -80,3 +80,15 @@
 .project-more-list strong,.project-more-list small { display:block; }
 .project-more-list small { color:var(--agv-text-secondary,#777); margin-top:4px; }
 @media (max-width:600px) { .project-daily-navigation > button { padding:8px 10px; } }
+
+/* Six-stage bar under the project title */
+.project-stage-bar { list-style: none; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; margin: 10px 0 2px 52px; padding: 0; }
+.project-stage-bar li { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.project-stage-track { height: 5px; border-radius: 3px; background: var(--agv-border-soft); }
+.project-stage-bar li.is-past .project-stage-track { background: color-mix(in srgb, var(--agv-primary) 45%, transparent); }
+.project-stage-bar li.is-current .project-stage-track { background: var(--agv-primary); }
+.project-stage-label { font-size: 12px; color: var(--agv-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.project-stage-bar li.is-current .project-stage-label { color: var(--agv-primary); font-weight: 600; }
+.project-stage-bar.is-suspended li.is-current .project-stage-track { background: var(--agv-danger, #b42318); }
+.project-stage-bar.is-suspended li.is-current .project-stage-label { color: var(--agv-danger, #b42318); }
+@media (max-width: 760px) { .project-stage-bar { margin-left: 0; gap: 3px; } .project-stage-label { font-size: 11px; } }

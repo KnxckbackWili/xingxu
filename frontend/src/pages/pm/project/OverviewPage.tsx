@@ -235,6 +235,12 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
     onClick={event => { if (event.button !== 0 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return; event.preventDefault(); go(path) }}>
     <span><strong>{title}</strong>{detail && <small>{detail}</small>}</span><RightOutlined aria-hidden="true" />
   </a>
+  const count = (title: string, value: number | null, path: string, urgent = false) => <a className={`overview-side-count${urgent ? ' is-urgent' : ''}`} href={`/pm/projects/${projectId}${path}`}
+    onClick={event => { if (event.button !== 0 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return; event.preventDefault(); go(path) }}>
+    <span>{title}</span><strong>{value ?? '未读取'}</strong>
+  </a>
+  const checklist = projectStatus === 'preparing' && !fieldStaff ? workflow.checklist : null
+  const pendingSteps = checklist ? checklist.filter(item => !item.done).length : 0
   const groups: UnitQuantity[] = data?.quantities_by_unit ?? []
   const quantity = (value: number) => Number(value.toFixed(3))
   const scheduleDetail = !weeklyPlan ? '周计划尚未读取' : `${weeklyPlan.total} 格周计划，${weeklyPlan.published_count} 格已发布${draftPlans===null?'':`，${draftPlans} 格草稿`}`
@@ -270,37 +276,53 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
         </div>
       </section>
 
-      {projectStatus === 'preparing' && !fieldStaff && <Card title="筹备清单" style={{ marginBottom: 16 }}><ol aria-label="筹备清单" style={{ display: 'grid', gap: 8 }}>{workflow.checklist.map(item => <li key={item.title}><Button type="link" onClick={() => go(item.path)}>{item.title}</Button><span>{item.done ? '已核对 · ' : '待核对 · '}{item.description}</span></li>)}</ol></Card>}
-      <div className="overview-summary-row">
-        <div><span>总进度</span><strong>{data?.progress_known === false ? '进度未知（数量待补）' : <>{data?.percent ?? 0}<small>%</small></>}</strong><Progress percent={data?.percent ?? 0} showInfo={false} aria-label="项目概况进度" strokeColor="var(--agv-primary)" /></div>
-        <button type="button" aria-expanded={dataOpen} aria-controls={`overview-evidence-${projectId}`} onClick={() => setDataOpen(value => !value)}>进度与记录 <RightOutlined aria-hidden="true" rotate={dataOpen ? 90 : 0} /></button>
+      <div className="overview-layout">
+        <div className="overview-main">
+          <section className="overview-next-work overview-card" aria-label="待处理工作">
+            <h2>{checklist ? (pendingSteps ? `进入「待进场」还差 ${pendingSteps} 项` : '筹备清单已全部核对') : '现在要处理'}</h2>
+            {checklist && <ol aria-label="筹备清单" className="overview-checklist">{checklist.map(item => <li key={item.title} className={item.done ? 'is-done' : ''}>
+              <span className="overview-check-mark" aria-hidden="true">{item.done ? '✓' : '!'}</span>
+              <span className="overview-check-copy"><Button type="link" onClick={() => go(item.path)}>{item.title}</Button><small>{item.path === '/documents?review=1' && !entryReady(prep) ? preparationDetail : item.description}</small></span>
+              <span className="overview-check-state">{item.done ? '已核对' : '待核对'}</span>
+            </li>)}</ol>}
+            <div className="overview-work-cards overview-work-list">
+              {openIssues.length > 0 && link('现场问题', '/issues', `${openIssues.length} 个问题待处理${severeIssueCount ? `，其中 ${severeIssueCount} 个优先处理` : ''}`, severeIssueCount > 0)}
+              {overdue.length > 0 && link(`${overdue.length} 项资料已逾期`, '/documents', overdueDetail, true)}
+              {!fieldStaff && !checklist && workflow.setup && !entryReady(prep) && link('发车前资料确认', '/documents?review=1', preparationDetail, prepBlocked > 0)}
+              {!fieldStaff && (!taskCount || unlinkedVehicleWorkCount > 0) && link('工作项范围待确认', '/plan', !taskCount ? '确认项目阶段与工作项范围' : `${unlinkedVehicleWorkCount} 项车辆工作尚未明确关联真实进度环节`)}
+              {!checklist && (workflow.setup || (draftPlans??0)>0 || (weeklyPlan?.warning_count??0)>0) && link('周计划', '/plan?view=weeks', [scheduleDetail,...weeklyWarnings].join('；'))}
+              {!!documentActions?.this_week_count && link('本周待交资料', '/documents?filter=week', `${documentActions.this_week_count} 项资料本周截止，按现场时区 ${documentActions.timezone}`)}
+              {!checklist && (documentProgress === null || documentProgress.pending > 0) && link('项目资料', '/documents', deliveryDetail)}
+              {!workflow.setup && !overdue.length && !openIssues.length && documentProgress !== null && !documentProgress.pending && link('查看周计划', '/plan?view=weeks', '查看已发布的工作和实际完成情况')}
+            </div>
+          </section>
+          <ProjectEventsTimeline key={projectId} projectId={projectId} initialData={eventState} canEdit={!eventWriteBlocked && (eventCapabilities ? eventCapabilities.includes('project.update') : canManageStatus && user?.role !== 'director')} onChanged={onStatusChange} />
+          {acceptanceSummary && ['acceptance', 'completed', 'archived'].includes(projectStatus) && <section className="overview-acceptance-summary overview-card" aria-label="当前验收情况">
+            <h2>验收情况</h2><AcceptanceDecision summary={acceptanceSummary} />{link('查看验收与复盘', '/documents?acceptance=1')}
+          </section>}
+        </div>
+        <aside className="overview-side" aria-label="项目概要">
+          <section className="overview-card overview-side-progress">
+            <h2>进度</h2>
+            <div className="overview-side-metric"><span>总进度</span><strong>{data?.progress_known === false ? '未知（数量待补）' : `${data?.percent ?? 0}%`}</strong></div>
+            <Progress percent={data?.percent ?? 0} showInfo={false} aria-label="项目概况进度" strokeColor="var(--agv-primary)" />
+            {currentPhase && <p className="overview-side-note">待完成阶段：{currentPhase.name}</p>}
+            <button type="button" className="overview-side-toggle" aria-expanded={dataOpen} aria-controls={`overview-evidence-${projectId}`} onClick={() => setDataOpen(value => !value)}>进度与记录 <RightOutlined aria-hidden="true" rotate={dataOpen ? 90 : 0} /></button>
+          </section>
+          <section className="overview-card overview-side-counts">
+            <h2>待处理</h2>
+            {count('未解决问题', openIssues.length, '/issues', severeIssueCount > 0)}
+            {count('待提交资料', documentProgress?.pending ?? null, '/documents')}
+            {count('逾期资料', overdue.length, '/documents', overdue.length > 0)}
+            {!fieldStaff && count('项目成员', memberCount, '/team')}
+          </section>
+          {!fieldStaff && recentLogs.length > 0 && <section className="overview-card overview-side-logs">
+            <h2>最近记录</h2>
+            {recentLogs.slice(0, 3).map((log: any) => <div key={log.id}><span>{formatAuditDetail(log.detail)}</span><small>{log.operator_name || '系统'} · {log.created_at ? formatDateTime(log.created_at) : ''}</small></div>)}
+            <Button type="link" onClick={() => go('/activity')}>全部记录</Button>
+          </section>}
+        </aside>
       </div>
-      <section className="overview-next-work" aria-label="待处理工作">
-        <h2>现在要处理</h2>
-        <div className="overview-work-cards overview-work-list">
-          {openIssues.length > 0 && link('现场问题', '/issues', `${openIssues.length} 个问题待处理${severeIssueCount ? `，其中 ${severeIssueCount} 个优先处理` : ''}`, severeIssueCount > 0)}
-          {overdue.length > 0 && link(`${overdue.length} 项资料已逾期`, '/documents', overdueDetail, true)}
-          {!fieldStaff && workflow.setup && !entryReady(prep) && link('发车前资料确认', '/documents?review=1', preparationDetail, prepBlocked > 0)}
-          {!fieldStaff && (!taskCount || unlinkedVehicleWorkCount > 0) && link('工作项范围待确认', '/plan', !taskCount ? '确认项目阶段与工作项范围' : `${unlinkedVehicleWorkCount} 项车辆工作尚未明确关联真实进度环节`)}
-          {(workflow.setup || (draftPlans??0)>0 || (weeklyPlan?.warning_count??0)>0) && link('周计划', '/plan?view=weeks', [scheduleDetail,...weeklyWarnings].join('；'))}
-          {!!documentActions?.this_week_count && link('本周待交资料', '/documents?filter=week', `${documentActions.this_week_count} 项资料本周截止，按现场时区 ${documentActions.timezone}`)}
-          {(documentProgress === null || documentProgress.pending > 0) && link('项目资料', '/documents', deliveryDetail)}
-          {!workflow.setup && !overdue.length && !openIssues.length && documentProgress !== null && !documentProgress.pending && link('查看周计划', '/plan?view=weeks', '查看已发布的工作和实际完成情况')}
-        </div>
-      </section>
-      <section className="overview-at-hand" aria-label="项目常用工作">
-        <h2>继续工作</h2>
-        <div className="overview-at-hand-links">
-          {!fieldStaff && link('工作项', '/plan', '阶段、工作说明、完成状态与真实车辆环节')}
-          {!fieldStaff && link('人员', '/team', memberCount ? `${memberCount} 人参与项目` : '添加参与项目的人')}
-          {link('现场', '/issues', '问题、车辆、物品和联系人')}
-          {link('资料', '/documents', '项目文件、提交材料和验收记录')}
-        </div>
-      </section>
-      <ProjectEventsTimeline key={projectId} projectId={projectId} initialData={eventState} canEdit={!eventWriteBlocked && (eventCapabilities ? eventCapabilities.includes('project.update') : canManageStatus && user?.role !== 'director')} onChanged={onStatusChange} />
-      {acceptanceSummary && ['acceptance', 'completed', 'archived'].includes(projectStatus) && <section className="overview-acceptance-summary" aria-label="当前验收情况">
-        <h2>验收情况</h2><AcceptanceDecision summary={acceptanceSummary} />{link('查看验收与复盘', '/documents?acceptance=1')}
-      </section>}
       {dataOpen && <div id={`overview-evidence-${projectId}`} className="overview-evidence-panel" aria-label="进度明细与记录">
         <h2>进度明细</h2>
             <div className="overview-tree-data">

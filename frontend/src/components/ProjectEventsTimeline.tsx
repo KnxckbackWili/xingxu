@@ -1,9 +1,10 @@
 import { useAuth } from '../stores/auth'
 import { useEffect, useRef, useState } from 'react'
-import { Alert, Button, DatePicker, Form, Input, Modal, Select, Space, Timeline, Typography } from 'antd'
+import { Alert, Button, DatePicker, Form, Input, Modal, Select, Space, Typography } from 'antd'
 import dayjs from 'dayjs'
 import { api, errMsg } from '../api/client'
 import { inProjectTime, type ProjectEvent } from '../constants/projectEvents'
+import './ProjectEventsTimeline.css'
 import { WorkSection } from './WorkPage'
 
 export default function ProjectEventsTimeline({ projectId, canEdit, onChanged, initialData }: {
@@ -52,17 +53,26 @@ export default function ProjectEventsTimeline({ projectId, canEdit, onChanged, i
   return <WorkSection title="关键事件" description={`调度平台：${data?.dispatch_platform === 'integrated' ? '集成' : data?.dispatch_platform || '未设置'} · 现场时区：${zone}`}>
     {error ? <Alert type="error" showIcon message="关键事件加载失败" description={error} action={<Button onClick={load}>重试关键事件</Button>} />
       : !data ? <Typography.Text type="secondary">正在读取关键事件…</Typography.Text>
-      : <Timeline items={(data.events ?? []).map(event => ({ key: event.event_key, color: event.actual_at || event.actual_date ? 'green' : 'gray', children: <div>
-        <Typography.Text strong>{event.label}</Typography.Text>
-        <div>计划：{event.planned_date || '未安排'} · 实际：{event.derived ? event.actual_date || '未全部到场' : event.actual_date ? event.actual_date : event.actual_at ? inProjectTime(event.actual_at, zone).format('YYYY-MM-DD HH:mm') : '未登记'}</div>
-        {event.derived && <Typography.Paragraph type="secondary" style={{ marginBottom: 4 }}>按逐台到场日期汇总{summary ? `；计划 ${summary.expected} 台，已建档 ${summary.registered} 台，到场 ${summary.arrived} 台。${summary.registry_complete ? '' : '车辆资料尚未完整匹配计划数量。'}` : ''}</Typography.Paragraph>}
-        {(event.actual_date || event.actual_source?.kind === 'legacy_status_transition') && <Typography.Paragraph type="secondary">{event.source_description}</Typography.Paragraph>}
-        {event.note && <Typography.Paragraph style={{ marginBottom: 4 }}>{event.note}</Typography.Paragraph>}
-        {canEdit && !event.derived && <Space wrap>
-          <Button size="small" onClick={() => open(event)}>{event.actual_at || event.actual_date ? `更正${event.label}时间` : `登记${event.label}已发生`}</Button>
-          {(event.actual_at || event.actual_date) && <Button size="small" danger onClick={() => open(event, true)}>清除{event.label}实际时间</Button>}
-        </Space>}
-      </div> }))} />}
+      : <div className="events-table-wrap"><table className="events-table">
+        <thead><tr><th scope="col">节点</th><th scope="col">计划</th><th scope="col">实际</th>{canEdit && <th scope="col" className="events-table-actions">操作</th>}</tr></thead>
+        <tbody>{(data.events ?? []).map(event => {
+          const done = !!(event.actual_at || event.actual_date)
+          const actual = event.derived ? event.actual_date || '未全部到场' : event.actual_date ? event.actual_date : event.actual_at ? inProjectTime(event.actual_at, zone).format('YYYY-MM-DD HH:mm') : '未登记'
+          return <tr key={event.event_key} className={done ? 'is-done' : ''}>
+            <th scope="row"><span className="events-table-name">{event.label}</span>
+              {event.derived && <small>按逐台到场日期汇总{summary ? `；计划 ${summary.expected} 台，已建档 ${summary.registered} 台，到场 ${summary.arrived} 台。${summary.registry_complete ? '' : '车辆资料尚未完整匹配计划数量。'}` : ''}</small>}
+              {(event.actual_date || event.actual_source?.kind === 'legacy_status_transition') && <small>{event.source_description}</small>}
+              {event.note && <small>{event.note}</small>}
+            </th>
+            <td>{event.planned_date || '未安排'}</td>
+            <td>{actual}</td>
+            {canEdit && <td className="events-table-actions">{!event.derived && <Space size={4} wrap>
+              <Button size="small" aria-label={done ? `更正${event.label}时间` : `登记${event.label}已发生`} onClick={() => open(event)}>{done ? '更正' : '登记'}</Button>
+              {done && <Button size="small" danger aria-label={`清除${event.label}实际时间`} onClick={() => open(event, true)}>清除</Button>}
+            </Space>}</td>}
+          </tr>
+        })}</tbody>
+      </table></div>}
     <Modal key={projectId} title={editing ? `${editing.clear ? '清除' : '登记'}${editing.event.label}实际时间` : ''} open={!!editing && editing.projectId === projectId}
       confirmLoading={saving} onCancel={() => { if (!busy.current) setEditing(null) }} onOk={() => form.submit()} okText="保存" okButtonProps={{ disabled: !canEdit }}>
       <Form form={form} layout="vertical" disabled={saving || !canEdit} onFinish={save}>

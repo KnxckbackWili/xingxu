@@ -8,9 +8,9 @@ export interface ProjectNavGroup { key: string; label: string; items: ProjectNav
 /** The only maintained project navigation structure; other views derive from it. */
 export const PROJECT_NAV_ITEMS: ProjectNavItem[] = [
   { key: 'overview', label: '概况', path: 'overview', icon: <DashboardOutlined /> },
-  { key: 'delivery', label: '资料', path: 'documents', icon: <FileDoneOutlined /> },
-  { key: 'vehicles', label: '车辆', path: 'vehicles', icon: <CarOutlined /> },
   { key: 'plan', label: '计划', path: 'plan', icon: <CarryOutOutlined /> },
+  { key: 'vehicles', label: '车辆', path: 'vehicles', icon: <CarOutlined /> },
+  { key: 'delivery', label: '资料', path: 'documents', icon: <FileDoneOutlined /> },
   { key: 'issues', label: '问题', path: 'issues', icon: <WarningOutlined /> },
   { key: 'field', label: '现场', path: 'inventory', children: [
     { key: 'inventory', label: '物品', path: 'inventory', defaultChild: true },
