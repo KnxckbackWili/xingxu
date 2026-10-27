@@ -73,7 +73,7 @@ def test_same_named_tasks_backup_roundtrip(client, admin_headers):
     bad_ref['progress'][0]['task_source_id'] = None
     assert client.post('/api/projects/import/json', headers=admin_headers, json=bad_ref).status_code == 400
     duplicate_id = deepcopy(snapshot)
-    duplicate_id['modules'][1]['tasks'][0]['source_id'] = ids[0]
+    duplicate_id['modules'][1]['tasks'][0]['source_id'] = duplicate_id['modules'][0]['tasks'][0]['source_id']
     assert client.post('/api/projects/import/json', headers=admin_headers, json=duplicate_id).status_code == 400
 
 
