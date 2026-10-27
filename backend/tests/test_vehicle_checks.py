@@ -95,7 +95,7 @@ def test_real_step_link_required_qualified_facts_cannot_rebind(client,pm_headers
     assert mark(client,pm_headers,pid,row,is_done=True).status_code==400
     assert write(client,pm_headers,pid,ids,key='go_live').status_code==400
     url=f'/api/projects/{pid}/tasks/{tid}'
-    assert client.put(url,headers=pm_headers,json={'vehicle_step_key':'not_this_project'}).status_code==400
+    assert client.put(url,headers=pm_headers,json=versioned(tid, {'vehicle_step_key':'not_this_project'}, 'Task')).status_code==400
     r=client.put(url,headers=pm_headers,json={'vehicle_step_key':'arrival_inspection','version':0})
     assert r.status_code==200 and r.json()['vehicle_step_key']=='arrival_inspection',r.text
     assert mark(client,pm_headers,pid,checks(client,pm_headers,pid,ids[0])[0],is_done=True).status_code==200

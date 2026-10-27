@@ -28,7 +28,7 @@ def test_archived_issue_mutations_rejected(client, pm_headers, operation):
     elif operation == 'import':
         result = client.post(f'/api/projects/{pid}/issues/import', headers=pm_headers, json={'items': [{'title': 'late'}]})
     elif operation == 'update':
-        result = client.put(path, headers=pm_headers, json={'title': 'changed'})
+        result = client.put(path, headers=pm_headers, json=versioned(issue['id'], {'title': 'changed'}, 'Issue'))
     elif operation == 'reopen':
         result = client.post(path + '/reopen', headers=pm_headers)
     else:

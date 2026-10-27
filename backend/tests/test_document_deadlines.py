@@ -49,18 +49,18 @@ def test_weekly_iso_year_and_dst_end_of_local_sunday(key,expected):
 def test_plan_change_actual_clear_and_submitted_snapshot_via_real_api(client,admin_headers):
     pid=create(client,admin_headers)['id']
     path=f'/api/projects/{pid}/events/ship'
-    assert client.put(path,headers=admin_headers,json={'planned_date':'2026-11-20'}).status_code==200
+    assert client.put(path,headers=admin_headers,json=versioned(pid, {'planned_date':'2026-11-20'})).status_code==200
     document=next(row for row in view(client,admin_headers,pid)['documents'] if row['code']=='5.1.1')
     assert document['due_at']=='2026-11-12T16:00:00+00:00' and document['due_is_estimated']
-    assert client.put(path,headers=admin_headers,json={'actual_at':'2026-11-21T15:30:00+08:00'}).status_code==200
+    assert client.put(path,headers=admin_headers,json=versioned(pid, {'actual_at':'2026-11-21T15:30:00+08:00'})).status_code==200
     current=next(row for row in view(client,admin_headers,pid)['documents'] if row['id']==document['id'])
     assert current['due_at']=='2026-11-14T07:30:00+00:00' and not current['due_is_estimated']
-    assert client.put(path,headers=admin_headers,json={'actual_at':None,'reason':'真实登记错误，恢复待确认'}).status_code==200
+    assert client.put(path,headers=admin_headers,json=versioned(pid, {'actual_at':None,'reason':'真实登记错误，恢复待确认'})).status_code==200
     current=next(row for row in view(client,admin_headers,pid)['documents'] if row['id']==document['id'])
     assert current['due_at']==document['due_at'] and current['due_is_estimated']
     assert upload(client,admin_headers,pid,[current['id']]).status_code==200
     frozen=next(row for row in view(client,admin_headers,pid)['documents'] if row['id']==document['id'])
-    assert client.put(path,headers=admin_headers,json={'planned_date':'2026-12-01'}).status_code==200
+    assert client.put(path,headers=admin_headers,json=versioned(pid, {'planned_date':'2026-12-01'})).status_code==200
     kept=next(row for row in view(client,admin_headers,pid)['documents'] if row['id']==document['id'])
     assert (kept['due_at'],kept['due_basis'],kept['version'])==(frozen['due_at'],frozen['due_basis'],frozen['version'])
 

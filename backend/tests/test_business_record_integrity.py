@@ -1,4 +1,5 @@
 """Round-three regressions for portable backups and secondary business workflows."""
+from tests.lifecycle_helpers import versioned
 from datetime import date
 from copy import deepcopy
 from uuid import uuid4
@@ -43,12 +44,12 @@ def test_same_named_tasks_backup_roundtrip(client, admin_headers):
     assert result.status_code == 200, result.text
     with SessionLocal() as db:
         new_pid = result.json()['id']
-        for index in range(2):
-            module = db.query(Module).filter_by(project_id=new_pid, name=f'模块{index}').one()
-            task = db.query(Task).filter_by(module_id=module.id).one()
-            assert task.id not in ids
-            assert db.query(DailyProgress).filter_by(task_id=task.id).one().completed_quantity == index + 1
-            assert db.query(ScheduleEntry).filter_by(task_id=task.id).one().planned_quantity == index + 3
+        # A new-project import keeps each same-named work definition distinct; retired
+        # daily facts are not replayed into the new project (full restore keeps them).
+        imported = db.query(Task).filter_by(project_id=new_pid, name='检查').all()
+        assert sorted(task.group_label for task in imported) == ['模块0', '模块1']
+        assert not {task.id for task in imported} & set(ids)
+        assert not db.query(DailyProgress).filter(DailyProgress.task_id.in_([t.id for t in imported])).count()
     # Legacy ambiguous snapshots fail explicitly rather than misassigning history.
     legacy = deepcopy(snapshot)
     for module in legacy['modules']:
@@ -159,13 +160,13 @@ def test_partial_handover_plan_preserves_hidden_fields_and_explicit_clear(client
     url = f'/api/projects/{pid}'
     original = {'mode': 'collective', 'meeting_point': '东门',
                 'transport': '大巴', 'notes': '原备注'}
-    assert client.put(url, headers=admin_headers, json={'entry_plan': original}).status_code == 200
-    assert client.put(url, headers=admin_headers, json={'entry_plan': {'notes': '新备注'}}).status_code == 200
+    assert client.put(url, headers=admin_headers, json=versioned(pid, {'entry_plan': original})).status_code == 200
+    assert client.put(url, headers=admin_headers, json=versioned(pid, {'entry_plan': {'notes': '新备注'}})).status_code == 200
     updated = client.get(url, headers=admin_headers).json()['entry_plan']
     assert updated == {**original, 'notes': '新备注'}
-    assert client.put(url, headers=admin_headers, json={'entry_plan': {'meeting_point': ''}}).status_code == 200
+    assert client.put(url, headers=admin_headers, json=versioned(pid, {'entry_plan': {'meeting_point': ''}})).status_code == 200
     updated = client.get(url, headers=admin_headers).json()['entry_plan']
     assert updated['meeting_point'] == ''
     assert updated['transport'] == '大巴'
-    assert client.put(url, headers=admin_headers, json={'entry_plan': None}).status_code == 200
+    assert client.put(url, headers=admin_headers, json=versioned(pid, {'entry_plan': None})).status_code == 200
     assert client.get(url, headers=admin_headers).json()['entry_plan'] == {}

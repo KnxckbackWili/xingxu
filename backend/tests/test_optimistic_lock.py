@@ -7,6 +7,7 @@
 version 缺省（旧前端）时跳过校验但仍自增，保持向后兼容。
 """
 
+from tests.lifecycle_helpers import versioned
 import pytest
 
 
@@ -62,10 +63,10 @@ def test_check_item_stale_version_409(client, pm_headers):
                    headers=pm_headers, json={"is_done": True, "version": v0})
     assert r.status_code == 409, r.json()
 
-    # version 缺省（旧前端）：跳过校验但仍自增
+    # 版本缺省不再跳过校验：检查登记须提交当前版本号
     r = client.put(f"/api/projects/{pid}/check-items/{ci['id']}",
                    headers=pm_headers, json={"is_done": True})
-    assert r.status_code == 200, r.json()
+    assert r.status_code == 400 and '版本号' in r.json()['detail'], r.json()
 
 
 def test_document_state_stale_version_409(client, pm_headers):
@@ -74,11 +75,14 @@ def test_document_state_stale_version_409(client, pm_headers):
     row = documents(client, pm_headers, pid)['documents'][0]
     path = f'/api/projects/{pid}/documents/{row["id"]}'
     payload = {'status': 'waived', 'reason': '客户明确不需要', 'version': row['version']}
-    first = client.put(path, headers=pm_headers, json=payload)
+    first = client.put(path, headers=pm_headers, json=versioned(row["id"], payload, 'ProjectDocument'))
     assert first.status_code == 200, first.text
-    stale = client.put(path, headers=pm_headers, json=payload)
+    stale = client.put(path, headers=pm_headers, json=versioned(row["id"], payload, 'ProjectDocument'))
     assert stale.status_code == 409, stale.text
     current = client.get(f'/api/projects/{pid}/documents', headers=pm_headers).json()['documents']
     assert next(value for value in current if value['id'] == row['id'])['version'] == first.json()['version']
+    # 省略版本号不再静默覆盖：要求客户端带上读取时的版本。
     omitted = client.put(path, headers=pm_headers, json={'status': 'pending', 'reason': '恢复资料要求'})
-    assert omitted.status_code == 200, omitted.text
+    assert omitted.status_code == 428, omitted.text
+    assert next(value for value in client.get(f'/api/projects/{pid}/documents', headers=pm_headers).json()['documents']
+                if value['id'] == row['id'])['status'] == 'waived'

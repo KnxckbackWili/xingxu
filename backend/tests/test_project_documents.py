@@ -58,7 +58,7 @@ def test_real_file_multi_submission_versions_waive_and_optional_review(client,ad
     assert len(current['versions'])==2
     assert client.delete('/api/files/'+asset['id'],headers=admin_headers).status_code==400
     path=f'/api/projects/{pid}/documents/{current["id"]}'
-    assert client.put(path,headers=admin_headers,json={'status':'waived','reason':' '}).status_code==400
+    assert client.put(path,headers=admin_headers,json=versioned(current["id"], {'status':'waived','reason':' '}, 'ProjectDocument')).status_code==400
     waived=client.put(path,headers=admin_headers,json={'status':'waived','reason':'客户明确无需此项','version':current['version']})
     assert waived.status_code==200 and waived.json()['status']=='waived'
     second=next(row for row in view(client,admin_headers,pid)['documents'] if row['id']==ids[1])

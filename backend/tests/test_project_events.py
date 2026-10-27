@@ -47,7 +47,7 @@ def test_plans_and_platform_are_one_source_and_do_not_move_status(client, pm_hea
     assert r.status_code == 200, r.text
     assert r.json()['dispatch_platform'] == 'integrated'
     assert events(client, pm_headers, p['id'])['ship']['planned_date'] is None
-    assert r.json()['status'] == 'draft'
+    assert r.json()['status'] == 'preparing'
 
 
 @pytest.mark.parametrize('body', [
@@ -65,30 +65,30 @@ def test_manual_event_keeps_instant_and_clear_requires_audited_reason(client, pm
     from app.models import ChangeLog, ProjectEvent
     p = project(client, pm_headers)
     path = f"/api/projects/{p['id']}/events/ship"
-    assert client.put(path, headers=pm_headers, json={'actual_at': '2026-10-20T14:32:21+08:00'}).status_code == 200
+    assert client.put(path, headers=pm_headers, json=versioned(p['id'], {'actual_at': '2026-10-20T14:32:21+08:00'})).status_code == 200
     assert events(client, pm_headers, p['id'])['ship']['actual_at'] == '2026-10-20T06:32:21+00:00'
-    assert client.put(path, headers=pm_headers, json={'actual_at': None, 'reason': '  '}).status_code == 400
+    assert client.put(path, headers=pm_headers, json=versioned(p['id'], {'actual_at': None, 'reason': '  '})).status_code == 400
     assert events(client, pm_headers, p['id'])['ship']['actual_at'] is not None
-    assert client.put(path, headers=pm_headers, json={'actual_at': None, 'reason': '误登记发车'}).status_code == 200
+    assert client.put(path, headers=pm_headers, json=versioned(p['id'], {'actual_at': None, 'reason': '误登记发车'})).status_code == 200
     with SessionLocal() as db:
         row = db.query(ProjectEvent).filter_by(project_id=p['id'], event_key='ship').one()
         assert row.actual_at is None and row.recorded_by
         audit = db.query(ChangeLog).filter_by(project_id=p['id'], entity_type='project_event').all()
         assert any('误登记发车' in x.detail and x.old_value['actual_at'] for x in audit)
-    assert client.get(f"/api/projects/{p['id']}", headers=pm_headers).json()['status'] == 'draft'
-    assert client.put(path, headers=pm_headers, json={'actual_at': '2026-10-20T14:32:21'}).status_code == 422
+    assert client.get(f"/api/projects/{p['id']}", headers=pm_headers).json()['status'] == 'preparing'
+    assert client.put(path, headers=pm_headers, json=versioned(p['id'], {'actual_at': '2026-10-20T14:32:21'})).status_code == 422
 
 
 def test_partial_registry_cannot_become_all_arrived_and_clear_is_atomic(client, pm_headers):
     p, vid = fleet(client, pm_headers)
     pid = p['id']; first = unit(client, pm_headers, pid, vid, 'AGV-1')
     path = f'/api/projects/{pid}/vehicle-arrivals'
-    r = client.put(path, headers=pm_headers, json={'unit_ids': [first], 'arrived_at': '2026-10-01'})
+    r = client.put(path, headers=pm_headers, json=versioned(pid, {'unit_ids': [first], 'arrived_at': '2026-10-01'}))
     assert r.status_code == 200, r.text
     assert r.json()['arrival_summary']['registry_complete'] is False
     assert events(client, pm_headers, pid)['arrival_all']['actual_at'] is None
     second = unit(client, pm_headers, pid, vid, 'AGV-2')
-    r = client.put(path, headers=pm_headers, json={'unit_ids': [second], 'arrived_at': '2026-10-03'})
+    r = client.put(path, headers=pm_headers, json=versioned(pid, {'unit_ids': [second], 'arrived_at': '2026-10-03'}))
     assert r.status_code == 200, r.text
     all_arrived = events(client, pm_headers, pid)['arrival_all']
     assert all_arrived['actual_date'] == '2026-10-03'
@@ -96,9 +96,9 @@ def test_partial_registry_cannot_become_all_arrived_and_clear_is_atomic(client, 
     assert all_arrived['derived'] and all_arrived['actual_precision'] == 'date'
     assert client.put(f'/api/projects/{pid}/events/arrival_all', headers=pm_headers,
                       json=versioned(pid, {'actual_at': None, 'reason': '绕过逐台记录'})).status_code == 400
-    assert client.put(path, headers=pm_headers, json={'unit_ids': [first, second], 'arrived_at': None}).status_code == 400
+    assert client.put(path, headers=pm_headers, json=versioned(pid, {'unit_ids': [first, second], 'arrived_at': None})).status_code == 400
     assert all(x['arrived_at'] for x in client.get(f'/api/projects/{pid}/vehicle-units', headers=pm_headers).json())
-    assert client.put(path, headers=pm_headers, json={'unit_ids': [first, second], 'arrived_at': None, 'reason': '误录到场'}).status_code == 200
+    assert client.put(path, headers=pm_headers, json=versioned(pid, {'unit_ids': [first, second], 'arrived_at': None, 'reason': '误录到场'})).status_code == 200
     assert events(client, pm_headers, pid)['arrival_all']['actual_at'] is None
 
 
@@ -110,7 +110,7 @@ def test_fleet_expansion_invalidates_derived_actual_without_changing_project_sta
     r = client.put(f'/api/projects/{pid}/vehicles/{vid}', headers=pm_headers, json={'quantity': 2})
     assert r.status_code == 200, r.text
     assert events(client, pm_headers, pid)['arrival_all']['actual_at'] is None
-    assert client.get(f'/api/projects/{pid}', headers=pm_headers).json()['status'] == 'draft'
+    assert client.get(f'/api/projects/{pid}', headers=pm_headers).json()['status'] == 'preparing'
 
 
 def test_batch_does_not_write_foreign_vehicle_and_member_cannot_change_events(client, pm_headers, worker_headers):
@@ -151,9 +151,8 @@ def test_portable_json_and_excel_preserve_event_precision_and_vehicle_arrival(cl
     workbook = client.get(f'/api/projects/{pid}/export/excel', headers=pm_headers)
     assert workbook.status_code == 200, workbook.text[:100] if workbook.status_code != 200 else ''
     book = load_workbook(BytesIO(workbook.content))
-    assert '关键事件' in book.sheetnames
-    assert any('2026-10-03' in tuple(row) for row in book['关键事件'].values)
-    assert any('到场日期' in tuple(row) for row in book['现场车辆'].values)
+    # T27: the delivery workbook is the simplified handover set; events travel in JSON.
+    assert book.sheetnames == ['交付概览', '生命周期表', '问题清单', '物资清单', '收发流水', '交付资料']
 
 
 def test_old_portable_dates_map_to_ship_and_arrival_without_actual_times(client, pm_headers):
