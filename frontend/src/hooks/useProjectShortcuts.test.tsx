@@ -42,8 +42,8 @@ describe('personal project shortcuts', () => {
   it('keeps in-memory preferences usable when browser storage is blocked', () => {
     const store = createProjectShortcutStore('blocked', () => { throw new Error('storage blocked') })
     const listener = vi.fn(), unsubscribe = store.subscribe(listener)
-    store.toggleFavorite('p'); store.visit('p', 'schedule')
-    expect(store.getSnapshot()).toEqual({ favorites: ['p'], recent: [{ id: 'p', section: 'schedule' }], temporary: true })
+    store.toggleFavorite('p'); store.visit('p', 'plan')
+    expect(store.getSnapshot()).toEqual({ favorites: ['p'], recent: [{ id: 'p', section: 'plan' }], temporary: true })
     expect(listener).toHaveBeenCalledTimes(2)
     store.clearRecent()
     expect(store.getSnapshot().favorites).toEqual(['p'])

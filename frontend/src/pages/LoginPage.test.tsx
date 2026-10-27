@@ -57,12 +57,12 @@ describe('login next destination safety', () => {
 describe('登录后按角色落地', () => {
   it('intern 登录后落 /worker（原 bug：被导向 /pm 403）', async () => {
     loginAs(internUser)
-    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/worker', { replace: true }))
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/worker/week', { replace: true }))
   })
 
   it('worker 登录后落 /worker', async () => {
     loginAs(workerUser)
-    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/worker', { replace: true }))
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/worker/week', { replace: true }))
   })
 
   it('pm 登录后落 /pm（管理端角色不受影响）', async () => {

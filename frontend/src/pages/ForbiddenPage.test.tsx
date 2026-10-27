@@ -9,7 +9,7 @@ it.each(['worker', 'intern'])('returns %s to the accessible field workbench', ro
   current.role = role
   render(<ForbiddenPage />)
   fireEvent.click(screen.getByRole('button', { name: '回到工作台' }))
-  expect(navigate).toHaveBeenCalledWith('/worker/today')
+  expect(navigate).toHaveBeenCalledWith('/worker/week')
 })
 it('returns managers to the management workbench', () => {
   current.role = 'pm'

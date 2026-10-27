@@ -12,8 +12,9 @@ beforeEach(() => { vi.clearAllMocks(); current.user = null })
 
 it.each([
   [{ role: 'pm' }, '/pm/dashboard'],
-  [{ role: 'worker' }, '/worker/today'],
-  [{ role: 'pm', permission_overrides: { 'workspace.view': false } }, '/pm/projects'],
+  [{ role: 'worker' }, '/worker/week'],
+  [{ role: 'pm', permission_overrides: { 'workspace.view': false } }, '/pm/dashboard'],
+  [{ role: 'pm', permission_overrides: { 'workspace.view': false, 'insights.view': false } }, '/pm/projects'],
 ] as const)('returns an authenticated user to their authorized home', (user, target) => {
   current.user = user
   render(<NotFoundPage />)

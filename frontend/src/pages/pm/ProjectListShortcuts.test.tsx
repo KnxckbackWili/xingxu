@@ -23,7 +23,7 @@ const account = (id: string): User => ({
 })
 const project = (id: string, name: string): Project => ({
   id, name, abbreviation: '', manager: 'manager', client: 'QA客户', location: 'QA地点',
-  start_date: '2026-10-01', end_date: '2026-12-31', status: 'draft', description: '',
+  start_date: '2026-10-01', end_date: '2026-12-31', status: 'preparing', description: '',
   members: [], capabilities: [], can_delete: false, created_at: '2026-10-01T00:00:00Z',
 })
 function seedShortcuts(id: string, favorites: string[], recent: Array<{ id: string; section: string }> = []) {
@@ -48,8 +48,8 @@ beforeEach(() => {
 
 describe('account-scoped project shortcuts in the real project list', () => {
   it.each([
-    ['card', '查看任务', 'plan'], ['card', '查看日程', 'schedule'],
-    ['table', '查看任务', 'plan'], ['table', '查看日程', 'schedule'],
+    ['card', '查看工作项', 'plan'], ['card', '查看周计划', 'plan?view=weeks'],
+    ['table', '查看工作项', 'plan'], ['table', '查看周计划', 'plan?view=weeks'],
   ])('opens the %s project %s directly without the parent row opening overview', async (view, label, section) => {
     localStorage.setItem('agvpm_proj_view', view)
     vi.mocked(projectApi.list).mockResolvedValue([project('alpha', 'Alpha项目')])
@@ -74,12 +74,12 @@ describe('account-scoped project shortcuts in the real project list', () => {
   })
 
   it('clears recent visits without clearing favorites and navigates to a safe remembered page', async () => {
-    seedShortcuts(auth.user!.id, ['alpha'], [{ id: 'alpha', section: 'schedule' }])
+    seedShortcuts(auth.user!.id, ['alpha'], [{ id: 'alpha', section: 'documents' }])
     vi.mocked(projectApi.list).mockResolvedValue([project('alpha', 'Alpha项目')])
     setup()
     const recent = await screen.findByRole('region', { name: '最近浏览的项目' })
-    fireEvent.click(within(recent).getByRole('button', { name: /Alpha项目.*继续查看日程/ }))
-    expect(navigate).toHaveBeenCalledWith('/pm/projects/alpha/schedule')
+    fireEvent.click(within(recent).getByRole('button', { name: /Alpha项目.*继续查看资料/ }))
+    expect(navigate).toHaveBeenCalledWith('/pm/projects/alpha/documents')
     fireEvent.click(within(recent).getByRole('button', { name: '清空记录' }))
     expect(screen.queryByRole('region', { name: '最近浏览的项目' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '取消收藏：Alpha项目' })).toHaveAttribute('aria-pressed', 'true')
@@ -95,13 +95,13 @@ describe('account-scoped project shortcuts in the real project list', () => {
     fireEvent.change(keyword, { target: { value: 'Alpha' } })
     fireEvent.click(screen.getByRole('button', { name: /我的收藏/ }))
     fireEvent.mouseDown(screen.getByRole('combobox', { name: '按状态筛选' }))
-    fireEvent.click(await screen.findByText('草稿', { selector: '.ant-select-item-option-content' }))
+    fireEvent.click(await screen.findByText('筹备', { selector: '.ant-select-item-option-content' }))
     fireEvent.click(screen.getByRole('button', { name: '刷新项目列表' }))
     await waitFor(() => expect(projectApi.list).toHaveBeenCalledTimes(2))
     await screen.findByRole('button', { name: '取消收藏：Alpha项目' })
     expect(keyword).toHaveValue('Alpha')
     expect(screen.getByRole('button', { name: /我的收藏/ })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('combobox', { name: '按状态筛选' }).closest('.ant-select')).toHaveTextContent('草稿')
+    expect(screen.getByRole('combobox', { name: '按状态筛选' }).closest('.ant-select')).toHaveTextContent('筹备')
     expect(table().queryByText('Beta项目')).not.toBeInTheDocument()
   })
 
