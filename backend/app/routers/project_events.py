@@ -13,7 +13,7 @@ from app.services.change_log import log_change
 from app.services.permissions import authorize_project, C_UPDATE, C_PLAN
 from app.services.record_lock import lock_writable_project
 from app.services.scope import ensure_project_visible
-from app.services.optimistic import bump_version
+from app.services.optimistic import bump_version, require_client_version
 from app.services.project_events import (
     EventKey, event_state, event_dict, events_for_project, set_actual, set_actual_date, sync_arrival_all,
 )
@@ -86,7 +86,7 @@ def update_event(project_id: str, event_key: EventKey, body: EventUpdate,
         row.planned_date = body.planned_date
     if "note" in fields:
         row.note = body.note.strip()
-    bump_version(project, body.version, db=db)
+    bump_version(project, require_client_version(body.version), db=db)
     after = event_dict(project, event_key, row)
     log_change(db, project_id, "project_event", row.id, "update", user.id,
                f"修改{after['label']}关键事件" + (f"；理由：{body.reason.strip()}" if body.reason.strip() else ""), before, after)
@@ -107,7 +107,7 @@ def update_arrivals(project_id: str, body: ArrivalUpdate,
         raise HTTPException(404, "所选车辆档案不存在或不属于当前项目，未修改任何到场日期")
     if body.arrived_at is None and any(unit.arrived_at is not None for unit in units) and not body.reason.strip():
         raise HTTPException(400, "清除已登记的到场日期必须填写理由")
-    bump_version(project, body.version, db=db)
+    bump_version(project, require_client_version(body.version), db=db)
     for unit in units:
         before = unit.arrived_at.isoformat() if unit.arrived_at else None
         unit.arrived_at = body.arrived_at

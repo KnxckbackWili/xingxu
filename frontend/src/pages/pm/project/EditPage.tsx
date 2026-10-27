@@ -277,7 +277,7 @@ function ProjectCoManagers({ project, users, canEdit, onReload, onDirtyChange }:
         ...grants.filter((grant) => grant.user_id !== values.user_id),
         { user_id: values.user_id, expires_at: values.expires_at?.format('YYYY-MM-DD') },
       ]
-      await projectApi.update(project.id, { co_managers: next.map(({ user_id, expires_at }) => ({ user_id, expires_at })) })
+      await projectApi.update(project.id, { co_managers: next.map(({ user_id, expires_at }) => ({ user_id, expires_at })), version: project.version })
       message.success('项目协管授权已保存')
       form.resetFields()
       onDirtyChange(false)
@@ -286,7 +286,7 @@ function ProjectCoManagers({ project, users, canEdit, onReload, onDirtyChange }:
   }
   const remove = async (userId: string) => {
     try {
-      await projectApi.update(project.id, { co_managers: grants.filter((grant) => grant.user_id !== userId).map(({ user_id, expires_at }) => ({ user_id, expires_at })) })
+      await projectApi.update(project.id, { co_managers: grants.filter((grant) => grant.user_id !== userId).map(({ user_id, expires_at }) => ({ user_id, expires_at })), version: project.version })
       message.success('协管授权已撤销')
       onReload()
     } catch (error) { message.error(errMsg(error)) }

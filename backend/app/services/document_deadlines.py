@@ -13,7 +13,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.models import (Project, ProjectEvent, ProjectDocument, ProjectDocumentDefinition,
-                        VehicleUnit, User, DocumentNoticeReceipt)
+                        VehicleUnit, User, DocumentNoticeReceipt, ChangeLog)
 from app.services.change_log import log_change
 from app.services.optimistic import bump_version
 from app.services.system_permissions import has_permission
@@ -169,6 +169,28 @@ def _users(db, project, documents):
     return {row.id: row for row in db.query(User).filter(User.id.in_(ids))}
 
 
+SITE_STAGE = '6'
+
+
+def execution_start(db, project):
+    """Local date the project first entered on-site execution, or None before it.
+
+    Uses the structured status audit; projects that reached execution before the
+    audit carried the new status (migrated or legacy) fall back to their start date.
+    """
+    from app.services.project_lifecycle import EXECUTION_PROJECT_STATUSES
+    effective = (project.suspension or {}).get('status_before') if project.status == 'suspended' else project.status
+    rows = db.query(ChangeLog.new_value, ChangeLog.created_at).filter(
+        ChangeLog.project_id == project.id, ChangeLog.entity_type == 'project', ChangeLog.entity_id == project.id,
+        ChangeLog.action == 'update').order_by(ChangeLog.created_at).all()
+    for value, at in rows:
+        if isinstance(value, dict) and value.get('status') == 'executing' and at:
+            return utc(at).replace(tzinfo=timezone.utc).astimezone(zone(project)).date()
+    if effective in EXECUTION_PROJECT_STATUSES or effective in ('completed', 'archived'):
+        return project.start_date
+    return None
+
+
 def generate_weekly(db, project, now=None, actor_id=None):
     """Catch up only weeks during which this project definition actually existed."""
     if project.deleted_at or project.status not in ACTIVE_PROJECT_STATUSES:
@@ -179,12 +201,19 @@ def generate_weekly(db, project, now=None, actor_id=None):
     from app.services.project_documents import applicable, instantiate
     definitions = db.query(ProjectDocumentDefinition).filter_by(project_id=project.id, timing_type='weekly').all()
     units = db.query(VehicleUnit).filter_by(project_id=project.id).all()
+    site_start = execution_start(db, project)
     count = 0
     for definition in definitions:
         if definition.stage_key == 'legacy' or not applicable(project, definition):
             continue
         created = utc(definition.created_at).replace(tzinfo=timezone.utc).astimezone(zone(project)).date()
-        first = week_start(max(project.start_date, created))
+        floor = max(project.start_date, created)
+        if definition.stage_key == SITE_STAGE:
+            # 实施阶段的周资料从首次进入现场实施的那一周开始，筹备/待进场不产生期次。
+            if site_start is None:
+                continue
+            floor = max(floor, site_start)
+        first = week_start(floor)
         week = first
         while week <= week_start(current):
             deadline_day=week+timedelta(days=(definition.timing_weekday or 7)-1)

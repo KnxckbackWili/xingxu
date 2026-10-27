@@ -368,7 +368,7 @@ def seed_all(db):
     tasks = {}
     for tid, mid, name, qtype, qty, unit, hours, safety, vtypes, order in tasks_data:
         t = Task(id=tid, project_id=None, module_id=mid, phase_id=modules[mid].phase_id, group_label=modules[mid].name, scope_conditions=list(modules[mid].preparation_conditions or []), name=name,
-                  quantity_type=qtype, target_quantity=qty, unit=unit,
+                  quantity_type=qtype, target_quantity=qty, unit=unit, vehicle_step_key=DEFAULT_TASK_VEHICLE_STEPS.get(tid),
                   standard_hours=hours, safety_flag=safety,
                   applicable_vehicle_types=vtypes, sort_order=order)
         db.add(t)
@@ -588,6 +588,15 @@ def seed_template_preparations(db):
 
 
 PRESET_VEHICLE_TYPES = ["潜伏式", "平衡重叉车", "堆高车", "前移式", "滚筒车", "顶升车", "其他/定制"]
+
+# 默认模板中按车辆的工作显式对应 H-2 默认车辆环节；生成项目时随工作复制。
+# 存量安装由迁移 g3a30b000002 按同一冻结映射补齐，已生成项目不改。
+DEFAULT_TASK_VEHICLE_STEPS = {
+    "task-005": "arrival_inspection", "task-006": "arrival_inspection", "task-007": "arrival_inspection",
+    "task-009": "single_commissioning", "task-010": "single_commissioning", "task-011": "single_commissioning",
+    "task-012": "single_commissioning", "task-013": "single_commissioning",
+    "task-022": "system_integration", "task-046": "system_integration",
+}
 
 
 def seed_vehicle_types(db):

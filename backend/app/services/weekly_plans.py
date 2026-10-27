@@ -662,7 +662,7 @@ def draft_preview(db, project, actor, rules, *, first_week=None):
                 'scope': {'vehicle_unit_ids': []}, 'vehicle_step_key': task.vehicle_step_key,
                 'week_start': begin.isoformat(), 'week_end': (begin + timedelta(days=6)).isoformat(),
                 'mode': mode, 'target_count': count, 'assignee_ids': [], 'published': False,
-                'notes': f'初稿：按{work.stage_label(phase.name)}阶段与关键事件规则生成，待人工确认负责人',
+                'notes': f'初稿：按{work.stage_label(phase.name)}阶段与关键事件规则生成',
                 'anchor': anchor, 'anchor_date': anchor_date.isoformat(), 'offset_weeks': offset})
     tasks = work.tasks_query(db, [project.id]).order_by(Task.id).all()
     rows = db.query(WeeklyPlanCell).filter_by(project_id=project.id).order_by(WeeklyPlanCell.id).all()

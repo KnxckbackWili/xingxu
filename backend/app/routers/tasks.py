@@ -392,8 +392,8 @@ def update_task(
         raise HTTPException(status_code=404, detail="任务不存在")
     from app.services.record_lock import lock_record
     lock_record(db, t, conflict_detail="任务正由另一操作更新，请刷新后重试")
-    from app.services.optimistic import bump_version
-    bump_version(t, data.version)
+    from app.services.optimistic import bump_version, require_client_version
+    bump_version(t, require_client_version(data.version))
     old = _task_dict(t)
     if t.phase_id is not None:
         from app.services.project_lifecycle import ACTIVE_PROJECT_STATUSES

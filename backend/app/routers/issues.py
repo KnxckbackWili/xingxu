@@ -386,8 +386,8 @@ def update_issue(
         authorize_project(user, p, C_ISSUES)
     if data.status == 'cancelled' and not (data.resolution or '').strip():
         raise HTTPException(400, "作废问题必须填写理由")
-    from app.services.optimistic import bump_version
-    bump_version(i, data.version)
+    from app.services.optimistic import bump_version, require_client_version
+    bump_version(i, require_client_version(data.version))
     if data.assignee_id is not None:
         _validate_assignee(db, p, data.assignee_id)
     old_assignee = i.assignee_id

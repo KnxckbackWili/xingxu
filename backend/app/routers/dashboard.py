@@ -92,6 +92,8 @@ def scope_issues(
             ),
             "description": i.description or "",
             "resolution": i.resolution or "",
+            "issue_type": i.issue_type,
+            "extra": i.extra or {},
         }
         for i, pname in rows
         if user.role not in ("worker", "intern")

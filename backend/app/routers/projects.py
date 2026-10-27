@@ -611,7 +611,7 @@ def _create_project(data: ProjectCreate, user: User, db: Session):
                     exclude_task_ids=[],
                 )
                 if execution_ids
-                else {"tasks": 0, "check_items": 0, "modules": []}
+                else {"tasks": 0, "check_items": 0, "check_definitions": 0, "vehicle_check_definitions": 0, "modules": []}
             )
             from app.routers.preparations import sync_preparation_items
 
@@ -836,9 +836,9 @@ def update_project(
         authorize_project(user, p, C_MEMBERS)
     if field_keys - {"members", "member_permissions", "version"}:
         authorize_project(user, p, C_UPDATE)
-    from app.services.optimistic import bump_version
+    from app.services.optimistic import bump_version, require_client_version
 
-    bump_version(p, data.version, db=db)
+    bump_version(p, require_client_version(data.version), db=db)
     if data.members is not None:
         _validate_user_ids(db, data.members, label="成员")
     if data.technical_manager_id is not None:
@@ -1206,7 +1206,8 @@ def change_status(
         _action_detail = (
             f"项目状态: {status_label(old_status)} → {status_label(new_status)}"
         )
-    log_change(db, p.id, "project", p.id, "update", user.id, _action_detail)
+    log_change(db, p.id, "project", p.id, "update", user.id, _action_detail,
+               {"status": old_status}, {"status": new_status, "reason": body.reason.strip()})
     db.commit()
     from app.services.cache import cache_clear
 

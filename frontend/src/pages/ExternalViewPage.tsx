@@ -3,6 +3,11 @@ import { Alert, Button, Card, Empty, Progress, Space, Spin, Table, Tag, Typograp
 import { externalViewApi, type ExternalDocument, type ExternalView } from '../api/externalView'
 import { STATUS_LABEL } from '../constants/status'
 
+// 浏览器刷新时地址里已没有分享令牌（打开后即移除），据此给出明确提示。
+const reloaded = () => {
+  try { return (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)?.type === 'reload' } catch { return false }
+}
+
 export default function ExternalViewPage() {
   const secret = useRef(new URLSearchParams(window.location.hash.slice(1)).get('token') || '')
   const session = useRef('')
@@ -17,7 +22,9 @@ export default function ExternalViewPage() {
     clearTimeout(expiration.current); session.current = ''
     setBusy(true); setError(''); setView(null)
     try {
-      if (!secret.current) throw new Error('链接不完整，请使用项目负责人提供的原始分享链接。')
+      if (!secret.current) throw new Error(reloaded()
+        ? '为保护分享内容，链接打开后已从地址栏移除，浏览器刷新后无法继续显示。请重新点击项目负责人发给你的原始分享链接；之后请使用页面上的「刷新分享」更新内容。'
+        : '链接不完整，请使用项目负责人提供的原始分享链接。')
       const result = await externalViewApi.bootstrap(secret.current, signal)
       if (ticket !== sequence.current) return
       session.current = result.session_token; setView(result.view)
@@ -51,7 +58,8 @@ export default function ExternalViewPage() {
   return <main style={{ maxWidth: 1100, margin: '0 auto', padding: 24 }}>
     <Typography.Title level={2}>项目外部查看</Typography.Title>
     <Typography.Paragraph type="secondary">只读分享 · 仅显示负责人授权的内容 · 保密资料永不对外提供</Typography.Paragraph>
-    <Space style={{ marginBottom: 16 }}><Button aria-label="刷新分享" loading={busy} disabled={!!downloading} onClick={() => void load()}>刷新分享</Button>{view && <Typography.Text>有效期至 {new Date(view.expires_at).toLocaleString()}</Typography.Text>}</Space>
+    <Space style={{ marginBottom: 16 }}><Button aria-label="刷新分享" loading={busy} disabled={!!downloading} onClick={() => void load()}>刷新分享</Button>{view && <Typography.Text>有效期至 {new Date(view.expires_at).toLocaleString('zh-CN', { hour12: false })}</Typography.Text>}</Space>
+    {view && <Alert type="info" showIcon style={{ marginBottom: 16 }} message="请使用上方「刷新分享」更新内容" description="为保护分享内容，链接打开后已从地址栏移除；使用浏览器刷新或关闭页面后，需要重新点击原始分享链接。" />}
     {error && <Alert type="warning" showIcon message="无法继续显示分享" description={error} />}
     {busy && <Spin aria-label="读取外部分享" />}
     {view && <Space direction="vertical" size={16} style={{ width: '100%' }}>

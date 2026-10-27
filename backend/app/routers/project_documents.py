@@ -18,6 +18,7 @@ from app.services.permissions import C_PLAN
 from app.services.system_permissions import route_permission
 from app.services.change_log import log_change
 from app.services.upload_safety import read_upload_limited
+from app.services.optimistic import require_client_version
 from app.services.rate_limit import rate_limit_export
 from app.config import MAX_UPLOAD_SIZE
 from app.time_utils import utcnow
@@ -300,7 +301,7 @@ def submit(project_id:str,body:Selection,user:User=Depends(get_current_user),db:
 def change_state(project_id:str,document_id:str,body:StateChange,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
     project=docs.writable(db,project_id,user,'worker.deliver')
     row=docs.owned_document(db,project_id,document_id)
-    docs.update_state(db,project,row,user,body.status,body.reason,body.version)
+    docs.update_state(db,project,row,user,body.status,body.reason,require_client_version(body.version))
     db.commit();return one_document(db,project,user,row.id)
 
 
@@ -308,13 +309,13 @@ def change_state(project_id:str,document_id:str,body:StateChange,user:User=Depen
 @route_permission('project.manage_plan')
 def assign_owner(project_id:str,document_id:str,body:OwnerChange,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
     from app.services.document_deadlines import validate_owner
-    from app.services.optimistic import bump_version
+    from app.services.optimistic import bump_version, require_client_version
     project=docs.writable(db,project_id,user,C_PLAN)
     row=docs.owned_document(db,project_id,document_id)
     if not docs.can_read_document(user,project,row):raise HTTPException(403,'无权指派该保密资料')
     validate_owner(db,project,body.owner_id)
     before=row.owner_id
-    bump_version(row,body.version,db=db)
+    bump_version(row,require_client_version(body.version),db=db)
     row.owner_id=body.owner_id
     log_change(db,project.id,'project_document',row.id,'assign_owner',user.id,'指派资料负责人',{'owner_id':before},{'owner_id':body.owner_id})
     db.commit();return one_document(db,project,user,row.id)

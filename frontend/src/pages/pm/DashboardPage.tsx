@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { Alert, Button, Card, Collapse, Empty, Space, Spin, Table, Tag, Typography } from 'antd'
+import { Alert, Button, Card, Collapse, Empty, Spin, Table, Tag, Typography } from 'antd'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../../stores/auth'
 import { hasSystemPermission } from '../../constants/systemPermissions'
@@ -34,6 +34,8 @@ export default function DashboardPage() {
   useEffect(()=>{setSnapshot({scope});if(canWorkspace)void load();return()=>{sequence.current++}},[scope,canWorkspace])
   const projects=data?.projects??[]
   const week=data?.this_week_documents
+  const plan=data?.weekly_plan
+  const planRows=plan?.state==='available'?[...(plan.items??[]),...(plan.unknown_items??[]).map(row=>({...row,state:'unknown'}))]:[]
   const overdue=projects.flatMap(project=>(project.document_attention?.overdue??[]).map(row=>({...row,project_id:project.id,project_name:project.name,timezone:project.document_attention!.timezone})))
   const signoffs=projects.flatMap(project=>project.next_signoff?[{...project.next_signoff,project_id:project.id,project_name:project.name}]:[])
   return <div style={{padding:24}}>
@@ -41,9 +43,15 @@ export default function DashboardPage() {
     {error&&<Alert type="error" showIcon message="工作台暂不可读取" description={error} action={<Button onClick={()=>void load()}>重试读取</Button>}/>}
     {loading&&!data&&<Spin aria-label="正在读取工作台"/>}
     {canWorkspace&&data&&<>
-      <Card title="本周待办" size="small" style={{marginBottom:16}}>
-        {data.weekly_plan?.state==='ready' ? <Space><Typography.Text>本周安排 {data.weekly_plan.count??'待核对'} 项</Typography.Text><Link to="/pm/people">查看人员与本周安排</Link></Space>
-          : <Alert type="info" message="本周计划暂不可读取" description="可重试读取，或到项目计划中查看。"/>}
+      <Card title="本周待办" size="small" style={{marginBottom:16}} extra={<Link to="/pm/people">查看人员与本周安排</Link>}>
+        {plan?.state!=='available'||!Array.isArray(plan.items)
+          ? <Alert type="info" message="本周计划暂不可读取" description="可重试读取，或到项目计划中查看。"/>
+          : !planRows.length ? <Empty description="已发布周计划暂无逾期或待核对的工作" image={Empty.PRESENTED_IMAGE_SIMPLE}/>
+          : <Table rowKey={row=>row.id} size="small" pagination={{pageSize:8}} dataSource={planRows} columns={[
+            {title:'项目',dataIndex:'project_name'},{title:'工作项',render:(_,row)=><Link to={row.url}>{row.name}</Link>},
+            {title:'计划周',dataIndex:'week_start'},
+            {title:'状态',render:(_,row)=>row.state==='unknown'?<Tag color="gold">完成情况待核对</Tag>:<Tag color="red">已逾期未完成</Tag>},
+          ]}/>}
       </Card>
       <Card title="本周待交资料" size="small" style={{marginBottom:16}}>
         {week===undefined?<Alert type="warning" message="本周资料尚未读取"/>:!week.length?<Empty description="本周暂无待交资料" image={Empty.PRESENTED_IMAGE_SIMPLE}/>:<Table rowKey={row=>`${row.project_id}:${row.id}`} size="small" pagination={{pageSize:8}} dataSource={week} columns={[

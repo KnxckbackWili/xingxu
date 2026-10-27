@@ -67,8 +67,9 @@ def test_plan_change_actual_clear_and_submitted_snapshot_via_real_api(client,adm
 def weekly_fixture(client,headers,timezone='UTC'):
     pid=create(client,headers,timezone=timezone)['id']
     with SessionLocal() as db:
-        project=db.get(Project,pid);project.status='preparing';project.created_at=datetime(2026,10,27)
-        # Preparing projects now instantiate company weekly rules immediately.
+        project=db.get(Project,pid);project.status='executing';project.created_at=datetime(2026,10,27)
+        # Site-stage weekly rules run once the project is on site; a project
+        # without a structured transition audit falls back to its start date.
         # This fixture tests a single explicitly activated weekly rule.
         db.query(ProjectDocument).filter_by(project_id=pid,timing_type='weekly').delete(synchronize_session=False)
         db.query(ProjectDocumentDefinition).filter_by(project_id=pid,timing_type='weekly').delete(synchronize_session=False)
@@ -89,6 +90,22 @@ def test_missed_weeks_do_not_invent_pre_activation_obligations(client,admin_head
         assert generate_weekly(db,project,datetime(2026,11,8,10))==0
         summary=action_summary(db,project,None,datetime(2026,11,8,10))
         assert summary['overdue_count']==2 and summary['period_key']=='2026-W46'
+
+
+def test_site_weekly_documents_start_from_the_week_execution_began(client,admin_headers):
+    from app.services.change_log import log_change
+    pid,rid=weekly_fixture(client,admin_headers)
+    with SessionLocal() as db:
+        project=db.get(Project,pid);project.status='ready';db.flush()
+        assert generate_weekly(db,project,datetime(2026,11,20,12))==0
+        project.status='executing'
+        log_change(db,pid,'project',pid,'update',None,'项目状态: 待进场 → 现场实施',{'status':'ready'},{'status':'executing'})
+        db.flush()
+        from app.models import ChangeLog
+        db.query(ChangeLog).filter_by(project_id=pid,entity_type='project',action='update').update({'created_at':datetime(2026,11,11,3)})
+        assert generate_weekly(db,project,datetime(2026,11,20,12))==2
+        keys=[row.period_key for row in db.query(ProjectDocument).filter_by(definition_id=rid).order_by(ProjectDocument.period_key)]
+        assert keys==['2026-W46','2026-W47']
 
 
 def test_custom_weekday_never_backfills_a_deadline_before_rule_activation(client,admin_headers):

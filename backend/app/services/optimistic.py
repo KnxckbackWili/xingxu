@@ -11,6 +11,13 @@ from sqlalchemy import update
 from sqlalchemy.orm import Session, object_session
 
 
+def require_client_version(client_version: Optional[int]) -> int:
+    """Client-facing edits must carry the version they read; never a blind overwrite."""
+    if client_version is None:
+        raise HTTPException(status_code=428, detail="缺少版本号：请刷新后再保存，避免覆盖他人的修改")
+    return client_version
+
+
 def bump_version(entity, client_version: Optional[int], db: Optional[Session] = None) -> None:
     """原子校验客户端版本号并自增；并发冲突抛 409。
 

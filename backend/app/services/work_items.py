@@ -228,7 +228,8 @@ def generate(db,project,source_tasks):
     """Freeze independent stage/work/check definitions without creating Modules."""
     from app.services.generate_tasks import copy_reference_docs
     from app.services.vehicle_checks import definition_data,import_definitions,generate_for_units
-    result={'tasks':0,'check_items':0,'modules':[],'work_items':[]}
+    # check_items：本次实际生成的检查记录；check_definitions：冻结的检查要求（按车辆的在车辆建档后逐车生成）。
+    result={'tasks':0,'check_items':0,'check_definitions':0,'vehicle_check_definitions':0,'modules':[],'work_items':[]}
     mapping={t.source_task_id:t for t in db.query(Task).filter_by(project_id=project.id) if t.source_task_id}
     for source in source_tasks:
         if source.id in mapping:continue
@@ -249,7 +250,9 @@ def generate(db,project,source_tasks):
                 'original':source.legacy_work_snapshot})
         db.add(row);db.flush();copy_reference_docs(db,source,row)
         definitions=definition_data(db,source)
+        result['check_definitions']+=len(definitions)
         if is_vehicle(row):
+            result['vehicle_check_definitions']+=len(definitions)
             import_definitions(db,row,definitions)
             result['check_items']+=len(generate_for_units(db,project.id,db.query(VehicleUnit).filter_by(project_id=project.id).all(),row))
         else:

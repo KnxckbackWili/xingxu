@@ -105,6 +105,10 @@ export default function ProjectListPage() {
   const [selectedWorkIds, setSelectedWorkIds] = useState<Set<string>>(new Set())
   const previewDocuments = documentRequirements.filter(row => !row.is_group && row.stage_key !== 'legacy' && (!row.platform || row.platform === dispatchPlatform))
   const vehicleDocumentCount = previewDocuments.filter(row => row.scope === 'vehicle').length
+  // 资料要求与已生成的待交资料不是同一个数：每车、每周与事件触发的要求在条件出现时才生成。
+  const weeklyDocumentCount = previewDocuments.filter(row => row.scope !== 'vehicle' && row.timing_type === 'weekly').length
+  const laterDocumentCount = previewDocuments.filter(row => row.scope !== 'vehicle' && ['on_trigger', 'on_demand'].includes(row.timing_type)).length
+  const documentBreakdown = [vehicleDocumentCount && `每车 ${vehicleDocumentCount} 项在车辆建档后生成`, weeklyDocumentCount && `每周 ${weeklyDocumentCount} 项在现场实施后逐周生成`, laterDocumentCount && `事件触发或抽查 ${laterDocumentCount} 项在发生时生成`].filter(Boolean).join('；')
   const legacyDocumentCount = documentRequirements.filter(row => row.stage_key === 'legacy').length
   const documentStages = [...new Set(previewDocuments.map(row => row.stage_key))]
   const createTasks = flatWorkItems(tplPhases).filter(task => selectedWorkItems(tplPhases,[...selectedWorkIds],excludedTasks).includes(task.id))
@@ -283,7 +287,9 @@ export default function ProjectListPage() {
         // C1-1：选了模块但生成的实施任务为 0（所选模块均为「仅准备项」）→ 不再误报成功
         message.warning('项目资料已建立，尚未加入执行工作；可在项目计划中从方案补充工作。')
       } else {
-        message.success(`项目已创建，生成 ${generated.tasks} 项工作、${generated.check_items} 项检查要求`)
+        const definitions = generated.check_definitions ?? generated.check_items
+        const vehicleDefinitions = generated.vehicle_check_definitions ?? 0
+        message.success(`项目已创建，生成 ${generated.tasks} 项工作、${definitions} 项检查要求${vehicleDefinitions ? `（其中 ${vehicleDefinitions} 项按车辆，车辆建档后逐车生成）` : ''}`)
       }
       setModalOpen(false)
       form.resetFields()
@@ -776,7 +782,7 @@ export default function ProjectListPage() {
             { key: 'template', label: '工作模板', children: templates.find((template) => template.id === tplId)?.name },
             { key: 'platform', label: '调度平台', children: DISPATCH_PLATFORMS.find(platform => platform.value === form.getFieldValue('dispatch_platform'))?.label || '未设置' },
             ...PLAN_EVENTS.map(key => ({ key, label: `${PROJECT_EVENT_LABELS[key]}计划日期`, children: form.getFieldValue(['event_plans', key])?.format('YYYY-MM-DD') || '未安排' })),
-            { key: 'work', label: '工作内容', children: `${createTasks.length} 项工作 · ${previewDocuments.length} 项资料要求（其中每车 ${vehicleDocumentCount} 项）` },
+            { key: 'work', label: '工作内容', children: `${createTasks.length} 项工作 · ${previewDocuments.length} 项资料要求${documentBreakdown ? `（${documentBreakdown}）` : ''}` },
           ]} />
           <Alert type="info" showIcon message="保存为筹备，准备好后再开始" description="任务、检查与资料要求一起保存；创建后先核对任务，再安排人员、发布日程。开始现场实施需单独确认。" />
           <Collapse style={{ marginTop: 16 }} items={[{ key: 'documents', label: `查看资料要求（${previewDocuments.length} 项）`, children: <section className="create-preparation-preview" aria-label="项目资料要求预览">

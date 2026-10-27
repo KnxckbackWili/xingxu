@@ -6,12 +6,12 @@
 - `frontend/src`：React 页面、API、离线队列与组件；`frontend/package.json`：前端命令。
 - `docker`：镜像、受管部署、宿主更新和备份；`docs/index.md`：主题文档；[术语表](docs/glossary.md)：业务名称与边界。
 - 后端使用 Python 3.12 和虚拟环境；本地入口 `python -m uvicorn app.main:app --reload --port 8000`。前端 `npm run dev`、`npm test`、`npm run build`。
-- 后端 SQLite 回归只用临时目录和内存库：
+- 后端 SQLite 回归只用临时目录里的文件库（与 CI 相同；连接池参数不支持 `sqlite://` 内存库）。首个用例完成全链迁移后，其余用例从同一快照恢复：
 
 ```sh
 cd backend
 task_data_dir="$(mktemp -d)"
-DATA_DIR="$task_data_dir" DATABASE_URL=sqlite:// .venv/bin/python -m pytest tests
+env -u DATABASE_URL DATA_DIR="$task_data_dir" .venv/bin/python -m pytest tests
 ```
 
 **pytest fixture 会清空全部表；PostgreSQL 测试仅使用新建专用测试库，绝不能指向真实备份恢复库或业务库。** 真实迁移验证和运维按独立脚本及部署说明执行。

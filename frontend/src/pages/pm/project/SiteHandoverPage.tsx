@@ -36,7 +36,7 @@ export default function SiteHandoverPage({ project, onReload }: { project: Proje
     if (!canEdit || !contactLock.tryAcquire()) return false
     setContactSaving(true)
     try {
-      await projectApi.update(project.id, { client_contacts: next })
+      await projectApi.update(project.id, { client_contacts: next, version: project.version })
       setContacts(next); await onReload()
       message.success('甲方联系人已保存')
       return true
@@ -56,7 +56,7 @@ export default function SiteHandoverPage({ project, onReload }: { project: Proje
     if (!canEdit || !entryLock.tryAcquire()) return
     setEntrySaving(true); setEntryError('')
     try {
-      await projectApi.update(project.id, { entry_plan: values })
+      await projectApi.update(project.id, { entry_plan: values, version: project.version })
       setEntryOpen(false); message.success('入场信息已保存'); await onReload()
     } catch (error) { setEntryError(errMsg(error)) }
     finally { entryLock.release(); setEntrySaving(false) }

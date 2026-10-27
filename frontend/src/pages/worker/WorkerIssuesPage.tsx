@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button, Card, Typography, Tag, Space, Empty, Skeleton, Drawer, Divider, Modal, Form, Input, Select, Alert, message, Segmented } from 'antd'
-import { PlusOutlined } from '@ant-design/icons'
+import { Button, Card, Typography, Tag, Space, Empty, Skeleton, Drawer, Divider, Modal, Form, Input, Select, Alert, message, Segmented, Upload, AutoComplete } from 'antd'
+import type { UploadFile } from 'antd'
+import { PlusOutlined, UploadOutlined } from '@ant-design/icons'
 import { useSearchParams } from 'react-router-dom'
 import { formatDate, formatDateTime } from '../../utils/date'
 import { api } from '../../api/client'
 import { useSubmitLock } from '../../hooks/useSubmitLock'
 import { useAuth } from '../../stores/auth'
 import { hasSystemPermission } from '../../constants/systemPermissions'
-import { ISSUE_STATUS_MAP, ISSUE_TYPES, ISSUE_TYPE_SHORT,ISSUE_NATURES } from '../../constants/issues'
+import { ISSUE_STATUS_MAP, ISSUE_TYPES, ISSUE_TYPE_SHORT, ISSUE_NATURES, ISSUE_TYPE_FIELDS, extraSummary } from '../../constants/issues'
+import { uploadProjectFile } from '../../api/projectDocuments'
+import { isUploadQueued } from '../../uploads/types'
 import { WorkPageHeader, WorkSection } from '../../components/WorkPage'
 import './WorkerWorkPages.css'
 import { isProjectStatus, isProjectWriteBlocked } from '../../constants/status'
@@ -27,6 +30,7 @@ interface MyIssue {
   created_at: string
   resolution: string
   source?: 'project' | 'vehicle'
+  extra?: Record<string, unknown> | null
   asset_code?: string
   nature?:string
   sla_hours?:number
@@ -74,6 +78,21 @@ export default function WorkerIssuesPage() {
   const [submitting, setSubmitting] = useState(false)
   const submitLock = useSubmitLock()
   const reportKey = useRef<string | null>(null)
+  // 问题建好后只重试剩余附件，不重复建问题（与项目问题页一致）。
+  const [createdIssue, setCreatedIssue] = useState<{ id: string; projectId: string } | null>(null)
+  const [fileList, setFileList] = useState<UploadFile[]>([])
+  const [vehicleOptions, setVehicleOptions] = useState<{ value: string }[]>([])
+  const reportProjectId = Form.useWatch('project_id', reportForm)
+  useEffect(() => {
+    let active = true
+    setVehicleOptions([])
+    if (!reportOpen || !reportProjectId) return
+    api.get(`/projects/${reportProjectId}/vehicle-units`).then(({ data }) => {
+      if (!active || !Array.isArray(data)) return
+      setVehicleOptions(data.map((unit: any) => ({ value: [unit.fleet_no, unit.asset_code].filter(Boolean).join(' · ') })).filter((option: { value: string }) => option.value))
+    }).catch(() => { /* 车辆列表仅作输入建议，读取失败仍可手动填写 */ })
+    return () => { active = false }
+  }, [reportOpen, reportProjectId])
   const writableProjects = projects.filter(project => !isProjectWriteBlocked(project.status))
 
   useEffect(() => {
@@ -134,22 +153,39 @@ export default function WorkerIssuesPage() {
     if (!submitLock.tryAcquire()) return
     setSubmitting(true)
     reportKey.current ??= globalThis.crypto?.randomUUID?.() ?? `local-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+    let issue = createdIssue?.projectId === values.project_id ? createdIssue : null
     try {
-      await api.post(`/projects/${values.project_id}/issues`, {
-        client_uuid: reportKey.current,
-        title: values.title.trim(),
-        description: values.description || '',
-        issue_type: values.issue_type,
-        nature:values.nature || 'normal',
-        severity: values.severity,
-      })
-      message.success('问题已上报')
+      if (!issue) {
+        const extra = Object.fromEntries(Object.entries(values.extra ?? {}).filter(([, value]) => typeof value === 'string' ? value.trim() : value != null))
+        const { data } = await api.post(`/projects/${values.project_id}/issues`, {
+          client_uuid: reportKey.current,
+          title: values.title.trim(),
+          description: values.description || '',
+          issue_type: values.issue_type,
+          nature:values.nature || 'normal',
+          severity: values.severity,
+          ...(Object.keys(extra).length ? { extra } : {}),
+        })
+        issue = { id: data.id, projectId: values.project_id }
+        setCreatedIssue(issue)
+      }
+      let queued = 0
+      for (const file of fileList) {
+        try { await uploadProjectFile(issue.projectId, file as unknown as File, 'issue', issue.id) }
+        catch (failure) { if (!isUploadQueued(failure)) throw failure; queued++ }
+        setFileList((pending) => pending.filter((item) => item !== file))
+      }
+      if (queued) message.info(`问题已上报，${queued} 个附件已保存到上传队列，核验完成后才会关联。`)
+      else message.success(fileList.length ? '问题已上报，附件已保存' : '问题已上报')
       setReportOpen(false)
       reportForm.resetFields()
+      setFileList([])
+      setCreatedIssue(null)
       reportKey.current = null
       setRetry((value) => value + 1)
     } catch (e: any) {
-      message.error(e.response?.data?.detail ?? '未能确认上报结果，已保留填写内容，请重试')
+      if (issue) { message.error('问题已保存，部分附件上传失败。请重试剩余附件。'); setRetry((value) => value + 1) }
+      else message.error(e.response?.data?.detail ?? '未能确认上报结果，已保留填写内容，请重试')
     } finally {
       setSubmitting(false)
       submitLock.release()
@@ -231,6 +267,21 @@ export default function WorkerIssuesPage() {
           <Form.Item name="description" label="问题描述">
             <Input.TextArea rows={3} placeholder="发生时间、现象、影响范围等" />
           </Form.Item>
+          <Form.Item name={['extra', 'device']} label="涉及车辆/设备（可选）" extra="可从本项目车辆中选择，也可直接填写设备或部位。">
+            <AutoComplete options={vehicleOptions} placeholder="如：3号车 · AGV-003 / 充电桩" allowClear filterOption={(input, option) => String(option?.value ?? '').toLowerCase().includes(input.toLowerCase())} />
+          </Form.Item>
+          <Form.Item noStyle shouldUpdate={(prev, cur) => prev.issue_type !== cur.issue_type}>
+            {({ getFieldValue }) => (ISSUE_TYPE_FIELDS[getFieldValue('issue_type')] ?? []).filter(field => field.key !== 'device').map(field => (
+              <Form.Item key={field.key} name={['extra', field.key]} preserve={false} label={field.label}>
+                {field.type === 'select' ? <Select options={field.options} placeholder={field.placeholder} allowClear /> : <Input placeholder={field.placeholder} />}
+              </Form.Item>
+            ))}
+          </Form.Item>
+          <Form.Item label="照片或附件（可选）" extra={createdIssue ? '问题已保存，提交时只重试下面剩余的附件。' : '可拍照或选择文件；网络不稳定时附件会进入上传队列。'}>
+            <Upload multiple fileList={fileList} beforeUpload={file => { setFileList(list => [...list, file]); return false }} onRemove={file => setFileList(list => list.filter(item => item.uid !== file.uid))} accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.txt">
+              <Button icon={<UploadOutlined />}>选择照片或文件</Button>
+            </Upload>
+          </Form.Item>
         </Form>
       </Modal>
 
@@ -251,6 +302,7 @@ export default function WorkerIssuesPage() {
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               {detail.project_name} · 处理人：{detail.assignee_name || '未指派'} · 上报 {detail.source === 'vehicle' ? formatDate(detail.created_at) : formatDateTime(detail.created_at)}
             </Typography.Text>
+            {extraSummary(detail.extra) && <Typography.Text type="secondary" style={{ fontSize: 12 }}>{extraSummary(detail.extra)}</Typography.Text>}
             {detail.sla_due_at && <Typography.Paragraph type="secondary">处理时限 {detail.sla_hours} 小时 · 截止 {formatDateTime(detail.sla_due_at)}；仅关闭或作废算闭环。</Typography.Paragraph>}
             {detail.sla_warning && <Alert type="info" message={detail.sla_warning} />}
             {detail.description && (

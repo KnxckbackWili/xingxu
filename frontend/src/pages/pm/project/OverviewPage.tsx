@@ -68,6 +68,7 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
   const statusLock = useRef(false)
   const [changingStatus, setChangingStatus] = useState(false)
   const [milestoneTarget, setMilestoneTarget] = useState<string | null>(null)
+  const [statusReason, setStatusReason] = useState('')
   const [statusFailure, setStatusFailure] = useState<{ target: string; message: string } | null>(null)
   const [acceptanceSummary, setAcceptanceSummary] = useState<AcceptanceSummary | undefined>()
 
@@ -210,9 +211,10 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
 
   const go = (path: string) => navigate(`/pm/projects/${projectId}${({ '/archive': '/documents?acceptance=1', '/preparation': '/documents?review=1', '/files': '/documents', '/delivery': '/documents' } as Record<string, string>)[path] ?? path}`)
   const milestoneNext: Record<string, string> = { executing: 'acceptance' }
+  // 每次人工推进都先确认；归档另有复盘弹窗。
   const requestStatus = (status: string) => {
-    if (status === milestoneNext[projectStatus]) { setStatusFailure(null); setMilestoneTarget(status) }
-    else changeStatus(status)
+    if (status === 'archived') { changeStatus(status); return }
+    setStatusFailure(null); setStatusReason(''); setMilestoneTarget(status)
   }
   const failureLinks = statusFailure?.target === 'executing'
     ? [{ path: '/documents?review=1', label: '查看发车前资料确认' }]
@@ -343,9 +345,11 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
       {/* C8-3：归档前填写项目复盘 */}
       <Modal title={milestoneTarget ? `确认进入「${STATUS_LABEL[milestoneTarget]}」` : '确认项目阶段'} open={!!milestoneTarget}
         onCancel={() => { if (!changingStatus) { setMilestoneTarget(null); setStatusFailure(null) } }}
-        onOk={() => { if (milestoneTarget) changeStatus(milestoneTarget) }} okText="确认推进阶段" cancelText="取消" confirmLoading={changingStatus}
+        onOk={() => { if (milestoneTarget) changeStatus(milestoneTarget, undefined, statusReason.trim()) }} okText="确认推进阶段" cancelText="取消" confirmLoading={changingStatus}
         cancelButtonProps={{ disabled: changingStatus }} closable={!changingStatus} maskClosable={false}>
-        <Typography.Paragraph>请核对现场实际情况后确认。当前进度 {data?.percent ?? 0}% 仅供参考，不会自动推进阶段；录入验收记录也不会自动标记项目完成。</Typography.Paragraph>
+        <Typography.Paragraph>项目状态将从「{STATUS_LABEL[projectStatus] ?? projectStatus}」变为「{milestoneTarget ? STATUS_LABEL[milestoneTarget] : ''}」，变更会记入项目记录。</Typography.Paragraph>
+        {milestoneTarget === milestoneNext[projectStatus] && <Typography.Paragraph>请核对现场实际情况后确认。当前进度 {data?.percent ?? 0}% 仅供参考，不会自动推进阶段；录入验收记录也不会自动标记项目完成。</Typography.Paragraph>}
+        <Input.TextArea aria-label="状态变更说明" rows={2} maxLength={5000} value={statusReason} onChange={event => setStatusReason(event.target.value)} placeholder="说明（可选）：如资料已齐、客户确认进场等" disabled={changingStatus} />
         {failureAlert}
       </Modal>
 
