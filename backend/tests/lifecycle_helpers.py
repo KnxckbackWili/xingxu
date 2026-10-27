@@ -79,3 +79,21 @@ def versioned(entity_id, body, model='Project'):
     with SessionLocal() as db:
         row = db.get(getattr(models, model), entity_id)
         return {**body, 'version': (row.version or 0) if row is not None else 0}
+
+
+def enter_execution(client, headers, project_id):
+    """Walk a new (preparing) project through the real v3 gates into on-site execution.
+
+    Stage-4 kickoff documents are submitted, the project is marked ready, the
+    current stage-5 risk is explicitly approved, then execution is entered.
+    """
+    from tests.document_helpers import documents, upload_documents
+    rows = documents(client, headers, project_id)['documents']
+    kickoff = [row['id'] for row in rows if row['stage_key'] == '4' and row['required'] and row['applicable'] and row['status'] != 'submitted']
+    if kickoff:
+        upload_documents(client, headers, project_id, kickoff)
+    for target in ('ready', 'executing'):
+        if target == 'executing':
+            approve_risk_entry(client, headers, project_id)
+        response = client.post(f'/api/projects/{project_id}/status', headers=headers, json={'status': target})
+        assert response.status_code == 200, response.text

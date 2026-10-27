@@ -1,5 +1,5 @@
-from tests.lifecycle_helpers import versioned
 """Attachment + notification tests."""
+from tests.lifecycle_helpers import versioned
 
 
 def _project(client, pm_headers, status=None):

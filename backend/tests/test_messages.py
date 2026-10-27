@@ -1,5 +1,5 @@
-from tests.lifecycle_helpers import versioned
 """Message center: notification pagination + batch read tests."""
+from tests.lifecycle_helpers import versioned
 
 
 def _project(client, pm_headers):

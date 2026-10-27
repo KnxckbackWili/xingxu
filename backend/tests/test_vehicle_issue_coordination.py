@@ -1,5 +1,5 @@
-from tests.lifecycle_helpers import versioned
 """Vehicle issue source-of-truth and implementation co-manager coordination."""
+from tests.lifecycle_helpers import versioned
 
 
 def _project(client, pm_headers):

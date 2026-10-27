@@ -13,7 +13,6 @@ from app.services.report_scheduler import (
 def _project(client, pm_headers, name="调度测试项目"):
     r = client.post("/api/projects", headers=pm_headers, json={
         "name": name,
-        "status": "planning",  # Scheduled report tests require an active project; draft exclusion is tested below.
         "start_date": "2026-08-10", "new_vehicles": False,
         "end_date": "2026-09-30",
     })

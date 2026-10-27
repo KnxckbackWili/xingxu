@@ -1,5 +1,5 @@
-from tests.lifecycle_helpers import versioned
 """乐观锁：并发写冲突返回 409。"""
+from tests.lifecycle_helpers import versioned
 
 
 def _project(client, pm_headers):

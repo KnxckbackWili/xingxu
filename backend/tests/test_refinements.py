@@ -1,5 +1,5 @@
-from tests.lifecycle_helpers import versioned
 """Refinement tests: task quantity editing + check item ticking."""
+from tests.lifecycle_helpers import versioned
 
 
 def _project(client, pm_headers):

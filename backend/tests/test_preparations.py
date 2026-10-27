@@ -1,5 +1,5 @@
-from tests.lifecycle_helpers import versioned
 """Project preparation (准备 Tab) tests."""
+from tests.lifecycle_helpers import versioned
 
 
 def _project(client, pm_headers, name="准备项目", status=None, with_procurement=True):

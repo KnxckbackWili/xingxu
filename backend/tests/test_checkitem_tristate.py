@@ -1,5 +1,5 @@
-from tests.lifecycle_helpers import versioned
 """检查项三态（通过/不通过/不适用）测试。"""
+from tests.lifecycle_helpers import versioned
 
 
 def _project_with_check(client, pm_headers):

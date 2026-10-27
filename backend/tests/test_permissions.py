@@ -1,5 +1,5 @@
-from tests.lifecycle_helpers import versioned
 """Current seven-role permission matrix and project relation tests."""
+from tests.lifecycle_helpers import versioned
 
 PASSWORD = "pw123456"
 

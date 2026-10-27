@@ -1,5 +1,5 @@
-from tests.lifecycle_helpers import versioned
 """生命周期回归：相邻流转、单步推进、验收门禁、初始状态保持、终态聚合口径。"""
+from tests.lifecycle_helpers import versioned
 
 _STATUS_ORDER = ["draft", "preparing", "planning", "ready", "executing",
                  "commissioning", "pilot", "acceptance", "completed", "archived"]

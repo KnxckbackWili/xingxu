@@ -1,23 +1,18 @@
-from tests.lifecycle_helpers import versioned
 """Dashboard overview tests."""
+from tests.lifecycle_helpers import versioned
 
 
 def _project_with_data(client, pm_headers):
     """Project with tasks, progress, and an open issue."""
     r = client.post("/api/projects", headers=pm_headers, json={
         "name": "看板测试项目A",
-        "status": "planning",  # This fixture measures an active execution project, not a new draft.
         "start_date": "2026-08-01", "new_vehicles": False,
         "end_date": "2026-09-30",
     })
     assert r.status_code == 200, r.json()
     pid = r.json()["id"]
-    r = client.post(f"/api/projects/{pid}/status", headers=pm_headers, json={"status": "ready"})
-    assert r.status_code == 200, r.json()
-    from tests.lifecycle_helpers import approve_risk_entry
-    approve_risk_entry(client, pm_headers, pid)
-    r = client.post(f"/api/projects/{pid}/status", headers=pm_headers, json={"status": "executing"})
-    assert r.status_code == 200, r.json()
+    from tests.lifecycle_helpers import enter_execution
+    enter_execution(client, pm_headers, pid)
     response = client.post(f"/api/projects/{pid}/vehicles", headers=pm_headers, json={
         "vehicle_type": "潜伏式", "model_name": "AGV-500", "quantity": 2})
     assert response.status_code == 200, response.json()

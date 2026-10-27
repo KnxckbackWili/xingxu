@@ -1,5 +1,5 @@
-from tests.lifecycle_helpers import versioned
 """项目参与者校验、人工阶段权限与直接移交。"""
+from tests.lifecycle_helpers import versioned
 
 
 

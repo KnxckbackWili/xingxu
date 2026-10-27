@@ -1,5 +1,5 @@
-from tests.lifecycle_helpers import versioned
 """Issue 分类专属字段（extra）+ 通知补齐测试。"""
+from tests.lifecycle_helpers import versioned
 
 
 def _project(client, pm_headers):

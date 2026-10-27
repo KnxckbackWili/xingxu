@@ -1,5 +1,5 @@
-from tests.lifecycle_helpers import versioned
 """Project & vehicle tests."""
+from tests.lifecycle_helpers import versioned
 
 
 def test_create_project(client, pm_headers):

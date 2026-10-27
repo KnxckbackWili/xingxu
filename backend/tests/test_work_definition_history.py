@@ -1,5 +1,5 @@
-from tests.lifecycle_helpers import versioned
 """工作快照及原日程填报来源保全。"""
+from tests.lifecycle_helpers import versioned
 
 
 

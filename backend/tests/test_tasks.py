@@ -1,5 +1,5 @@
-from tests.lifecycle_helpers import versioned
 """Template + task generation tests."""
+from tests.lifecycle_helpers import versioned
 
 
 def _new_project(client, pm_headers, name="任务生成测试项目"):

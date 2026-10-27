@@ -1,5 +1,5 @@
-from tests.lifecycle_helpers import versioned
 """验收记录门禁、资料可选审核与通知。"""
+from tests.lifecycle_helpers import versioned
 
 
 
