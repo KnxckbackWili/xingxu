@@ -39,6 +39,11 @@ def completeable_project(client, headers, *, documents_data=None, legacy_accepta
         json={'version': 0, 'is_completed': True, 'reason': '已按现行工作口径核对并完成'})
     assert completed.status_code == 200, completed.text
     from tests.document_helpers import complete_documents, requirement, upload_documents
+    # Lifetime (stage 9) documents exist once the internal kickoff actually happened.
+    version = client.get(f'/api/projects/{pid}', headers=headers).json()['version']
+    kickoff = client.put(f'/api/projects/{pid}/events/internal_kickoff', headers=headers,
+        json={'actual_date': '2026-08-03', 'version': version})
+    assert kickoff.status_code == 200, kickoff.text
     complete_documents(client, headers, pid)
     for index, item in enumerate(documents_data or []):
         item = {'name': item, 'required': True} if isinstance(item, str) else item

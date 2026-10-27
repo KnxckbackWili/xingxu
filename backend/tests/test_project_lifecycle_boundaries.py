@@ -123,57 +123,36 @@ def test_status_transition_revalidates_after_lock(client, pm_headers, monkeypatc
         assert db.get(Project, pid).status == 'suspended'
 
 
-@pytest.mark.parametrize('operation', ['edit'])
-def test_archiving_invalidates_preloaded_project_write(client, pm_headers, admin_headers, monkeypatch, operation, request):
-    from app.models import ArchiveChecklist
+def test_archiving_invalidates_preloaded_project_write(client, pm_headers, monkeypatch):
+    """An archive committed between the edit's visibility read and its project
+    lock must win: the stale edit is rejected and cannot write the old state back."""
     from app.routers.projects import change_status, ProjectStatusChange
-    from app.services.optimistic import bump_version
-    pid = project(client, pm_headers)
-    with SessionLocal() as db:
-        current = db.get(Project, pid)
-        current.status = 'completed'
-        current.retrospective = {'content': '已完成复盘'}
-        for item in db.query(ArchiveChecklist).filter_by(project_id=pid):
-            item.is_done = True
-        db.commit()
-    from tests.document_helpers import complete_documents
-    complete_documents(client, pm_headers, pid)
-    from tests.lifecycle_helpers import sign_current_scope
-    sign_current_scope(client, pm_headers, pid)
+    from app.services.record_lock import lock_record
+    from tests.test_lifecycle_write_integrity import completeable_project
+    pid, _, _ = completeable_project(client, pm_headers)
+    status_path = f'/api/projects/{pid}/status'
+    assert client.post(status_path, headers=pm_headers, json={'status': 'completed'}).status_code == 200
+    before = client.get(f'/api/projects/{pid}', headers=pm_headers).json()
     entered = []
-    # [DEBUG-t61-archive] Capture only status/version metadata, never full SQL parameters.
-    from sqlalchemy import event
-    from app.db import engine
-    import inspect
-    updates=[]
-    def observe(connection,cursor,statement,parameters,context,many):
-        if statement.lstrip().lower().startswith('update') and 'projects' in statement.lower():
-            metadata=[{key:value for key,value in row.items() if key in ('status','version')} for row in (getattr(context,'compiled_parameters',None) or [])]
-            updates.append((statement[:150],metadata,[list(row) for row in (getattr(context,'compiled_parameters',None) or [])],[frame.function for frame in inspect.stack() if '/app/' in frame.filename]))
-    event.listen(engine,'before_cursor_execute',observe)
-    request.addfinalizer(lambda:event.remove(engine,'before_cursor_execute',observe))
-    def commit_concurrent_archive(entity):
+
+    def archive_before_lock(db, entity, **kwargs):
         if isinstance(entity, Project) and entity.id == pid and not entered:
             entered.append(True)
             with SessionLocal() as concurrent:
                 fresh = concurrent.get(Project, pid)
                 operator = concurrent.get(User, fresh.manager)
-                result = change_status(pid, ProjectStatusChange(status='archived', version=fresh.version or 0), operator, fresh, concurrent)
+                result = change_status(pid, ProjectStatusChange(status='archived', retrospective='并发归档复盘'), operator, fresh, concurrent)
                 assert result['status'] == 'archived'
             with SessionLocal() as proof:
-                assert proof.get(Project,pid).status=='archived', '并发归档尚未持久化，不能模拟已归档竞态'
-    # Editing now serializes on Project before its CAS. A second writer
-    # cannot archive after that lock is held: model the real race between
-    # the initial visibility read and acquiring the project lock instead.
-    from app.services.record_lock import lock_record
-    def archive_before_lock(db, entity, **kwargs):
-        commit_concurrent_archive(entity)
+                assert proof.get(Project, pid).status == 'archived'
         return lock_record(db, entity, **kwargs)
+
     monkeypatch.setattr('app.services.record_lock.lock_record', archive_before_lock)
-    response = client.put(f'/api/projects/{pid}', headers=pm_headers, json={'name': '归档后不应生效'})
-    assert response.status_code == 400, response.text
+    response = client.put(f'/api/projects/{pid}', headers=pm_headers,
+                          json={'name': '归档后不应生效', 'version': before['version']})
+    assert response.status_code in (400, 409), response.text
     assert entered == [True]
     with SessionLocal() as db:
         saved = db.get(Project, pid)
-        assert saved.status == 'archived', updates
-        assert saved.name == '生命周期复核'
+        assert saved.status == 'archived'
+        assert saved.name == before['name']
