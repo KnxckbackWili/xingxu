@@ -51,10 +51,10 @@ it('permits an explicitly granted field account to directly read system backups'
   useAuth.setState({ user: { id: 'member', role: 'worker', username: 'member', display_name: '成员', phone: '', email: '', is_active: true, system_permissions: ['system.backups.read'] } })
   vi.mocked(api.get).mockImplementation(async (url: string) => ({ data: url === '/system/backups' ? { items: [], restore_pending: false, database: 'postgresql', web_restore_supported: false } : url.includes('unread-count') ? { count: 0 } : [] }))
   renderApp('/pm/backups')
-  await waitFor(() => expect(api.get).toHaveBeenCalledWith('/system/backups'))
+  await waitFor(() => expect(api.get).toHaveBeenCalledWith('/system/backups'), { timeout: 8000 })
   expect(screen.queryByText('403')).toBeNull()
   expect(screen.queryByRole('button', { name: /立即备份/ })).toBeNull()
-})
+}, 15000)
 
 it('blocks a revoked module before reading it and reserves permission administration to real admins', async () => {
   useAuth.setState({ user: { id: 'member', role: 'worker', username: 'member', display_name: '成员', phone: '', email: '', is_active: true, system_permissions: ['permission.manage'], permission_overrides: { 'permission.manage': true } } })

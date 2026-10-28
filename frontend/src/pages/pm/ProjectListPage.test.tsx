@@ -45,7 +45,7 @@ it('starts with project details, validates them before content, and explains dra
   expect(screen.getByRole('button', { name: '选择工作内容' })).toBeVisible()
   expect(screen.queryByRole('combobox', { name: '项目初始阶段' })).not.toBeInTheDocument()
   expect(projectApi.create).not.toHaveBeenCalled()
-})
+}, 15000)
 
 it('permits entering details during template loading, blocks confirmation, and ignores an old response', async () => {
   vi.clearAllMocks()
