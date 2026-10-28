@@ -91,9 +91,11 @@ def test_archive_deny_keeps_other_authorized_status_changes_available(client, pm
     from tests.document_helpers import documents, upload_documents
     kickoff = [row['id'] for row in documents(client, pm_headers, project['id'])['documents'] if row['stage_key'] == '4' and row['required']]
     upload_documents(client, pm_headers, project['id'], kickoff)
+    from tests.lifecycle_helpers import approve_risk_entry
+    approve_risk_entry(client, pm_headers, project['id'])
     before = client.get(f"/api/projects/{project['id']}", headers=pm_headers).json()["version"]
     result = client.post(f"/api/projects/{project['id']}/status", headers=pm_headers,
-                         json={"status": "ready"})
+                         json={"status": "executing"})
     assert result.status_code == 200, result.text
     current = client.get(f"/api/projects/{project['id']}", headers=pm_headers).json()
-    assert current["status"] == "ready" and current["version"] == before + 1
+    assert current["status"] == "executing" and current["version"] == before + 1

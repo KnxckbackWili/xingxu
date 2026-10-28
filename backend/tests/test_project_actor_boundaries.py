@@ -43,9 +43,11 @@ def test_director_can_change_status(client, admin_headers, pm_headers):
     login = client.post('/api/auth/login', json={'username': 'dir1', 'password': 'Review123!'})
     assert login.status_code == 200, login.text
     director = {'Authorization': 'Bearer ' + login.json()['access_token']}
-    result = client.post(f'/api/projects/{pid}/status', headers=director, json={'status': 'ready'})
+    from tests.lifecycle_helpers import approve_risk_entry
+    approve_risk_entry(client, pm_headers, pid)
+    result = client.post(f'/api/projects/{pid}/status', headers=director, json={'status': 'executing'})
     assert result.status_code == 200, result.text
-    assert client.get(f'/api/projects/{pid}', headers=director).json()['status'] == 'ready'
+    assert client.get(f'/api/projects/{pid}', headers=director).json()['status'] == 'executing'
 
 def test_retired_transfer_request_does_not_notify_or_mutate(client, pm_headers, admin_headers):
     """退役申请入口不得创建审批事实或通知；直接移交另有正向覆盖。"""

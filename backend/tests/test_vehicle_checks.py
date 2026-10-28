@@ -122,7 +122,7 @@ def test_permission_state_and_acceptance_scope(client,pm_headers,worker_headers)
     assert client.get(f'/api/projects/{pid}/vehicle-units/{otherids[0]}/checks',headers=pm_headers).status_code==404
     assert mark(client,worker_headers,pid,row,is_done=True).status_code==404
     with SessionLocal() as db:
-        fingerprint=acceptance_scope_fingerprint(db,pid);p=db.get(Project,pid);p.status='ready';db.commit()
+        fingerprint=acceptance_scope_fingerprint(db,pid);p=db.get(Project,pid);p.status='preparing';db.commit()
     assert mark(client,pm_headers,pid,row,is_done=True).status_code==400
     with SessionLocal() as db:p=db.get(Project,pid);p.status='executing';db.commit()
     assert mark(client,pm_headers,pid,row,is_done=True).status_code==200

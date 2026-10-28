@@ -7,7 +7,7 @@ vi.mock('../../../api/client', () => ({ api: { get: h.get, post: h.post }, errMs
 vi.mock('../../../stores/auth', () => ({ useAuth: () => ({ user: { id: 'pm', permission_version: 1 } }) }))
 import EntryReviewPanel from './EntryReviewPanel'
 const manifest = { met: [], unmet: [{ name: '安全条件', is_required: true }], entry_unmet: [{ name: '安全条件' }], risks: [], missing: [], review_token: 'token1' }
-function show(can = true) { return render(<ConfigProvider theme={{ token: { motion: false } }}><ProjectStatusContext.Provider value="ready"><ProjectCapabilitiesContext.Provider value={can ? ['project.manage_plan'] : []}><EntryReviewPanel projectId="p1" /></ProjectCapabilitiesContext.Provider></ProjectStatusContext.Provider></ConfigProvider>) }
+function show(can = true) { return render(<ConfigProvider theme={{ token: { motion: false } }}><ProjectStatusContext.Provider value="preparing"><ProjectCapabilitiesContext.Provider value={can ? ['project.manage_plan'] : []}><EntryReviewPanel projectId="p1" /></ProjectCapabilitiesContext.Provider></ProjectStatusContext.Provider></ConfigProvider>) }
 beforeEach(() => { vi.resetAllMocks(); h.get.mockResolvedValue({ data: [] }); h.post.mockResolvedValue({ data: manifest }) })
 it('opens loading immediately and requires a reason to approve real risk', async () => {
   let finish: (value: unknown) => void = () => {}; h.post.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
@@ -39,7 +39,7 @@ it('does not keep the previous project submission lock or apply its delayed resu
   let finish!: (value: unknown) => void
   h.post.mockResolvedValueOnce({ data: manifest }).mockImplementationOnce(() => new Promise(resolve => { finish = resolve })).mockResolvedValue({ data: manifest })
   const changed=vi.fn()
-  const tree=(id: string) => <ConfigProvider theme={{ token: { motion: false } }}><ProjectStatusContext.Provider value="ready"><ProjectCapabilitiesContext.Provider value={['project.manage_plan']}><EntryReviewPanel projectId={id} onConfirmed={changed} /></ProjectCapabilitiesContext.Provider></ProjectStatusContext.Provider></ConfigProvider>
+  const tree=(id: string) => <ConfigProvider theme={{ token: { motion: false } }}><ProjectStatusContext.Provider value="preparing"><ProjectCapabilitiesContext.Provider value={['project.manage_plan']}><EntryReviewPanel projectId={id} onConfirmed={changed} /></ProjectCapabilitiesContext.Provider></ProjectStatusContext.Provider></ConfigProvider>
   const view=render(tree('p1'))
   fireEvent.click(screen.getByRole('button', { name: '核对发车前资料' }))
   await screen.findAllByText('安全条件')

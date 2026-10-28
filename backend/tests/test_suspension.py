@@ -67,7 +67,7 @@ def _first_check(pid):
 # ===================== 突发停工生命周期 =====================
 
 def test_any_active_status_can_suspend(client, pm_headers):
-    for status in ("preparing", "ready", "executing", "acceptance"):
+    for status in ("preparing", "executing", "acceptance"):
         pid = _project(client, pm_headers, f"可停工-{status}")
         _set_status_direct(pid, status)
         r = _suspend(client, pm_headers, pid)

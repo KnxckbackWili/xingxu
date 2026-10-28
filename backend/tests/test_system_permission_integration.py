@@ -122,10 +122,12 @@ def test_archive_denial_blocks_inherited_governance_and_manager_archive(client, 
     from tests.document_helpers import documents, upload_documents
     kickoff = [row['id'] for row in documents(client, pm_headers, pid)['documents'] if row['stage_key'] == '4' and row['required']]
     upload_documents(client, pm_headers, pid, kickoff)
-    started = client.post(f'/api/projects/{pid}/status', headers=headers, json={'status': 'ready'})
+    from tests.lifecycle_helpers import approve_risk_entry
+    approve_risk_entry(client, pm_headers, pid)
+    started = client.post(f'/api/projects/{pid}/status', headers=headers, json={'status': 'executing'})
     assert started.status_code == 200, started.text
     policy(client, admin_headers, director['id'], {'project.archive': False})
     assert client.post(f'/api/projects/{pid}/status', headers=headers, json={'status': 'preparing'}).status_code == 403
     policy(client, admin_headers, 'user-pm-001', {'project.archive': False})
     assert client.post(f'/api/projects/{pid}/status', headers=pm_headers, json={'status': 'archived', 'retrospective': 'denied'}).status_code == 403
-    assert client.get(f'/api/projects/{pid}', headers=pm_headers).json()['status'] == 'ready'
+    assert client.get(f'/api/projects/{pid}', headers=pm_headers).json()['status'] == 'executing'

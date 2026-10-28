@@ -1068,7 +1068,7 @@ def repair_legacy_lifecycle(project_id: str, body: LegacyLifecycleRepair,
         raise HTTPException(409, '该项目无需历史状态修复，请使用正常状态推进')
     reason = body.reason.strip()
     if not reason:
-        raise HTTPException(400, '必须说明核对依据与重置筹备的理由')
+        raise HTTPException(400, '必须说明核对依据与重置为准备的理由')
     bump_version(p, body.version, db=db)
     before = {'status': p.status, 'suspension': p.suspension, 'legacy_lifecycle': evidence}
     p.status = 'preparing'
@@ -1076,7 +1076,7 @@ def repair_legacy_lifecycle(project_id: str, body: LegacyLifecycleRepair,
     p.legacy_lifecycle = {**evidence, 'requires_repair': False, 'repaired_by': user.id,
                           'repaired_at': utcnow().isoformat(), 'repair_reason': reason}
     log_change(db, p.id, 'project', p.id, 'lifecycle_repair', user.id,
-               '管理员根据原始记录明确重置为筹备；后续须逐阶段重新核对推进', before,
+               '管理员根据原始记录明确重置为准备；后续须逐阶段重新核对推进', before,
                {'status': p.status, 'legacy_lifecycle': p.legacy_lifecycle})
     db.commit()
     from app.services.cache import cache_clear
@@ -1131,7 +1131,7 @@ def change_status(
         raise HTTPException(status_code=400, detail=f"无效状态: {new_status}")
     old_status = p.status
     if (p.legacy_lifecycle or {}).get("requires_repair"):
-        raise HTTPException(400, "历史状态尚未核对，请管理员根据原始记录明确重置筹备")
+        raise HTTPException(400, "历史状态尚未核对，请管理员根据原始记录明确重置为准备")
     suspension = p.suspension or {}
 
     # 突发停工（HYPE-71）：旁路状态，不参与 STATUS_FLOW 相邻流转。
@@ -1244,7 +1244,7 @@ def create_acceptance(
 ):
     """录入验收签字记录。conclusion=accepted 是 completed 的前置门禁（C7-2）。
 
-    允许从 ready（待进场）之后的任意状态录入——提前录入客户签字属正常数据准备，
+    允许从现场实施及之后的状态录入（原待进场已并入准备，准备阶段不录入）——提前录入客户签字属正常数据准备，
     真正的约束在 completed 门禁（进度 100% + 交付物齐备 + 验收记录）。
     """
     from app.services.record_lock import lock_writable_project
@@ -1261,13 +1261,12 @@ def create_acceptance(
         else p.status
     )
     if effective_status not in (
-        "ready",
         "executing",
         "acceptance",
         "completed",
     ):
         raise HTTPException(
-            status_code=400, detail="项目尚未进入待进场或后续阶段，不能录入验收记录"
+            status_code=400, detail="项目尚未进入现场实施，不能录入验收记录"
         )
     from app.time_utils import project_today
 

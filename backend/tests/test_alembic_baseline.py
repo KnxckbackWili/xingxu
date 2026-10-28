@@ -98,9 +98,10 @@ def test_v243_adoption_preserves_rows_before_explicit_lifecycle_migration(alembi
         with engine.connect() as connection:
             assert connection.execute(sa.text('SELECT id,name,status,version FROM projects ORDER BY id')).all() == before
         command.upgrade(alembic_config, 'head')
-        expected_statuses = {'draft': 'preparing', 'planning': 'preparing',
+        expected_statuses = {'draft': 'preparing', 'planning': 'preparing', 'ready': 'preparing',
                              'commissioning': 'executing', 'pilot': 'executing', 'closed': 'suspended'}
-        expected = [(pid, name, expected_statuses.get(state, state), version + 1)
+        # T28 bumps every row once; the later stage merge bumps former ready rows again.
+        expected = [(pid, name, expected_statuses.get(state, state), version + (2 if state == 'ready' else 1))
                     for pid, name, state, version in before]
         with engine.connect() as connection:
             assert connection.execute(sa.text('SELECT id,name,status,version FROM projects ORDER BY id')).all() == expected
@@ -109,6 +110,10 @@ def test_v243_adoption_preserves_rows_before_explicit_lifecycle_migration(alembi
             for pid, suspension, source in migrated:
                 original = originals[pid]
                 evidence = json.loads(source)
+                merge = evidence.pop('ready_merge', None)
+                assert (merge is not None) == (original == 'ready')
+                if merge:
+                    assert merge == {'migration': 'g3a90b000001', 'original_status': 'ready', 'original_status_before': None}
                 assert evidence == {'version': 1, 'original_status': original, 'original_suspension': None,
                                     'migration': 'g3a28b000001', 'requires_repair': original in ('suspended', 'closed')}
                 context = json.loads(suspension)

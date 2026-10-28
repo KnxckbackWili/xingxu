@@ -47,7 +47,7 @@ def test_25_by_5_batch_and_cancel_is_audited_without_state_change(client,pm_head
         assert db.query(ChangeLog).filter_by(project_id=pid,entity_type='vehicle_progress',action='reopen').one().detail.endswith('复测发现需重做')
 
 
-@pytest.mark.parametrize('status',['preparing','ready','suspended','completed','archived'])
+@pytest.mark.parametrize('status',['preparing','suspended','completed','archived'])
 def test_no_matrix_writes_before_execution_or_after_end(client,pm_headers,status):
     pid,ids=setup_fleet(client,pm_headers,1,status)
     r=write(client,pm_headers,pid,ids)
@@ -210,7 +210,7 @@ def test_state_and_membership_are_rechecked_after_waiting_for_project_lock(clien
     original=router.lock_writable_project
     def transition(db,project,user):
         with SessionLocal() as other:
-            other.get(Project,pid).status='ready';other.commit()
+            other.get(Project,pid).status='preparing';other.commit()
         return original(db,project,user)
     monkeypatch.setattr(router,'lock_writable_project',transition)
     assert write(client,pm_headers,pid,ids).status_code==400

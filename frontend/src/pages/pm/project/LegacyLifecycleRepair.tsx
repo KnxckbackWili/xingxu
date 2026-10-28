@@ -29,10 +29,10 @@ export default function LegacyLifecycleRepair({ project, onChanged }: { project:
   return <Alert type="warning" showIcon message="历史状态需明确核对，项目暂时只读"
     description={<Space direction="vertical" style={{ width: '100%' }}>
       <span>原状态：{project.legacy_lifecycle.original_status || '空值'}。原记录和文件已保留。</span>
-      {user?.role === 'admin' && <><span>根据备份和操作记录核对后，可明确重置筹备；后续仍需逐阶段检查资料和批准，系统不推定原状态。</span>
+      {user?.role === 'admin' && <><span>根据备份和操作记录核对后，可明确重置为准备；后续仍需逐阶段检查资料和批准，系统不推定原状态。</span>
         <Input.TextArea aria-label="历史状态核对依据" value={reason} onChange={event => setReason(event.target.value)} disabled={busy} maxLength={5000} rows={2} />
-        <Popconfirm title="核对后明确重置为筹备？" description="原历史状态保留，完成和验收资格不会自动取得。" onConfirm={repair} disabled={busy || !reason.trim()}>
-          <Button disabled={busy || !reason.trim()} loading={busy}>核对后重置筹备</Button>
+        <Popconfirm title="核对后明确重置为准备？" description="原历史状态保留，完成和验收资格不会自动取得。" onConfirm={repair} disabled={busy || !reason.trim()}>
+          <Button disabled={busy || !reason.trim()} loading={busy}>核对后重置为准备</Button>
         </Popconfirm></>}
       {error && <Alert type="error" message={error} />}
     </Space>} />

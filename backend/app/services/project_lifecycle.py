@@ -5,18 +5,19 @@ should not duplicate status sets or transition maps in routers and schedulers.
 """
 
 PROJECT_STATUSES = {
-    "preparing": "筹备", "ready": "待进场", "executing": "现场实施",
+    "preparing": "准备", "executing": "现场实施",
     "acceptance": "验收中", "completed": "已完成", "archived": "已归档",
     "suspended": "突发停工",
 }
 INITIAL_PROJECT_STATUSES = ("preparing",)
-ACTIVE_PROJECT_STATUSES = ("preparing", "ready", "executing", "acceptance")
+ACTIVE_PROJECT_STATUSES = ("preparing", "executing", "acceptance")
 EXECUTION_PROJECT_STATUSES = ("executing", "acceptance")
 TERMINAL_PROJECT_STATUSES = ("completed", "archived")
 SUSPENDABLE_PROJECT_STATUSES = ACTIVE_PROJECT_STATUSES
+# 原“筹备”“待进场”已合并为“准备”；进入现场实施时一次核对原两道门禁。
 STATUS_FLOW = {
-    "preparing": ("ready",), "ready": ("preparing", "executing"),
-    "executing": ("ready", "acceptance"), "acceptance": ("executing", "completed"),
+    "preparing": ("executing",),
+    "executing": ("preparing", "acceptance"), "acceptance": ("executing", "completed"),
     "completed": ("acceptance", "archived"), "archived": ("completed",), "suspended": (),
 }
 

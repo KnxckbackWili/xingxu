@@ -209,7 +209,7 @@ def generate_weekly(db, project, now=None, actor_id=None):
         created = utc(definition.created_at).replace(tzinfo=timezone.utc).astimezone(zone(project)).date()
         floor = max(project.start_date, created)
         if definition.stage_key == SITE_STAGE:
-            # 实施阶段的周资料从首次进入现场实施的那一周开始，筹备/待进场不产生期次。
+            # 实施阶段的周资料从首次进入现场实施的那一周开始，准备阶段不产生期次。
             if site_start is None:
                 continue
             floor = max(floor, site_start)

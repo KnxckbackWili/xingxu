@@ -12,12 +12,14 @@ def ready_project(client, headers):
     from app.models import ProjectDocument, ProjectDocumentDefinition
     pid = project(client, headers, '发车资料门禁')
     with SessionLocal() as db:
-        db.get(Project, pid).status = 'ready'
+        db.get(Project, pid).status = 'preparing'
         # Minimal explicit document scope for these gate fixtures. Historical
         # procurement flags no longer configure dispatch authority.
         db.query(ProjectDocument).filter_by(project_id=pid, stage_key='5').delete(synchronize_session=False)
         db.query(ProjectDocumentDefinition).filter_by(project_id=pid, stage_key='5').delete(synchronize_session=False)
         db.commit()
+    from tests.lifecycle_helpers import submit_kickoff_documents
+    submit_kickoff_documents(client, headers, pid)
     return pid
 
 
@@ -41,7 +43,7 @@ def test_entry_cannot_use_warning_flag_as_risk_approval(client, pm_headers, conf
     response = client.post(f'/api/projects/{pid}/status', headers=pm_headers, json=body)
     assert response.status_code == 400, response.text
     assert '风险' in response.json()['detail']['message']
-    assert client.get(f'/api/projects/{pid}', headers=pm_headers).json()['status'] == 'ready'
+    assert client.get(f'/api/projects/{pid}', headers=pm_headers).json()['status'] == 'preparing'
 
 
 def test_entry_accepts_current_risk_review_then_requires_new_review_after_change(client, pm_headers):
@@ -51,7 +53,7 @@ def test_entry_accepts_current_risk_review_then_requires_new_review_after_change
     approve_risk_entry(client, pm_headers, pid)
     state = f'/api/projects/{pid}/status'
     assert client.post(state, headers=pm_headers, json={'status': 'executing'}).status_code == 200
-    assert client.post(state, headers=pm_headers, json={'status': 'ready'}).status_code == 200
+    assert client.post(state, headers=pm_headers, json={'status': 'preparing'}).status_code == 200
     added = client.post(f'/api/projects/{pid}/documents/requirements', headers=pm_headers, json={
         'stage_key': '5', 'code': '5.' + uuid4().hex[:8], 'name': '新增电源确认资料',
         'scope': 'project', 'timing_type': 'on_demand', 'required': True})
@@ -155,7 +157,7 @@ def test_legacy_acceptance_remains_history_without_fabricated_scope(client, pm_h
     assert client.get(f'/api/projects/{pid}', headers=pm_headers).json()['status'] == 'acceptance'
 
 
-@pytest.mark.parametrize('state', ['ready', 'executing', 'acceptance', 'completed'])
+@pytest.mark.parametrize('state', ['preparing', 'executing', 'acceptance', 'completed'])
 def test_progress_evaluators_never_move_human_milestones(client, pm_headers, monkeypatch, state):
     from app.services.status_flow import advance_project_status, regress_project_status
     pid = ready_project(client, pm_headers)
@@ -236,7 +238,7 @@ def test_unknown_legacy_status_is_rejected_by_database_constraint(client, pm_hea
         db.get(Project, pid).status = 'closed'
         with pytest.raises(IntegrityError):
             db.commit()
-    assert client.get(f'/api/projects/{pid}', headers=pm_headers).json()['status'] == 'ready'
+    assert client.get(f'/api/projects/{pid}', headers=pm_headers).json()['status'] == 'preparing'
 
 
 def test_legacy_null_recorded_time_is_older_than_a_same_day_current_decision(client, pm_headers):

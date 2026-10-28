@@ -44,8 +44,8 @@ const PAGE_PREFETCH: Record<string, () => void> = {
   export: () => void import('./ExportPage'),
 }
 
-const STAGES = ['preparing', 'ready', 'executing', 'acceptance', 'completed', 'archived']
-/** Six manual project stages at a glance; a stop-work keeps the stage it interrupted. */
+const STAGES = ['preparing', 'executing', 'acceptance', 'completed', 'archived']
+/** Five manual project stages at a glance; a stop-work keeps the stage it interrupted. */
 function ProjectStageBar({ status, statusBefore }: { status: string; statusBefore: string | null }) {
   const suspended = status === 'suspended'
   const current = STAGES.indexOf(suspended ? statusBefore ?? '' : status)
@@ -263,7 +263,7 @@ export default function ProjectLayout() {
           <Suspense key={project.id} fallback={<div style={{ textAlign: 'center', padding: 64 }}><Spin /></div>}>
             {rawTab === 'edit' && <EditPage project={project} onReload={load} />}
             {rawTab === 'export' && <ExportPage projectId={project.id} projectName={project.name} />}
-            {!specialView && activeTab === 'overview' && <OverviewPage projectId={project.id} projectStatus={project.status} projectSuspension={project.suspension ?? null} vehicleTotal={project.vehicle_total ?? 0} memberCount={project.members?.length ?? 0} canManageStatus={canManageStatus} canArchive={user?.permission_overrides?.['project.archive'] !== false} onStatusChange={load} />}
+            {!specialView && activeTab === 'overview' && <OverviewPage projectId={project.id} projectStatus={project.status} projectSuspension={project.suspension ?? null} infoComplete={!!(project.client?.trim() && project.location?.trim())} vehicleTotal={project.vehicle_total ?? 0} memberCount={project.members?.length ?? 0} canManageStatus={canManageStatus} canArchive={user?.permission_overrides?.['project.archive'] !== false} onStatusChange={load} />}
             {!specialView && activeTab === 'plan' && <Tabs activeKey={rawTab==='schedule'||new URLSearchParams(location.search).get('view')==='weeks'?'weeks':'work'} onChange={view=>navigateSafely(`/pm/projects/${project.id}/plan?view=${view}`)} items={[
               { key:'work',label:'工作项',children:(rawTab!=='schedule'&&new URLSearchParams(location.search).get('view')!=='weeks') ? <TaskPlanPage focusTaskId={new URLSearchParams(location.search).get('task') ?? ''} focusTab={new URLSearchParams(location.search).get('tab') === 'reference' ? 'reference' : 'checks'} sourceTemplate={project.source_template} vehicles={project.vehicles ?? []} projectId={project.id} canManage={!!project.is_co_manager} projectStatus={project.status} focusTargets={new URLSearchParams(location.search).get('focus') === 'targets'} /> : null },
               { key:'weeks',label:'周计划',children:(rawTab==='schedule'||new URLSearchParams(location.search).get('view')==='weeks') ? <SchedulePage projectId={project.id} project={project} onProjectChange={load} /> : null },

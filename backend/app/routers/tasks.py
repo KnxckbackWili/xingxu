@@ -495,7 +495,7 @@ def update_task_targets(
 ):
     """开工清单批量填写工作量；任一越权/冲突时整批回滚。"""
     _lock_task_plan(db, p, user)
-    if p.status not in {"preparing", "ready"}:
+    if p.status != "preparing":
         raise HTTPException(400, "当前项目不在开工准备阶段，请到任务详情调整工作量")
     if db.query(ScheduleEntry.id).filter(
         ScheduleEntry.project_id == project_id, ScheduleEntry.is_confirmed.is_(True)

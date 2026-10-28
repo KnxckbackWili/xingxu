@@ -97,10 +97,10 @@ def test_site_weekly_documents_start_from_the_week_execution_began(client,admin_
     from app.services.change_log import log_change
     pid,rid=weekly_fixture(client,admin_headers)
     with SessionLocal() as db:
-        project=db.get(Project,pid);project.status='ready';db.flush()
+        project=db.get(Project,pid);project.status='preparing';db.flush()
         assert generate_weekly(db,project,datetime(2026,11,20,12))==0
         project.status='executing'
-        log_change(db,pid,'project',pid,'update',None,'项目状态: 待进场 → 现场实施',{'status':'ready'},{'status':'executing'})
+        log_change(db,pid,'project',pid,'update',None,'项目状态: 准备 → 现场实施',{'status':'preparing'},{'status':'executing'})
         db.flush()
         from app.models import ChangeLog
         db.query(ChangeLog).filter_by(project_id=pid,entity_type='project',action='update').update({'created_at':datetime(2026,11,11,3)})

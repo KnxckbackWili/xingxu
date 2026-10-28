@@ -17,7 +17,7 @@ function mockEmptyAcceptance(status: string, capabilities: string[]) {
 }
 
 it('offers an adjacent empty-state entry using the same acceptance form without writing on cancellation', async () => {
-  mockEmptyAcceptance('ready', ['project.update'])
+  mockEmptyAcceptance('executing', ['project.update'])
   render(<ConfigProvider theme={{ token: { motion: false } }}><AcceptanceRecordsPanel projectId="p1" /></ConfigProvider>)
   expect(await screen.findByText('尚未录入客户验收结果')).toBeInTheDocument()
   expect(screen.queryByText(/请先在验收页/)).not.toBeInTheDocument()
@@ -43,7 +43,7 @@ it('explains the acceptance stage without opening a premature entry', async () =
 })
 
 it('points a read-only eligible project to the authorized recorder instead of a self-referencing page', async () => {
-  mockEmptyAcceptance('ready', [])
+  mockEmptyAcceptance('executing', [])
   render(<AcceptanceRecordsPanel projectId="p1" />)
   expect(await screen.findByText('尚无验收记录；由有项目资料维护权限的负责人录入')).toBeInTheDocument()
   expect(screen.queryByText(/请先在验收页/)).not.toBeInTheDocument()
@@ -100,7 +100,7 @@ it('验收加载失败可重试且不请求旧归档清单', async () => {
   vi.mocked(api.get).mockRejectedValue(new Error('offline'))
   render(<AcceptanceRecordsPanel projectId="p1" />)
   expect(await screen.findByText('offline')).toBeInTheDocument()
-  mockEmptyAcceptance('ready', [])
+  mockEmptyAcceptance('executing', [])
   fireEvent.click(screen.getByRole('button', { name: /重\s*试/ }))
   expect(await screen.findByText('尚无验收记录；由有项目资料维护权限的负责人录入')).toBeInTheDocument()
   expect(vi.mocked(api.get).mock.calls.some(([url]) => String(url).includes('archive-checklist'))).toBe(false)

@@ -2,8 +2,7 @@
  * 后端 project_lifecycle.py 定义同一生命周期与允许的相邻切换。
  */
 export const STATUS_MAP: Record<string, { label: string; color: string }> = {
-  preparing: { label: '筹备', color: 'gold' },
-  ready: { label: '待进场', color: 'cyan' },
+  preparing: { label: '准备', color: 'gold' },
   executing: { label: '现场实施', color: 'green' },
   acceptance: { label: '验收中', color: 'magenta' },
   suspended: { label: '突发停工', color: 'red' },
@@ -15,7 +14,7 @@ export const STATUS_MAP: Record<string, { label: string; color: string }> = {
  * 页面不得用「!== archived」等页面级排除代替本常量。
  */
 export const ACTIVE_PROJECT_STATUSES = [
-  'preparing', 'ready', 'executing', 'acceptance',
+  'preparing', 'executing', 'acceptance',
 ]
 
 export const STATUS_LABEL: Record<string, string> = Object.fromEntries(

@@ -122,12 +122,12 @@ function ImportForm({ allowed: canImport }: { allowed: boolean }) {
           <Alert type={importPreview.valid ? 'success' : 'error'} showIcon message={importPreview.valid ? '模板检查通过，可以创建项目' : '模板存在错误，暂不能导入'} />
           <Typography.Text>源项目状态：{projectImportSourceStatus(importPayload) === undefined && importSourceStatus === undefined
             ? '未注明' : projectStatusMeta(importSourceStatus ?? projectImportSourceStatus(importPayload)!).label}</Typography.Text>
-          {importSourceStatus !== undefined && <Alert type="info" showIcon message="新项目将从筹备开始" description="实施阶段需重新确认；交付附件与审核结果需重新提交。原项目和备份文件保持原样。" />}
+          {importSourceStatus !== undefined && <Alert type="info" showIcon message="新项目将从准备开始" description="实施阶段需重新确认；交付附件与审核结果需重新提交。原项目和备份文件保持原样。" />}
           {draftProjectImport(importPayload) && <Space direction="vertical">
-            <Typography.Text>复用此项目方案时，可按筹备重新预检，再确认创建新项目。</Typography.Text>
-            <Button loading={validatingImport} disabled={importing} onClick={previewAsDraft}>按筹备重新预检</Button>
+            <Typography.Text>复用此项目方案时，可按准备重新预检，再确认创建新项目。</Typography.Text>
+            <Button loading={validatingImport} disabled={importing} onClick={previewAsDraft}>按准备重新预检</Button>
           </Space>}
-          {draftPreviewError && <Alert type="error" showIcon message="筹备预检未通过，原预检内容已保留" description={draftPreviewError} />}
+          {draftPreviewError && <Alert type="error" showIcon message="准备预检未通过，原预检内容已保留" description={draftPreviewError} />}
           {!!importPreview.errors?.length && <Alert type="error" showIcon message="必须修正" description={importPreview.errors.join('；')} />}
           {!!importPreview.warnings?.length && <Alert type="warning" showIcon message="导入提醒" description={importPreview.warnings.join('；')} />}
           <Descriptions size="small" bordered column={3} items={[

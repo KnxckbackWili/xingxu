@@ -8,7 +8,7 @@ from app.db import SessionLocal
 from app.models import AcceptanceRecord, ArchiveChecklist, DailyProgress, Module, Phase, Project, ProjectPreparationItem, Task, User
 
 
-def _project(client, headers, status="ready"):
+def _project(client, headers, status="preparing"):
     response = client.post("/api/projects", headers=headers, json={
         "name": "生命周期独立验证", "start_date": "2026-09-01",
         "end_date": "2026-12-31", "new_vehicles": False, "status": "preparing",
@@ -20,6 +20,10 @@ def _project(client, headers, status="ready"):
         p.status = status
         db.query(ProjectPreparationItem).filter_by(project_id=pid).delete()
         db.commit()
+    if status == "preparing":
+        # The former ready stage: stage-4 kickoff evidence in place, only the stage-5 decision left.
+        from tests.lifecycle_helpers import submit_kickoff_documents
+        submit_kickoff_documents(client, headers, pid)
     return pid
 
 
@@ -98,7 +102,7 @@ def test_entry_needs_current_risk_review_not_legacy_warning_flag(client, pm_head
     extra = {} if legacy_flag is None else {"confirm_warnings": legacy_flag}
     response = _status(client, pm_headers, pid, "executing", reason="任意状态备注", **extra)
     assert response.status_code == 400, response.text
-    _assert_status(pid, "ready")
+    _assert_status(pid, "preparing")
     assert _review(client, pm_headers, pid, notes="  ").status_code == 400
     assert _review(client, pm_headers, pid).status_code == 200
     assert _status(client, pm_headers, pid, "executing", **extra).status_code == 200
@@ -111,7 +115,7 @@ def test_either_mandatory_or_blocking_prerequisite_needs_risk_decision(client, p
     assert _status(client, pm_headers, pid, "executing").status_code == 400
 
 
-@pytest.mark.parametrize("origin", ["ready", "suspended"])
+@pytest.mark.parametrize("origin", ["preparing", "suspended"])
 def test_every_executing_entry_path_rechecks_current_risk(client, pm_headers, origin):
     """Entering or resuming execution rechecks the current stage-5 risk approval."""
     from tests.test_dispatch_review_t29 import scope, confirm, requirement
@@ -134,7 +138,7 @@ def test_later_not_ready_supersedes_earlier_risky_decision(client, pm_headers):
     assert _review(client, pm_headers, pid, conclusion="not_ready", notes="风险暂不接受").status_code == 200
     response = _status(client, pm_headers, pid, "executing")
     assert response.status_code == 400, response.text
-    _assert_status(pid, "ready")
+    _assert_status(pid, "preparing")
 
 
 @pytest.mark.parametrize("later", ["rejected", "conditionally_accepted"])
@@ -282,7 +286,7 @@ def test_percentage_helpers_cannot_advance_or_regress_manual_stage(client, pm_he
             db.commit()
 
 
-@pytest.mark.parametrize("stage,target", [("executing", "ready"), ("ready", "preparing")])
+@pytest.mark.parametrize("stage,target", [("executing", "preparing")])
 def test_stage_requires_authorized_human_action_not_percentage(client, pm_headers, worker_headers, stage, target):
     pid = _project(client, pm_headers, stage)
     worker = client.get("/api/auth/me", headers=worker_headers).json()["id"]
@@ -334,16 +338,19 @@ def test_new_project_import_cannot_bypass_lifecycle_decisions(client, pm_headers
         assert not db.query(Project).filter_by(name="导入必须保留人工决定").count()
 
 
-def test_allowed_ready_import_still_requires_explicit_entry_decision(client, pm_headers):
+@pytest.mark.parametrize("state", ["preparing", "ready"])
+def test_allowed_preparation_import_still_requires_explicit_entry_decision(client, pm_headers, state):
+    """A legacy ready payload is accepted and lands in preparation like any new project."""
     payload = {"type": "agvpm-project", "project": {
         "name": "导入待进场计划", "start_date": "2026-09-01",
-        "end_date": "2026-12-31", "status": "ready",
+        "end_date": "2026-12-31", "status": state,
     }}
     preview = client.post("/api/projects/import/preview", headers=pm_headers, json=payload)
     assert preview.status_code == 200 and preview.json()["valid"], preview.text
     result = client.post("/api/projects/import/json", headers=pm_headers, json=payload)
     assert result.status_code == 200, result.text
     pid = result.json()["id"]
+    _assert_status(pid, "preparing")
     assert _status(client, pm_headers, pid, "executing").status_code == 400
 
 
@@ -393,7 +400,7 @@ def test_stale_actor_loses_stage_authority_after_grant_revocation(client, pm_hea
             newer.get(Project, pid).member_permissions = []
             newer.commit()
         with pytest.raises(HTTPException) as error:
-            change_status(pid, ProjectStatusChange(status="ready"), actor, p, stale)
+            change_status(pid, ProjectStatusChange(status="preparing"), actor, p, stale)
         assert error.value.status_code == 403
         stale.rollback()
     _assert_status(pid, "executing")
@@ -419,7 +426,7 @@ def test_explicit_member_stage_authority_is_honored(client, pm_headers, worker_h
         "version": project_version(client, pm_headers, pid),
     })
     assert response.status_code == 200, response.text
-    allowed = _status(client, worker_headers, pid, "ready")
+    allowed = _status(client, worker_headers, pid, "preparing")
     assert allowed.status_code == 200, allowed.text
 
 

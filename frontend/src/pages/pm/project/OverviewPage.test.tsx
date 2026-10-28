@@ -15,7 +15,7 @@ describe('项目总览按需展开', () => {
     apiGet.mockResolvedValue({ data: { ...overview, tree: [{ work_items: [{ kind: 'vehicle', vehicle_step_key: null }] }] } })
     render(<OverviewPage projectId="p1" projectStatus="preparing" vehicleTotal={1} memberCount={1} canManageStatus />)
     const current = within(await screen.findByRole('region', { name: '当前行动' }))
-    expect(screen.getByRole('list', { name: '筹备清单' })).toBeVisible()
+    expect(screen.getByRole('list', { name: '准备清单' })).toBeVisible()
     expect(current.getByRole('button', { name: /调整项目状态/ })).toBeVisible()
     const target = screen.getByRole('link', { name: /工作项范围待确认/ })
     expect(target).toHaveAttribute('href', '/pm/projects/p1/plan')
@@ -35,7 +35,7 @@ describe('项目总览按需展开', () => {
     expect(current.getByRole('button', { name: /^资料清单$/ })).toBeVisible()
     expect(current.queryByRole('button', { name: /调整项目状态/ })).not.toBeInTheDocument()
     expect(screen.getByRole('region', { name: '待处理工作' })).toBeVisible()
-    // 筹备阶段周计划只在筹备清单中出现一次
+    // 准备阶段周计划只在准备清单中出现一次
     expect(screen.getAllByText(/89 格周计划/)).toHaveLength(1)
     expect(screen.getByText('89 格周计划，89 格草稿')).toBeVisible()
     const quantities = screen.getByRole('list', { name: '各单位数量' })
@@ -50,7 +50,7 @@ describe('项目总览按需展开', () => {
       phases: [{ id: 'phase1', name: '进场准备', percent: 100, modules: [{ id: 'm1', name: '安全检查', percent: 100, tasks: [{ id: 't/1', name: '确认现场安全围栏', percent: 100 }] }] }],
     } } })
     render(<OverviewPage projectId="p1" projectStatus="preparing" />)
-    expect(await screen.findByText('筹备')).toBeVisible()
+    expect(await screen.findByText('准备')).toBeVisible()
     fireEvent.click(screen.getByRole('button', { name: '进度与记录' })); expect(screen.getByText('各任务阶段数量进度已达标')).toBeVisible()
     expect(screen.queryByText('安全检查')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '任务阶段进度' })).not.toBeInTheDocument()
@@ -97,15 +97,15 @@ describe('项目总览按需展开', () => {
     await waitFor(() => expect(apiPost).toHaveBeenCalledWith('/projects/p1/status', expect.objectContaining({ status: 'acceptance' })))
   })
   it('every manual status change asks for confirmation and records the optional reason', async () => {
-    render(<OverviewPage projectId="p1" projectStatus="ready" canManageStatus />)
+    render(<OverviewPage projectId="p1" projectStatus="executing" canManageStatus />)
     fireEvent.click(await screen.findByRole('button', { name: /调整项目状态/ }))
-    fireEvent.click(await screen.findByText('切换到「筹备」'))
+    fireEvent.click(await screen.findByText('切换到「准备」'))
     let dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByText(/项目状态将从「.*」变为「筹备」/)).toBeInTheDocument()
+    expect(within(dialog).getByText(/项目状态将从「.*」变为「准备」/)).toBeInTheDocument()
     fireEvent.click(within(dialog).getByRole('button', { name: '取 消' }))
     expect(apiPost).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: /调整项目状态/ }))
-    fireEvent.click(await screen.findByText('切换到「筹备」'))
+    fireEvent.click(await screen.findByText('切换到「准备」'))
     dialog = await screen.findByRole('dialog')
     fireEvent.change(within(dialog).getByLabelText('状态变更说明'), { target: { value: '客户推迟进场' } })
     fireEvent.click(within(dialog).getByRole('button', { name: '确认推进阶段' }))
@@ -167,7 +167,7 @@ describe('项目总览按需展开', () => {
     fireEvent.click(screen.getByRole('button', { name: '阶段进度与记录' }))
     fireEvent.click(await screen.findByRole('button', { name: /进度趋势/ }))
     expect(await screen.findByTestId('lazy-chart')).toBeInTheDocument()
-    expect(within(screen.getByRole('list', { name: '筹备清单' })).getByText(/3 项发车前资料待落实/)).toBeVisible()
+    expect(within(screen.getByRole('list', { name: '准备清单' })).getByText(/3 项发车前资料待落实/)).toBeVisible()
     fireEvent.click(screen.getByRole('button', { name: '发车前资料确认' }))
     expect(navigate).toHaveBeenCalledWith('/pm/projects/p1/documents?review=1')
   })
@@ -176,7 +176,7 @@ describe('项目总览按需展开', () => {
     await screen.findByRole('button', { name: '进度与记录' })
     expect(apiGet.mock.calls.map(([url]) => url)).toEqual(['/projects/p2/overview'])
     fireEvent.click(screen.getByRole('button', { name: /调整项目状态/ }))
-    expect(await screen.findByText('切换到「待进场」')).toBeInTheDocument()
+    expect(await screen.findByText('切换到「现场实施」')).toBeInTheDocument()
     expect(screen.queryByText('切换到「计划中」')).not.toBeInTheDocument()
     expect(apiPost).not.toHaveBeenCalled()
   })
@@ -224,7 +224,7 @@ describe('项目总览按需展开', () => {
 
   it('blocked entry offers current review instead of a warning-confirm bypass', async () => {
     apiPost.mockRejectedValue({ response: { status: 400, data: { detail: '当前进场条件未满足，请先评审并明确批准风险进场' } } })
-    render(<OverviewPage projectId="p1" projectStatus="ready" canManageStatus />)
+    render(<OverviewPage projectId="p1" projectStatus="preparing" canManageStatus />)
     fireEvent.click(await screen.findByRole('button', { name: /调整项目状态/ }))
     fireEvent.click(await screen.findByText('切换到「现场实施」'))
     fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '确认推进阶段' }))
@@ -253,7 +253,7 @@ describe('项目总览按需展开', () => {
   it('legacy warning responses also cannot offer a bypass', async () => {
     const changed = vi.fn()
     apiPost.mockResolvedValue({ data: { requires_confirmation: true, warnings: ['缺少入场证'] } })
-    render(<OverviewPage projectId="p1" projectStatus="ready" canManageStatus onStatusChange={changed} />)
+    render(<OverviewPage projectId="p1" projectStatus="preparing" canManageStatus onStatusChange={changed} />)
     fireEvent.click(await screen.findByRole('button', { name: /调整项目状态/ }))
     fireEvent.click(await screen.findByText('切换到「现场实施」'))
     fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '确认推进阶段' }))
@@ -327,7 +327,7 @@ describe('项目总览按需展开', () => {
 
   it('stale readiness approval points startup back to current entry review', async () => {
     apiGet.mockResolvedValue({ data: { ...overview, tree: [{ modules: [{ tasks: [{ target_quantity: 1 }] }] }], schedule: [{ is_confirmed: true, assignee_id: 'u1' }], preparations: { summary: { state_key: 'forced_ready', entry_confirmed: true, void: true } } } })
-    render(<OverviewPage projectId="p1" projectStatus="ready" vehicleTotal={1} memberCount={1} canManageStatus />)
+    render(<OverviewPage projectId="p1" projectStatus="preparing" vehicleTotal={1} memberCount={1} canManageStatus />)
     fireEvent.click(await screen.findByRole('button', { name: /发车前资料确认/ }))
     expect(navigate).toHaveBeenCalledWith('/pm/projects/p1/documents?review=1')
     expect(apiPost).not.toHaveBeenCalled()

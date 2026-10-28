@@ -27,14 +27,14 @@ import ContextTip from '../../../components/ContextTip'
 import './OverviewPage.css'
 
 const STATUS_FLOW: Record<string, string[]> = {
-  preparing: ['ready'], ready: ['preparing', 'executing'], executing: ['ready', 'acceptance'],
+  preparing: ['executing'], executing: ['preparing', 'acceptance'],
   acceptance: ['executing', 'completed'], completed: ['acceptance', 'archived'], archived: ['completed'],
 }
-const SUSPENDABLE_STATUSES = ['preparing', 'ready', 'executing', 'acceptance']
+const SUSPENDABLE_STATUSES = ['preparing', 'executing', 'acceptance']
 
 /** Project status remains a management decision; the work tree organizes its readable evidence. */
-export default function OverviewPage({ projectId, projectStatus, projectSuspension = null, vehicleTotal = 0, memberCount = 0, canManageStatus = false, canArchive = true, onStatusChange }: {
-  projectId: string; projectStatus: string; projectSuspension?: any; vehicleTotal?: number; memberCount?: number; canManageStatus?: boolean; canArchive?: boolean; onStatusChange?: () => void
+export default function OverviewPage({ projectId, projectStatus, projectSuspension = null, infoComplete, vehicleTotal = 0, memberCount = 0, canManageStatus = false, canArchive = true, onStatusChange }: {
+  projectId: string; projectStatus: string; projectSuspension?: any; infoComplete?: boolean; vehicleTotal?: number; memberCount?: number; canManageStatus?: boolean; canArchive?: boolean; onStatusChange?: () => void
 }) {
   const { user } = useAuth()
   const eventWriteBlocked = useProjectWriteBlocked(projectStatus)
@@ -169,13 +169,13 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
   const weeklyWarnings = (weeklyPlan?.warnings??[]).map(planWarningText)
   const severeIssueCount = openIssues.filter((i) => i.severity === 'critical' || i.severity === 'high').length
   const workflow = projectWorkflow({
-    status: projectStatus, vehicles: vehicleTotal, tasks: taskCount,
+    status: projectStatus, infoComplete, vehicles: vehicleTotal, tasks: taskCount,
     members: memberCount, plans: weeklyPlan?.total ?? null, drafts: draftPlans,
     unassigned: weeklyPlan?.unassigned_count ?? null, planWarnings: weeklyPlan?.warning_count,
     kickoffReady: documentProgress?.phase4_ready, prepReady: entryReady(prep), severeIssues: severeIssueCount, progress: data?.percent ?? 0,
   })
   const nextAction = fieldStaff && workflow.setup && workflow.action.path !== '/issues'
-    ? { title: '查看执行安排', description: '项目处于筹备阶段。查看已发布的周计划，有现场问题可随时上报。', path: '/plan?view=weeks', status: undefined }
+    ? { title: '查看执行安排', description: '项目处于准备阶段。查看已发布的周计划，有现场问题可随时上报。', path: '/plan?view=weeks', status: undefined }
     : workflow.action
   const actionDescription = nextAction.path.includes('step=schedule') && !nextAction.status
     ? '核对每周工作、车辆范围和负责人，再发布周计划。'
@@ -217,8 +217,7 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
     setStatusFailure(null); setStatusReason(''); setMilestoneTarget(status)
   }
   const failureLinks = statusFailure?.target === 'executing'
-    ? [{ path: '/documents?review=1', label: '查看发车前资料确认' }]
-    : statusFailure?.target === 'ready' ? [{ path: '/documents?stage=4', label: '查看筹备资料' }]
+    ? [{ path: '/documents?stage=4', label: '查看准备资料' }, { path: '/documents?review=1', label: '查看发车前资料确认' }]
     : statusFailure?.target === 'acceptance' ? [{ path: '/documents?stage=6', label: '查看签单资料' }]
     : ['completed', 'archived'].includes(statusFailure?.target ?? '')
       ? [{ path: '/documents?acceptance=1', label: '核对验收与归档' }, { path: '/plan', label: '核对任务与质量' }, { path: '/documents', label: '核对必需资料' }, { path: '/issues', label: '处理未解决问题' }]
@@ -279,8 +278,8 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
       <div className="overview-layout">
         <div className="overview-main">
           <section className="overview-next-work overview-card" aria-label="待处理工作">
-            <h2>{checklist ? (pendingSteps ? `进入「待进场」还差 ${pendingSteps} 项` : '筹备清单已全部核对') : '现在要处理'}</h2>
-            {checklist && <ol aria-label="筹备清单" className="overview-checklist">{checklist.map(item => <li key={item.title} className={item.done ? 'is-done' : ''}>
+            <h2>{checklist ? (pendingSteps ? `进入「现场实施」还差 ${pendingSteps} 项` : '准备清单已全部核对') : '现在要处理'}</h2>
+            {checklist && <ol aria-label="准备清单" className="overview-checklist">{checklist.map(item => <li key={item.title} className={item.done ? 'is-done' : ''}>
               <span className="overview-check-mark" aria-hidden="true">{item.done ? '✓' : '!'}</span>
               <span className="overview-check-copy"><Button type="link" onClick={() => go(item.path)}>{item.title}</Button><small>{item.path === '/documents?review=1' && !entryReady(prep) ? preparationDetail : item.description}</small></span>
               <span className="overview-check-state">{item.done ? '已核对' : '待核对'}</span>

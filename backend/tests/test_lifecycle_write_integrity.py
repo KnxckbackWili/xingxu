@@ -238,7 +238,7 @@ def test_evidence_write_rechecks_revoked_capability_after_preload(client, admin_
     capability = {'preparation': 'project.manage_plan', 'documents': 'project.manage_plan', 'acceptance': 'project.update'}[kind]
     with SessionLocal() as db:
         p = db.get(Project, pid)
-        p.status = 'ready'
+        p.status = 'preparing'
         p.members = [*p.members, worker]
         p.member_permissions = [{'user_id': worker, 'capabilities': [capability]}]
         db.commit()

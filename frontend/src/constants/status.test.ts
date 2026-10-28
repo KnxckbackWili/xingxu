@@ -8,7 +8,7 @@ it('unknown historical values stay visible instead of looking like draft or over
   expect(isProjectWriteBlocked('')).toBe(true)
 })
 it('known lifecycle labels and existing write policies are preserved', () => {
-  expect(projectStatusMeta('preparing')).toMatchObject({ label: '筹备', color: 'gold' })
+  expect(projectStatusMeta('preparing')).toMatchObject({ label: '准备', color: 'gold' })
   expect(projectStatusMeta('executing', true)).toMatchObject({ label: '已延期', baseLabel: '现场实施' })
   expect(isProjectWriteBlocked('archived')).toBe(true)
   expect(isProjectWriteBlocked('completed')).toBe(false)

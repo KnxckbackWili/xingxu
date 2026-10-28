@@ -58,7 +58,7 @@ def check_transition(db: Session, project: Project, target: str) -> list[Blocker
     def add(kind, message, page):
         blockers.append(Blocker(kind, message, f"/pm/projects/{project.id}/{page}"))
 
-    if target == "ready" and project.status == "preparing":
+    if target == "executing" and project.status == "preparing":
         pending = _pending_required_documents(db, project.id, stages=('4',))
         if pending:
             add('kickoff_documents', '第4阶段必需资料尚未提交或缺少真实原件：' + '、'.join(pending), 'documents?stage=4')

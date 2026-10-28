@@ -788,89 +788,6 @@ html:not([data-theme='dark']) .ant-tag-success { color: #237804 !important; back
   justify-content: flex-end;
 }
 
-.template-picker {
-  margin-bottom: 14px;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.template-option {
-  position: relative;
-  min-width: 0;
-  min-height: 62px;
-  padding: 10px 34px 10px 10px;
-  border: 1px solid #dfe6e3;
-  border-radius: 7px;
-  background: var(--agv-bg-container);
-  color: #17201f;
-  cursor: pointer;
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  text-align: left;
-}
-
-.template-option:hover {
-  border-color: #9ebdb5;
-  background: #f7faf9;
-}
-
-.template-option.is-selected {
-  border-color: #176b5b;
-  background: #eef6f3;
-  box-shadow: inset 3px 0 0 #176b5b;
-}
-
-.template-option-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #65716e;
-  background: #f1f4f3;
-}
-
-.template-option.is-selected .template-option-icon {
-  color: #176b5b;
-  background: #dcebe7;
-}
-
-.template-option-copy {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.template-option-copy strong {
-  overflow: hidden;
-  color: inherit;
-  font-size: 12.5px;
-  font-weight: 650;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.template-option-copy small {
-  margin-top: 3px;
-  overflow: hidden;
-  color: #56625e;
-  font-size: 10.5px;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.template-option-check {
-  position: absolute;
-  top: 12px;
-  right: 11px;
-  color: #176b5b;
-}
-
 .project-template-preview {
   margin-bottom: 18px;
   padding: 10px 12px;
@@ -905,25 +822,6 @@ html:not([data-theme='dark']) .ant-tag-success { color: #237804 !important; back
   font-size: 10.5px;
 }
 
-.create-section-title {
-  display: block;
-  margin-bottom: 2px;
-  font-size: 14px;
-}
-
-.create-section-help {
-  margin: 0 0 10px !important;
-  font-size: 11.5px;
-}
-
-.project-create-form {
-  margin-top: 8px;
-}
-
-.project-create-form .ant-form-item {
-  margin-bottom: 14px;
-}
-
 .project-condition-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -933,12 +831,6 @@ html:not([data-theme='dark']) .ant-tag-success { color: #237804 !important; back
 .project-condition-grid .ant-checkbox-wrapper {
   margin-inline-start: 0 !important;
   font-size: 12.5px;
-}
-
-.project-create-footnote {
-  display: block;
-  padding-top: 2px;
-  font-size: 11px;
 }
 
 /* ===== Project workspace ===== */
@@ -1368,7 +1260,6 @@ html:not([data-theme='dark']) .ant-tag-success { color: #237804 !important; back
   margin-top: 18px;
 }
 
-
 .user-filter-bar {
   max-width: calc(100vw - 390px);
 }
@@ -1627,7 +1518,6 @@ html:not([data-theme='dark']) .ant-tag-success { color: #237804 !important; back
 .staffing-project-numbers .good strong {
   color: #237a57;
 }
-
 
 .staffing-section-label {
   display: inline-flex;
@@ -2230,7 +2120,6 @@ html:not([data-theme='dark']) .ant-tag-success { color: #237804 !important; back
   font-size: 12px;
 }
 
-
 .analytics-summary-band {
   display: grid;
   grid-template-columns: repeat(6, minmax(100px, 1fr));
@@ -2534,10 +2423,6 @@ html:not([data-theme='dark']) .ant-tag-success { color: #237804 !important; back
     grid-template-columns: 1fr;
   }
 
-  .template-picker {
-    grid-template-columns: 1fr;
-  }
-
   .project-condition-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2743,11 +2628,6 @@ html[data-theme='dark'] {
   --agv-text: var(--agv-text);
   --agv-text-secondary: var(--agv-text-secondary);
   --agv-primary-soft: var(--agv-primary-soft);
-}
-
-/* ===== 弹窗 6px 横向溢出修复 ===== */
-.project-create-form {
-  overflow-x: hidden;
 }
 
 /* ===== 项目工作区加载态 ===== */
@@ -3051,9 +2931,7 @@ html[data-theme='dark'] .team-member-card {
   background: var(--agv-bg-container);
 }
 
-
 /* AI 能力入口禁用态 */
-
 
 /* ===== 本轮视觉调整：全局 / 登录 / 总览 / 项目列表 / 项目详情 ===== */
 .pm-header {
@@ -3353,7 +3231,6 @@ html[data-theme='dark'] .pm-header {
   cursor: pointer;
 }
 
-
 /* KPI 卡周环比与迷你趋势 */
 .portfolio-summary-band .portfolio-metric-head {
   width: 100%;
@@ -3375,7 +3252,6 @@ html[data-theme='dark'] .pm-header {
 .portfolio-summary-band .portfolio-metric-delta.is-down {
   color: var(--agv-success);
 }
-
 
 /* ===== 深色模式全面兜底：防止硬编码白底/浅色文字残留 ===== */
 html[data-theme='dark'] body,
@@ -3500,7 +3376,6 @@ html[data-theme='dark'] .portfolio-summary-band button:hover {
   background: var(--agv-primary-soft);
 }
 
-
 /* ===== 现场人员精简项目页 ===== */
 .worker-project-detail {
   max-width: 640px;
@@ -3530,28 +3405,6 @@ html[data-theme='dark'] .worker-project-detail .ant-card {
 }
 html[data-theme='dark'] .worker-project-detail .ant-list-item + .ant-list-item {
   border-top-color: var(--agv-border);
-}
-
-
-/* ===== 极简 AI 助手：单一聊天框 ===== */
-
-/* AI 消息 Markdown 渲染 */
-
-/* Creation: keep repeated vehicle groups readable on narrow screens. */
-.project-create-modal .ant-modal-footer {
-  border-top: 1px solid var(--agv-border);
-  padding-top: 12px;
-}
-.template-option:disabled { cursor: wait; opacity: .65; }
-@media (max-width: 767px) {
-  .project-create-modal .create-vehicle-row {
-    padding: 12px 8px 0;
-    margin-bottom: 12px;
-    border: 1px solid var(--agv-border);
-    border-radius: 8px;
-  }
-  .project-create-modal .ant-modal-body { overscroll-behavior: contain; }
-  .project-create-modal .ant-modal-footer .ant-btn { min-height: 44px; }
 }
 
 /* Shared document-inbox progress styles. */
@@ -3609,13 +3462,6 @@ html[data-theme='dark'] .worker-project-detail .ant-list-item + .ant-list-item {
     min-width: 0;
   }
 }
-
-/* 创建项目：准备清单可见且说明来源。 */
-.create-preparation-preview { margin-top: 20px; padding: 16px; background: var(--agv-bg-subtle); border: 1px solid var(--agv-border); border-radius: 10px; }
-.create-preparation-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.create-preparation-groups ul { margin: 8px 0 0; padding-left: 20px; }
-.create-preparation-groups li { margin: 5px 0; overflow-wrap: anywhere; }
-@media (max-width: 600px) { .create-preparation-groups { grid-template-columns: 1fr; } }
 
 .readiness-unmet-list { width: 100%; display: grid; gap: 8px; }
 .readiness-unmet-list article { padding: 10px 12px; border: 1px solid var(--agv-border); border-radius: 8px; background: var(--agv-bg-subtle); }

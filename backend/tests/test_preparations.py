@@ -15,6 +15,9 @@ def _project(client, pm_headers, name="准备项目", status=None, with_procurem
         from app.models import Project
         with SessionLocal() as db:
             db.get(Project,pid).status=status;db.commit()
+        if status == 'preparing':
+            from tests.lifecycle_helpers import submit_kickoff_documents
+            submit_kickoff_documents(client, pm_headers, pid)
     if with_procurement:
         created = client.post(f'/api/projects/{pid}/procurements', headers=pm_headers,
             json={'name': '采购前置条件', 'category': 'procurement', 'is_required': True, 'blocks_entry': True})
@@ -87,8 +90,8 @@ def test_crud_and_audit(client, pm_headers):
 
 
 def test_status_warnings_on_executing(client, pm_headers):
-    pid = _project(client, pm_headers, status="ready")
-    assert client.get(f"/api/projects/{pid}", headers=pm_headers).json()['status'] == 'ready'
+    pid = _project(client, pm_headers, status="preparing")
+    assert client.get(f"/api/projects/{pid}", headers=pm_headers).json()['status'] == 'preparing'
     # 未满足条件必须先明确批准风险；批准后仍保留警告
     from tests.lifecycle_helpers import approve_risk_entry
     approve_risk_entry(client, pm_headers, pid)
@@ -99,8 +102,8 @@ def test_status_warnings_on_executing(client, pm_headers):
 
 
 def test_status_warning_preview_does_not_change_status(client, pm_headers):
-    pid = _project(client, pm_headers, status="ready")
-    assert client.get(f"/api/projects/{pid}", headers=pm_headers).json()['status'] == 'ready'
+    pid = _project(client, pm_headers, status="preparing")
+    assert client.get(f"/api/projects/{pid}", headers=pm_headers).json()['status'] == 'preparing'
     r = client.post(
         f"/api/projects/{pid}/status",
         headers=pm_headers,
@@ -108,7 +111,7 @@ def test_status_warning_preview_does_not_change_status(client, pm_headers):
     )
     assert r.status_code == 400
     assert "风险" in r.json()["detail"]["message"]
-    assert client.get(f"/api/projects/{pid}", headers=pm_headers).json()["status"] == "ready"
+    assert client.get(f"/api/projects/{pid}", headers=pm_headers).json()["status"] == "preparing"
 
     r = client.post(
         f"/api/projects/{pid}/status",

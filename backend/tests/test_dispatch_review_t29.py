@@ -12,13 +12,17 @@ from tests.test_vehicle_progress import setup_fleet, write
 from tests.test_vehicle_checks import work
 
 
-def scope(client, headers, *, status='ready'):
+def scope(client, headers, *, status='preparing'):
     pid = create(client, headers)['id']
     with SessionLocal() as db:
         db.query(ProjectDocument).filter_by(project_id=pid, stage_key='5').delete(synchronize_session=False)
         db.query(ProjectDocumentDefinition).filter_by(project_id=pid, stage_key='5').delete(synchronize_session=False)
         db.get(Project, pid).status = status
         db.commit()
+    if status == 'preparing':
+        # Only the stage-5 decision is under test; stage-4 kickoff evidence is in place.
+        from tests.lifecycle_helpers import submit_kickoff_documents
+        submit_kickoff_documents(client, headers, pid)
     return pid, requirement(client, headers, pid)
 
 
@@ -52,7 +56,7 @@ def test_required_documents_real_bytes_and_waiver_replace_procurement_conditions
     uploaded = upload(client, pm_headers, pid, [doc['id']]); assert uploaded.status_code == 200
     assert not preview(client, pm_headers, pid)['entry_unmet']
     assert state(client, pm_headers, pid, 'executing').status_code == 200
-    assert state(client, pm_headers, pid, 'ready').status_code == 200
+    assert state(client, pm_headers, pid, 'preparing').status_code == 200
     with SessionLocal() as db:
         asset = db.get(Attachment, uploaded.json()['file']['id'])
         from app.services.project_documents import file_path
@@ -75,7 +79,7 @@ def test_risk_requires_reason_and_fresh_preview_and_worsening_invalidates_it(cli
     with SessionLocal() as db:
         db.add(ProjectPreparationItem(project_id=pid, name='新采购缺项', category='procurement', is_required=True, blocks_entry=True, status='failed')); db.commit()
     assert state(client, pm_headers, pid, 'executing').status_code == 200
-    assert state(client, pm_headers, pid, 'ready').status_code == 200
+    assert state(client, pm_headers, pid, 'preparing').status_code == 200
     requirement(client, pm_headers, pid, '新增必须核对的发车资料')
     assert state(client, pm_headers, pid, 'executing').status_code == 400
     with SessionLocal() as db:
@@ -111,7 +115,7 @@ def test_new_overdue_condition_needs_reapproval_and_legacy_review_grants_no_curr
     assert state(client, pm_headers, pid, 'executing').status_code == 400
 
 
-@pytest.mark.parametrize('status', ['preparing', 'ready'])
+@pytest.mark.parametrize('status', ['preparing'])
 def test_before_execution_all_checks_and_manual_and_quantity_and_offline_ops_are_rejected(client, pm_headers, status):
     pid, units = setup_fleet(client, pm_headers, 1, status=status)
     tid = work(pid, units, safety=False, legacy=True)
@@ -161,7 +165,7 @@ def test_old_preparation_review_endpoints_are_retired_and_new_preview_writes_no_
     assert preview(client, pm_headers, pid) == before
     with SessionLocal() as db:
         assert db.query(ProjectReadinessReview).filter_by(project_id=pid).count() == 0
-        assert db.get(Project, pid).status == 'ready'
+        assert db.get(Project, pid).status == 'preparing'
 
 
 def test_authorized_old_period_cleanup_retains_submission_but_normal_missing_original_does_not(client, admin_headers):

@@ -114,7 +114,7 @@ def test_car_projection_and_download_preserve_confidential_acl_and_submit_revoca
 def test_preentry_still_allows_car_documents_without_matrix_progress(client,admin_headers):
     pid,ids=fleet(client,admin_headers)
     with SessionLocal() as db:
-        db.get(Project,pid).status='ready';db.commit()
+        db.get(Project,pid).status='preparing';db.commit()
     doc=inspection(vehicle_view(client,admin_headers,pid,ids[0]))
     assert upload(client,admin_headers,pid,[doc['id']]).status_code==200
     assert client.get(f'/api/projects/{pid}/vehicle-progress',headers=admin_headers).json()['summary']['completed']==0

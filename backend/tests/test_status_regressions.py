@@ -44,7 +44,7 @@ def _finish(client, pm_headers, pid, target):
 
 
 def test_strict_adjacent_flow_rejects_skips(client, pm_headers):
-    """手动流转只允许相邻：不能跳级（筹备 → 现场实施），也不能跨阶段跳到已完成。"""
+    """手动流转只允许相邻：准备不能直接跳到已完成，现场实施也不能跨阶段；原“待进场”已退役。"""
     pid = _create(client, pm_headers, "相邻流转项目")
     assert _status(client, pm_headers, pid) == "preparing"
     assert _post(client, pm_headers, pid, "executing").status_code == 400
@@ -52,9 +52,9 @@ def test_strict_adjacent_flow_rejects_skips(client, pm_headers):
     enter_execution(client, pm_headers, pid)
     assert _post(client, pm_headers, pid, "completed").status_code == 400
     assert _post(client, pm_headers, pid, "archived", retrospective="跳级").status_code == 400
-    assert _post(client, pm_headers, pid, "preparing").status_code == 400
-    assert _post(client, pm_headers, pid, "ready").status_code == 200  # 相邻回退允许
-    assert _status(client, pm_headers, pid) == "ready"
+    assert _post(client, pm_headers, pid, "ready").status_code == 400  # 已退役的状态
+    assert _post(client, pm_headers, pid, "preparing").status_code == 200  # 相邻回退允许
+    assert _status(client, pm_headers, pid) == "preparing"
 
 
 def test_completed_projects_counts_completed_and_archived(client, pm_headers):

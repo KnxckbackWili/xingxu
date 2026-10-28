@@ -97,7 +97,7 @@ class AiUsageLedger(Base):
 
 class Project(Base):
     __tablename__ = "projects"
-    __table_args__ = (CheckConstraint("status IN ('preparing','ready','executing','acceptance','completed','archived','suspended')", name="ck_project_status"),)
+    __table_args__ = (CheckConstraint("status IN ('preparing','executing','acceptance','completed','archived','suspended')", name="ck_project_status"),)
 
     id = Column(String(36), primary_key=True, default=gen_uuid)
     name = Column(String(200), nullable=False)

@@ -56,13 +56,6 @@
 .project-recent-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; font-size: 13px; font-weight: 600; }
 .project-recent-section { display: flex; align-items: center; gap: 6px; color: var(--agv-primary); font-size: 12px; flex-shrink: 0; }
 .project-shortcuts-notice { margin-bottom: 16px; }
-.project-create-modal .create-content-scope { margin-top: 18px; }
-.project-create-modal .create-optional-settings { margin-top: 22px; }
-.project-create-modal .template-option { border-color: var(--agv-border); background: var(--agv-bg-container); }
-.project-create-modal .template-option.is-selected { border-color: var(--agv-primary); border-left-color: var(--agv-primary); background: var(--agv-primary-soft); }
-.project-create-modal .template-option.is-selected .template-option-icon,
-.project-create-modal .template-option-check { color: var(--agv-primary); }
-.project-create-modal .create-confirm-summary { margin-bottom: 20px; }
 @media (max-width: 1100px) {
   .project-library-filters { flex-basis: 100%; }
   .project-library-filters .ant-input-search { max-width: none; }

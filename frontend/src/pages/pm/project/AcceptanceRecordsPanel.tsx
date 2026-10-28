@@ -43,7 +43,7 @@ export default function AcceptanceRecordsPanel({ projectId, refreshToken, onChan
   }, [projectId, form])
   useEffect(() => { void load() }, [projectId, refreshToken])
   const stage = project?.status === 'suspended' ? project?.suspension?.status_before : project?.status
-  const canRecord = !!project?.capabilities?.includes('project.update') && ['ready', 'executing', 'commissioning', 'pilot', 'acceptance', 'completed'].includes(stage)
+  const canRecord = !!project?.capabilities?.includes('project.update') && ['executing', 'commissioning', 'pilot', 'acceptance', 'completed'].includes(stage)
   const today = project?.acceptance_summary?.as_of_date ?? ''
   const save = async (values: Record<string, unknown>) => {
     if (lock.current || !canRecord || loadError) return

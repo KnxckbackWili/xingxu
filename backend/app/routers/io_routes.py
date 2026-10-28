@@ -165,10 +165,10 @@ def _validate_quick_import(payload: dict) -> dict:
         errors.append("project.timezone 必须是有效的 IANA 时区")
     if project.get("rest_mode", "none") not in {"none", "one", "two"}:
         errors.append("project.rest_mode 只能是 none/one/two")
-    if project.get("status", "preparing") not in {*PROJECT_STATUSES, "draft", "planning"}:
+    if project.get("status", "preparing") not in {*PROJECT_STATUSES, "draft", "planning", "ready"}:
         errors.append("project.status 枚举值无效")
     elif project.get("status", "preparing") not in {"preparing", "draft", "planning", "ready"}:
-        errors.append("新建项目导入不能直接进入实施或后续阶段；请将 project.status 改为 preparing 后导入（旧筹备状态会统一重置为筹备），再由有权限的人按流程确认推进。历史项目恢复请使用完整备份恢复流程。")
+        errors.append("新建项目导入不能直接进入实施或后续阶段；请将 project.status 改为 preparing 后导入（旧筹备/待进场状态会统一重置为准备），再由有权限的人按流程确认推进。历史项目恢复请使用完整备份恢复流程。")
     for idx, value in enumerate(project.get("rest_days") or []):
         checked_date(value, f"project.rest_days[{idx}]")
 

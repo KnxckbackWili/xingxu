@@ -20,8 +20,9 @@ def state(client, headers, pid, target):
     return client.post(f'/api/projects/{pid}/status', headers=headers, json={'status': target})
 
 
-def test_six_states_plus_suspension_and_new_project_cannot_skip_gates(client, admin_headers):
-    assert set(PROJECT_STATUSES) == {'preparing','ready','executing','acceptance','completed','archived','suspended'}
+def test_five_states_plus_suspension_and_new_project_cannot_skip_gates(client, admin_headers):
+    # The former ready stage is merged into preparing.
+    assert set(PROJECT_STATUSES) == {'preparing','executing','acceptance','completed','archived','suspended'}
     assert create(client, admin_headers)['status'] == 'preparing'
     for value in ('draft','planning','commissioning','pilot','ready','executing','completed'):
         response = client.post('/api/projects', headers=admin_headers, json={
@@ -29,13 +30,14 @@ def test_six_states_plus_suspension_and_new_project_cannot_skip_gates(client, ad
         assert response.status_code == 400, (value, response.text)
 
 
-def test_ready_requires_stage4_and_acceptance_requires_all_four_real_signoffs(client, admin_headers):
+def test_execution_requires_stage4_and_acceptance_requires_all_four_real_signoffs(client, admin_headers):
     pid = create(client, admin_headers)['id']
-    response = state(client, admin_headers, pid, 'ready')
+    response = state(client, admin_headers, pid, 'executing')
     assert response.status_code == 400 and response.json()['detail']['blockers'][0]['type'] == 'kickoff_documents'
     rows = documents(client, admin_headers, pid)['documents']
     upload_documents(client, admin_headers, pid, [r['id'] for r in rows if r['stage_key']=='4' and r['required']])
-    assert state(client, admin_headers, pid, 'ready').status_code == 200
+    response = state(client, admin_headers, pid, 'executing')
+    assert response.status_code == 400 and 'kickoff_documents' not in {b['type'] for b in response.json()['detail']['blockers']}
     with SessionLocal() as db:
         db.get(Project,pid).status='executing'; db.commit()
     response = state(client, admin_headers, pid, 'acceptance')

@@ -66,8 +66,8 @@ def test_project_crud_flow(client, pm_headers):
     enter_execution(client, pm_headers, pid)
     assert client.get(f"/api/projects/{pid}", headers=pm_headers).json()["status"] == "executing"
 
-    # Invalid transition: executing -> preparing (not adjacent)
-    r = client.post(f"/api/projects/{pid}/status", headers=pm_headers, json={"status": "preparing"})
+    # Invalid transition: executing -> completed (not adjacent)
+    r = client.post(f"/api/projects/{pid}/status", headers=pm_headers, json={"status": "completed"})
     assert r.status_code == 400
 
 
