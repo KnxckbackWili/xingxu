@@ -263,6 +263,26 @@ bash docker/scripts/manage.sh install
 
 发布镜像需同时包含 `linux/amd64` 和 `linux/arm64`。账号密码只交给 `docker login`，不要写入 `.env` 或 Compose 文件。
 
+### GitHub 自动构建（GHCR）
+
+GitHub 仓库的 `.github/workflows/docker-image.yml` 会自动构建 `linux/amd64` 与 `linux/arm64` 镜像，发布到 `ghcr.io/knxckbackwili/xingxu`：
+
+| 触发 | 发布的标签 | 用途 |
+|---|---|---|
+| 推送 `master` | `edge`、`sha-<7 位提交号>` | 试用最新代码；`sha-` 标签固定不变，可用于回滚 |
+| 推送 `v<版本>` 标签 | `<版本>`、`latest` | 正式版本；先运行 `release-check.sh`，标签必须与 `frontend/package.json` 版本一致 |
+
+仓库是私有的，镜像默认也是私有。NAS 先用 GitHub 账号和一个只勾选 `read:packages` 的个人访问令牌登录，再切换为 registry 模式：
+
+```bash
+docker login ghcr.io -u <GitHub 用户名>
+sed -i 's|^DEPLOY_MODE=.*|DEPLOY_MODE=registry|' .env
+sed -i 's|^AGV_IMAGE=.*|AGV_IMAGE=ghcr.io/knxckbackwili/xingxu:3.0.0|' .env
+bash docker/scripts/manage.sh install
+```
+
+正式环境使用版本号或 `sha-` 标签，不要直接跟随 `edge`。
+
 默认只监听 NAS 本机 `127.0.0.1:8000`。在群晖/QNAP 的反向代理中创建一个 HTTPS 域名，将上游指向 `http://127.0.0.1:8000`，不要直接把 8000 端口映射到公网。如确需局域网直连，把 `.env` 的 `BIND_ADDRESS` 改为 `0.0.0.0`。
 
 公网启用时必须按文首清单配置：
