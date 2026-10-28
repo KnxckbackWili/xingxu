@@ -30,7 +30,7 @@ it('pre-entry uploads one version to the same document and blocks rapid duplicat
   h.upload.mockImplementation(() => new Promise(resolve => { finish = resolve }))
   const version = { id: 'ver-1', attachment_id: 'file-1', filename: '真实点检.txt', uploaded_by_name: '现场人员', uploaded_at: '2026-10-20T16:01:00Z', download_url: '/projects/p1/documents/doc-real-car-1/versions/ver-1/download' }
   h.list.mockResolvedValueOnce(response()).mockResolvedValue(response([row({ status: 'submitted', latest_version: version as any, versions: [version as any] })]))
-  show({ projectId: 'p1', unitId: 'real-car-1', unitLabel: 'AGV-001', projectStatus: 'ready' })
+  show({ projectId: 'p1', unitId: 'real-car-1', unitLabel: 'AGV-001', projectStatus: 'preparing' })
   fireEvent.click(await screen.findByRole('button', { name: '上传资料' }))
   const dialog = within(screen.getByRole('dialog'))
   expect(dialog.getByRole('button', { name: '提交资料' })).toBeDisabled()

@@ -43,7 +43,7 @@ it('keeps migration identities unknown and displays source quantities without in
   expect(screen.queryByRole('button', { name: /AGV-.*勾选完成/ })).not.toBeInTheDocument()
 })
 it('pre-entry remains read-only even if an old response says recording is allowed', async () => {
-  render(<VehicleProgressMatrix projectId="p1" status="ready" />)
+  render(<VehicleProgressMatrix projectId="p1" status="preparing" />)
   expect(await screen.findByRole('button', { name: 'AGV-001 到场点检 勾选完成' })).toBeDisabled()
   expect(screen.queryByRole('button', { name: '批量勾选' })).not.toBeInTheDocument()
 })
@@ -71,7 +71,7 @@ it('shows portable execution as an inspectable read-only source, without changin
   get.mockImplementation((url: string) => Promise.resolve({ data: url.endsWith('/source')
     ? { read_only: true, verified: false, source: { legacy_quantity_reports: [{ completed_quantity: 1000, client_uuid: '原项目真实登记', user_id: '原操作者' }] } }
     : fixture({ source_snapshot_available: true }) }))
-  render(<ConfigProvider theme={{ token: { motion: false } }}><VehicleProgressMatrix projectId="p1" status="ready" /></ConfigProvider>)
+  render(<ConfigProvider theme={{ token: { motion: false } }}><VehicleProgressMatrix projectId="p1" status="preparing" /></ConfigProvider>)
   fireEvent.click(await screen.findByRole('button', { name: '查阅原始来源' }))
   await waitFor(() => expect(screen.getByText(/原项目真实登记/)).toBeVisible())
   expect(screen.getByText(/不计入本项目完成资格/)).toBeVisible()

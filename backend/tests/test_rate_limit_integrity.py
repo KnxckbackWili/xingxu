@@ -4,7 +4,17 @@ import pytest
 from fastapi import HTTPException
 from sqlalchemy import text
 
-def test_export_rate_limited(client, pm_headers):
+def _freeze_rate_clock(monkeypatch):
+    """Keep all requests in one fixed window; a slow run must not roll into a fresh bucket mid-test."""
+    import time as real
+    from types import SimpleNamespace
+    from app.services import rate_limit as rl
+    frozen = real.time()
+    monkeypatch.setattr(rl, 'time', SimpleNamespace(time=lambda: frozen, monotonic=lambda: frozen))
+
+
+def test_export_rate_limited(client, pm_headers, monkeypatch):
+    _freeze_rate_clock(monkeypatch)
     """B5：导出接口按用户限流，超限返回 429。"""
     pid = client.post('/api/projects', headers=pm_headers, json={'name': '导出限流项目', 'start_date': '2026-08-10', 'new_vehicles': False, 'end_date': '2026-09-30'}).json()['id']
     ok = 0
@@ -40,7 +50,8 @@ def test_pg_shared_rate_limit_atomic(client, monkeypatch):
     finally:
         db.close()
 
-def test_export_rate_limited_still_ok(client, pm_headers):
+def test_export_rate_limited_still_ok(client, pm_headers, monkeypatch):
+    _freeze_rate_clock(monkeypatch)
     """T006：SQLite 路径导出限流行为不回退（验证超限边界）。"""
     pid = client.post('/api/projects', headers=pm_headers, json={'name': '导出限流回归', 'start_date': '2026-08-10', 'new_vehicles': False, 'end_date': '2026-09-30'}).json()['id']
     ok = 0

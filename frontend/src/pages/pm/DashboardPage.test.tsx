@@ -41,7 +41,7 @@ it('hides the previous account immediately and ignores its delayed response',asy
  expect(await screen.findByText('暂无需要处理的事项')).toBeVisible();await act(async()=>finish(overview));expect(screen.queryByText('项目甲')).toBeNull()
 })
 it('keeps partially unread document and signoff states unknown',async()=>{
- h.overview.mockResolvedValue({projects:[{id:'p1',name:'项目甲',status:'ready'}]});show()
+ h.overview.mockResolvedValue({projects:[{id:'p1',name:'项目甲',status:'preparing'}]});show()
  expect(await screen.findByText('逾期资料尚未完整读取。')).toBeVisible();expect(screen.getByText('签单状态尚未完整读取。')).toBeVisible()
  expect(screen.getByText('车辆进度未读取')).toBeVisible();expect(screen.queryByText('暂无需要处理的事项')).toBeNull()
 })
