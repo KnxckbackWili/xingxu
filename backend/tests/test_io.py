@@ -214,12 +214,16 @@ def test_project_export_package_zip_missing_file(client, pm_headers):
     pid = client.post("/api/projects", headers=pm_headers, json={
         "name": "缺文件导出项目",
         "start_date": "2026-08-10", "new_vehicles": False, "end_date": "2026-09-30"}).json()["id"]
+    existing = {path for path in UPLOAD_DIR.rglob("*") if path.is_file()}
     r = client.post(f"/api/projects/{pid}/documents/files", headers=pm_headers,
                     files={"file": ("关键点位表.xlsx", b"\x50\x4b\x03\x04fake-xlsx", "application/vnd.ms-excel")})
     assert r.status_code == 200, r.json()
 
-    # 删除磁盘文件本体（模拟备份缺失），数据库记录仍在
-    for f in UPLOAD_DIR.iterdir():
+    # 只删除本用例上传的磁盘文件本体（模拟备份缺失），数据库记录仍在；
+    # 其它用例共享的启动期文件不能删，否则后续整系统备份会因原件缺失失败。
+    uploaded = {path for path in UPLOAD_DIR.rglob("*") if path.is_file()} - existing
+    assert uploaded
+    for f in uploaded:
         f.unlink()
 
     r = client.get(f"/api/projects/{pid}/export/package", headers=pm_headers)
