@@ -168,11 +168,31 @@ def _task_dict(t: Task, completed: float = 0, db: Session | None = None) -> dict
 def get_project_tree(project_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Return the project's full task tree: phases → modules → tasks → check items."""
     p = ensure_project_visible(db,project_id,user)
+    from collections import defaultdict
     from sqlalchemy import or_
-    from app.services.work_items import phase_of,group_of,item_dict
+    from app.models import VehicleUnit
+    from app.services.work_items import phase_of,group_of,item_dicts
     completed={tid:qty or 0 for tid,qty in db.query(DailyProgress.task_id,func.sum(DailyProgress.completed_quantity)).filter_by(project_id=project_id).group_by(DailyProgress.task_id)}
+    tasks=db.query(Task).filter_by(project_id=project_id).order_by(Task.sort_order,Task.id).all()
+    # Load the few phases/modules up front so per-task phase_of/group_of lookups hit the identity map.
+    module_ids={t.module_id for t in tasks if t.module_id}
+    modules=db.query(Module).filter(Module.id.in_(module_ids)).all() if module_ids else []
+    phase_ids={t.phase_id for t in tasks if t.phase_id}|{m.phase_id for m in modules if m.phase_id}
+    # Keep a strong reference: the session's identity map only holds objects weakly.
+    phases=db.query(Phase).filter(Phase.id.in_(phase_ids)).all() if phase_ids else []
+    items=item_dicts(db,tasks,checks=True)
+    task_checks=defaultdict(list)
+    if tasks:
+        for c in db.query(CheckItem).filter(CheckItem.task_id.in_([t.id for t in tasks]),or_(CheckItem.project_id==project_id,CheckItem.project_id.is_(None))).order_by(CheckItem.sort_order,CheckItem.id):
+            task_checks[c.task_id].append(c)
+    unit_ids={c.vehicle_unit_id for rows in task_checks.values() for c in rows if c.vehicle_unit_id}
+    units={u.id:u for u in db.query(VehicleUnit).filter(VehicleUnit.id.in_(unit_ids))} if unit_ids else {}
+    def label(check):
+        if not check.vehicle_unit_id:return '任务级检查（未逐车核验）'
+        unit=units.get(check.vehicle_unit_id)
+        return (unit.fleet_no or unit.asset_code) if unit else '车辆来源待核对'
     grouped={}
-    for task in db.query(Task).filter_by(project_id=project_id).order_by(Task.sort_order,Task.id):
+    for task in tasks:
         phase=phase_of(db,task)
         if phase is None:continue
         row=grouped.setdefault(phase.id,{'id':phase.id,'name':phase.name,'sort_order':phase.sort_order or 0,'color':phase.color,'entry_criteria':phase.entry_criteria,'exit_criteria':phase.exit_criteria,'modules':[],'work_items':[]})
@@ -181,13 +201,13 @@ def get_project_tree(project_id: str, user: User = Depends(get_current_user), db
         if group is None:
             group={'id':task.module_id,'name':scope,'category':'source','sort_order':0,'read_only_source':True,'tasks':[]}
             row['modules'].append(group)
-        checks=db.query(CheckItem).filter(CheckItem.task_id==task.id,or_(CheckItem.project_id==project_id,CheckItem.project_id.is_(None))).order_by(CheckItem.sort_order,CheckItem.id).all()
+        checks=task_checks[task.id]
         group['tasks'].append({**_task_dict(task,completed.get(task.id,0),db),'check_items':[{'id':c.id,'name':c.name,'description':c.description or '',
-            'vehicle_unit_id':c.vehicle_unit_id,'vehicle_step_key':c.vehicle_step_key,'vehicle_label':vehicle_label(db,c),
+            'vehicle_unit_id':c.vehicle_unit_id,'vehicle_step_key':c.vehicle_step_key,'vehicle_label':label(c),
             'is_required':c.is_required,'is_safety_critical':c.is_safety_critical,'is_applicable':c.is_applicable,'is_done':c.is_done,
             'failed':c.failed,'failed_reason':c.failed_reason,'not_applicable_reason':c.not_applicable_reason,'done_by':c.done_by,
             'done_at':c.done_at.isoformat() if c.done_at else None,'version':c.version or 0} for c in checks]})
-        row['work_items'].append(item_dict(db,task,checks=True))
+        row['work_items'].append(items[task.id])
     return sorted(grouped.values(),key=lambda phase:(phase['sort_order'],phase['id']))
 
 

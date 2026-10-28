@@ -115,13 +115,14 @@ def task_progress_maps(db: Session, tasks: list[Task]) -> tuple[dict, dict, dict
         if check_counts.get(task.id,(0,0,0,0,0))[4]: percent_map[task.id]=min(percent_map[task.id],99)
     # T34 work has no editable quantity target. Preserve old raw report functions
     # for source readers, while active status uses booleans or the real matrix.
-    from app.services.work_items import step_state
+    from app.services.work_items import step_states
     quality_blocked=quality_blocked_task_ids(db,tasks)
+    states=step_states(db,[task for task in tasks if task.phase_id is not None and task.quantity_type == 'per_vehicle'])
     for task in tasks:
         if task.phase_id is None:
             continue  # compatibility for historical adapters awaiting normalization
         if task.quantity_type == 'per_vehicle':
-            state=step_state(db,task)
+            state=states.get(task.id) or {}
             target_map[task.id]=state.get('expected_count') or 0
             completed_map[task.id]=state.get('completed_count') or 0
             percent_map[task.id]=state.get('percent') or 0
@@ -188,8 +189,10 @@ def project_completion_blocker_tasks(db: Session, project_id: str) -> list[Task]
                      .filter(DailyProgress.task_id.in_([task.id for task in tasks]))
                      .group_by(DailyProgress.task_id).all())
     quality_blocked=quality_blocked_task_ids(db,tasks)
-    from app.services.work_items import step_state
-    unlinked={task.id for task in tasks if task.phase_id is not None and task.quantity_type=='per_vehicle' and not step_state(db,task).get('linked')}
+    from app.services.work_items import step_states
+    vehicle_tasks=[task for task in tasks if task.phase_id is not None and task.quantity_type=='per_vehicle']
+    states=step_states(db,vehicle_tasks)
+    unlinked={task.id for task in vehicle_tasks if not (states.get(task.id) or {}).get('linked')}
     return [
         task for task in tasks
         if (task.id in quality_blocked or task.id in unlinked

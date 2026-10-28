@@ -79,22 +79,41 @@ def legacy_quantity(db,task):
 
 
 def step_state(db,task):
-    if not task.vehicle_step_key:return {'linked':False,'complete':False,'percent':None,'warning':'尚未明确关联车辆环节'}
-    step=db.query(ProjectVehicleStep).filter_by(project_id=task.project_id,key=task.vehicle_step_key).one_or_none()
-    if step is None:return {'linked':False,'complete':False,'percent':None,'warning':'原车辆环节来源待核对'}
+    return step_states(db,[task]).get(task.id)
+
+
+def step_states(db,tasks):
+    """Vehicle-matrix state per vehicle work item; each project's steps, counts and fleet are read once."""
+    from collections import defaultdict
     from app.services.vehicle_progress import fleet_scope
-    units,total,unknown=fleet_scope(db,task.project_id)
-    expected=step.expected_quantity if step.expected_quantity is not None else total
-    if step.source_task_id and step.expected_quantity is None:unknown=True
-    done=db.query(func.count(VehicleProgress.id)).filter_by(project_id=task.project_id,step_key=step.key,is_done=True).scalar()
-    credit=db.query(VehicleProgressMigration).filter_by(project_id=task.project_id,step_key=step.key).one_or_none()
-    unidentified=credit.unassigned_count if credit else 0
-    count=done+unidentified
-    return {'linked':True,'key':step.key,'name':step.name,'identified_completed':done,'unidentified_completed':unidentified,
-        'completed_count':count,'expected_count':None if unknown else expected,
-        'complete':not unknown and expected>0 and count>=expected,
-        'percent':None if unknown else min(100,round(count/expected*100,1)) if expected else 0,
-        'warning':'已完成（迁移，车号未知），不代表逐台核验' if unidentified else '车辆数量待核对' if unknown else ''}
+    by_project=defaultdict(list)
+    for task in tasks:
+        if task.project_id:by_project[task.project_id].append(task)
+    result={}
+    for project_id,rows in by_project.items():
+        keys={t.vehicle_step_key for t in rows if t.vehicle_step_key}
+        steps={s.key:s for s in db.query(ProjectVehicleStep).filter(ProjectVehicleStep.project_id==project_id,ProjectVehicleStep.key.in_(keys))} if keys else {}
+        done=dict(db.query(VehicleProgress.step_key,func.count(VehicleProgress.id)).filter(VehicleProgress.project_id==project_id,
+            VehicleProgress.step_key.in_(steps),VehicleProgress.is_done.is_(True)).group_by(VehicleProgress.step_key)) if steps else {}
+        credits={c.step_key:c for c in db.query(VehicleProgressMigration).filter(VehicleProgressMigration.project_id==project_id,VehicleProgressMigration.step_key.in_(steps))} if steps else {}
+        fleet=fleet_scope(db,project_id) if steps else None
+        for task in rows:
+            if not task.vehicle_step_key:result[task.id]={'linked':False,'complete':False,'percent':None,'warning':'尚未明确关联车辆环节'};continue
+            step=steps.get(task.vehicle_step_key)
+            if step is None:result[task.id]={'linked':False,'complete':False,'percent':None,'warning':'原车辆环节来源待核对'};continue
+            units,total,unknown=fleet
+            expected=step.expected_quantity if step.expected_quantity is not None else total
+            if step.source_task_id and step.expected_quantity is None:unknown=True
+            identified=done.get(step.key,0)
+            credit=credits.get(step.key)
+            unidentified=credit.unassigned_count if credit else 0
+            count=identified+unidentified
+            result[task.id]={'linked':True,'key':step.key,'name':step.name,'identified_completed':identified,'unidentified_completed':unidentified,
+                'completed_count':count,'expected_count':None if unknown else expected,
+                'complete':not unknown and expected>0 and count>=expected,
+                'percent':None if unknown else min(100,round(count/expected*100,1)) if expected else 0,
+                'warning':'已完成（迁移，车号未知），不代表逐台核验' if unidentified else '车辆数量待核对' if unknown else ''}
+    return result
 
 
 def item_dict(db,task,*,checks=False):
@@ -146,10 +165,11 @@ def item_dicts(db,tasks,*,checks=False):
         if not check.vehicle_unit_id:return '任务级检查（未逐车核验）'
         unit=units.get(check.vehicle_unit_id)
         return (unit.fleet_no or unit.asset_code) if unit else '车辆来源待核对'
+    matrices=step_states(db,[t for t in tasks if t.project_id and is_vehicle(t)])
     result={}
     for task in tasks:
         phase=phase_for(task)
-        matrix=step_state(db,task) if task.project_id and is_vehicle(task) else None
+        matrix=matrices.get(task.id)
         actor=actors.get(task.manual_completed_by) if task.manual_completed_by else None
         row={'id':task.id,'phase_id':phase.id if phase else None,'phase_name':stage_label(phase.name) if phase else '历史未分类',
             'group_label':group_for(task),'name':task.name,'description':task.description or '',
