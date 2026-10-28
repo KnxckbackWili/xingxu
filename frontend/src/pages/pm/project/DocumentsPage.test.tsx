@@ -13,6 +13,13 @@ vi.mock('./ProcurementPanel', () => ({ default: () => <div>采购明细面板</d
 vi.mock('./AcceptanceRecordsPanel', () => ({ default: () => <div>验收记录面板</div> }))
 vi.mock('./EntryReviewPanel', () => ({ default: () => <div>评审记录面板</div> }))
 import DocumentsPage from './DocumentsPage'
+
+// 行内次要操作收在「⋯」菜单里：先打开第一行的菜单再选择。
+async function rowMenu(item: string | RegExp) {
+  fireEvent.click((await screen.findAllByRole('button', { name: /的更多操作$/ }))[0])
+  return screen.findByRole('menuitem', { name: item })
+}
+
 function row(id = 'd1', patch: Partial<ProjectDocument> = {}): ProjectDocument {
   return { id, requirement_id: null, definition_id: 'r1', stage_key: '4', code: id === 'd1' ? '4.1' : '4.2', name: `项目资料${id}`, template_no: '', required: true, scope: 'project', platform: null, timing_type: 'on_demand', timing_event: null, timing_offset_hours: null, timing_weekday: null, trigger_type: null, blank_file_id: null, sort_order: 0, note: '', source_metadata: null, vehicle_unit_id: null, vehicle_label: '', period_key: null, trigger_ref: null, due_at: null, due_is_estimated: false, status: 'pending', waived_reason: '', confidential: false, external_visible: false, external_never_visible: false, submitted_at: null, submitted_by: null, version: 7, versions: [], latest_version: null, applicable: true, ...patch }
 }
@@ -30,7 +37,7 @@ it('shows date precision and exposes real owner assignment with the current vers
     effective_owner_name: '原负责人', owner_warning: '原负责人已停用' })]), owner_options: [{ id: 'u1', name: '张工' }] })
   show()
   expect(await screen.findByText(/按实际到场日 2026-11-01/)).toHaveTextContent('未记录实际时刻')
-  fireEvent.click(screen.getByRole('button', { name: '指派负责人' }))
+  fireEvent.click(await rowMenu('指派负责人'))
   const modal = within(screen.getByRole('dialog'))
   fireEvent.mouseDown(modal.getByRole('combobox', { name: '资料负责人' }))
   fireEvent.click(screen.getByText('张工', { selector: '.ant-select-item-option-content' }))
@@ -97,7 +104,7 @@ it.each(['archived', 'legacy_unknown'])('%s keeps files readable and hides all w
   expect(screen.queryByRole('button', { name: '上传资料或文件' })).toBeNull(); expect(screen.queryByRole('button', { name: /删\s*除/ })).toBeNull(); expect(screen.queryByRole('button', { name: '提交文件' })).toBeNull()
 })
 it('requires an explanation and current row version for waiver', async () => {
-  show(); fireEvent.click(await screen.findByRole('button', { name: '不适用' }))
+  show(); fireEvent.click(await rowMenu('不适用'))
   const modal = within(screen.getByRole('dialog')); expect(modal.getByRole('button', { name: '保存理由' })).toBeDisabled()
   fireEvent.change(modal.getByLabelText('资料状态修改理由'), { target: { value: '客户合同明确不要求' } }); fireEvent.click(modal.getByRole('button', { name: '保存理由' }))
   await waitFor(() => expect(h.status).toHaveBeenCalledWith('p1', expect.objectContaining({ id: 'd1', version: 7 }), 'waived', '客户合同明确不要求'))
@@ -105,7 +112,7 @@ it('requires an explanation and current row version for waiver', async () => {
 it('shows all versions and historical optional review while preventing self review', async () => {
   const v = { id: 'v1', attachment_id: 'a1', filename: '已交证据.pdf', file_size: 12, sha256: null, uploaded_by: 'me', uploaded_by_name: '本人', uploaded_at: '2026-10-01T00:00:00Z', note: '第一版', review_metadata: { latest_review: { decision: 'rejected', note: '补充说明', by_name: '复核人员', at: '2026-10-02T00:00:00Z' }, review_history: [] }, download_url: '/projects/p1/documents/d1/versions/v1/download' }
   h.list.mockResolvedValue(response([row('d1', { status: 'submitted', versions: [v], latest_version: v })]))
-  show(); fireEvent.click(await screen.findByRole('button', { name: /版本记录 1/ }))
+  show(); fireEvent.click(await rowMenu(/版本记录 1/))
   const drawer = within(await screen.findByRole('dialog')); await waitFor(() => expect(drawer.getByText('已退回')).toBeVisible()); expect(drawer.queryByRole('button', { name: '审核通过' })).toBeNull()
   fireEvent.click(drawer.getByRole('button', { name: /下载此版本/ })); expect(h.download).toHaveBeenCalledWith(v.download_url, v.filename)
   expect(screen.getByText(/已提交 1/)).toBeVisible()
@@ -145,8 +152,10 @@ it('read-only export users can package selected evidence without gaining upload 
 
 it('does not infer confidential management from the global administrator role', async () => {
   show(); await screen.findByText(/4.1 项目资料d1/)
-  expect(screen.getByText(/账号密码类信息建议使用密码管理工具/)).toBeVisible()
-  expect(screen.queryByRole('button', { name: '保密范围' })).toBeNull()
+  expect(screen.getByText(/账号密码类信息请放在密码管理工具中/)).toBeVisible()
+  fireEvent.click((await screen.findAllByRole('button', { name: /的更多操作$/ }))[0])
+  await screen.findByRole('menuitem', { name: /版本记录/ })
+  expect(screen.queryByRole('menuitem', { name: '保密范围' })).toBeNull()
 })
 
 it('applies an owner-selected independent confidential scope in the first upload request', async () => {
@@ -213,4 +222,13 @@ it('only offers the lifecycle generator for the server local current week and su
   expect(screen.getAllByRole('button', { name: '由系统生成本周生命周期表' })).toHaveLength(1)
   fireEvent.click(button); fireEvent.click(button)
   await waitFor(() => expect(h.generateLifecycle).toHaveBeenCalledExactlyOnceWith('p1', 'current', {}))
+})
+
+it('shows one stage at a time, defaulting to the first stage with pending items, and lists all stages on demand', async () => {
+  show()
+  const tabs = await screen.findByRole('tablist')
+  const selected = within(tabs).getAllByRole('tab').find(tab => tab.getAttribute('aria-selected') === 'true')
+  expect(selected?.textContent).toMatch(/待交/)
+  fireEvent.click(within(tabs).getByRole('tab', { name: /^全部/ }))
+  expect(within(tabs).getByRole('tab', { name: /^全部/ })).toHaveAttribute('aria-selected', 'true')
 })

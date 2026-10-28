@@ -1,6 +1,8 @@
 import { ensureVerifiedAccount } from '../../../utils/verifiedAccount'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Button, Collapse, Drawer, Empty, Input, Modal, Select, Space, Table, Tag, Typography } from 'antd'
+import { Alert, Button, Collapse, Drawer, Dropdown, Empty, Input, Modal, Progress, Select, Space, Table, Tag, Typography } from 'antd'
+import { DownOutlined, EllipsisOutlined, SearchOutlined } from '@ant-design/icons'
+import './TaskPlanPage.css'
 import { Link } from 'react-router-dom'
 import { api, errMsg } from '../../../api/client'
 import { workItemsApi, type WorkCatalog, type WorkItem, type WorkPhase } from '../../../api/workItems'
@@ -38,6 +40,8 @@ export default function TaskPlanPage({ projectId, focusTaskId, onWorkChanged, de
   const [selected, setSelected] = useState<string[]>([])
   const [excluded, setExcluded] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
+  const [filter, setFilter] = useState<'all' | 'open' | 'checks' | 'vehicle'>('all')
+  const [query, setQuery] = useState('')
   const lock = useRef(false)
   const scopeSequence = useRef(0)
   const generation = useRef(0)
@@ -102,15 +106,54 @@ export default function TaskPlanPage({ projectId, focusTaskId, onWorkChanged, de
   }
   return <div>
     {!detailsOnly && <>
-    <WorkPageHeader title="工作项" description="按阶段维护工作；车辆完成看真实进度表，非车辆工作记录完成状态。" tools={<Space wrap><Link to={`/pm/projects/${projectId}/schedule`}>周计划</Link><Button loading={loading} onClick={() => void load()}>刷新工作项</Button>{canPlan && <><Button onClick={() => setPhaseName('')}>添加阶段</Button><Button disabled={!data?.phases.length} onClick={() => setEditor({})}>添加工作项</Button><Button onClick={() => void openScope()}>从模板带入</Button></>}</Space>} />
+    <WorkPageHeader title="工作项" description="按阶段维护工作；车辆完成看真实进度表，非车辆工作记录完成状态。"
+      primary={canPlan ? <Button type="primary" disabled={!data?.phases.length} onClick={() => setEditor({})}>添加工作项</Button> : undefined}
+      tools={<Dropdown trigger={['click']} menu={{ items: [
+        ...(canPlan ? [{ key: 'phase', label: '添加阶段', onClick: () => setPhaseName('') }, { key: 'template', label: '从模板带入', onClick: () => void openScope() }] : []),
+        { key: 'refresh', label: '刷新工作项', onClick: () => void load() },
+      ] }}><Button loading={loading}>更多 <DownOutlined /></Button></Dropdown>} />
     {error && <Alert type="error" showIcon message="工作项读取或操作未完成" description={error} action={<Button onClick={() => void load()}>刷新核对</Button>} />}
     {!!data?.legacy_work_items?.length && <Collapse items={[{ key: 'legacy', label: `历史准备工作来源（只读） ${data.legacy_work_items.length} 项`, children: data.legacy_work_items.map(item => <p key={item.id}>{item.name} {item.group_label && <Tag>{item.group_label}</Tag>}<Button onClick={() => void history(item)}>查看原记录</Button></p>) }]} />}
     {data && !data.phases.length && <Empty description="尚无工作阶段，添加阶段后即可维护工作项" />}
-    {data && <Collapse defaultActiveKey={data.phases.map(p => p.id)} key={`${projectId}:${data.phases.map(p => p.id).join('|')}`} items={data.phases.map(phase => ({ key: phase.id, label: phase.name, extra: `${phase.work_items.length} 项工作`, children: <Table<WorkItem> rowKey="id" pagination={false} dataSource={phase.work_items} locale={{ emptyText: '本阶段尚无工作项' }} columns={[
-      { title: '工作项', key: 'name', render: (_, item) => <><Button type="link" onClick={() => setDetailId(item.id)}>{item.name}</Button>{item.group_label && <Tag>{item.group_label}</Tag>}{item.description && <Typography.Paragraph ellipsis={{ rows: 2 }}>{item.description}</Typography.Paragraph>}</> },
-      { title: '完成情况', key: 'state', render: (_, item) => item.kind === 'vehicle' ? <><Tag>车辆环节</Tag><div>{item.matrix?.name || '尚未关联环节'}</div><div>{item.matrix?.expected_count == null ? '数量待核对' : `${item.matrix.completed_count} / ${item.matrix.expected_count} 个车辆环节`}</div>{item.matrix?.warning && <Typography.Text type="warning">{item.matrix.warning}</Typography.Text>}</> : <><Tag color={item.is_completed ? 'green' : 'default'}>{item.is_completed ? '已完成' : '未完成'}</Tag>{item.quality_blocked && <Tag color="orange">检查待确认</Tag>}</> },
-      { title: '操作', key: 'actions', render: (_, item) => <Space wrap><WorkCompletionAction projectId={projectId} item={item} canRecord={canRecord} canOverride={!!data.permissions.override} onSaved={changed} />{canPlan && <Button onClick={() => setEditor({ item })}>编辑</Button>}{item.has_legacy_quantity && <Button onClick={() => void history(item)}>历史来源</Button>}</Space> },
-    ]} /> }))} />}
+    {data && !!data.phases.length && <div className="plan-toolbar">
+      <Input allowClear prefix={<SearchOutlined />} aria-label="查找工作项" placeholder="查找工作项" value={query} onChange={event => setQuery(event.target.value)} className="plan-search" />
+      <div className="plan-filters" role="group" aria-label="筛选工作项">
+        {([['all', '全部', work.length], ['open', '未完成', work.filter(item => !item.is_completed).length], ['checks', '待检查', work.filter(item => item.quality_blocked).length], ['vehicle', '车辆工作', work.filter(item => item.kind === 'vehicle').length]] as const).map(([key, label, total]) =>
+          <button key={key} type="button" aria-pressed={filter === key} onClick={() => setFilter(key)}>{label} {total}</button>)}
+      </div>
+    </div>}
+    {data && !!data.phases.length && (() => {
+      const term = query.trim().toLocaleLowerCase()
+      const match = (item: WorkItem) => (filter === 'all' || (filter === 'open' && !item.is_completed) || (filter === 'checks' && !!item.quality_blocked) || (filter === 'vehicle' && item.kind === 'vehicle'))
+        && (!term || `${item.name} ${item.group_label ?? ''} ${item.description ?? ''}`.toLocaleLowerCase().includes(term))
+      const narrowed = filter !== 'all' || !!term
+      const phases = data.phases.map(phase => ({ phase, items: phase.work_items.filter(match) })).filter(row => !narrowed || row.items.length)
+      // Unfiltered: open only the first phase that still has unfinished work; filtered: open every matching phase.
+      const current = data.phases.find(phase => phase.work_items.some(item => !item.is_completed))
+      const open = narrowed ? phases.map(row => row.phase.id) : current ? [current.id] : []
+      if (!phases.length) return <Empty description="没有符合条件的工作项" />
+      return <Collapse className="plan-phases" defaultActiveKey={open} key={`${projectId}:${filter}:${term}:${data.phases.map(p => p.id).join('|')}`} items={phases.map(({ phase, items }) => {
+        const done = phase.work_items.filter(item => item.is_completed).length
+        const checks = phase.work_items.filter(item => item.quality_blocked).length
+        const percent = phase.work_items.length ? Math.round(done / phase.work_items.length * 100) : 0
+        return { key: phase.id, label: <span className="plan-phase-head"><strong>{phase.name}</strong><span className="plan-phase-count">{phase.work_items.length} 项工作</span>
+          <Progress className="plan-phase-progress" percent={percent} size="small" showInfo={false} aria-label={`${phase.name}完成进度`} /><span className="plan-phase-count">{done}/{phase.work_items.length} 完成</span>
+          {checks > 0 && <Tag color="orange">{checks} 项待检查</Tag>}</span>,
+          children: <Table<WorkItem> rowKey="id" size="small" pagination={false} dataSource={items} locale={{ emptyText: '本阶段尚无工作项' }} columns={[
+            { title: '工作项', key: 'name', render: (_, item) => <div className="plan-work-name"><Button type="link" onClick={() => setDetailId(item.id)}>{item.name}</Button>{item.group_label && <Tag>{item.group_label}</Tag>}{item.description && <Typography.Paragraph type="secondary" ellipsis={{ rows: 1 }}>{item.description}</Typography.Paragraph>}</div> },
+            { title: '完成情况', key: 'state', width: 260, render: (_, item) => item.kind === 'vehicle' ? <div className="plan-work-state"><Tag color="blue">车辆环节 · {item.matrix?.name || '尚未关联环节'}</Tag><span>{item.matrix?.expected_count == null ? '数量待核对' : `${item.matrix.completed_count} / ${item.matrix.expected_count} 个车辆环节`}</span>{item.matrix?.warning && <Typography.Text type="warning">{item.matrix.warning}</Typography.Text>}</div>
+              : <div className="plan-work-state"><Tag color={item.is_completed ? 'green' : 'default'}>{item.is_completed ? '已完成' : '未完成'}</Tag>{item.quality_blocked && <Tag color="orange">检查待确认</Tag>}</div> },
+            { title: '操作', key: 'actions', width: 220, render: (_, item) => <Space size={6} className="plan-work-actions">
+              <WorkCompletionAction projectId={projectId} item={item} canRecord={canRecord} canOverride={!!data.permissions.override} onSaved={changed} />
+              <Dropdown trigger={['click']} menu={{ items: [
+                { key: 'detail', label: '查看详情与检查', onClick: () => setDetailId(item.id) },
+                ...(canPlan ? [{ key: 'edit', label: '编辑', onClick: () => setEditor({ item }) }] : []),
+                ...(item.has_legacy_quantity ? [{ key: 'history', label: '历史来源', onClick: () => void history(item) }] : []),
+              ] }}><Button aria-label={`${item.name}的更多操作`} icon={<EllipsisOutlined />} /></Dropdown>
+            </Space> },
+          ]} /> }
+      })} />
+    })()}
     <WorkItemEditor canEdit={canPlan} open={!!editor} projectId={projectId} item={editor?.item} phases={data?.phases || []} steps={steps} onClose={() => setEditor(undefined)} onSaved={changed} />
     <Modal title="添加工作阶段" open={phaseName !== undefined} onCancel={() => { if (!busy) setPhaseName(undefined) }} onOk={() => void addPhase()} okText="保存阶段" confirmLoading={busy} okButtonProps={{ disabled: !phaseName?.trim() || !canPlan }}><Input aria-label="工作阶段名称" value={phaseName} maxLength={100} onChange={e => setPhaseName(e.target.value)} /></Modal>
     <Modal title="从模板选择工作项" open={append} width={780} okText="带入所选工作" onCancel={() => { if (!busy) setAppend(false) }} onOk={() => void applyScope()} confirmLoading={busy} okButtonProps={{ disabled: !canPlan || !selectedWorkItems(scope, selected, excluded).length || busy }}><Select aria-label="工作来源模板" value={templateId} options={templates.map(t => ({ value: t.id, label: t.name }))} onChange={id => { setTemplateId(id); void readScope(id) }} /><TemplateScope phases={scope} selected={selected} onSelected={setSelected} excluded={excluded} onExcluded={setExcluded} disabled={busy} /></Modal>

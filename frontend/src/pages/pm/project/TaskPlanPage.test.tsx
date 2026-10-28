@@ -15,7 +15,9 @@ beforeEach(() => {
 function show(props: any = {}) { return render(<MemoryRouter><TaskPlanPage projectId="p" {...props} /></MemoryRouter>) }
 it('shows phase/work items, matrix identity warnings and history without editable quantities', async () => {
   show(); expect(await screen.findByText('现场验证')).toBeVisible(); expect(screen.getAllByText('原模块标签')[0]).toBeVisible(); expect(screen.getByText('2 / 3 个车辆环节')).toBeVisible(); expect(screen.getByText(/不代表逐台核验/)).toBeVisible()
-  expect(screen.queryByRole('spinbutton')).toBeNull(); fireEvent.click(screen.getAllByRole('button', { name: '历史来源' })[0]); expect(await screen.findByText(/original-uuid/)).toBeVisible()
+  expect(screen.queryByRole('spinbutton')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: '现场验证的更多操作' })); fireEvent.click(await screen.findByRole('menuitem', { name: '历史来源' }))
+  expect(await screen.findByText(/original-uuid/)).toBeVisible()
 })
 it('keeps execution details in the global drawer and calls its close callback', async () => {
   const close = vi.fn(); show({ focusTaskId: 'w1', detailsOnly: true, onDetailClose: close })
@@ -34,4 +36,15 @@ it('ignores a late previous project response', async () => {
 it('displays retired preparation sources read-only and honors a project plan denial', async () => {
   get.mockImplementation(async (url: string) => ({ data: url.endsWith('/work-items') ? { ...source, legacy_work_items: [work({ id: 'legacy', name: '原准备工作' })], permissions: { plan: false, record: false, override: false } } : { steps: [] } }))
   show(); await screen.findByText('现场验证'); expect(screen.queryByRole('button', { name: '添加工作项' })).toBeNull(); expect(screen.getByRole('button', { name: '标记完成' })).toBeDisabled(); fireEvent.click(screen.getByText('历史准备工作来源（只读） 1 项')); await waitFor(() => expect(screen.getByText('原准备工作')).toBeVisible())
+})
+
+it('filters by state and search, opening every matching phase', async () => {
+  show(); expect(await screen.findByText('现场验证')).toBeVisible()
+  const filters = screen.getByRole('group', { name: '筛选工作项' })
+  expect(screen.getByRole('button', { name: '全部 2' })).toHaveAttribute('aria-pressed', 'true')
+  fireEvent.click(screen.getByRole('button', { name: '车辆工作 1' }))
+  expect(filters).toBeInTheDocument(); expect(screen.queryByText('现场验证')).toBeNull(); expect(screen.getByText('真实车辆检查')).toBeVisible()
+  fireEvent.click(screen.getByRole('button', { name: '全部 2' }))
+  fireEvent.change(screen.getByRole('textbox', { name: '查找工作项' }), { target: { value: '不存在的工作' } })
+  expect(screen.getByText('没有符合条件的工作项')).toBeVisible()
 })

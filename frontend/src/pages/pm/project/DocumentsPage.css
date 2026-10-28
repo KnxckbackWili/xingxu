@@ -8,3 +8,9 @@
   .project-documents-page .ant-collapse-content-box { padding: 10px 0 !important; }
   .project-documents-page .field-record-card h3 { overflow-wrap: anywhere; margin-top: 0; }
 }
+
+/* Stage tabs: one stage at a time */
+.documents-stage-tabs .ant-tabs-nav { margin-bottom: 8px; }
+.documents-stage-count { margin-left: 4px; font-size: 12px; color: var(--agv-text-secondary); }
+.documents-stage-tabs .ant-tabs-tab-active .documents-stage-count { color: inherit; }
+.documents-row-actions { flex-wrap: nowrap; }

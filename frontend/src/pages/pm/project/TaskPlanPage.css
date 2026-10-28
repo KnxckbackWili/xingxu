@@ -1,30 +1,17 @@
-.task-plan-summary .task-plan-summary-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.task-plan-quantities { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 16px; margin-top: 12px; font-size: 13px; }
-.task-plan-quantities > span { color: var(--agv-text-secondary); }
-.task-plan-quantities ul { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.task-plan-quantities li { padding: 4px 10px; border-radius: 5px; background: var(--agv-bg-subtle); color: var(--agv-text); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.task-plan-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--agv-border-soft); }
-.task-plan-filters > .ant-btn { margin-left: auto; }
-.task-plan-page .task-plan-controls { padding: 12px; border: 1px solid var(--agv-border-soft); border-radius: 14px; background: var(--agv-bg-container); }
-.task-plan-page .task-filter-count { margin-left: auto; font-size: 12px; font-variant-numeric: tabular-nums; }
-.task-plan-page .task-plan-empty { margin: 0; padding: 40px 20px; border: 1px solid var(--agv-border-soft); border-radius: 14px; background: var(--agv-bg-container); }
-.task-plan-page .task-plan-empty .ant-empty-description { max-width: 40ch; margin-inline: auto; line-height: 1.7; }
-.task-plan-page .task-mobile-list { display: grid; gap: 10px; }
-.task-plan-page .task-mobile-list > article { border: 1px solid var(--agv-border-soft); border-radius: 12px; padding: 12px; background: var(--agv-bg-container); }
-.task-plan-page .task-mobile-meta { flex-wrap: wrap; gap: 8px; }
-.task-manual-completion { margin-top: 8px; padding: 10px 12px; background: var(--agv-bg-subtle); border: 1px solid var(--agv-success); border-radius: 10px; overflow-wrap: anywhere; }
-.task-manual-completion-reason { margin-top: 4px; color: var(--agv-text-secondary); font-size: 12px; white-space: pre-wrap; }
-.work-detail-drawer .ant-drawer-title { min-width: 0; overflow-wrap: anywhere; }
-.work-detail-drawer .ant-drawer-title .ant-space { flex-wrap: wrap; }
-.task-filter-popover .ant-checkbox-wrapper { min-height: 36px; align-items: center; }
-@media (max-width: 768px) {
-  .task-plan-quantities { display: block; }
-  .task-plan-quantities ul { margin-top: 8px; }
-  .task-plan-filters { gap: 10px; }
-  .task-plan-page .task-plan-controls > .ant-btn,
-  .task-plan-page .task-plan-empty .ant-btn,
-  .task-filter-popover .ant-checkbox-wrapper,
-  .task-filter-popover .ant-select-single { min-height: 44px; }
-  .task-plan-page .task-plan-controls .ant-segmented-item-label { min-height: 44px; display: flex; align-items: center; justify-content: center; }
-  .task-plan-page .task-filter-count { font-size: 11px; }
-}
+.plan-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 4px 0 14px; }
+.plan-search { width: 240px; max-width: 100%; }
+.plan-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.plan-filters button { height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid var(--agv-border); background: var(--agv-bg-container); color: var(--agv-text); font: inherit; font-size: 13px; cursor: pointer; }
+.plan-filters button[aria-pressed='true'] { border-color: var(--agv-primary); background: var(--agv-primary-soft); color: var(--agv-primary); }
+.plan-filters button:focus-visible { outline: 2px solid var(--agv-primary); outline-offset: 2px; }
+.plan-phases.ant-collapse { background: var(--agv-bg-container); }
+.plan-phase-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; width: 100%; }
+.plan-phase-head strong { min-width: 120px; font-weight: 600; }
+.plan-phase-count { font-size: 13px; color: var(--agv-text-secondary); }
+.plan-phase-progress.ant-progress { width: 180px; margin: 0; }
+.plan-work-name { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.plan-work-name .ant-btn-link { padding: 0; height: auto; font-weight: 500; }
+.plan-work-name .ant-typography { flex-basis: 100%; margin: 0; font-size: 13px; }
+.plan-work-state { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 13px; }
+.plan-work-actions { flex-wrap: nowrap; }
+@media (max-width: 760px) { .plan-phase-progress.ant-progress { width: 100px; } .plan-search { width: 100%; } }

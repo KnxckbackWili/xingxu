@@ -1,7 +1,7 @@
 import { PROJECT_EVENT_LABELS } from '../../../constants/projectEvents'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Button, Collapse, Drawer, Empty, Input, Modal, Popconfirm, Segmented, Select, Space, Switch, Table, Tag, Typography, message } from 'antd'
-import { DownloadOutlined, HistoryOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons'
+import { Alert, Button, Collapse, Drawer, Dropdown, Empty, Input, Modal, Popconfirm, Segmented, Select, Space, Switch, Table, Tabs, Tag, Typography, message } from 'antd'
+import { DownOutlined, DownloadOutlined, EllipsisOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons'
 import { useLocation } from 'react-router-dom'
 import { projectDocumentsApi, downloadDocumentResource, downloadSelectedDocuments, type ProjectDocument, type ProjectDocumentDefinition, type ProjectDocumentsResponse, type ProjectDocumentVersion, type ProjectFile } from '../../../api/projectDocuments'
 import { errMsg } from '../../../api/client'
@@ -191,23 +191,34 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
   }
   const query = search.trim().toLocaleLowerCase()
   const triggerFilter = new URLSearchParams(location.search).get('trigger')
-  const visible = useMemo(() => documents.filter(row => (!stage || row.stage_key === stage) && (!vehicle || row.vehicle_unit_id === vehicle)
+  const stageFiltered = useMemo(() => documents.filter(row => (!vehicle || row.vehicle_unit_id === vehicle)
     && (!triggerFilter || row.trigger_ref===triggerFilter)
     && (status === 'all' || (status === 'overdue' ? late(row) : status === 'week' ? !!data?.document_actions?.this_week.some(item => item.id === row.id) : status === 'on_demand' ? row.timing_type === 'on_demand' && row.status === 'pending' && row.stage_key !== 'legacy' : row.status === status))
-    && `${row.code} ${row.name} ${row.vehicle_label} ${row.period_key ?? ''}`.toLocaleLowerCase().includes(query)), [data, stage, vehicle, status, query,triggerFilter])
-  const grouped = useMemo(() => [...DOCUMENT_STAGES.map(item => item.value), 'legacy'].map(key => ({ key, rows: visible.filter(row => row.stage_key === key) })).filter(group => group.rows.length), [visible])
+    && `${row.code} ${row.name} ${row.vehicle_label} ${row.period_key ?? ''}`.toLocaleLowerCase().includes(query)), [data, vehicle, status, query,triggerFilter])
+  // One stage at a time: default to the first stage that still has pending items; any search or filter shows all stages.
+  const stageGroups = useMemo(() => [...DOCUMENT_STAGES.map(item => item.value), 'legacy'].map(key => ({ key, rows: stageFiltered.filter(row => row.stage_key === key) })).filter(group => group.rows.length), [stageFiltered])
+  const narrowed = !!query || status !== 'all' || !!vehicle || !!triggerFilter
+  const activeStage = stage && (stage === 'all' || stageGroups.some(group => group.key === stage)) ? stage
+    : narrowed ? 'all' : stageGroups.find(group => group.rows.some(row => row.status === 'pending' && row.applicable !== false))?.key ?? stageGroups[0]?.key ?? 'all'
+  const visible = activeStage === 'all' ? stageFiltered : stageFiltered.filter(row => row.stage_key === activeStage)
+  const grouped = activeStage === 'all' ? stageGroups : stageGroups.filter(group => group.key === activeStage)
   const history = documents.find(row => row.id === historyId)
   const current = documents.filter(row => row.applicable !== false && row.stage_key !== 'legacy')
   const waiting = definitions.filter(row => row.waiting_reason)
   const vehicleOptions = [...new Map(documents.filter(row => row.vehicle_unit_id).map(row => [row.vehicle_unit_id!, { value: row.vehicle_unit_id!, label: row.vehicle_label || '车号待补录' }])).values()]
-  const renderActions = (row: ProjectDocument) => <Space size={4} wrap>
-    {canManageConfidentiality && <Button size="small" disabled={busy} onClick={() => setConfidentialityTarget({ kind: 'document', row })}>保密范围</Button>}
-    {canSubmit && row.applicable !== false && <Button size="small" disabled={busy || loading} onClick={() => openUpload([row.id])}>{row.status === 'submitted' ? '提交新版本' : '提交文件'}</Button>}
-    {canManage && <Button size="small" disabled={busy || loading} onClick={() => { setOwnerEditing(row); setOwnerId(row.owner_id ?? undefined) }}>指派负责人</Button>}
-    <Button size="small" icon={<HistoryOutlined />} onClick={() => setHistoryId(row.id)}>版本记录 {row.versions.length}</Button>
-    {row.blank_file_id && row.definition_id && <Button size="small" onClick={() => void download(`/projects/${encodeURIComponent(projectId)}/documents/requirements/${encodeURIComponent(row.definition_id!)}/blank-file`, `${row.name}空白模板`)}>下载模板</Button>}
-    {row.code === '4.4' && <Button size="small" onClick={() => setProcurementOpen(true)}>采购明细</Button>}
-    {row.code === '7.1' && <Button size="small" onClick={() => setAcceptanceOpen(true)}>验收记录</Button>}
+  const renderActions = (row: ProjectDocument) => {
+    const more = [
+      ...(canManage ? [{ key: 'owner', label: '指派负责人', disabled: busy || loading, onClick: () => { setOwnerEditing(row); setOwnerId(row.owner_id ?? undefined) } }] : []),
+      { key: 'history', label: `版本记录 ${row.versions.length}`, onClick: () => setHistoryId(row.id) },
+      ...(row.blank_file_id && row.definition_id ? [{ key: 'blank', label: '下载空白模板', onClick: () => void download(`/projects/${encodeURIComponent(projectId)}/documents/requirements/${encodeURIComponent(row.definition_id!)}/blank-file`, `${row.name}空白模板`) }] : []),
+      ...(row.code === '4.4' ? [{ key: 'procurement', label: '采购明细', onClick: () => setProcurementOpen(true) }] : []),
+      ...(row.code === '7.1' ? [{ key: 'acceptance', label: '验收记录', onClick: () => setAcceptanceOpen(true) }] : []),
+      ...(canManageConfidentiality ? [{ key: 'confidential', label: '保密范围', disabled: busy, onClick: () => setConfidentialityTarget({ kind: 'document', row }) }] : []),
+      ...(canSubmit && row.applicable !== false ? [{ key: 'waive', label: row.status === 'waived' ? '恢复待提交' : '不适用', disabled: busy || loading, onClick: () => { setReason(''); setStatusChange({ row, status: row.status === 'waived' ? 'pending' : 'waived' }) } }] : []),
+      ...(canSubmit && row.status === 'submitted' ? [{ key: 'withdraw', label: '撤回提交', disabled: busy || loading, onClick: () => { setReason(''); setStatusChange({ row, status: 'pending' }) } }] : []),
+    ]
+    return <Space size={4} wrap className="documents-row-actions">
+      {canSubmit && row.applicable !== false && <Button size="small" type={row.status === 'submitted' ? 'default' : 'primary'} ghost={row.status !== 'submitted'} disabled={busy || loading} onClick={() => openUpload([row.id])}>{row.status === 'submitted' ? '提交新版本' : '提交文件'}</Button>}
     {canSubmit && row.applicable !== false && row.scope === 'project' && row.stage_key !== 'legacy' && <>
       {row.code === '6.2' && row.timing_type === 'weekly' && row.period_key === data?.document_actions?.period_key && <GeneratedFormControl projectId={projectId} documentId={row.id} kind="lifecycle" busy={busy || loading} canManageConfidentiality={canManageConfidentiality} generationError={actionError}
         onGenerate={options => act(() => projectDocumentsApi.generateLifecycle(projectId, row.id, options), '本周生命周期表已生成并提交')} />}
@@ -216,9 +227,9 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
       {row.code === '9.2' && row.timing_type === 'lifetime' && <GeneratedFormControl projectId={projectId} documentId={row.id} kind="inventory" busy={busy || loading} canManageConfidentiality={canManageConfidentiality} generationError={actionError}
         onGenerate={options => act(() => projectDocumentsApi.generateInventory(projectId, row.id, options.note ?? '', options), '物资收发清单已生成并提交')} />}
     </>}
-    {canSubmit && row.applicable !== false && <Button size="small" type="text" disabled={busy || loading} onClick={() => { setReason(''); setStatusChange({ row, status: row.status === 'waived' ? 'pending' : 'waived' }) }}>{row.status === 'waived' ? '恢复待提交' : '不适用'}</Button>}
-    {canSubmit && row.status === 'submitted' && <Button size="small" type="text" disabled={busy || loading} onClick={() => { setReason(''); setStatusChange({ row, status: 'pending' }) }}>撤回提交</Button>}
-  </Space>
+      <Dropdown trigger={['click']} menu={{ items: more }}><Button size="small" icon={<EllipsisOutlined />} aria-label={`${row.code} ${row.name}的更多操作`} /></Dropdown>
+    </Space>
+  }
   const renderState = (row: ProjectDocument) => <><Tag color={row.status === 'submitted' ? 'green' : late(row) ? 'red' : 'default'}>{late(row) ? '已逾期' : statusName[row.status]}</Tag>
     {row.due_state === 'estimated_past_due' && <Tag color="gold">预计截止已过</Tag>}
     {row.required && <Tag>必需</Tag>}{row.confidential && <Tag color="orange">保密</Tag>}{row.applicable === false && <Tag>原平台资料，保留历史</Tag>}
@@ -230,28 +241,7 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
     if (dirty) Modal.confirm({ title: '还有未保存的填写内容', content: '关闭后将放弃当前填写。', okText: '放弃并关闭', cancelText: '继续填写', onOk: finish })
     else finish()
   }
-  const onDefinitionSaved = useCallback(() => { void load() }, [load])
-  return <div className="field-work-page project-documents-page">
-    <WorkPageHeader title="资料" description="按阶段提交文件，保留每次版本；同一文件可以同时满足多项要求。"
-      meta={data ? `${current.length} 项资料 · 待交 ${current.filter(row => row.status === 'pending').length} · 已提交 ${current.filter(row => row.status === 'submitted').length} · 不适用 ${current.filter(row => row.status === 'waived').length}` : loadError ? '资料状态尚未读取' : '正在读取资料状态'}
-      primary={canSubmit && <Button type="primary" icon={<UploadOutlined />} disabled={busy || loading} onClick={() => openUpload()}>上传资料或文件</Button>}
-      tools={<Space wrap><Button loading={loading} onClick={() => void load()}>刷新资料</Button><Button onClick={() => setAcceptanceOpen(true)}>验收记录</Button><Button onClick={() => setProcurementOpen(true)}>采购明细</Button></Space>} />
-    {data?.storage_warnings?.map((warning, index) => <Alert key={index} type="warning" showIcon message={warning} />)}
-    {loadError && <Alert type="error" showIcon message="资料清单加载失败" description={loadError} action={<Button onClick={() => void load()}>重试</Button>} />}
-    {actionError && <Alert type="error" showIcon message={actionError} style={{ marginBottom: 12 }} />}
-    <Alert type="info" showIcon message="账号密码类信息建议使用密码管理工具，系统中只放位置说明。保密资料永不向外部人员展示。" style={{ marginBottom: 12 }} />
-    {triggerFilter && <Alert type="info" message="正在查看单个事件生成的资料" action={<Button href={`/pm/projects/${projectId}/documents`}>查看全部资料</Button>} style={{marginBottom:12}} />}
-    {data?.trigger_events?.filter(event=>event.source_metadata.warning).map(event=><Alert key={event.id} type="warning" showIcon message={`${event.source_metadata.title || event.source_metadata.member_name || '真实事件'}：${event.source_metadata.warning}`} style={{marginBottom:12}} />)}
-    {data?.document_actions && <Space wrap style={{ marginBottom: 12 }}><Tag color="blue">本周待交 {data.document_actions.this_week_count}</Tag><Tag color={data.document_actions.overdue_count ? 'red' : 'default'}>已逾期 {data.document_actions.overdue_count}</Tag>{data.document_actions.estimated_past_due_count > 0 && <Tag color="gold">预计截止已过 {data.document_actions.estimated_past_due_count}</Tag>}{data.document_actions.owner_warnings.length > 0 && <Typography.Text type="warning">{data.document_actions.owner_warnings.length} 项负责人需核对，可在资料行指派</Typography.Text>}</Space>}
-    <WorkSection title="项目资料清单" filters={<Space wrap>
-      <Input.Search aria-label="搜索项目资料" placeholder="搜索编号、资料、车号或周期" allowClear value={search} onChange={event => setSearch(event.target.value)} style={{ width: 260 }} />
-      <Select aria-label="资料阶段" allowClear placeholder="全部阶段" value={stage} onChange={setStage} style={{ minWidth: 160 }} options={[...DOCUMENT_STAGES, { value: 'legacy', label: '历史待分类' }]} />
-      {vehicleOptions.length > 0 && <Select aria-label="筛选车辆资料" allowClear showSearch optionFilterProp="label" placeholder="全部车辆" value={vehicle} onChange={setVehicle} options={vehicleOptions} style={{ minWidth: 150 }} />}
-      <Segmented aria-label="资料状态" value={status} onChange={value => setStatus(String(value))} options={[{ value: 'all', label: '全部' }, { value: 'week', label: '本周待交' }, { value: 'on_demand', label: '抽查' }, { value: 'pending', label: '待提交' }, { value: 'submitted', label: '已提交' }, { value: 'waived', label: '不适用' }, { value: 'overdue', label: '逾期' }]} />
-    </Space>} extra={(canSubmit || canExport) && selected.length > 0 && <Space><Typography.Text>已选 {selected.length} 项</Typography.Text>{canSubmit && selected.every(id => documents.find(row => row.id === id)?.applicable !== false) && <Button disabled={busy || loading} onClick={() => openUpload(selected)}>同一文件提交所选资料</Button>}{canExport && <Button disabled={busy || loading} onClick={async () => { if (mutation.current) return; const ticket = generation.current; mutation.current = true; setBusy(true); setActionError(''); try { await downloadSelectedDocuments(projectId, selected) } catch (failure) { if (ticket === generation.current) setActionError(errMsg(failure)) } finally { if (ticket === generation.current) { mutation.current = false; setBusy(false) } } }}>打包所选资料（最新版本）</Button>}<Button onClick={() => setSelected([])}>取消选择</Button></Space>}>
-      {data && <Typography.Paragraph type="secondary">当前现场时区 {data.timezone}；截止时间按资料保存的规则时区显示，已提交资料保留原截止依据。预计截止以计划为依据，审核为可选。</Typography.Paragraph>}
-      {!loading && !loadError && !visible.length && <Empty description={documents.length ? '当前筛选没有资料' : '还没有已生成的资料实例；等待条件和资料要求见下方'} />}
-      <Collapse className="documents-stages" bordered={false} defaultActiveKey={['4', '5', '6', '7', '8', '9']} items={grouped.map(group => ({ key: group.key, label: `${stageName(group.key)} · ${group.rows.length} 项`, children: <>
+  const renderGroup = (group: { key: string; rows: ProjectDocument[] }) => <>
         {group.key === 'legacy' && <Alert type="info" showIcon message="旧资料与原审核信息保留，尚未猜配到新阶段" description="负责人可在下方资料要求中明确分类；未分类资料不冒充已满足新阶段门禁。" style={{ marginBottom: 12 }} />}
         {mobile ? <div className="field-card-list">{group.rows.map(row => <article className="field-record-card" key={row.id}>
           <h3>{row.code} {row.name}</h3>{row.vehicle_label && <p>{row.vehicle_label}</p>}{row.period_key && <Tag>{row.period_key}</Tag>}
@@ -268,8 +258,44 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
             { title: '最近版本', width: 220, render: (_, row) => renderFile(row) },
             { title: '操作', width: 310, render: (_, row) => renderActions(row) },
           ]} />}
-      </> }))} />
+</>
+  const onDefinitionSaved = useCallback(() => { void load() }, [load])
+  return <div className="field-work-page project-documents-page">
+    <WorkPageHeader title="资料" description="按阶段提交文件，保留每次版本；同一文件可以同时满足多项要求。"
+      meta={data ? `${current.length} 项资料 · 待交 ${current.filter(row => row.status === 'pending').length} · 已提交 ${current.filter(row => row.status === 'submitted').length} · 不适用 ${current.filter(row => row.status === 'waived').length}` : loadError ? '资料状态尚未读取' : '正在读取资料状态'}
+      primary={canSubmit && <Button type="primary" icon={<UploadOutlined />} disabled={busy || loading} onClick={() => openUpload()}>上传资料或文件</Button>}
+      tools={<Dropdown trigger={['click']} menu={{ items: [
+        { key: 'refresh', label: '刷新资料', onClick: () => void load() },
+        { key: 'acceptance', label: '验收记录', onClick: () => setAcceptanceOpen(true) },
+        { key: 'procurement', label: '采购明细', onClick: () => setProcurementOpen(true) },
+        { key: 'requirements', label: '资料要求与等待条件', onClick: () => document.getElementById('documents-requirements')?.scrollIntoView({ behavior: 'smooth' }) },
+        { key: 'storage', label: '项目存储与保留策略', onClick: () => document.getElementById('documents-storage')?.scrollIntoView({ behavior: 'smooth' }) },
+      ] }}><Button loading={loading}>更多 <DownOutlined /></Button></Dropdown>} />
+    {data?.storage_warnings?.map((warning, index) => <Alert key={index} type="warning" showIcon message={warning} />)}
+    {loadError && <Alert type="error" showIcon message="资料清单加载失败" description={loadError} action={<Button onClick={() => void load()}>重试</Button>} />}
+    {actionError && <Alert type="error" showIcon message={actionError} style={{ marginBottom: 12 }} />}
+    {!!data?.unclassified_files?.length && <Alert type="warning" showIcon style={{ marginBottom: 12 }} message={`有 ${data.unclassified_files.length} 个上传文件还没有归到资料要求`}
+      action={<Button size="small" onClick={() => document.getElementById('documents-unclassified')?.scrollIntoView({ behavior: 'smooth' })}>去归类</Button>} />}
+    {triggerFilter && <Alert type="info" message="正在查看单个事件生成的资料" action={<Button href={`/pm/projects/${projectId}/documents`}>查看全部资料</Button>} style={{marginBottom:12}} />}
+    {data?.trigger_events?.filter(event=>event.source_metadata.warning).map(event=><Alert key={event.id} type="warning" showIcon message={`${event.source_metadata.title || event.source_metadata.member_name || '真实事件'}：${event.source_metadata.warning}`} style={{marginBottom:12}} />)}
+    {data?.document_actions && <Space wrap style={{ marginBottom: 12 }}><Tag color="blue">本周待交 {data.document_actions.this_week_count}</Tag><Tag color={data.document_actions.overdue_count ? 'red' : 'default'}>已逾期 {data.document_actions.overdue_count}</Tag>{data.document_actions.estimated_past_due_count > 0 && <Tag color="gold">预计截止已过 {data.document_actions.estimated_past_due_count}</Tag>}{data.document_actions.owner_warnings.length > 0 && <Typography.Text type="warning">{data.document_actions.owner_warnings.length} 项负责人需核对，可在资料行指派</Typography.Text>}</Space>}
+    <WorkSection title="项目资料清单" description="账号密码类信息请放在密码管理工具中，这里只写位置说明；保密资料永不向外部人员展示。" filters={<Space wrap>
+      <Input.Search aria-label="搜索项目资料" placeholder="搜索编号、资料、车号或周期" allowClear value={search} onChange={event => setSearch(event.target.value)} style={{ width: 260 }} />
+      {vehicleOptions.length > 0 && <Select aria-label="筛选车辆资料" allowClear showSearch optionFilterProp="label" placeholder="全部车辆" value={vehicle} onChange={setVehicle} options={vehicleOptions} style={{ minWidth: 150 }} />}
+      <Segmented aria-label="资料状态" value={status} onChange={value => setStatus(String(value))} options={[{ value: 'all', label: '全部' }, { value: 'week', label: '本周待交' }, { value: 'on_demand', label: '抽查' }, { value: 'pending', label: '待提交' }, { value: 'submitted', label: '已提交' }, { value: 'waived', label: '不适用' }, { value: 'overdue', label: '逾期' }]} />
+    </Space>} extra={(canSubmit || canExport) && selected.length > 0 && <Space><Typography.Text>已选 {selected.length} 项</Typography.Text>{canSubmit && selected.every(id => documents.find(row => row.id === id)?.applicable !== false) && <Button disabled={busy || loading} onClick={() => openUpload(selected)}>同一文件提交所选资料</Button>}{canExport && <Button disabled={busy || loading} onClick={async () => { if (mutation.current) return; const ticket = generation.current; mutation.current = true; setBusy(true); setActionError(''); try { await downloadSelectedDocuments(projectId, selected) } catch (failure) { if (ticket === generation.current) setActionError(errMsg(failure)) } finally { if (ticket === generation.current) { mutation.current = false; setBusy(false) } } }}>打包所选资料（最新版本）</Button>}<Button onClick={() => setSelected([])}>取消选择</Button></Space>}>
+      {data && <Typography.Paragraph type="secondary">当前现场时区 {data.timezone}；截止时间按资料保存的规则时区显示，已提交资料保留原截止依据。预计截止以计划为依据，审核为可选。</Typography.Paragraph>}
+      {!loading && !loadError && !visible.length && <Empty description={documents.length ? '当前筛选没有资料' : '还没有已生成的资料实例；等待条件和资料要求见下方'} />}
+      {stageGroups.length > 0 && <Tabs className="documents-stage-tabs" activeKey={activeStage} onChange={key => { setStage(key); setSelected([]) }} items={[
+        ...stageGroups.map(group => { const pending = group.rows.filter(row => row.status === 'pending' && row.applicable !== false).length
+          return { key: group.key, label: <span>{stageName(group.key)} <span className="documents-stage-count">{pending ? `${pending} 待交` : '已齐'}</span></span> } }),
+        { key: 'all', label: `全部 ${stageFiltered.length}` },
+      ]} />}
+      {activeStage === 'all'
+        ? <Collapse className="documents-stages" bordered={false} defaultActiveKey={['4', '5', '6', '7', '8', '9', 'legacy']} items={grouped.map(group => ({ key: group.key, label: `${stageName(group.key)} · ${group.rows.length} 项`, children: renderGroup(group) }))} />
+        : grouped.map(group => <div key={group.key} className="documents-stage-body">{renderGroup(group)}</div>)}
     </WorkSection>
+    <div id="documents-requirements" />
     <WorkSection title="资料要求与等待条件" description="这里保留项目自己的要求快照。周期、事件触发或尚未建档的车辆满足条件后才生成应交资料。"
       extra={canManage && <Button icon={<PlusOutlined />} disabled={busy || loading} onClick={() => setEditing('new')}>新增资料要求</Button>}>
       <Collapse items={[{ key: 'requirements', label: `${definitions.length} 项资料要求${waiting.length ? ` · ${waiting.length} 项等待条件` : ''}`, children: <Table<ProjectDocumentDefinition> rowKey="id" dataSource={definitions} size="small" pagination={{ pageSize: 15 }} scroll={{ x: 650 }} columns={[
@@ -278,7 +304,9 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
         { title: '操作', render: (_, row) => <Space wrap>{row.blank_file_id && <Button size="small" onClick={() => void download(`/projects/${encodeURIComponent(projectId)}/documents/requirements/${encodeURIComponent(row.id)}/blank-file`, `${row.name}空白模板`)}>下载模板</Button>}{canManageConfidentiality && <Button size="small" disabled={busy} onClick={() => setConfidentialityTarget({ kind: 'definition', row })}>保密范围</Button>}{canManage && <Button size="small" disabled={busy || loading} onClick={() => setEditing(row)}>{row.stage_key === 'legacy' ? '明确分类' : '编辑要求'}</Button>}</Space> },
       ]} /> }]} />
     </WorkSection>
+    <div id="documents-storage" />
     <Collapse style={{ marginBottom: 16 }} items={[{ key: 'storage', label: '项目存储与周资料保留策略', children: <ProjectStoragePanel key={projectId} projectId={projectId} canCleanup={deleteCapability && !writeBlocked} onChanged={() => { void load() }} /> }]} />
+    <div id="documents-unclassified" />
     <WorkSection title="未归类文件" description="上传后尚未对应资料要求的文件；问题照片等仍按原所属事项保留。">
       <Table<ProjectFile> rowKey="id" dataSource={data?.unclassified_files ?? []} size="small" loading={loading} pagination={{ pageSize: 10 }} scroll={{ x: 540 }} locale={{ emptyText: <Empty description={loadError ? "文件清单尚未读取" : "暂无未归类文件"} /> }} columns={[
         { title: '文件', render: (_, row) => <><Button type="link" size="small" icon={<DownloadOutlined />} onClick={() => void download(row.download_url, row.filename)}>{row.filename}</Button>{row.confidential && <Tag color="orange">保密</Tag>}<div className="documents-note">{sizeLabel(row.file_size)} · {row.uploaded_by_name || '原上传人未记录'} · {formatDateTime(row.uploaded_at)}</div></> },
