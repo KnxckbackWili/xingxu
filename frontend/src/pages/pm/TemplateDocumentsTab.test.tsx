@@ -12,7 +12,7 @@ it('只读显示资料规则、范围和未上传状态', async () => {
   render(<TemplateDocumentsTab templateId="default" editMode={false} />)
   expect(await screen.findByText('生命周期表')).toBeVisible()
   expect(screen.getByText('每周日')).toBeVisible()
-  expect(screen.getByText('尚未上传空白模板')).toBeVisible()
+  expect(screen.queryByRole('button', { name: /上传空白模板/ })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: '新增资料要求' })).not.toBeInTheDocument()
 })
 it('加载失败可重试，迟到的旧模板响应不能覆盖新模板', async () => {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Alert, Button, Empty, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography, Upload, message } from 'antd'
-import { DeleteOutlined, DownloadOutlined, EditOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons'
+import { Alert, Button, Empty, Form, Input, InputNumber, Modal, Popconfirm, Select, Skeleton, Space, Switch, Tag, Typography, Upload, message } from 'antd'
+import { DeleteOutlined, DisconnectOutlined, DownloadOutlined, EditOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons'
+import { IconAction } from '../../components/IconAction'
 import { api } from '../../api/client'
 
 const STAGES = [{ value: '4', label: '4 · 内部启动会' }, { value: '5', label: '5 · 发车前' }, { value: '6', label: '6 · 实施' }, { value: '7', label: '7 · 验收' }, { value: '8', label: '8 · 交付' }, { value: '9', label: '9 · 全项目周期更新' }]
@@ -99,22 +100,61 @@ export default function TemplateDocumentsTab({ templateId, editMode, refreshToke
   const filtered = rows.filter(row => (!stageFilter || row.stage_key === stageFilter) && `${row.code} ${row.name} ${row.template_no}`.toLowerCase().includes(keyword.toLowerCase()))
   const eventOptions = Object.entries(EVENTS).filter(([key]) => kind === 'after_milestone' ? MILESTONES.includes(key) : key !== 'vehicle_arrival' || (kind === 'after_event' && scope === 'vehicle')).map(([value, label]) => ({ value, label }))
 
-  return <div>
-    <Typography.Paragraph type="secondary">按第4–9阶段管理需要提交的资料。空白模板上传后，项目资料清单可下载使用；项目中已生成的资料保留原有要求。</Typography.Paragraph>
-    <Space wrap style={{ marginBottom: 12 }}>
-      <Select aria-label="筛选资料阶段" allowClear placeholder="全部阶段" options={[...STAGES, { value: 'legacy', label: '历史待分类' }]} value={stageFilter} onChange={setStageFilter} style={{ minWidth: 190 }} />
-      <Input.Search aria-label="搜索资料要求" allowClear placeholder="搜编号、资料或模板编号" value={keyword} onChange={e => setKeyword(e.target.value)} style={{ width: 250 }} />
-      <Typography.Text>{rows.filter(row => !row.is_group && row.stage_key !== 'legacy').length} 项标准资料 · {rows.filter(row => row.stage_key === 'legacy').length} 项历史待分类 · {rows.filter(row => row.is_group).length} 个分组</Typography.Text>
-      {editMode && <Button icon={<PlusOutlined />} onClick={() => open('new')} disabled={busy}>新增资料要求</Button>}
-    </Space>
-    {error ? <Alert type="error" message="资料要求加载失败" action={<Button onClick={() => void load()}>重试</Button>} /> : <Table<Requirement> rowKey="id" size="small" loading={loading} dataSource={filtered} pagination={{ pageSize: 20, showSizeChanger: true }} scroll={{ x: 1100 }} locale={{ emptyText: <Empty description="此模板尚未配置资料要求" /> }} columns={[
-      { title: '阶段 / 编号', width: 125, render: (_, row) => <><Typography.Text type="secondary">{row.stage_key === 'legacy' ? '历史待分类' : `第${row.stage_key}阶段`}</Typography.Text><br />{row.code}</> },
-      { title: '资料要求', width: 260, render: (_, row) => <><Typography.Text strong={row.is_group}>{row.name}</Typography.Text>{row.stage_key === 'legacy' && <Tag color="orange">历史待分类</Tag>}{row.source_metadata && <details><summary>历史来源（只读）</summary><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: 180, overflow: 'auto' }}>{JSON.stringify(row.source_metadata, null, 2)}</pre></details>}{row.parent_code && <div><Typography.Text type="secondary">分组 {row.parent_code}</Typography.Text></div>}<div><Space size={4} wrap>{row.template_no && <Tag>{row.template_no}</Tag>}{!row.is_group && (row.required ? <Tag color="blue">必需</Tag> : <Tag>非必需</Tag>)}{row.confidential_default && <Tag color="orange">默认保密</Tag>}{row.external_never_visible && <Tag>禁止外部查看</Tag>}{row.external_visible_default && <Tag>默认对外可见</Tag>}</Space></div></> },
-      { title: '范围 / 平台', width: 120, render: (_, row) => row.is_group ? '—' : <>{row.scope === 'vehicle' ? '每台车' : '项目'}<br />{row.platform === 'integrated' ? '集成' : row.platform ?? '全部平台'}</> },
-      { title: '输出时机', width: 230, render: (_, row) => <>{timingLabel(row)}{row.note && <div><Typography.Text type="secondary">{row.note}</Typography.Text></div>}</> },
-      { title: '空白模板', width: 220, render: (_, row) => row.is_group ? '—' : <Space direction="vertical" size={3}>{row.blank_file ? <Button type="link" size="small" icon={<DownloadOutlined />} onClick={() => void download(row)}>{row.blank_file.filename}</Button> : <Typography.Text type="secondary">尚未上传空白模板</Typography.Text>}{editMode && <Space><Upload showUploadList={false} beforeUpload={file => { const data = new FormData(); data.append('file', file); void act(() => api.post(`/templates/${templateId}/document-requirements/${row.id}/blank-file`, data), '空白模板已上传'); return false }} disabled={busy}><Button size="small" icon={<UploadOutlined />} disabled={busy}>{row.blank_file ? '替换' : '上传'}</Button></Upload>{row.blank_file && <Popconfirm title="移除当前空白模板引用？历史版本保留。" onConfirm={() => act(() => api.delete(`/templates/${templateId}/document-requirements/${row.id}/blank-file`), '已移除引用')}><Button size="small" danger disabled={busy}>移除</Button></Popconfirm>}</Space>}</Space> },
-      ...(editMode ? [{ title: '操作', width: 110, render: (_: unknown, row: Requirement) => <Space><Button type="text" aria-label={`${row.stage_key === 'legacy' ? '分类历史资料' : '编辑资料'}${row.code}`} icon={<EditOutlined />} onClick={() => open(row)} disabled={busy} /><Popconfirm title="删除此资料要求？既有项目与历史文件保留。" onConfirm={() => act(() => api.delete(`/templates/${templateId}/document-requirements/${row.id}`), '资料要求已删除')}><Button type="text" danger aria-label={`删除资料${row.code}`} icon={<DeleteOutlined />} disabled={busy} /></Popconfirm></Space> }] : []),
-    ]} />}
+  const stageLabel = (key: string) => key === 'legacy' ? '历史待分类' : STAGES.find(stage => stage.value === key)?.label ?? `第${key}阶段`
+  const stageKeys = [...STAGES.map(stage => stage.value), 'legacy'].filter(key => rows.some(row => row.stage_key === key))
+  const count = (key: string) => rows.filter(row => row.stage_key === key && !row.is_group).length
+  const blankActions = (row: Requirement) => editMode && !row.is_group && <>
+    <Upload showUploadList={false} disabled={busy} beforeUpload={file => { const data = new FormData(); data.append('file', file); void act(() => api.post(`/templates/${templateId}/document-requirements/${row.id}/blank-file`, data), '空白模板已上传'); return false }}>
+      <IconAction label={row.blank_file ? `替换空白模板${row.code}` : `上传空白模板${row.code}`} icon={<UploadOutlined />} disabled={busy} />
+    </Upload>
+    {row.blank_file && <Popconfirm title="移除当前空白模板引用？历史版本保留。" onConfirm={() => act(() => api.delete(`/templates/${templateId}/document-requirements/${row.id}/blank-file`), '已移除引用')}>
+      <IconAction label={`移除空白模板${row.code}`} icon={<DisconnectOutlined />} danger disabled={busy} />
+    </Popconfirm>}
+  </>
+  const requirementRow = (row: Requirement) => row.is_group
+    ? <li key={row.id} className="template-doc-group"><span className="template-doc-code">{row.code}</span><strong>{row.name}</strong>
+      {editMode && <span className="row-icon-actions"><IconAction label={`编辑资料${row.code}`} icon={<EditOutlined />} onClick={() => open(row)} disabled={busy} />
+        <Popconfirm title="删除此分组？既有项目与历史文件保留。" onConfirm={() => act(() => api.delete(`/templates/${templateId}/document-requirements/${row.id}`), '资料要求已删除')}><IconAction label={`删除资料${row.code}`} icon={<DeleteOutlined />} danger disabled={busy} /></Popconfirm></span>}</li>
+    : <li key={row.id} className={`template-doc-row${row.parent_code ? ' is-child' : ''}`}>
+      <div className="template-doc-main">
+        <span className="template-doc-title"><span className="template-doc-code">{row.code}</span>{row.name}{row.stage_key === 'legacy' && <Tag color="orange">历史待分类</Tag>}</span>
+        <span className="template-doc-meta">
+          <span>{timingLabel(row)}</span>
+          {row.scope === 'vehicle' && <span>每台车</span>}
+          {row.platform && <span>{row.platform === 'integrated' ? '集成' : row.platform}</span>}
+          {row.template_no && <span>{row.template_no}</span>}
+          {row.required ? <Tag color="blue">必需</Tag> : <Tag>非必需</Tag>}
+          {row.confidential_default && <Tag color="orange">默认保密</Tag>}
+          {row.external_never_visible && <Tag>禁止外部查看</Tag>}
+          {row.external_visible_default && <Tag>默认对外可见</Tag>}
+        </span>
+        {row.note && <Typography.Text type="secondary" className="template-doc-note">{row.note}</Typography.Text>}
+        {row.source_metadata && <details><summary>历史来源（只读）</summary><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: 180, overflow: 'auto' }}>{JSON.stringify(row.source_metadata, null, 2)}</pre></details>}
+      </div>
+      {row.blank_file && <Button type="link" size="small" className="template-doc-blank" icon={<DownloadOutlined />} onClick={() => void download(row)}>{row.blank_file.filename}</Button>}
+      <span className="row-icon-actions">
+        {blankActions(row)}
+        {editMode && <IconAction label={`${row.stage_key === 'legacy' ? '分类历史资料' : '编辑资料'}${row.code}`} icon={<EditOutlined />} onClick={() => open(row)} disabled={busy} />}
+        {editMode && <Popconfirm title="删除此资料要求？既有项目与历史文件保留。" onConfirm={() => act(() => api.delete(`/templates/${templateId}/document-requirements/${row.id}`), '资料要求已删除')}><IconAction label={`删除资料${row.code}`} icon={<DeleteOutlined />} danger disabled={busy} /></Popconfirm>}
+      </span>
+    </li>
+
+  return <div className="template-docs">
+    <div className="template-work-toolbar">
+      <Input.Search aria-label="搜索资料要求" allowClear placeholder="搜编号、资料或模板编号" value={keyword} onChange={e => setKeyword(e.target.value)} />
+      {editMode && <Button type="primary" icon={<PlusOutlined />} onClick={() => open('new')} disabled={busy}>新增资料要求</Button>}
+    </div>
+    <div className="template-stage-chips" role="group" aria-label="筛选资料阶段">
+      <button type="button" aria-pressed={!stageFilter} onClick={() => setStageFilter(undefined)}>全部 {rows.filter(row => !row.is_group).length}</button>
+      {stageKeys.map(key => <button key={key} type="button" aria-pressed={stageFilter === key} onClick={() => setStageFilter(key)}>{stageLabel(key)} {count(key)}</button>)}
+    </div>
+    {error ? <Alert type="error" message="资料要求加载失败" action={<Button onClick={() => void load()}>重试</Button>} />
+      : loading && !rows.length ? <Skeleton active paragraph={{ rows: 6 }} />
+      : !filtered.length ? <Empty description={rows.length ? '没有匹配的资料要求' : '此模板尚未配置资料要求'} />
+      : <div className="template-doc-stages">{stageKeys.filter(key => filtered.some(row => row.stage_key === key)).map(key => <section key={key} aria-label={stageLabel(key)}>
+        <h3>{stageLabel(key)}<Typography.Text type="secondary">{filtered.filter(row => row.stage_key === key && !row.is_group).length} 项</Typography.Text></h3>
+        <ul>{filtered.filter(row => row.stage_key === key).map(requirementRow)}</ul>
+      </section>)}</div>}
     <Modal title={editing === 'new' ? '新增资料要求' : '编辑资料要求'} open={editing !== null} onCancel={() => !busy && setEditing(null)} onOk={() => void save()} confirmLoading={busy} okText="保存" cancelText="取消" width={700} destroyOnHidden>
       <Form form={form} layout="vertical" preserve>
         {editing && editing !== 'new' && editing.stage_key === 'legacy' && <Alert type="info" showIcon message="请明确选择第4–9阶段并填写对应编号；历史来源只读保留，不会改写。" style={{ marginBottom: 12 }} />}

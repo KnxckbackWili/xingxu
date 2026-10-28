@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Alert, Card, Table, Typography, Tag, Space, Button, Select, Input, Modal, Form, Popconfirm, message } from 'antd'
-import { PlusOutlined, DeleteOutlined } from '@ant-design/icons'
+import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons'
+import { IconAction } from '../../components/IconAction'
 import { api } from '../../api/client'
 import { useSubmitLock } from '../../hooks/useSubmitLock'
 
@@ -119,12 +120,12 @@ export default function TemplateProcurementsTab({ templateId, editMode }: { temp
           ...(editMode ? [{
             title: '操作', width: 80,
             render: (_: any, t: any) => (
-              <Space size={0}>
-                <Button type="link" size="small" onClick={() => { setEdit(t); form.setFieldsValue(t); setModalOpen(true) }}>编辑</Button>
+              <span className="row-icon-actions">
+                <IconAction label="编辑采购项" icon={<EditOutlined />} onClick={() => { setEdit(t); form.setFieldsValue(t); setModalOpen(true) }} />
                 <Popconfirm title="删除该采购项？" onConfirm={() => remove(t.id)}>
-                  <Button type="text" size="small" danger icon={<DeleteOutlined />} aria-label="删除采购项" />
+                  <IconAction label="删除采购项" icon={<DeleteOutlined />} danger />
                 </Popconfirm>
-              </Space>
+              </span>
             ),
           }] : []),
         ]}
