@@ -13,10 +13,10 @@ services:
       # loopback 上无代理 → apt/pip 拉取失败；host 网络可复用宿主代理。
       network: host
       args:
-        APP_VERSION: ${APP_VERSION:-3.0.0}
+        APP_VERSION: ${APP_VERSION:-3.1.0}
         # 构建来源 git 短 SHA（deploy.sh 自动注入；直接 docker compose 时不传则为 unknown）。
         GIT_SHA: ${GIT_SHA:-unknown}
-    image: ${AGV_IMAGE:-agv-pm-multica:3.0.0}
+    image: ${AGV_IMAGE:-agv-pm-multica:3.1.0}
     container_name: ${AGV_CONTAINER_NAME:-agv-pm-8002}
     ports:
       - "${BIND_ADDRESS:-0.0.0.0}:${APP_PORT:-8002}:8000"

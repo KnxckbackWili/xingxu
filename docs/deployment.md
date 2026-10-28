@@ -277,7 +277,7 @@ GitHub 仓库的 `.github/workflows/docker-image.yml` 会自动构建 `linux/amd
 ```bash
 docker login ghcr.io -u <GitHub 用户名>
 sed -i 's|^DEPLOY_MODE=.*|DEPLOY_MODE=registry|' .env
-sed -i 's|^AGV_IMAGE=.*|AGV_IMAGE=ghcr.io/knxckbackwili/xingxu:3.0.0|' .env
+sed -i 's|^AGV_IMAGE=.*|AGV_IMAGE=ghcr.io/knxckbackwili/xingxu:3.1.0|' .env
 bash docker/scripts/manage.sh install
 ```
 
