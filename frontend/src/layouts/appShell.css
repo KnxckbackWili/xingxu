@@ -46,7 +46,7 @@ html:has(.app-shell) { scroll-padding-top: calc(var(--agv-global-header-height) 
 .app-topbar-actions .ant-btn { min-width: 44px; min-height: 40px; }
 
 .app-content { flex: 1; min-width: 0; width: 100%; box-sizing: border-box; padding: 24px var(--agv-page-inset, 24px) 48px; }
-.app-shell.is-project-workspace .app-content { padding-top: 0; }
+.app-shell.is-project-workspace .app-content { padding-top: 16px; }
 
 .app-bottom-nav { display: none; }
 
