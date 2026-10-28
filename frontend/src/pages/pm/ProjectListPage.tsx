@@ -8,7 +8,7 @@ import {
   Select, DatePicker, message, Progress, Segmented, Table, Radio, Pagination, Descriptions, Collapse, Steps,
 } from 'antd'
 import {
-  AppstoreOutlined, CheckCircleFilled, FileTextOutlined, PlusOutlined, ReloadOutlined, StarOutlined, StarFilled, HistoryOutlined, UnorderedListOutlined, RightOutlined,
+  AppstoreOutlined, CalendarOutlined, EyeOutlined, DeleteOutlined, CheckCircleFilled, FileTextOutlined, PlusOutlined, StarOutlined, StarFilled, HistoryOutlined, UnorderedListOutlined, RightOutlined,
 } from '@ant-design/icons'
 import TemplateScope, { flatWorkItems, selectedWorkItems } from '../../components/TemplateScope'
 import ProjectDeleteButton from '../../components/ProjectDeleteButton'
@@ -26,6 +26,7 @@ import { useVehicleTypes, toVehicleTypeSelectOptions } from '../../hooks/useVehi
 
 import { WorkPageHeader } from '../../components/WorkPage'
 import './ProjectListPage.css'
+import { IconAction, RefreshAction } from '../../components/IconAction'
 
 /** 项目列表 + 创建向导（项目资料 → 工作内容 → 确认创建）。 */
 export default function ProjectListPage() {
@@ -79,8 +80,8 @@ export default function ProjectListPage() {
       onClick={event => { event.stopPropagation(); if (!shortcuts.toggleFavorite(project.id)) message.info(`最多收藏 ${PROJECT_SHORTCUT_LIMIT} 个项目，请先取消部分收藏`) }} />
   }
   const quickLinks = (project: Project) => <>
-    <Button size="small" aria-label={`查看工作项：${project.name}`} onClick={event => { event.stopPropagation(); navigate(`/pm/projects/${project.id}/plan`) }}>工作项</Button>
-    <Button size="small" aria-label={`查看周计划：${project.name}`} onClick={event => { event.stopPropagation(); navigate(`/pm/projects/${project.id}/plan?view=weeks`) }}>周计划</Button>
+    <IconAction label="工作项" icon={<UnorderedListOutlined />} aria-label={`查看工作项：${project.name}`} onClick={event => { event.stopPropagation(); navigate(`/pm/projects/${project.id}/plan`) }} />
+    <IconAction label="周计划" icon={<CalendarOutlined />} aria-label={`查看周计划：${project.name}`} onClick={event => { event.stopPropagation(); navigate(`/pm/projects/${project.id}/plan?view=weeks`) }} />
   </>
   const canCreate = hasSystemPermission(user, 'projects.create')
   // 车型字典（HYPE-63）：创建向导的车型选择统一来自后端字典，不再硬编码
@@ -312,7 +313,7 @@ export default function ProjectListPage() {
       <WorkPageHeader title="项目" description="打开项目，查看工作项、维护周计划或处理现场问题。"
         meta={loadError ? '列表暂不可用' : `${filtered.length} 个项目`}
         primary={canCreate ? <Button type="primary" icon={<PlusOutlined />} onClick={() => { setCreateStep(0); setModalOpen(true) }}>新建项目</Button> : undefined}
-        tools={<><Button icon={<ReloadOutlined />} loading={loading} onClick={() => void load()} aria-label="刷新项目列表">刷新</Button>{canAccessNav('/pm/inventory', user) && <Button onClick={() => navigate('/pm/inventory')}>物品总览</Button>}{canAccessNav('/pm/project-recycle-bin', user) && <Button aria-label="项目回收站" onClick={() => navigate('/pm/project-recycle-bin')}>回收站</Button>}</>} />
+        tools={<><RefreshAction label="刷新项目列表" loading={loading} onClick={load} />{canAccessNav('/pm/inventory', user) && <IconAction bordered label="物品总览" icon={<AppstoreOutlined />} onClick={() => navigate('/pm/inventory')} />}{canAccessNav('/pm/project-recycle-bin', user) && <IconAction bordered label="项目回收站" icon={<DeleteOutlined />} onClick={() => navigate('/pm/project-recycle-bin')} />}</>} />
 
       {shortcuts.temporary && <Alert className="project-shortcuts-notice" type="info" showIcon message="浏览器暂时无法保存，收藏与最近浏览仅在本次使用中保留。" />}
       {!loading && !loadError && recentProjects.length > 0 && <section className="project-recent" aria-label="最近浏览的项目">
@@ -408,16 +409,18 @@ export default function ProjectListPage() {
           }}
           onRow={(p) => ({ onClick: () => navigate(`/pm/projects/${p.id}`), style: { cursor: 'pointer' } })}
           columns={[
-            { title: '收藏', key: 'favorite', width: 60, render: (_, p) => favoriteButton(p) },
+            { title: <StarOutlined aria-label="收藏" />, key: 'favorite', width: 52, render: (_, p) => favoriteButton(p) },
             {
-              title: '项目', dataIndex: 'name',
+              title: '项目', dataIndex: 'name', width: 240,
               render: (v: string, p) => (
-                <Space size={6} wrap className="project-table-name">
-                  <span style={{ fontWeight: 600 }}>{v}</span>
-
-                  {progressMap[p.id]?.overdue && <Tag color="red" style={{ fontSize: 10 }}>逾期</Tag>}
-                  {!!progressMap[p.id]?.critical && <Tag color="volcano" style={{ fontSize: 10 }}>严重问题 {progressMap[p.id].critical}</Tag>}
-                </Space>
+                <div className="project-table-name">
+                  <Space size={6} wrap>
+                    <span style={{ fontWeight: 600 }}>{v}</span>
+                    {progressMap[p.id]?.overdue && <Tag color="red" style={{ fontSize: 10 }}>逾期</Tag>}
+                    {!!progressMap[p.id]?.critical && <Tag color="volcano" style={{ fontSize: 10 }}>严重问题 {progressMap[p.id].critical}</Tag>}
+                  </Space>
+                  {p.client && <Typography.Text type="secondary" className="project-table-client">{p.client}</Typography.Text>}
+                </div>
               ),
             },
             { title: '状态', width: 110, render: (_, p) => {
@@ -455,7 +458,6 @@ export default function ProjectListPage() {
                 )
               },
             },
-            { title: '客户', dataIndex: 'client', ellipsis: true, render: (v: string) => v ? <Typography.Text strong style={{ fontSize: 12 }}>{v}</Typography.Text> : '-' },
             {
               title: '负责人', width: 130,
               render: (_, p) => (
@@ -468,21 +470,13 @@ export default function ProjectListPage() {
               ),
             },
             {
-              title: '操作', key: 'action', width: 250,
+              title: '操作', key: 'action', width: 150,
               render: (_, p) => (
-                <Space wrap>
-                <Button
-                  type="link"
-                  size="small"
-                  style={{ padding: 0 }}
-                  onClick={(e) => { e.stopPropagation(); navigate(`/pm/projects/${p.id}`) }}
-                >
-                  查看
-                </Button>
+                <span className="row-icon-actions">
+                <IconAction label="查看" icon={<EyeOutlined />} aria-label={`查看项目：${p.name}`} onClick={(e) => { e.stopPropagation(); navigate(`/pm/projects/${p.id}`) }} />
                 {quickLinks(p)}
-
                 <ProjectDeleteButton project={p} onDeleted={() => removeProject(p.id)} />
-                </Space>
+                </span>
               ),
             },
           ]}

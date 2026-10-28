@@ -8,7 +8,7 @@ import {
   Alert, Button, Checkbox, DatePicker, Drawer, Empty, Form, Input, InputNumber, Modal, Select,
   Space, Table, Tag, Typography, message, Popconfirm, Popover, Upload, Segmented,
 } from 'antd'
-import { CarOutlined, CheckCircleOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons'
+import { CarOutlined, CheckCircleOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, PlusOutlined, SwapOutlined, UploadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useSubmitLock } from '../../../hooks/useSubmitLock'
 import { api, errMsg } from '../../../api/client'
@@ -21,6 +21,7 @@ import './VehicleLifecyclePage.css'
 import { WorkPageHeader, WorkSection } from '../../../components/WorkPage'
 import { useMediaQuery } from '../../../hooks/useMediaQuery'
 import './FieldWorkPages.css'
+import { IconAction, RefreshAction } from '../../../components/IconAction'
 
 /** 根据起始编号生成连续编号：AGV-001 -> AGV-001, AGV-002... */
 function nextAssetCode(startCode: string, index: number) {
@@ -346,11 +347,11 @@ export default function VehicleLifecyclePage({ project, onReload, configurationO
   return <div className="field-work-page">
     <WorkPageHeader title="车辆" description="按车号登记环节，查看车辆位置与问题履历。"
       primary={canManage && <Button type="primary" icon={<PlusOutlined />} onClick={() => setUnitOpen(true)}>添加车辆</Button>}
-      tools={<Space wrap>{canManage && <VehicleArrivalEditor key={projectId} project={project} units={units} onSaved={async () => { await load(); await onReload?.() }} />}<Button onClick={load}>刷新</Button>{(canManage || canExport) && <Popover trigger="click" placement="bottomRight" content={<div className="field-secondary-actions">
+      tools={<Space wrap>{canManage && <VehicleArrivalEditor key={projectId} project={project} units={units} onSaved={async () => { await load(); await onReload?.() }} />}<RefreshAction onClick={load} />{(canManage || canExport) && <Popover trigger="click" placement="bottomRight" content={<div className="field-secondary-actions">
         {canManage && <Upload showUploadList={false} accept=".xlsx" beforeUpload={(f) => importLifecycle(f as File)}><Button icon={<UploadOutlined />}>导入车辆表</Button></Upload>}
         {canExport && <Button icon={<DownloadOutlined />} onClick={downloadLifecycle}>导出车辆表</Button>}
         <Typography.Text type="secondary">Excel 按车辆编号匹配，重复导入不重复建档；保留原生命周期表格式。</Typography.Text>
-      </div>}><Button>导入与导出</Button></Popover>}</Space>}
+      </div>}><IconAction bordered label="导入与导出" icon={<SwapOutlined />} /></Popover>}</Space>}
       meta={<Space wrap><span>{units.length} 台车辆</span><span>{openIssues} 个未关闭问题</span></Space>} />
     <VehicleProgressMatrix projectId={projectId} status={project.status} onChanged={() => { void load(); void onReload?.() }} />
     <Typography.Title level={4}>车辆档案与生命周期问题履历</Typography.Title>

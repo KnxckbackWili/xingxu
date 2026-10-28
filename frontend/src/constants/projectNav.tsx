@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { DashboardOutlined, CarryOutOutlined, CarOutlined, WarningOutlined, FileDoneOutlined, HistoryOutlined, PlusOutlined, SettingOutlined, DownloadOutlined } from '@ant-design/icons'
+import { DashboardOutlined, CarryOutOutlined, CarOutlined, WarningOutlined, FileDoneOutlined, HistoryOutlined, PlusOutlined, SettingOutlined, DownloadOutlined, EnvironmentOutlined } from '@ant-design/icons'
 
 export interface ProjectNavChild { key: string; label: string; path: string; defaultChild?: boolean }
 export interface ProjectNavItem { key: string; label: string; path: string; icon?: ReactNode; children?: ProjectNavChild[]; more?: boolean }
@@ -12,7 +12,7 @@ export const PROJECT_NAV_ITEMS: ProjectNavItem[] = [
   { key: 'vehicles', label: '车辆', path: 'vehicles', icon: <CarOutlined /> },
   { key: 'delivery', label: '资料', path: 'documents', icon: <FileDoneOutlined /> },
   { key: 'issues', label: '问题', path: 'issues', icon: <WarningOutlined /> },
-  { key: 'field', label: '现场', path: 'inventory', children: [
+  { key: 'field', label: '现场', path: 'inventory', icon: <EnvironmentOutlined />, children: [
     { key: 'inventory', label: '物品', path: 'inventory', defaultChild: true },
     { key: 'handover', label: '联系人', path: 'handover' },
   ] },
@@ -40,6 +40,7 @@ export const PROJECT_MORE_KEYS = PROJECT_NAV_ITEMS.filter(item => item.more).fla
 export const PROJECT_NAV_GROUPS: ProjectNavGroup[] = [{ key: 'project', label: '本项目', items: PROJECT_NAV_ITEMS }]
 export const FIELD_STAFF_TOP_KEYS = PROJECT_NAV_ITEMS.filter(item => !item.more).map(item => item.key)
 export function filterProjectNav(groups: ProjectNavGroup[], _role?: string, _capabilities?: string[]): ProjectNavGroup[] { return groups }
+export const PROJECT_ITEM_ICON = Object.fromEntries(PROJECT_NAV_ITEMS.map(item => [item.key, item.icon])) as Record<string, ReactNode>
 export const PROJECT_ITEM_BY_KEY = Object.fromEntries(PROJECT_NAV_ITEMS.map(item => [item.key, item])) as Record<string, ProjectNavItem>
 export const PROJECT_CHILD_BY_SEGMENT = Object.fromEntries(PROJECT_NAV_ITEMS.flatMap(item => (item.children ?? []).map(child => [child.path, { parentKey: item.key, child }]))) as Record<string, { parentKey: string; child: ProjectNavChild }>
 export function defaultChildKey(item: ProjectNavItem): string | null { return item.children?.find(child => child.defaultChild)?.key ?? null }

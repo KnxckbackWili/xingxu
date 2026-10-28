@@ -8,6 +8,7 @@ import { errMsg } from '../../api/client'
 import { getOfflineAccount } from '../../offline/queue'
 import { systemUpdatesApi, type SystemUpdates, type UpdateCheck, type UpdateSource } from '../../api/systemUpdates'
 import './SystemUpdatesPage.css'
+import { InfoHint } from '../../components/IconAction'
 
 type Draft = { name: string; repository_url: string; ref: string; allow_http: boolean; token: string; clear_token: boolean }
 type Action = 'save' | 'check' | 'install' | 'add' | 'select' | 'delete'
@@ -262,7 +263,7 @@ function UpdatesEditor({ actorId }: { actorId: string }) {
           description={trustBlocked ? trustReason : '安装信任由部署管理员在宿主管理，网页不能修改。'} />}
         {(readError || (!data.runner.online && activeJob)) && <Alert type="warning" showIcon message={needsAttention ? '恢复处理尚未完成' : activeJob || awaitingInstall ? '更新中，等待服务恢复' : '暂时无法刷新更新状态'}
           description={needsAttention ? '需要部署管理员检查备份和日志，完成恢复后再继续。' : activeJob || awaitingInstall ? '保留上次进度并每 6 秒重试连接。请勿重复安装，恢复后会继续显示结果。' : `${readError}。当前显示上次读取的信息。`} />}
-        {!data.runner.online && !activeJob && !awaitingInstall && <Alert type="info" showIcon message="安装功能暂不可用" description="更新服务未连接。仍可保存来源和检查版本；请参照部署文档接入更新服务后再安装。" />}
+        {!data.runner.online && !activeJob && !awaitingInstall && <Alert type="info" showIcon message={<>安装功能暂不可用<InfoHint text="更新服务未连接。仍可保存来源和检查版本；请参照部署文档接入更新服务后再安装。" /></>} />}
         {data.maintenance && <Alert type="warning" showIcon message="系统维护中" description="来源编辑、切换和安装已暂停，维护完成后可继续操作。" />}
         {actionError && <Alert type="error" showIcon message={actionError} />}
         {sourceNotice && <Alert type="success" showIcon message={sourceNotice} />}

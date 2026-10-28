@@ -6,6 +6,7 @@ import { errMsg } from '../api/client'
 import { useAuth } from '../stores/auth'
 import type { PermissionUser } from '../constants/systemPermissions'
 import './ProjectDeleteButton.css'
+import { IconAction } from './IconAction'
 
 type DeletableProject = Pick<Project, 'id' | 'name' | 'manager' | 'capabilities' | 'version' | 'can_delete'>
 export function canDeleteProject(project: DeletableProject, user: PermissionUser | null | undefined) {
@@ -68,10 +69,10 @@ export default function ProjectDeleteButton({ project, onDeleted }: { project: D
   }
   if (!allowed && !open) return null
   return <span className="project-delete-action" onClick={event => event.stopPropagation()}>
-    {allowed && <Button disabled={busy} danger icon={<DeleteOutlined aria-hidden />} aria-label={`删除项目：${project.name}`} onClick={() => {
+    {allowed && <IconAction label="删除项目" disabled={busy} danger icon={<DeleteOutlined aria-hidden />} aria-label={`删除项目：${project.name}`} onClick={() => {
       setError(''); setConflict(false); setOpenScope(scopeKey)
       if (project.version === undefined) void readCurrent()
-    }}>删除</Button>}
+    }} />}
     <Modal className="project-delete-modal" title="删除这个项目？" open={open} onOk={remove}
       onCancel={() => { if (!lock.current) setOpenScope(null) }} okText="备份并删除" cancelText="保留项目"
       confirmLoading={busy} okButtonProps={{ danger: true, disabled: !allowed || current.version === undefined || conflict }}

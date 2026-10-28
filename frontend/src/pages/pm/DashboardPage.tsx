@@ -13,6 +13,7 @@ import { fieldWeekApi, type Week } from '../../api/fieldWeek'
 import { api, errMsg } from '../../api/client'
 import { deadlineLabel } from '../../utils/documentDeadlines'
 import './DashboardPage.css'
+import { RefreshAction } from '../../components/IconAction'
 const WorkspaceStatistics = lazy(() => import('../../components/WorkspaceStatistics'))
 
 type Kind = '资料' | '周计划' | '问题' | '签单'
@@ -118,7 +119,7 @@ export default function DashboardPage() {
   const monday = today.subtract((today.day() + 6) % 7, 'day')
   return <div className="workbench">
     <WorkPageHeader title="工作台" description={`${today.format('M 月 D 日')} · 本周 ${monday.format('M/D')} – ${monday.add(6, 'day').format('M/D')}`}
-      tools={canWorkspace && <Button loading={loading} onClick={() => void load()}>刷新</Button>} />
+      tools={canWorkspace && <RefreshAction loading={loading} onClick={load} />} />
     {current?.error && <Alert type="error" showIcon message="工作台暂不可读取" description={current.error} action={<Button onClick={() => void load()}>重试读取</Button>} style={{ marginBottom: 16 }} />}
     {loading && !data && canWorkspace && <Spin aria-label="正在读取工作台" />}
     <div className="workbench-grid">

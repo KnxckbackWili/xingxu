@@ -16,6 +16,7 @@ import { useMediaQuery } from '../../hooks/useMediaQuery'
 import { MEDIA_QUERY } from '../../constants/breakpoints'
 import { useSubmitLock } from '../../hooks/useSubmitLock'
 import { useAuth } from '../../stores/auth'
+import { InfoHint } from '../../components/IconAction'
 
 interface BudgetStatus { enabled: boolean; blocked: boolean; reason: string; limits: { requests: number; tokens: number }; usage: { month: string; requests: number; tokens: number } }
 
@@ -176,7 +177,7 @@ export default function AiTokensPage() {
         meta={`${rows.filter(row => row.is_active).length} 个启用令牌 · ${rows.length} 个总计`} />
 
 
-      <Alert type="info" showIcon message="只读接入，用于整理文字" description="外部工具可读取获授权的资料清单、车辆进度表和本周待交资料；保密范围与当前账号一致。工具不修改状态、检查、资料、权限或分享，也不生成数量计划和按天排程。" style={{ marginBottom: 16 }} />
+      <Alert type="info" showIcon message={<>只读接入，用于整理文字<InfoHint text="外部工具可读取获授权的资料清单、车辆进度表和本周待交资料；保密范围与当前账号一致。工具不修改状态、检查、资料、权限或分享，也不生成数量计划和按天排程。" /></>} style={{ marginBottom: 16 }} />
       <Card size="small" title="AI 用量预算" style={{ marginBottom: 16 }}>
         {budget ? <Space direction="vertical">
           <Typography.Text>{budget.usage.month} · 系统模型调用 {budget.usage.requests} 次 / {budget.limits.requests || '不限'} · 估算用量 {budget.usage.tokens} / {budget.limits.tokens || '不限'} tokens</Typography.Text>
@@ -273,7 +274,7 @@ export default function AiTokensPage() {
           <Typography.Paragraph copyable={{ text: restUrl }} code>{restUrl}</Typography.Paragraph>
         </Card>
       </div>
-      <Alert type="info" showIcon style={{ marginBottom: 16 }} message="外部助手只读" description="助手可读取获授权的事实并整理文字建议。业务修改由有权限的人在对应页面核对后操作；令牌不会取得写入能力，也不自动增加既有权限。" />
+      <Alert type="info" showIcon style={{ marginBottom: 16 }} message={<>外部助手只读<InfoHint text="助手可读取获授权的事实并整理文字建议。业务修改由有权限的人在对应页面核对后操作；令牌不会取得写入能力，也不自动增加既有权限。" /></>} />
       </details>
 
       <Modal title="创建访问令牌" open={open} onCancel={closeCreate} cancelButtonProps={{ disabled: saving }} closable={!saving} maskClosable={!saving} keyboard={!saving} onOk={() => form.submit()} okText="创建" confirmLoading={saving} okButtonProps={{ disabled: !canManage }}>

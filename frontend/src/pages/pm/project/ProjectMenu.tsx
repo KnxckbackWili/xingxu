@@ -4,7 +4,7 @@ import { MoreOutlined, SearchOutlined } from '@ant-design/icons'
 import { useDrawerReturnFocus } from '../../../hooks/useDrawerReturnFocus'
 import { useAuth } from '../../../stores/auth'
 import { hasSystemPermission } from '../../../constants/systemPermissions'
-import { PROJECT_NAV_ITEMS, PROJECT_DISPLAY_LABEL, PROJECT_MORE_KEYS, PROJECT_PAGE_INFO } from '../../../constants/projectNav'
+import { PROJECT_ITEM_ICON, PROJECT_NAV_ITEMS, PROJECT_DISPLAY_LABEL, PROJECT_MORE_KEYS, PROJECT_PAGE_INFO } from '../../../constants/projectNav'
 import './projectNavigation.css'
 
 export interface ProjectMenuProps {
@@ -58,7 +58,7 @@ export function ProjectMenuContent({ projectId, activeParent, activeChild, activ
   return <>
     <nav className="project-daily-navigation" aria-label="项目常用功能">
       {daily.map(item=><button key={item.key} type="button" aria-current={activeParent===item.key&&!activeSpecial?'page':undefined}
-        onClick={()=>nav(item.path)} onMouseEnter={()=>onPrefetch?.(item.key)} onFocus={()=>onPrefetch?.(item.key)}>{item.label}</button>)}
+        onClick={()=>nav(item.path)} onMouseEnter={()=>onPrefetch?.(item.key)} onFocus={()=>onPrefetch?.(item.key)}>{item.icon&&<span className="project-tab-icon" aria-hidden="true">{item.icon}</span>}{item.label}</button>)}
       <button ref={trigger} type="button" className="project-more-trigger" aria-haspopup="dialog" aria-expanded={open} aria-current={PROJECT_MORE_KEYS.includes(current)?'page':undefined}
         onClick={()=>{restore.current=false;setSearch('');setOpen(true)}}><MoreOutlined aria-hidden="true" />更多</button>
     </nav>
@@ -66,7 +66,7 @@ export function ProjectMenuContent({ projectId, activeParent, activeChild, activ
     <Drawer title="更多" open={open} onClose={close} width="min(420px, calc(100vw - 16px))" rootClassName="project-navigation-drawer" destroyOnHidden afterOpenChange={value=>{if(value)input.current?.focus()}}>
       <Input ref={input} aria-label="查找项目功能" placeholder="按功能名称或用途查找" prefix={<SearchOutlined />} value={search} onChange={event=>setSearch(event.target.value)} allowClear />
       <ul className="project-more-list">{found.map(item=><li key={item.key}><button type="button" aria-label={item.label} aria-describedby={`project-more-description-${item.key}`} aria-current={current===item.key?'page':undefined} onClick={()=>nav(item.path)} onMouseEnter={()=>onPrefetch?.(item.parent)} onFocus={()=>onPrefetch?.(item.parent)}>
-        <strong>{item.label}</strong><small id={`project-more-description-${item.key}`}>{PROJECT_PAGE_INFO[item.key]?.description}</small>
+        <span className="project-more-icon" aria-hidden="true">{PROJECT_ITEM_ICON[item.parent]}</span><span className="project-more-copy"><strong>{item.label}</strong><small id={`project-more-description-${item.key}`}>{PROJECT_PAGE_INFO[item.key]?.description}</small></span>
       </button></li>)}</ul>
       {!found.length&&<p>没有找到功能，请按名称或用途查找。</p>}
     </Drawer>

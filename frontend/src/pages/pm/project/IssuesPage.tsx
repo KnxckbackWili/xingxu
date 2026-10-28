@@ -5,7 +5,7 @@ import {
 } from 'antd'
 import {
   CheckCircleOutlined, DeleteOutlined, DownloadOutlined, FileExcelOutlined, FileTextOutlined, PaperClipOutlined,
-  PlusOutlined, StopOutlined, UploadOutlined, UserSwitchOutlined,
+  EyeOutlined, ImportOutlined, PlayCircleOutlined, PlusOutlined, StopOutlined, UploadOutlined, UserSwitchOutlined,
 } from '@ant-design/icons'
 import { parseDateTime,formatDateTime } from '../../../utils/date'
 import { api, errMsg } from '../../../api/client'
@@ -21,6 +21,7 @@ import InlineSelect from '../../../components/InlineSelect'
 import ContextTip from '../../../components/ContextTip'
 import { WorkPageHeader, WorkSection } from '../../../components/WorkPage'
 import './FieldWorkPages.css'
+import { IconAction, RefreshAction } from '../../../components/IconAction'
 
 interface Issue {
   can_close?: boolean
@@ -317,14 +318,14 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
   }
   const quickActions = (issue: Issue) => {
     if (detailIssue || assigning || editing) return null
-    return <Space size={2} wrap onClick={(event) => event.stopPropagation()}>
-    {canHandle(issue) && issue.status === 'open' && <Button size="small" loading={statusSaving}
-      onClick={() => updateStatus(issue, 'processing')}>开始处理</Button>}
-    {canHandle(issue) && ['open', 'processing'].includes(issue.status) && <Button size="small" disabled={statusSaving}
-      onClick={() => openResolution(issue)}>解决</Button>}
-    {canClose(issue) && issue.status === 'resolved' && <Button size="small" loading={statusSaving}
-      onClick={() => updateStatus(issue, 'closed')}>关闭</Button>}
-    </Space>
+    return <span className="row-icon-actions" onClick={(event) => event.stopPropagation()}>
+    {canHandle(issue) && issue.status === 'open' && <IconAction label="开始处理" icon={<PlayCircleOutlined />} loading={statusSaving}
+      onClick={() => updateStatus(issue, 'processing')} />}
+    {canHandle(issue) && ['open', 'processing'].includes(issue.status) && <IconAction label="解决" icon={<CheckCircleOutlined />} disabled={statusSaving}
+      onClick={() => openResolution(issue)} />}
+    {canClose(issue) && issue.status === 'resolved' && <IconAction label="关闭" icon={<StopOutlined />} loading={statusSaving}
+      onClick={() => updateStatus(issue, 'closed')} />}
+    </span>
   }
 
   const queue: Array<{id:string;source:'project';item:Issue} | {id:string;source:'vehicle';item:VehicleIssue}> = [
@@ -335,7 +336,7 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
     if(row.source==='vehicle') return <Space wrap><Tag>车辆</Tag><Tag color={row.item.status==='resolved'?'green':'red'}>{row.item.status==='resolved'?'已关闭':'未解决'}</Tag></Space>
     const issue=row.item
     const overdue=issue.sla_due_at && !['closed','cancelled'].includes(issue.status) && parseDateTime(issue.sla_due_at).isBefore(new Date())
-    return <Space wrap><Tag>{TYPE_LABEL[issue.issue_type] ?? '其他'}</Tag><Tag color={issue.nature==='accident'?'red':issue.nature==='quality'?'orange':undefined}>{ISSUE_NATURES.find(item=>item.value===issue.nature)?.label || '普通'}</Tag><Tag color={SEVERITY_MAP[issue.severity]?.color}>{SEVERITY_MAP[issue.severity]?.label}</Tag><Tag color={ISSUE_STATUS_MAP[issue.status]?.color}>{ISSUE_STATUS_MAP[issue.status]?.label}</Tag>{overdue && <Tag color="red">超过 {issue.sla_hours} 小时处理时限</Tag>}</Space>
+    return <Space wrap>{TYPE_LABEL[issue.issue_type] && issue.issue_type !== 'other' && <Tag>{TYPE_LABEL[issue.issue_type]}</Tag>}{issue.nature && issue.nature !== 'normal' && <Tag color={issue.nature==='accident'?'red':issue.nature==='quality'?'orange':undefined}>{ISSUE_NATURES.find(item=>item.value===issue.nature)?.label}</Tag>}<Tag color={SEVERITY_MAP[issue.severity]?.color}>{SEVERITY_MAP[issue.severity]?.label}</Tag><Tag color={ISSUE_STATUS_MAP[issue.status]?.color}>{ISSUE_STATUS_MAP[issue.status]?.label}</Tag>{overdue && <Tag color="red">超过 {issue.sla_hours} 小时处理时限</Tag>}</Space>
   }
 
   const issueOwner = (row:typeof queue[number]) => row.source==='vehicle' ? row.item.handler || row.item.reporter_name || '未填写'
@@ -343,8 +344,8 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
         options={users.map(person=>({value:person.id,label:person.display_name || person.username}))}
         disabled={statusSaving || usersLoading || usersError} allowClear onSave={value=>quickAssign(row.item,value)} /> : row.item.assignee_name || '未指派'
   const issueActions = (row:typeof queue[number]) => row.source==='vehicle'
-    ? <Button onClick={()=>setVehicleDetail(row.item)}>查看车辆问题</Button>
-    : <Space wrap>{quickActions(row.item)}<Button onClick={()=>setDetailIssue(row.item)}>详情</Button></Space>
+    ? <IconAction label="查看车辆问题" icon={<EyeOutlined />} onClick={()=>setVehicleDetail(row.item)} />
+    : <span className="row-icon-actions">{quickActions(row.item)}<IconAction label="详情" icon={<EyeOutlined />} onClick={()=>setDetailIssue(row.item)} /></span>
   const issueDescription = (row:typeof queue[number]) => row.source==='vehicle'
     ? `${row.item.asset_code} · ${row.item.fault_part || row.item.description || '未填写故障部位'}`
     : extraSummary(row.item.extra) || row.item.task_name || row.item.description
@@ -352,7 +353,7 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
     <div className="field-work-page">
       <WorkPageHeader title="现场问题" description="先处理未解决的问题，填写结果后再确认关闭。车辆问题在车辆记录中处理。"
         primary={!writeBlocked && <Button type="primary" aria-label="上报问题" icon={<PlusOutlined />} onClick={()=>setModalOpen(true)}>上报问题</Button>}
-        tools={<Space wrap><Button onClick={load} loading={loading}>刷新</Button><ContextTip id="issue-quick-actions" title="问题快捷处理">有处理权限时，可直接指派和开始处理；解决时填写方案，再由项目经理或报告人确认关闭。</ContextTip>{!writeBlocked && <Popover trigger="click" content={<Upload disabled={importing} showUploadList={false} accept=".xlsx" beforeUpload={file=>importQualityForm(file as File)}><Button loading={importing} icon={<UploadOutlined />}>导入质量问题反馈单</Button></Upload>}><Button>导入问题</Button></Popover>}</Space>}
+        tools={<Space wrap><RefreshAction onClick={load} loading={loading} /><ContextTip id="issue-quick-actions" title="问题快捷处理">有处理权限时，可直接指派和开始处理；解决时填写方案，再由项目经理或报告人确认关闭。</ContextTip>{!writeBlocked && <Popover trigger="click" content={<Upload disabled={importing} showUploadList={false} accept=".xlsx" beforeUpload={file=>importQualityForm(file as File)}><Button loading={importing} icon={<UploadOutlined />}>导入质量问题反馈单</Button></Upload>}><IconAction bordered label="导入问题" icon={<ImportOutlined />} /></Popover>}</Space>}
         meta={`${openProjectCount + openVehicleCount} 项未解决 · ${issues.filter(i=>i.status==='resolved').length} 项待关闭`} />
       {loadError && <Alert type="error" showIcon message="问题数据未能完整加载，请重试。" action={<Button onClick={load} loading={loading}>重新加载</Button>} />}
       <WorkSection filters={<>

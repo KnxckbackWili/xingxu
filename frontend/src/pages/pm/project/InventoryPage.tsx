@@ -18,6 +18,7 @@ import ContextTip from '../../../components/ContextTip'
 import { WorkPageHeader, WorkSection } from '../../../components/WorkPage'
 import { useMediaQuery } from '../../../hooks/useMediaQuery'
 import './FieldWorkPages.css'
+import { RefreshAction } from '../../../components/IconAction'
 
 const OWNERSHIP: Record<string, { label: string; color: string }> = {
   company: { label: '我方', color: 'blue' },
@@ -347,7 +348,7 @@ export default function InventoryPage({ projectId, canManage: managePermission }
   return <div className="inventory-page field-work-page">
     <WorkPageHeader title="现场物品" description="记录物品放在哪里、由谁保管，以及每次收货、领用和归还。"
       primary={canManage && <Button type="primary" icon={<PlusOutlined />} onClick={()=>activeTab==='items'?openItem():openApplication()}>{activeTab==='items'?'录入物品':'新建申请'}</Button>}
-      tools={<Space wrap><Button onClick={()=>activeTab==='items'?load():loadApplications()}>刷新</Button><ContextTip id="inventory-quick-status" title="物品快捷调整">有管理权限时，可直接改状态；收货、领用和数量变动请记录在收发记录中。</ContextTip></Space>}
+      tools={<Space wrap><RefreshAction onClick={()=>activeTab==='items'?load():loadApplications()} /><ContextTip id="inventory-quick-status" title="物品快捷调整">有管理权限时，可直接改状态；收货、领用和数量变动请记录在收发记录中。</ContextTip></Space>}
       meta={<Space wrap>{statItems.filter(([label])=>['全部物品','需要关注'].includes(String(label))).map(([label,value])=><span key={label}>{label} {value}</span>)}</Space>} />
     {loadError && <Alert type="error" showIcon message="物品列表加载失败" action={<Button onClick={()=>load()}>重试</Button>} />}
     <Tabs activeKey={activeTab} onChange={setActiveTab} items={[{key:'items',label:'物品',children:itemsContent},{key:'applications',label:`申请${apps.filter(app=>app.status==='pending').length ? ` (${apps.filter(app=>app.status==='pending').length})` : ''}`,children:applicationsContent}]} />

@@ -15,6 +15,7 @@ import { canAccessNav } from '../../constants/nav'
 import { deadlineLabel } from '../../utils/documentDeadlines'
 import { ISSUE_STATUS_MAP } from '../../constants/issues'
 import './worker.css'
+import { RefreshAction } from '../../components/IconAction'
 
 export default function WeekPage({ projectId = '' }: { projectId?: string }) {
   const { user } = useAuth(); const identity = `${user?.id}:${projectId}`; const active = useRef(identity); active.current = identity
@@ -76,7 +77,7 @@ export default function WeekPage({ projectId = '' }: { projectId?: string }) {
     } finally { uploadLock.current = false; if (active.current === owner) setUploadBusy(false) }
   }
   return <div className="worker-work-page">
-    <WorkPageHeader title={canAccessNav('/pm/dashboard', user) ? '我的本周' : '工作台'} description="本周分配给你的工作；登记实际完成日期，协助登记会同时保留操作人和被协助人。" tools={<Space wrap><DatePicker picker="week" aria-label="计划周" onChange={value => setWeek(value?.subtract((value.day() + 6) % 7, 'day').format('YYYY-MM-DD'))} /><Button onClick={load} loading={loading}>刷新</Button></Space>} />
+    <WorkPageHeader title={canAccessNav('/pm/dashboard', user) ? '我的本周' : '工作台'} description="本周分配给你的工作；登记实际完成日期，协助登记会同时保留操作人和被协助人。" tools={<Space wrap><DatePicker picker="week" aria-label="计划周" onChange={value => setWeek(value?.subtract((value.day() + 6) % 7, 'day').format('YYYY-MM-DD'))} /><RefreshAction onClick={load} loading={loading} /></Space>} />
     {error && <Alert type="error" message="本周信息未能读取" description={error} />}
     {warningGroups.size > 0 && <Alert type="warning" showIcon className="week-notice" message={warningGroups.size === 1 ? [...warningGroups.keys()][0] : `有 ${data!.warnings.length} 条需要核对的提醒`}
       description={warningGroups.size > 1 || data!.warnings.length > 1 ? <ul className="week-notice-list">{[...warningGroups].map(([message, count]) => <li key={message}>{message}{count > 1 ? `（${count} 处）` : ''}</li>)}</ul> : undefined} />}

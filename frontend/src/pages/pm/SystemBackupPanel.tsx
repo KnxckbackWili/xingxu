@@ -5,10 +5,11 @@ import { NAV_LABEL, NAV_DESCRIPTION } from '../../constants/nav'
 import './SettingsPages.css'
 import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, Card, Input, Modal, Popconfirm, Space, Table, Tag, Typography, Upload, message } from 'antd'
-import { CloudDownloadOutlined, DatabaseOutlined, DeleteOutlined, ReloadOutlined, UploadOutlined } from '@ant-design/icons'
+import { CloudDownloadOutlined, DatabaseOutlined, DeleteOutlined, UploadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { api, errMsg } from '../../api/client'
 import { useSubmitLock } from '../../hooks/useSubmitLock'
+import { InfoHint, RefreshAction } from '../../components/IconAction'
 
 type BackupData = { items: any[]; restore_pending: boolean; database?: string; web_restore_supported?: boolean; encryption?: { configured: boolean; source?: string } }
 
@@ -146,7 +147,7 @@ export default function SystemBackupPanel() {
   return <div className="settings-work-page system-backup-panel">
     <WorkPageHeader title={NAV_LABEL['/pm/backups']} description={NAV_DESCRIPTION['/pm/backups']}
       primary={canCreate && <Button type="primary" icon={<DatabaseOutlined />} loading={loading} disabled={metadataState !== 'ready' || !configured} onClick={create}>立即备份</Button>}
-      tools={<Button icon={<ReloadOutlined />} onClick={load} disabled={loading} aria-label="刷新备份列表">刷新</Button>}
+      tools={<RefreshAction label="刷新备份列表" onClick={load} disabled={loading} />}
       meta={`${databaseLabel} · ${data.items.length} 个备份包`} />
     {metadataState === 'ready' && <Alert type={configured ? 'info' : 'warning'} showIcon style={{ marginBottom: 16 }}
       message={configured ? '系统备份已启用口令加密' : '请先设置备份口令'}
@@ -175,7 +176,7 @@ export default function SystemBackupPanel() {
     <details className="work-detail-summary settings-detail">
       <summary>恢复系统备份</summary>
       <p className="work-helper">恢复会替换整个系统的数据和附件；正常备份只需点击上方“立即备份”。</p>
-      {metadataState === 'ready' && data.web_restore_supported !== true && <Alert type="info" showIcon message={data.database === 'postgresql' ? '当前 PostgreSQL 部署不支持网页恢复' : '当前部署未确认支持网页恢复'} description="请由管理员使用 docker/scripts/restore.sh 恢复备份。网页仍支持生成及下载备份。" style={{ marginTop: 12 }} />}
+      {metadataState === 'ready' && data.web_restore_supported !== true && <Alert type="info" showIcon message={<>{data.database === 'postgresql' ? '当前 PostgreSQL 部署不支持网页恢复' : '当前部署未确认支持网页恢复'}<InfoHint text="请由管理员使用 docker/scripts/restore.sh 恢复备份。网页仍支持生成及下载备份。" /></>} style={{ marginTop: 12 }} />}
       <div className="backup-restore-zone"><div><Typography.Text strong>灾难恢复</Typography.Text><div><Typography.Text type="secondary">上传 .agvenc 加密完整备份，并输入这份备份的口令</Typography.Text></div></div><Upload disabled={restoreDisabled} showUploadList={false} accept=".agvenc" beforeUpload={(file) => restore(file as File)}><Button disabled={restoreDisabled} danger icon={<UploadOutlined />}>上传恢复包</Button></Upload></div>
     </details>
   </div>

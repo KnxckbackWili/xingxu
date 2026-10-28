@@ -4,6 +4,7 @@ import { Alert, Button, Space, Spin } from 'antd'
 import { api, errMsg } from '../api/client'
 import { openWorkDetail } from '../stores/workDetail'
 import AcceptanceDecision, { acceptanceDecisionText } from './AcceptanceDecision'
+import { RefreshAction } from './IconAction'
 
 export default function HandoverSummary({ projectId, onUse }: { projectId: string; onUse?: (text: string) => void }) {
   const navigate = useNavigate()
@@ -33,7 +34,7 @@ export default function HandoverSummary({ projectId, onUse }: { projectId: strin
   if (truncated) summary += `\n${note}`
   const visible = (items: any[]) => expanded ? items : items.slice(0, 3)
   return <section className="handover-summary">
-    <div className="work-section-heading"><strong>接手后需要跟进</strong><Space><Button size="small" onClick={()=>setAttempt(x=>x+1)}>刷新</Button>{onUse&&<Button size="small" onClick={()=>onUse(summary)}>带入交接说明</Button>}</Space></div>
+    <div className="work-section-heading"><strong>接手后需要跟进</strong><Space><RefreshAction onClick={()=>setAttempt(x=>x+1)} />{onUse&&<Button size="small" onClick={()=>onUse(summary)}>带入交接说明</Button>}</Space></div>
     <p>根据项目现有记录整理，点击工作可继续处理。交接说明中再补充客户承诺和下一步重点。</p>
     <AcceptanceDecision summary={data.acceptance_summary} />
     <div className="handover-counts"><span>未完工作 <b>{data.counts.tasks}</b></span><span>现场问题 <b>{data.counts.issues}</b></span><span>车辆故障 <b>{data.counts.faults}</b></span><span>待提交资料 <b>{data.counts.documents}</b></span></div>

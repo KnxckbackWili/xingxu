@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../../api/client'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
 import { MEDIA_QUERY } from '../../constants/breakpoints'
+import { RefreshAction } from '../../components/IconAction'
 
 const OWNER: Record<string, { label: string; color: string }> = {
   company: { label: '我方', color: 'blue' }, client: { label: '甲方', color: 'gold' }, third_party: { label: '第三方', color: 'default' },
@@ -54,7 +55,7 @@ export default function InventoryOverviewPage() {
   return <div className="settings-work-page inventory-page inventory-overview-page">
     <WorkPageHeader title={NAV_LABEL['/pm/inventory']} description={NAV_DESCRIPTION['/pm/inventory']}
       primary={<Button type="primary" onClick={() => navigate('/pm/projects')}>打开项目</Button>}
-      tools={<Button onClick={() => void load()} loading={loading}>刷新</Button>}
+      tools={<RefreshAction onClick={load} loading={loading} />}
       meta={`全部可见项目 · ${data.summary.total_records ?? 0} 条物品记录 · ${data.summary.attention_records ?? 0} 条需要关注`} />
     <WorkSection title="查找物品" description="在对应项目中查看流水、修改数量或登记去向。" filters={
     <div className="inventory-filters inventory-global-filters">

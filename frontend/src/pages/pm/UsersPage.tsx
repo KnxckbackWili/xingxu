@@ -15,6 +15,7 @@ import { useMediaQuery } from '../../hooks/useMediaQuery'
 import { useSubmitLock } from '../../hooks/useSubmitLock'
 import { MEDIA_QUERY } from '../../constants/breakpoints'
 import { ROLE_NAME } from '../../constants/roles'
+import { IconAction } from '../../components/IconAction'
 
 interface UserRow {
   id: string
@@ -242,16 +243,12 @@ export default function UsersPage() {
                 title: '操作',
                 width: 150,
                 render: (_: any, u: UserRow) => (
-                  <Space size={0}>
-                    <Button type="link" size="small" icon={<EditOutlined />} disabled={!canEditAccount(u)} onClick={() => openEdit(u)}>
-                      编辑
-                    </Button>
+                  <span className="row-icon-actions">
+                    <IconAction label="编辑" icon={<EditOutlined />} disabled={!canEditAccount(u)} onClick={() => openEdit(u)} />
                     <Popconfirm title={u.is_active ? `停用「${u.display_name}」？` : `启用「${u.display_name}」？`} onConfirm={() => toggleActive(u)} disabled={!canEditAccount(u) || saving || !!loadError || u.username === 'admin'}>
-                      <Button type="link" size="small" icon={u.is_active ? <StopOutlined /> : <PlayCircleOutlined />} style={{ color: u.is_active ? '#ad2102' : '#237804' }} disabled={!canEditAccount(u) || saving || !!loadError || u.username === 'admin'}>
-                        {u.is_active ? '停用' : '启用'}
-                      </Button>
+                      <IconAction label={u.is_active ? '停用' : '启用'} danger={u.is_active} icon={u.is_active ? <StopOutlined /> : <PlayCircleOutlined />} disabled={!canEditAccount(u) || saving || !!loadError || u.username === 'admin'} />
                     </Popconfirm>
-                  </Space>
+                  </span>
                 ),
               },
             ]}

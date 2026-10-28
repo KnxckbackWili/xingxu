@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Alert, Button, Card, Col, Row, Spin, Statistic, Table, Tag } from 'antd'
+import { Alert, Card, Col, Row, Spin, Statistic, Table, Tag } from 'antd'
 import { useAuth } from '../stores/auth'
 import { workbenchApi, type WorkspaceStatisticsData } from '../api/workbench'
 import { errMsg } from '../api/client'
 import { projectStatusMeta } from '../constants/status'
 import { hasSystemPermission } from '../constants/systemPermissions'
+import { RefreshAction } from './IconAction'
 export default function WorkspaceStatistics() {
   const { user } = useAuth()
   const allowed = hasSystemPermission(user, 'insights.view')
@@ -24,7 +25,7 @@ export default function WorkspaceStatistics() {
   useEffect(()=>{setSnapshot({scope});if(allowed)void load();return()=>{sequence.current++}},[scope,allowed])
   if(!allowed)return null
   return <section aria-label="统计">
-    <Button onClick={()=>void load()} loading={loading}>刷新统计</Button>
+    <RefreshAction label="刷新统计" onClick={load} loading={loading} />
     {error&&<Alert type="error" showIcon message="统计暂不可读取" description={error}/>}
     {loading&&!data&&<Spin aria-label="正在读取统计"/>}
     {data&&<>

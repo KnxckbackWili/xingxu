@@ -9,7 +9,7 @@ import {
   Alert, Card, Drawer, List, Segmented, Select, Checkbox, Button, Spin, Space, Row, Col,
   Typography, Tag, message,
 } from 'antd'
-import { CheckOutlined, ReloadOutlined } from '@ant-design/icons'
+import { CheckOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../stores/auth'
@@ -18,6 +18,7 @@ import { NOTIFICATION_READ_EVENT, notifyReadStateChanged } from '../utils/notifi
 import { formatDateTime } from '../utils/date'
 import { FONT } from '../constants/theme'
 import EmptyState from '../components/EmptyState'
+import { IconAction, RefreshAction } from '../components/IconAction'
 
 interface NotificationT {
   id: string
@@ -173,7 +174,7 @@ export default function MessagesPage() {
           detailTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
           void openOne(items.find(item => !item.is_read) ?? items[0])
         }}>{items.some(item => !item.is_read) ? '查看未读' : '查看消息'}</Button> : undefined}
-        tools={<Space><Button icon={<ReloadOutlined />} onClick={() => load(false)}>刷新</Button><Button onClick={markAllRead}>全部已读</Button></Space>} />
+        tools={<Space><RefreshAction onClick={() => load(false)} /><IconAction bordered label="全部已读" icon={<CheckOutlined />} onClick={markAllRead} /></Space>} />
       <WorkSection title="收件箱" description={loading ? '正在加载消息' : `${items.length} 条已加载 · ${items.filter(item => !item.is_read).length} 条未读`} filters={
       <Space style={{ marginBottom: 16 }} wrap>
         <Segmented

@@ -8,6 +8,7 @@ import { WorkPageHeader } from '../../components/WorkPage'
 import UnavailabilityManager from '../../components/UnavailabilityManager'
 import { useAuth } from '../../stores/auth'
 import { hasSystemPermission } from '../../constants/systemPermissions'
+import { RefreshAction } from '../../components/IconAction'
 
 type Cell = { id: string; project_id: string; project_name: string; week_start: string; mode: string; target_count: number | null; task_name?: string }
 type Person = { id: string; name: string; cells: Cell[]; unavailable: { start_date: string; end_date: string; reason?: string; note?: string }[]; conflicts: { week_start: string; project_ids: string[] }[] }
@@ -28,7 +29,7 @@ export default function PeoplePlanPage() {
     savingLock.current = true; setSaving(true); setSaveError('')
     try { ensureVerifiedAccount(user?.id); await api.post(`/users/${values.user_id}/unavailability`, { start_date: values.range[0].format('YYYY-MM-DD'), end_date: values.range[1].format('YYYY-MM-DD'), reason: values.reason, note: values.note || '' }, { headers: { 'X-AGV-Expected-Account': user!.id } }); setCreate(false); setRevision(n => n + 1) } catch (e) { setSaveError(errMsg(e)) } finally { savingLock.current = false; setSaving(false) }
   }
-  return <div><WorkPageHeader title="人员" description="按周核对人员在可见项目中的已发布安排和不可用时段；同一周多个项目会提示冲突。" tools={<Space wrap><Select aria-label="人员范围" value={scope} onChange={setScope} options={[...(teamAllowed ? [{ value: 'team', label: '团队周计划' }] : []), { value: 'mine', label: '本人周计划' }]} /><DatePicker picker="week" aria-label="人员计划起始周" onChange={value => setWeek(value?.subtract((value.day() + 6) % 7, 'day').format('YYYY-MM-DD'))} /><Button onClick={() => setRevision(n => n + 1)} loading={loading}>刷新</Button></Space>} />
+  return <div><WorkPageHeader title="人员" description="按周核对人员在可见项目中的已发布安排和不可用时段；同一周多个项目会提示冲突。" tools={<Space wrap><Select aria-label="人员范围" value={scope} onChange={setScope} options={[...(teamAllowed ? [{ value: 'team', label: '团队周计划' }] : []), { value: 'mine', label: '本人周计划' }]} /><DatePicker picker="week" aria-label="人员计划起始周" onChange={value => setWeek(value?.subtract((value.day() + 6) % 7, 'day').format('YYYY-MM-DD'))} /><RefreshAction onClick={() => setRevision(n => n + 1)} loading={loading} /></Space>} />
     {error && <Alert type="error" message="人员周计划未能读取" description={error} />}{data?.warnings.map((w, i) => <Alert key={i} type="warning" message={w.message} />)}{[...new Set(data?.calendar.flatMap(row => row.missing_holiday_years) || [])].length > 0 && <Alert type="warning" message={`缺少年度节假日数据：${[...new Set(data?.calendar.flatMap(row => row.missing_holiday_years) || [])].join('、')}`} />}
     {canManage && <Space style={{ marginBottom: 12 }}><Button onClick={() => { setCreate(true); setSaveError(''); form.resetFields() }}>登记不可用时段</Button><Button onClick={() => setManage(true)}>管理不可用时段</Button></Space>}
     <Card>{data?.people.length ? <Table<Person> rowKey="id" columns={columns} dataSource={data.people} pagination={{ pageSize: 20 }} scroll={{ x: 1080 }} /> : <Empty description={data?.state === 'unavailable' || error ? '周计划状态未知' : '当前范围没有已发布安排'} />}</Card>

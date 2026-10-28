@@ -4,6 +4,7 @@ import { api, errMsg } from '../../../api/client'
 import { projectDocumentsApi, downloadProjectFile, type ProjectFile } from '../../../api/projectDocuments'
 import AcceptanceDecision, { acceptanceLabels, type AcceptanceRecord } from '../../../components/AcceptanceDecision'
 import { formatDateTime } from '../../../utils/date'
+import { RefreshAction } from '../../../components/IconAction'
 
 export default function AcceptanceRecordsPanel({ projectId, refreshToken, onChanged, onUpload, onDirtyChange }: {
   projectId: string; refreshToken?: unknown; onChanged?: () => void; onUpload?: () => void
@@ -70,7 +71,7 @@ export default function AcceptanceRecordsPanel({ projectId, refreshToken, onChan
   const retrospective = typeof project?.retrospective === 'string' ? { content: project.retrospective } : project?.retrospective ?? {}
   return <div aria-busy={loading}>
     <Typography.Paragraph type="secondary">验收以最新有效结论和当前车辆范围为准；选择的签字附件会同时关联本项目资料7.1；未选附件时仍需在资料清单补交项目验收单。</Typography.Paragraph>
-    <Space wrap style={{ marginBottom: 12 }}><Button loading={loading} onClick={() => void load()}>刷新验收记录</Button>
+    <Space wrap style={{ marginBottom: 12 }}><RefreshAction label="刷新验收记录" loading={loading} onClick={load} />
       {canRecord && <Button type="primary" disabled={loading || !!loadError || saving} onClick={() => { form.resetFields(); setSaveError(''); onDirtyChange?.(false); setOpen(true) }}>录入验收记录</Button>}
       {onUpload && <Button onClick={onUpload}>上传项目验收单</Button>}
     </Space>

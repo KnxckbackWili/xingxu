@@ -4,6 +4,7 @@ import { api, errMsg } from '../api/client'
 import { formatDateTime } from '../utils/date'
 import { useAuth } from '../stores/auth'
 import { hasSystemPermission } from '../constants/systemPermissions'
+import { RefreshAction } from './IconAction'
 
 export type VehicleCheck = { id: string; task_id: string; task_name: string; task_version: number; vehicle_unit_id: string | null; vehicle_step_key: string | null; scope: 'vehicle' | 'legacy_task'; name: string; is_required: boolean; is_safety_critical: boolean; is_applicable: boolean; is_done: boolean; failed: boolean; failed_reason: string; not_applicable_reason: string; done_by?: string; done_by_name?: string; done_at?: string; version: number; definition_version?: number; blocker?: string }
 type Props = { projectId: string; unitId: string; unitLabel: string; stepKey: string; steps: { key: string; name: string }[]; canManage: boolean; onChanged: () => void }
@@ -61,7 +62,7 @@ export default function VehicleChecksPanel({ projectId, unitId, unitLabel, stepK
   const legacy = [...new Map((data?.items ?? []).filter(r => r.scope === 'legacy_task' && r.vehicle_step_key).map(r => [r.task_id, r])).values()]
   return <section aria-label={`${unitLabel} 环节检查`}>
     <Typography.Paragraph>{unitLabel} · {steps.find(s => s.key === stepKey)?.name}。必需项先完成，安全关键项必须真实通过。</Typography.Paragraph>
-    <Button onClick={() => void load()} loading={loading} disabled={busy}>刷新检查</Button>
+    <RefreshAction label="刷新检查" onClick={load} loading={loading} disabled={busy} />
     {error && <Alert showIcon type="error" message="检查操作未完成" description={error} />}
     {canPlan && unresolved.map(item => <div key={item.task_id}><Alert type="warning" message={`${item.task_name} 尚未明确关联环节`} /><Space wrap><Select aria-label={`${item.task_name} 关联车辆环节`} placeholder="负责人选择实际环节" value={binding[item.task_id]} disabled={busy} onChange={value => setBinding(old => ({ ...old, [item.task_id]: value }))} options={steps.map(s => ({ value: s.key, label: s.name }))} style={{ minWidth: 190 }} /><Button disabled={!binding[item.task_id] || busy} onClick={() => void bind(item)}>确认关联</Button></Space></div>)}
     {canPlan && legacy.map(item => <p key={item.task_id}><Button disabled={busy} onClick={() => choose(item, 'review')}>为本车生成复核：{item.task_name}</Button></p>)}

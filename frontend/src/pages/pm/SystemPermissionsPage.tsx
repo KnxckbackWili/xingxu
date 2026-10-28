@@ -7,6 +7,7 @@ import { permissionsApi, type MemberPermissions, type PermissionCatalog, type Pe
 import { useAuth } from '../../stores/auth'
 import { useSubmitLock } from '../../hooks/useSubmitLock'
 import './SystemPermissionsPage.css'
+import { RefreshAction } from '../../components/IconAction'
 
 type Choice = 'inherit' | 'allow' | 'deny'
 const hasOverride = (values: PermissionOverrides, key: string) => Object.prototype.hasOwnProperty.call(values, key)
@@ -240,7 +241,7 @@ export default function SystemPermissionsPage() {
 
   return <div className="system-permissions-page">
     <WorkPageHeader title="系统权限" description="先选择成员，再按功能模块调整。继承使用默认规则，允许和禁止是该成员的单独设置。"
-      tools={<Button disabled={saving || refreshingLatest || directoryLoading} onClick={() => void loadDirectory()}>刷新成员与目录</Button>} />
+      tools={<RefreshAction label="刷新成员与目录" disabled={saving || refreshingLatest || directoryLoading} onClick={loadDirectory} />} />
     <div className="permissions-scope-note"><strong>权限与项目范围是两回事</strong><p>项目内操作只作用于该成员可见的项目，不会让他看到不相关项目。继承的项目权限按具体项目职责或已有授权判断；组织全部项目可见属于单独的敏感权限。</p></div>
     {directoryError && <Alert type="error" showIcon message="暂时无法加载权限目录" description={directoryError} action={<Button onClick={() => void loadDirectory()}>重新加载目录</Button>} />}
     {directoryLoading && !catalog ? <Skeleton active paragraph={{ rows: 6 }} /> : catalog && <div className="permissions-workspace">

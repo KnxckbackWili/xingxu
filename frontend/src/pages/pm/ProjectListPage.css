@@ -102,3 +102,4 @@
   .project-library-page .project-library-card,
   .project-recent-link { transition: none; }
 }
+.project-library-table .project-table-client { display: block; font-size: 12px; margin-top: 2px; }

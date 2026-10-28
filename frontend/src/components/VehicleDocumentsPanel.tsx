@@ -10,6 +10,7 @@ import { hasSystemPermission } from '../constants/systemPermissions'
 import { useProjectWriteBlocked } from '../hooks/useProjectCapability'
 import { deadlineLabel, basisLabel } from '../utils/documentDeadlines'
 import { formatDateTime } from '../utils/date'
+import { RefreshAction } from './IconAction'
 
 const statusName = { pending: '待提交', submitted: '已提交', waived: '不适用' }
 
@@ -94,7 +95,7 @@ export default function VehicleDocumentsPanel({ projectId, unitId, unitLabel, pr
   return <section aria-label={`${unitLabel}的资料`} style={{ marginTop: 20 }}>
     <Space wrap style={{ display: 'flex', justifyContent: 'space-between' }}>
       <Typography.Title level={4} style={{ margin: 0 }}>该车资料</Typography.Title>
-      <Space wrap><Button onClick={() => void load()} loading={loading} disabled={saving}>刷新资料</Button><a href={`/pm/projects/${encodeURIComponent(projectId)}/documents?vehicle=${encodeURIComponent(unitId)}`}>在资料清单查看此车</a></Space>
+      <Space wrap><RefreshAction label="刷新资料" onClick={load} loading={loading} disabled={saving} /><a href={`/pm/projects/${encodeURIComponent(projectId)}/documents?vehicle=${encodeURIComponent(unitId)}`}>在资料清单查看此车</a></Space>
     </Space>
     <Typography.Paragraph type="secondary">与项目资料清单共用同一份资料和版本；提交即可，审核不影响提交状态。</Typography.Paragraph>
     {loadError && <Alert type="error" showIcon message="该车资料读取失败" description={loadError} action={<Button onClick={() => void load()}>重试读取</Button>} />}

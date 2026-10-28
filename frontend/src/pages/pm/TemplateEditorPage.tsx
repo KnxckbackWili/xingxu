@@ -1,6 +1,7 @@
 import { ensureVerifiedAccount } from '../../utils/verifiedAccount'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Button, Collapse, Drawer, Empty, Input, Modal, Select, Space, Table, Tag, Upload, message } from 'antd'
+import { Alert, Button, Collapse, Drawer, Empty, Input, Modal, Select, Space, Table, Tag, Tooltip, Typography, Upload, message } from 'antd'
+import { CopyOutlined, DownloadOutlined, EditOutlined, PaperClipOutlined, UploadOutlined } from '@ant-design/icons'
 import { api, errMsg } from '../../api/client'
 import { workItemsApi, type WorkItem, type WorkPhase } from '../../api/workItems'
 import { useAuth } from '../../stores/auth'
@@ -12,6 +13,7 @@ import TemplateProcurementsTab from './TemplateProcurementsTab'
 import TemplateVehicleSteps from '../../components/TemplateVehicleSteps'
 import WorkItemEditor from '../../components/WorkItemEditor'
 import { downloadDocumentResource } from '../../api/projectDocuments'
+import { IconAction, RefreshAction } from '../../components/IconAction'
 
 export default function TemplateEditorPage() {
   const { user } = useAuth()
@@ -69,14 +71,14 @@ export default function TemplateEditorPage() {
     catch (e) { setError(errMsg(e)) }
   }
   return <div>
-    <WorkPageHeader title="实施模板" description="阶段下维护工作项；旧模块名保留为标签。已生成项目保留各自定义与检查事实。" tools={<Space wrap><Button loading={loading} onClick={() => void load()}>刷新模板</Button><Button onClick={() => void exportJson()}>导出模板 JSON</Button>{canManage && <><Button onClick={() => setCopyName('')}>复制为新模板</Button>{tid !== 'default' && <Button disabled={busy} onClick={() => void mutate(() => api.post(`/templates/${tid}/publish`))}>发布版本</Button>}</>}{canImport && <Upload accept=".json" showUploadList={false} beforeUpload={file => { void file.text().then(text => mutate(async () => { await api.post(`/templates/${tid}/import/json`, JSON.parse(text)); message.success('模板已导入') }, 'import')).catch(e => setError(errMsg(e))); return false }}><Button disabled={busy}>导入模板 JSON</Button></Upload>}</Space>} />
+    <WorkPageHeader title="实施模板" description="阶段下维护工作项；旧模块名保留为标签。已生成项目保留各自定义与检查事实。" tools={<Space wrap><RefreshAction label="刷新模板" loading={loading} onClick={load} /><IconAction bordered label="导出模板 JSON" icon={<DownloadOutlined />} onClick={() => void exportJson()} />{canManage && <><IconAction bordered label="复制为新模板" icon={<CopyOutlined />} onClick={() => setCopyName('')} />{tid !== 'default' && <Button disabled={busy} onClick={() => void mutate(() => api.post(`/templates/${tid}/publish`))}>发布版本</Button>}</>}{canImport && <Upload accept=".json" showUploadList={false} beforeUpload={file => { void file.text().then(text => mutate(async () => { await api.post(`/templates/${tid}/import/json`, JSON.parse(text)); message.success('模板已导入') }, 'import')).catch(e => setError(errMsg(e))); return false }}><IconAction bordered label="导入模板 JSON" icon={<UploadOutlined />} disabled={busy} /></Upload>}</Space>} />
     {error && <Alert type="error" showIcon message={error} />}
     <Select aria-label="选择实施模板" value={tid} options={templates.map(t => ({ value: t.id, label: `${t.name} · v${t.version || 1}` }))} onChange={setTid} style={{ minWidth: 250 }} />
     <Tabs items={[
-      { key: 'work', label: '工作项', children: <><Space style={{ margin: '12px 0' }}><Tag>{phases.length} 个阶段 · {phases.reduce((n, p) => n + p.work_items.length, 0)} 项工作</Tag>{canManage && <><Button onClick={() => setPhaseName('')}>添加阶段</Button><Button disabled={!phases.length || loading} onClick={() => setEditor({})}>添加工作项</Button></>}</Space>{!phases.length && !loading && <Empty description="暂无实施阶段" />}<Collapse defaultActiveKey={phases.map(p => p.id)} key={`${tid}:${phases.map(p => p.id).join('|')}`} items={phases.map(p => ({ key: p.id, label: p.name, children: <Table<WorkItem> rowKey="id" dataSource={p.work_items} pagination={false} columns={[
+      { key: 'work', label: '工作项', children: <><Space style={{ margin: '12px 0' }}><Tag>{phases.length} 个阶段 · {phases.reduce((n, p) => n + p.work_items.length, 0)} 项工作</Tag>{canManage && <><Button onClick={() => setPhaseName('')}>添加阶段</Button><Button disabled={!phases.length || loading} onClick={() => setEditor({})}>添加工作项</Button></>}</Space>{!phases.length && !loading && <Empty description="暂无实施阶段" />}<Collapse defaultActiveKey={phases.slice(0, 1).map(p => p.id)} key={`${tid}:${phases.map(p => p.id).join('|')}`} items={phases.map(p => ({ key: p.id, label: <span>{p.name} <Typography.Text type="secondary">· {p.work_items.length} 项</Typography.Text></span>, children: <Table<WorkItem> rowKey="id" dataSource={p.work_items} pagination={false} columns={[
         { title: '工作项', render: (_, item) => <><strong>{item.name}</strong> {item.group_label && <Tag>{item.group_label}</Tag>}<p>{item.description}</p></> },
         { title: '实施方式', render: (_, item) => <><Tag>{item.kind === 'vehicle' ? '车辆环节' : '完成 / 未完成'}</Tag>{item.kind === 'vehicle' && <p>{steps.find(s => s.key === item.vehicle_step_key)?.name || '历史工作待明确关联'}</p>}<span>{item.check_definitions?.length || 0} 项检查</span></> },
-        { title: '操作', render: (_, item) => <Space>{canManage && <Button onClick={() => setEditor({ item })}>编辑工作项</Button>}<Button onClick={() => setDocs(item)}>参考文档 {item.reference_docs.length}</Button></Space> },
+        { title: '操作', render: (_, item) => <span className="row-icon-actions">{canManage && <IconAction label="编辑工作项" icon={<EditOutlined />} onClick={() => setEditor({ item })} />}<Tooltip title="参考文档"><Button type="text" className="icon-count-action" icon={<PaperClipOutlined />} aria-label={`参考文档 ${item.reference_docs.length}`} onClick={() => setDocs(item)}>{item.reference_docs.length}</Button></Tooltip></span> },
       ]} /> }))} /></> },
       { key: 'documents', label: '资料要求', children: <TemplateDocumentsTab templateId={tid} editMode={canManage} /> },
       { key: 'procurements', label: '采购库', children: <TemplateProcurementsTab templateId={tid} editMode={canManage} /> },

@@ -11,6 +11,7 @@ import { ArrowDownOutlined, ArrowUpOutlined, EditOutlined, PlusOutlined } from '
 import { vehicleTypeApi } from '../../api'
 import { errMsg } from '../../api/client'
 import { useSubmitLock } from '../../hooks/useSubmitLock'
+import { IconAction } from '../../components/IconAction'
 
 interface VehicleTypeRow {
   id: string
@@ -175,10 +176,8 @@ export default function VehicleTypesPage() {
             {
               title: '操作', width: 110,
               render: (_: any, row) => (
-                <Button size="small" type="link" icon={<EditOutlined />}
-                  disabled={!canManage || saving || loading} onClick={() => { if (busy.current) return; dialog.current = row.id; renameForm.setFieldsValue({ name: row.name }); setRenameRow(row) }}>
-                  重命名
-                </Button>
+                <IconAction label="重命名" icon={<EditOutlined />}
+                  disabled={!canManage || saving || loading} onClick={() => { if (busy.current) return; dialog.current = row.id; renameForm.setFieldsValue({ name: row.name }); setRenameRow(row) }} />
               ),
             },
           ]}

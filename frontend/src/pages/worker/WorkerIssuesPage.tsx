@@ -14,6 +14,7 @@ import { isUploadQueued } from '../../uploads/types'
 import { WorkPageHeader, WorkSection } from '../../components/WorkPage'
 import './WorkerWorkPages.css'
 import { isProjectStatus, isProjectWriteBlocked } from '../../constants/status'
+import { RefreshAction } from '../../components/IconAction'
 
 interface MyIssue {
   id: string
@@ -202,7 +203,7 @@ export default function WorkerIssuesPage() {
     <div className="worker-work-page">
       <WorkPageHeader title="我的问题" description="查看分给你的问题和你上报的进展；协管项目的问题也会在这里显示。"
         primary={<Button type="primary" aria-label="上报问题" icon={<PlusOutlined />} disabled={!canRaiseIssue || loadError || writableProjects.length===0} onClick={()=>{if(!permissions.current.raise)return;if(writableProjects.length===1)reportForm.setFieldValue('project_id',writableProjects[0].id);setReportOpen(true)}}>上报问题</Button>}
-        tools={<Button onClick={()=>setRetry(value=>value+1)}>刷新</Button>} meta={loadError?'数据暂不可用':`${issues.filter(issue=>['open','processing'].includes(issue.status)).length} 项待处理`} />
+        tools={<RefreshAction onClick={()=>setRetry(value=>value+1)} />} meta={loadError?'数据暂不可用':`${issues.filter(issue=>['open','processing'].includes(issue.status)).length} 项待处理`} />
       <WorkSection filters={<><Segmented aria-label="问题查看范围" value={scope} onChange={value=>setScope(String(value))} options={[{value:'active',label:'待处理'},{value:'reported',label:'我上报的'},{value:'all',label:'全部'}]} /><Input.Search aria-label="搜索我的问题" placeholder="搜索问题或项目" allowClear value={search} onChange={event=>setSearch(event.target.value)} /></>}>
 
       {!loadError && focusIssueId && !issues.some(issue => issue.id === focusIssueId) && <Alert type="warning" showIcon style={{ marginBottom: 12 }}

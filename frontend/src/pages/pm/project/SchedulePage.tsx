@@ -13,6 +13,7 @@ import { parseDispositionFilename } from '../../../utils/download'
 import HolidayCalendarNotice from '../../../components/HolidayCalendarNotice'
 import { WorkPageHeader } from '../../../components/WorkPage'
 import './WeeklyPlan.css'
+import { RefreshAction } from '../../../components/IconAction'
 
 const monday = (value: string) => { const d = dayjs(value); return d.subtract((d.day() + 6) % 7, 'day').format('YYYY-MM-DD') }
 const stateText: Record<string,string> = { unknown:'完成情况待核对', completed:'已完成', overdue:'已逾期', in_progress:'计划进行中', planned:'计划完成' }
@@ -127,7 +128,7 @@ export default function SchedulePage({projectId,project,onProjectChange}: {proje
   const print=()=>{document.documentElement.classList.add('printing-weekly-plans');window.addEventListener('afterprint',()=>document.documentElement.classList.remove('printing-weekly-plans'),{once:true});window.print()}
   const missing=[...new Set([...(project?.missing_holiday_years??[]),...(data?.weeks.flatMap(week=>week.missing_holiday_years)??[])])]
   return <section className="weekly-plan-page">
-    <WorkPageHeader title="周计划" description="行是工作项，列是周；负责人和计划与实际完成分别记录。" tools={<Space wrap><Button loading={loading} disabled={busy} onClick={()=>void load()}>刷新周计划</Button>{allowed&&<><Button disabled={busy} onClick={()=>openNew()}>新增计划格</Button><Button disabled={busy} onClick={openDraft}>生成初稿</Button></>}<Link to={`/pm/projects/${projectId}/edit?section=schedule`}>排期设置</Link></Space>}/>
+    <WorkPageHeader title="周计划" description="行是工作项，列是周；负责人和计划与实际完成分别记录。" tools={<Space wrap><RefreshAction label="刷新周计划" loading={loading} disabled={busy} onClick={load} />{allowed&&<><Button disabled={busy} onClick={()=>openNew()}>新增计划格</Button><Button disabled={busy} onClick={openDraft}>生成初稿</Button></>}<Link to={`/pm/projects/${projectId}/edit?section=schedule`}>排期设置</Link></Space>}/>
     <HolidayCalendarNotice years={missing}/>
     {error&&<Alert type="error" message="周计划暂不可读取" description={error} action={<Button onClick={()=>void load()}>重试读取</Button>}/>}
     {actionError&&!editor&&!draftOpen&&<Alert type="error" message="操作未完成" description={actionError}/>}

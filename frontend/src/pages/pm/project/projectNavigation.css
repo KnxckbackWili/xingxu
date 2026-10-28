@@ -92,3 +92,15 @@
 .project-stage-bar.is-suspended li.is-current .project-stage-track { background: var(--agv-danger, #b42318); }
 .project-stage-bar.is-suspended li.is-current .project-stage-label { color: var(--agv-danger, #b42318); }
 @media (max-width: 760px) { .project-stage-bar { margin-left: 0; gap: 3px; } .project-stage-label { font-size: 11px; } }
+
+/* Tabs and the "more" list lead with an icon. */
+.project-daily-navigation > button { display:inline-flex; align-items:center; gap:6px; }
+.project-tab-icon { display:inline-flex; font-size:15px; }
+.project-more-list button { display:flex; align-items:flex-start; gap:12px; }
+.project-more-icon { display:inline-flex; align-items:center; justify-content:center; flex:none; width:32px; height:32px; border-radius:8px; background:var(--agv-primary-soft,#e6f4ff); color:var(--agv-primary,#1677ff); font-size:16px; }
+.project-more-copy { min-width:0; }
+@media (max-width: 600px) {
+  .project-daily-navigation { flex-wrap:nowrap; overflow-x:auto; gap:0; scrollbar-width:none; }
+  .project-daily-navigation > button { flex:1 0 auto; flex-direction:column; gap:2px; padding:6px 2px; font-size:12px; min-width:46px; }
+  .project-tab-icon { font-size:18px; }
+}

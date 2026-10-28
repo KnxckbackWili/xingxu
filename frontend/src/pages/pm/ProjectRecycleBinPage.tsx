@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, Empty, Input, Modal, Skeleton, Tag, Typography, message } from 'antd'
-import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, DownloadOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { projectRecycleApi, type RecycledProject, type PermanentProjectBackup } from '../../api'
 import { errMsg } from '../../api/client'
@@ -10,6 +10,7 @@ import { projectStatusMeta } from '../../constants/status'
 import { formatDateTime } from '../../utils/date'
 import PermanentProjectDeleteModal, { downloadPermanentProjectBackup } from '../../components/PermanentProjectDeleteModal'
 import './ProjectRecycleBinPage.css'
+import { IconAction, InfoHint, RefreshAction } from '../../components/IconAction'
 
 export default function ProjectRecycleBinPage() {
   const { user } = useAuth()
@@ -107,8 +108,8 @@ export default function ProjectRecycleBinPage() {
   const visible = rows.filter(row => `${row.name} ${row.deleted_by_name}`.toLocaleLowerCase().includes(query))
   return <div className="project-recycle-page">
     <WorkPageHeader title="项目回收站" description="查看你有权限管理的已删除项目。还原会恢复原项目，保留删除前的状态、成员、资料和记录。"
-      tools={<><Button disabled={busy} onClick={() => navigate('/pm/projects')}>返回项目</Button><Button aria-label="刷新回收站" disabled={busy} icon={<ReloadOutlined aria-hidden />} onClick={() => void load()}>刷新</Button></>} meta={loadError ? '列表暂不可用' : `${rows.length} 个已删除项目`} />
-    <Alert type="info" showIcon message="回收站内项目不会自动清理" description="删除前备份并保留原项目。仅管理员可生成、下载加密备份后明确永久删除；历史归档只读保留，不再产生新的物理清理归档。备份仅包含对应项目的业务记录和文件，不提供整系统数据库或个人私有内容。" />
+      tools={<><IconAction bordered label="返回项目" icon={<ArrowLeftOutlined />} disabled={busy} onClick={() => navigate('/pm/projects')} /><RefreshAction label="刷新回收站" disabled={busy} onClick={load} /></>} meta={loadError ? '列表暂不可用' : `${rows.length} 个已删除项目`} />
+    <Alert type="info" showIcon message={<>回收站内项目不会自动清理<InfoHint text="删除前备份并保留原项目。仅管理员可生成、下载加密备份后明确永久删除；历史归档只读保留，不再产生新的物理清理归档。备份仅包含对应项目的业务记录和文件，不提供整系统数据库或个人私有内容。" /></>} />
     <Input.Search aria-label="搜索回收站项目" placeholder="项目名称或删除人" allowClear value={search} onChange={event => setSearch(event.target.value)} className="project-recycle-search" />
     {loadError && <Alert type="error" showIcon message="回收站加载失败" description={loadError} action={<Button onClick={() => void load()}>重新加载</Button>} />}
     {loading && !rows.length ? <Skeleton active paragraph={{ rows: 5 }} /> : !loadError && !visible.length ? <Empty description={rows.length ? '没有匹配的已删除项目' : '回收站暂无项目'}><Button onClick={() => rows.length ? setSearch('') : navigate('/pm/projects')}>{rows.length ? '清除搜索' : '查看项目'}</Button></Empty> : <div className="project-recycle-list">

@@ -5,9 +5,10 @@ import { NAV_LABEL, NAV_DESCRIPTION } from '../../constants/nav'
 import './SettingsPages.css'
 import { useCallback, useEffect, useState } from 'react'
 import { Alert, Button, Input, Modal, Space, Switch, Tag, Typography, message } from 'antd'
-import { ReloadOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
+import { SafetyCertificateOutlined } from '@ant-design/icons'
 import { api } from '../../api/client'
 import { errMsg } from '../../api/client'
+import { RefreshAction } from '../../components/IconAction'
 
 interface DingtalkStatus {
   configured: boolean
@@ -102,7 +103,7 @@ export default function NotificationChannelsPage() {
   return <div className="settings-work-page notification-settings-page">
     <WorkPageHeader title={NAV_LABEL['/pm/notification-channels']} description={NAV_DESCRIPTION['/pm/notification-channels']}
       primary={canConfigure && <Button type="primary" disabled={!ding || envManaged} loading={saving} onClick={() => configureOpen ? save(enabled) : setConfigureOpen(true)}>{configureOpen ? '保存' : '配置钉钉'}</Button>}
-      tools={<Button icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>刷新</Button>} />
+      tools={<RefreshAction loading={loading} onClick={load} />} />
     <WorkSection title="站内消息" description="项目待办与变更通过站内消息送达，无需额外配置。">
       <Space wrap>
         <Tag color="green" icon={<SafetyCertificateOutlined />}>{status?.in_app.label ?? '站内通知（始终开启）'}</Tag>

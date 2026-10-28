@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, DatePicker, Empty, Input, InputNumber, Modal, Select, Space, Table, Tag, Typography } from 'antd'
 import dayjs from 'dayjs'
 import { api, errMsg } from '../api/client'
+import { RefreshAction } from './IconAction'
 
 type Cell = { version: number; is_done: boolean; done_on: string | null; migrated: boolean; recorded_at: string; done_by: string; note: string }
 type Unit = { id: string; asset_code: string; fleet_no: string; vehicle_type: string; model_name: string; cells: Record<string, Cell> }
@@ -85,7 +86,7 @@ export default function VehicleProgressMatrix({ projectId, status, onChanged }: 
     {error && <Alert type="error" showIcon message="车辆进度操作未完成" description={error} action={<Button onClick={() => void load()}>刷新核对</Button>} />}
     {!data && !loading && !error && <Empty description="车辆进度未知" />}
     {data && <>
-      <Space wrap style={{ marginBottom: 12 }}><span>已完成 {data.summary.completed} / {data.summary.target} 个环节 · {data.summary.percent == null ? '进度未知（数量待补）' : `${data.summary.percent}%`}</span><Button onClick={() => void load()} loading={loading}>刷新进度表</Button>
+      <Space wrap style={{ marginBottom: 12 }}><span>已完成 {data.summary.completed} / {data.summary.target} 个环节 · {data.summary.percent == null ? '进度未知（数量待补）' : `${data.summary.percent}%`}</span><RefreshAction label="刷新进度表" onClick={load} loading={loading} />
         <Select aria-label="按车型筛选进度" allowClear placeholder="全部车型" value={vehicleType} onChange={v => { setVehicleType(v); setSelected([]) }} options={[...new Set(data.units.map(u => u.vehicle_type).filter(Boolean))].map(v => ({ label: v, value: v }))} style={{ minWidth: 160 }} />
       </Space>
       {data.source_snapshot_available && <Alert type="info" message="便携导入来源仅供核对，不计入本项目完成资格" action={<Button loading={readingSource} onClick={() => void readSource()}>查阅原始来源</Button>} />}

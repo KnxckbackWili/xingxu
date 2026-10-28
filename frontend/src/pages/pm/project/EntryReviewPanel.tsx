@@ -4,6 +4,7 @@ import { api, errMsg } from '../../../api/client'
 import { useProjectCapability, useProjectWriteBlocked } from '../../../hooks/useProjectCapability'
 import { formatDateTime } from '../../../utils/date'
 import { useAuth } from '../../../stores/auth'
+import { RefreshAction } from '../../../components/IconAction'
 
 const label = (item: unknown) => typeof item === 'string' ? item : item && typeof item === 'object'
   ? String((item as Record<string, unknown>).name ?? (item as Record<string, unknown>).item_name ?? (item as Record<string, unknown>).reason ?? '待核对事项') : '待核对事项'
@@ -66,7 +67,7 @@ export default function EntryReviewPanel({ projectId, onConfirmed, onDirtyChange
   }
   return <div>
     <Typography.Paragraph type="secondary">按第5阶段必需资料及真实原件核对。缺项时可填写理由批准风险进场；新增缺项或条件恶化后需重新确认。历史准备评审只作原始记录。</Typography.Paragraph>
-    <Space style={{ marginBottom: 12 }}><Button onClick={() => void loadHistory()}>刷新评审记录</Button>{canReview && <Button type="primary" onClick={() => void inspect()}>核对发车前资料</Button>}</Space>
+    <Space style={{ marginBottom: 12 }}><RefreshAction label="刷新评审记录" onClick={loadHistory} />{canReview && <Button type="primary" onClick={() => void inspect()}>核对发车前资料</Button>}</Space>
     {historyError && <Alert type="error" showIcon message={historyError} />}
     {!historyError && !history.length && <Empty description="尚无发车前资料确认记录" />}
     {history.map(record => <article className="field-record-card" key={record.id}>

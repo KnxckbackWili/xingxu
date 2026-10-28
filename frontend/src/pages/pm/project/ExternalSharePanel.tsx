@@ -3,6 +3,7 @@ import { Alert, Button, Card, Checkbox, DatePicker, Drawer, Empty, Input, Popcon
 import dayjs, { type Dayjs } from 'dayjs'
 import { externalSharesApi, SHARE_SCOPES, type ShareScope, type ExternalShare, type ShareOption, type ExternalAccess } from '../../../api/externalShares'
 import { errMsg } from '../../../api/client'
+import { InfoHint, RefreshAction } from '../../../components/IconAction'
 
 const defaultScopes: ShareScope[] = ['project_progress', 'vehicle_progress']
 export default function ExternalSharePanel({ projectId, enabled, onDirtyChange }: { projectId: string; enabled: boolean; onDirtyChange: (dirty: boolean) => void }) {
@@ -70,7 +71,7 @@ export default function ExternalSharePanel({ projectId, enabled, onDirtyChange }
   }
   if (!enabled) return <Alert type="info" message="仅当前项目负责人可管理外部查看，需要项目资料维护权限。" />
   return <Space direction="vertical" size={16} style={{ width: '100%' }}>
-    <Alert type="info" showIcon message="默认只分享项目进度和车辆进度" description="保密资料和永不对外的资料始终不可外部读取。新增签单或交付资料范围时，将包含以后提交的符合范围的最新版本；指定资料只含所选期次，以后新期次不会自动加入。" />
+    <Alert type="info" showIcon message={<>默认只分享项目进度和车辆进度<InfoHint text="保密资料和永不对外的资料始终不可外部读取。新增签单或交付资料范围时，将包含以后提交的符合范围的最新版本；指定资料只含所选期次，以后新期次不会自动加入。" /></>} />
     {error && <Alert type="error" showIcon message={error} action={<Button disabled={busy} onClick={() => void load()}>刷新核对</Button>} />}
     <Card title="创建只读分享" size="small">
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
@@ -81,7 +82,7 @@ export default function ExternalSharePanel({ projectId, enabled, onDirtyChange }
       </Space>
     </Card>
     {link && <Alert type="success" showIcon closable onClose={() => setLink('')} message="链接仅在此次创建后显示，请妥善转交" description={<Space direction="vertical" style={{ width: '100%' }}><Input.TextArea aria-label="新分享链接" readOnly value={link} autoSize /><Typography.Text>持有链接即可读取所选内容；需要收回时撤销链接。刷新网页后无法找回原令牌。</Typography.Text><Button onClick={async () => { try { await navigator.clipboard.writeText(link) } catch { setError('复制失败，请选中链接手动复制') } }}>复制分享链接</Button></Space>} />}
-    <Card title="已创建分享" size="small" extra={<Button loading={loading} disabled={busy} onClick={() => void load()}>刷新列表</Button>}>
+    <Card title="已创建分享" size="small" extra={<RefreshAction label="刷新列表" loading={loading} disabled={busy} onClick={load} />}>
       <Table<ExternalShare> rowKey="id" size="small" dataSource={rows} loading={loading} pagination={{ pageSize: 10 }} scroll={{ x: 650 }} locale={{ emptyText: <Empty description="尚未创建外部分享" /> }} columns={[
         { title: '范围', render: (_, row) => <Space wrap>{row.scopes.map(scope => <Tag key={scope}>{SHARE_SCOPES.find(item => item.value === scope)?.label || scope}</Tag>)}{row.document_ids.length > 0 && <span>指定 {row.document_ids.length} 项</span>}</Space> },
         { title: '有效期', render: (_, row) => new Date(row.expires_at).toLocaleString() },

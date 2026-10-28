@@ -3,6 +3,7 @@ import { Alert, Button, Empty, Form, Input, InputNumber, Modal, Popconfirm, Sele
 import { api, errMsg } from '../../../api/client'
 import { useAuth } from '../../../stores/auth'
 import { useProjectCapability, useProjectWriteBlocked } from '../../../hooks/useProjectCapability'
+import { RefreshAction } from '../../../components/IconAction'
 
 interface Procurement {
   id: string; name: string; status: string; owner_id: string | null; owner_party: string; owner_name: string
@@ -101,7 +102,7 @@ export default function ProcurementPanel({ projectId, templateId, onDirtyChange 
     <Typography.Paragraph type="secondary">采购明细支持资料4.4。数量和到货状态在这里维护，资料本身仍需上传文件提交。</Typography.Paragraph>
     <Space wrap style={{ marginBottom: 12 }}>
       {writable && <><Button disabled={busy || !!error} onClick={() => open('new')}>新增采购项</Button><Button disabled={busy || !!error} onClick={() => void openCatalog()}>从采购库带入</Button></>}
-      <Button loading={loading} onClick={() => void load()}>刷新采购</Button>
+      <RefreshAction label="刷新采购" loading={loading} onClick={load} />
     </Space>
     {error && <Alert type="error" showIcon message={error} action={<Button onClick={() => void load()}>重新加载后重试</Button>} />}
     {actionError && !editing && !catalogOpen && <Alert type="error" showIcon message={actionError} />}

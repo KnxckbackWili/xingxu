@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { InfoHint } from './IconAction'
 
 /** A task-oriented heading: one main action, followed by optional tools. */
 export function WorkPageHeader({ title, description, primary, tools, meta }: {
@@ -9,7 +10,7 @@ export function WorkPageHeader({ title, description, primary, tools, meta }: {
   meta?: ReactNode
 }) {
   return <header className="work-page-header">
-    <div className="work-page-heading"><h1>{title}</h1>{description && <p>{description}</p>}{meta && <div className="work-page-meta">{meta}</div>}</div>
+    <div className="work-page-heading"><div className="work-title-row"><h1>{title}</h1>{description && <InfoHint text={description} />}</div>{meta && <div className="work-page-meta">{meta}</div>}</div>
     {(primary || tools) && <div className="work-page-actions">{primary}{tools}</div>}
   </header>
 }
@@ -23,7 +24,7 @@ export function WorkSection({ title, description, extra, filters, children, clas
   className?: string
 }) {
   return <section className={`work-section ${className}`}>
-    {(title || extra) && <div className="work-section-heading"><div>{title && <h2>{title}</h2>}{description && <p>{description}</p>}</div>{extra && <div className="work-section-actions">{extra}</div>}</div>}
+    {(title || extra) && <div className="work-section-heading"><div className="work-title-row">{title && <h2>{title}</h2>}{description && <InfoHint text={description} />}</div>{extra && <div className="work-section-actions">{extra}</div>}</div>}
     {filters && <div className="work-section-filters">{filters}</div>}
     <div className="work-section-body">{children}</div>
   </section>
