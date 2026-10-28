@@ -355,7 +355,8 @@ def test_allowed_preparation_import_still_requires_explicit_entry_decision(clien
 
 
 def test_acceptance_can_be_recorded_early_but_cannot_complete_incomplete_work(client, pm_headers):
-    pid = _project(client, pm_headers)
+    # Recorded during execution, before the acceptance stage (preparation cannot record acceptance).
+    pid = _project(client, pm_headers, "executing")
     rid = _sign(client, pm_headers, pid)
     with SessionLocal() as db:
         assert db.get(AcceptanceRecord, rid) is not None
@@ -461,7 +462,7 @@ def test_same_clock_review_recordings_preserve_revocation_order(client, pm_heade
 def test_new_acceptance_date_uses_project_local_today(client, pm_headers, monkeypatch, tz, day, expected):
     instant = datetime(2026, 10, 2, 0, 30, tzinfo=timezone.utc)
     monkeypatch.setattr("app.time_utils.now_in", lambda zone: instant.astimezone(ZoneInfo(zone)))
-    pid = _project(client, pm_headers)
+    pid = _project(client, pm_headers, "executing")
     with SessionLocal() as db:
         db.get(Project, pid).timezone = tz
         db.commit()
