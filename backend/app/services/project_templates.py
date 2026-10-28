@@ -30,7 +30,7 @@ def detach_project_phases(db: Session):
         phase = db.query(Phase).filter(Phase.project_id == module.project_id, Phase.name == source.name).first()
         if phase is None:
             phase = Phase(project_id=module.project_id, name=source.name, sort_order=source.sort_order,
-                          color=source.color, entry_criteria=source.entry_criteria, exit_criteria=source.exit_criteria)
+                          color=source.color, entry_criteria=source.entry_criteria, exit_criteria=source.exit_criteria, stage_key=source.stage_key)
             db.add(phase)
             db.flush()
         if not module.source_module_id:

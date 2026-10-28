@@ -196,7 +196,7 @@ def copy_tree(db: Session, src_template_id: str, dst_template_id: Optional[str],
     phase_map = {}
     for ph in src_phases:
         new_ph = Phase(project_id=None, template_id=dst_template_id, name=ph.name, sort_order=ph.sort_order,
-                       color=ph.color, entry_criteria=ph.entry_criteria, exit_criteria=ph.exit_criteria)
+                       color=ph.color, entry_criteria=ph.entry_criteria, exit_criteria=ph.exit_criteria, stage_key=ph.stage_key)
         db.add(new_ph)
         db.flush()
         phase_map[ph.id] = new_ph
@@ -342,7 +342,7 @@ def get_template_tree(template_id: str, user: User = Depends(get_current_user), 
                              "sort_order": m.sort_order, "description": m.description,
                 "preparation_conditions": m.preparation_conditions or [], "tasks": task_list,
                              "prep_only": ph.name in REMINDER_ONLY_PHASE_NAMES})
-        result.append({"id": ph.id, "name": ph.name, "sort_order": ph.sort_order, "color": ph.color,
+        result.append({"id": ph.id, "name": ph.name, "sort_order": ph.sort_order, "color": ph.color, "stage_key": ph.stage_key,
                        "entry_criteria": ph.entry_criteria, "exit_criteria": ph.exit_criteria, "modules": mod_list})
     from app.services.work_items import item_dicts
     phase_tasks = defaultdict(list)
@@ -408,6 +408,7 @@ class PhaseIn(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     sort_order: int = 0
     color: str = "#1890ff"
+    stage_key: Optional[Literal['4', '5', '6', '7', '8', '9']] = None
     modules: list[ModuleIn] = []
 
 
@@ -426,7 +427,7 @@ def _capture_phase_subtree(db: Session, tid, phase_id: str):
     if ph is None:
         return None
     return {
-        "id": ph.id, "name": ph.name, "sort_order": ph.sort_order, "color": ph.color,
+        "id": ph.id, "name": ph.name, "sort_order": ph.sort_order, "color": ph.color, "stage_key": ph.stage_key,
         "entry_criteria": ph.entry_criteria, "exit_criteria": ph.exit_criteria,
         "modules": [
             {
@@ -488,7 +489,7 @@ def _restore_phase_subtree(db: Session, tid, cap: dict, submitted_ids=frozenset(
     if not cap:
         return
     ph = Phase(id=cap["id"], project_id=None, template_id=tid, name=cap["name"], sort_order=cap["sort_order"],
-               color=cap["color"], entry_criteria=cap.get("entry_criteria"), exit_criteria=cap.get("exit_criteria"))
+               color=cap["color"], entry_criteria=cap.get("entry_criteria"), exit_criteria=cap.get("exit_criteria"), stage_key=cap.get("stage_key"))
     db.add(ph)
     db.flush()
     for mcap in cap["modules"]:
@@ -579,7 +580,7 @@ def _replace_template_tree(template_id, data, user, db, capability):
     _delete_tree(db, tid)
     db.flush()
     for ph in data.phases:
-        phase = Phase(id=ph.id, project_id=None, template_id=tid, name=ph.name, sort_order=ph.sort_order, color=ph.color, entry_criteria=ph.entry_criteria, exit_criteria=ph.exit_criteria)
+        phase = Phase(id=ph.id, project_id=None, template_id=tid, name=ph.name, sort_order=ph.sort_order, color=ph.color, entry_criteria=ph.entry_criteria, exit_criteria=ph.exit_criteria, stage_key=ph.stage_key)
         db.add(phase)
         db.flush()
         for m in ph.modules:

@@ -962,7 +962,7 @@ def clone_project(
         old_phase=phase_of(db,old_task)
         if old_phase is None:continue
         if old_phase.id not in phase_map:
-            phase=Phase(project_id=p.id,**{key:getattr(old_phase,key) for key in ('name','sort_order','color','entry_criteria','exit_criteria')})
+            phase=Phase(project_id=p.id,**{key:getattr(old_phase,key) for key in ('name','sort_order','color','entry_criteria','exit_criteria','stage_key')})
             db.add(phase);db.flush();phase_map[old_phase.id]=phase.id
         task=Task(project_id=p.id,phase_id=phase_map[old_phase.id],module_id=None,group_label=group_of(db,old_task),
             scope_conditions=deepcopy(old_task.scope_conditions or []),

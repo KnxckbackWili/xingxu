@@ -313,7 +313,7 @@ def generate(db,project,source_tasks):
         phase=db.query(Phase).filter(Phase.project_id==project.id,Phase.name.in_([origin.name,stage_label(origin.name)])).order_by(Phase.sort_order,Phase.id).first()
         if phase is None:
             phase=Phase(project_id=project.id,name=stage_label(origin.name),color=origin.color,sort_order=origin.sort_order,
-                entry_criteria=origin.entry_criteria,exit_criteria=origin.exit_criteria)
+                entry_criteria=origin.entry_criteria,exit_criteria=origin.exit_criteria,stage_key=origin.stage_key)
             db.add(phase);db.flush()
         row=Task(project_id=project.id,phase_id=phase.id,module_id=None,name=source.name,description=source.description,
             quantity_type='per_vehicle' if is_vehicle(source) else 'fixed',target_quantity=None,

@@ -587,7 +587,7 @@ def project_view(db, project, actor, start, weeks, *, include_cancelled=False):
     for task in work.tasks_query(db, [project.id]).order_by(Task.sort_order, Task.id):
         phase = work.phase_of(db, task)
         group = phases.setdefault(phase.id, {'id': phase.id, 'name': work.stage_label(phase.name),
-            'source_name': phase.name, 'sort_order': phase.sort_order or 0, 'work_items': []})
+            'source_name': phase.name, 'sort_order': phase.sort_order or 0, 'stage_key': phase.stage_key, 'work_items': []})
         group['work_items'].append({'id': task.id, 'name': task.name, 'kind': 'vehicle' if work.is_vehicle(task) else 'other',
             'group_label': work.group_of(db, task), 'vehicle_step_key': task.vehicle_step_key,
             'version': task.version or 0, 'applicable_vehicle_types': task.applicable_vehicle_types or []})
@@ -597,7 +597,8 @@ def project_view(db, project, actor, start, weeks, *, include_cancelled=False):
     if missing:
         warnings.append({'code': 'missing_holiday_years', 'years': missing, 'message': f'缺少 {"、".join(map(str, missing))} 年已核对节假日数据，请在设置维护，不能视为全年无节假日'})
     members = db.query(User).filter(User.id.in_(member_ids(project))).order_by(User.display_name, User.id).all()
-    return {'cells': data, 'work_items': sorted(phases.values(), key=lambda row: (row['sort_order'], row['id'])),
+    from app.services.template_stages import stage_order
+    return {'cells': data, 'work_items': sorted(phases.values(), key=lambda row: (stage_order(row['stage_key']), row['sort_order'], row['id'])),
         'weeks': metadata, 'warnings': warnings, 'timezone': project.timezone or 'Asia/Shanghai',
         'permissions': {'read': True, 'edit': editing, 'publish': editing,
             'claim': can_claim(project, actor), 'export': has_permission(actor, 'project.export', default=True) and 'project.export' in project_capabilities(actor, project)},

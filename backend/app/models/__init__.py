@@ -5,7 +5,7 @@ from datetime import date
 from app.time_utils import utcnow
 from sqlalchemy import (
     Column, Integer, BigInteger, String, Float, Boolean, Date, DateTime,
-    ForeignKey, Text, JSON, UniqueConstraint, CheckConstraint, Index, Enum as SAEnum, false,
+    ForeignKey, Text, JSON, UniqueConstraint, CheckConstraint, Index, Enum as SAEnum, false, event,
 )
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.dialects.postgresql import JSONB
@@ -405,8 +405,18 @@ class Phase(Base):
     color = Column(String(20), default="#1890ff")
     entry_criteria = Column(Text, default="")
     exit_criteria = Column(Text, default="")
+    # 主线阶段（资料编号第4–9阶段）；工作阶段是主线阶段下的工作分组。
+    stage_key = Column(String(10), nullable=True)
 
     project = relationship("Project", backref=backref("phases", passive_deletes=True, cascade="all, delete-orphan"))
+
+
+@event.listens_for(Phase, "before_insert")
+def _phase_stage_default(mapper, connection, target):
+    """Every work group sits on the stage backbone; copies pass their source's stage explicitly."""
+    if not target.stage_key:
+        from app.services.template_stages import infer_phase_stage
+        target.stage_key = infer_phase_stage(target.name)
 
 
 # ===== Module (实施模块) =====
