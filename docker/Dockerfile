@@ -1,5 +1,6 @@
 # Build the frontend from the lockfile so a clean checkout is deployable.
-FROM node:22-alpine AS frontend-builder
+# 前端产物与 CPU 架构无关：固定在构建机原生平台编译一次，多架构构建时不经 QEMU 模拟运行 npm。
+FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend-builder
 
 WORKDIR /build/frontend
 COPY frontend/package.json frontend/package-lock.json ./
