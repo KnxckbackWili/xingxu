@@ -7,7 +7,7 @@ from typing import Optional
 
 # Base directory
 BASE_DIR = Path(__file__).resolve().parent.parent
-APP_VERSION = os.getenv("APP_VERSION", "3.2.0")
+APP_VERSION = os.getenv("APP_VERSION", "3.3.0")
 
 # Data directory (SQLite DB, uploads)
 DATA_DIR = Path(os.getenv("DATA_DIR", BASE_DIR / "data"))
