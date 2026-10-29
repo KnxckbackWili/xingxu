@@ -120,19 +120,32 @@ def create_template(data: TemplateCreate, user: User = Depends(require_admin), d
     return {"id": t.id, "name": t.name}
 
 
+class TemplateUpdate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = Field(default=None, max_length=2000)
+
+
 @router.put("/{template_id}")
 @route_permission('system.templates.manage')
-def rename_template(template_id: str, data: TemplateCreate, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+def rename_template(template_id: str, data: TemplateUpdate, user: User = Depends(require_admin), db: Session = Depends(get_db)):
     if template_id == DEFAULT_TEMPLATE_ID:
         raise HTTPException(status_code=400, detail="系统默认模板不能重命名")
-    t = db.get(Template, template_id)
-    if t is None:
+    from app.services.document_requirements import lock_templates, recheck_authority
+    if db.get(Template, template_id) is None:
         raise HTTPException(status_code=404, detail="模板不存在")
-    t.name = data.name
-    if data.description:
-        t.description = data.description
+    lock_templates(db, template_id)
+    recheck_authority(db, user.id)
+    t = db.get(Template, template_id)
+    name = data.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="模板名称不能为空")
+    old = {"name": t.name, "description": t.description}
+    t.name = name
+    if data.description is not None:
+        t.description = data.description.strip()
+    log_change(db, None, "template", t.id, "update", user.id, f"修改模板「{t.name}」的名称或说明", old, {"name": t.name, "description": t.description})
     db.commit()
-    return {"id": t.id, "name": t.name}
+    return {"id": t.id, "name": t.name, "description": t.description}
 
 
 @router.post("/{template_id}/publish")

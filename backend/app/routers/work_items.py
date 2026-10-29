@@ -239,6 +239,74 @@ def update_template_work(template_id:str,task_id:str,body:TemplateWorkUpdate,use
     return service.item_dict(db,task,checks=True)
 
 
+def _template_task(db,template_id,task_id):
+    task=db.get(Task,task_id)
+    if task is None or task.project_id or task.template_id!=(None if template_id=='default' else template_id):raise HTTPException(404,'模板工作项不存在')
+    phase=service.phase_of(db,task)
+    if phase is None or phase.name in REMINDER_ONLY_PHASE_NAMES:raise HTTPException(400,'历史准备工作来源只读')
+    return task
+
+
+@router.delete('/templates/{template_id}/work-items/{task_id}')
+@route_permission('system.templates.manage')
+def delete_template_work(template_id:str,task_id:str,user:User=Depends(require_admin),db:Session=Depends(get_db)):
+    """Remove a work item from a template. Projects already created keep their own copies; uploaded reference files stay on disk."""
+    from app.models import TemplateDoc
+    _lock_template(db,template_id,user)
+    task=_template_task(db,template_id,task_id)
+    old=service.item_dict(db,task,checks=True)
+    db.query(CheckItem).filter_by(task_id=task.id,project_id=None).delete(synchronize_session=False)
+    db.query(TemplateDoc).filter_by(task_id=task.id).delete(synchronize_session=False)
+    db.delete(task)
+    _draft(db,template_id)
+    log_change(db,None,'template_task',task_id,'delete',user.id,f'删除模板工作项「{old["name"]}」',old,None);db.commit()
+    return {'id':task_id}
+
+
+class LayoutGroup(BaseModel):
+    model_config={'extra':'forbid'}
+    id:str
+    stage_key:StageKey
+    item_ids:list[str]=Field(default_factory=list,max_length=2000)
+
+
+class WorkLayout(BaseModel):
+    model_config={'extra':'forbid'}
+    groups:list[LayoutGroup]=Field(max_length=500)
+
+
+@router.put('/templates/{template_id}/work-layout')
+@route_permission('system.templates.manage')
+def save_template_layout(template_id:str,body:WorkLayout,user:User=Depends(require_admin),db:Session=Depends(get_db)):
+    """Save the whole order after a drag: each group's stage and position, and which items it holds in which order.
+
+    The layout must name every current group and item exactly once, so a stale page cannot drop or resurrect work.
+    """
+    _lock_template(db,template_id,user)
+    catalog=_catalog(db,template_id=template_id)
+    groups={phase['id'] for phase in catalog}
+    items={item['id']:phase['id'] for phase in catalog for item in phase['work_items']}
+    sent_groups=[group.id for group in body.groups]
+    sent_items=[item for group in body.groups for item in group.item_ids]
+    if len(set(sent_groups))!=len(sent_groups) or set(sent_groups)!=groups or len(set(sent_items))!=len(sent_items) or set(sent_items)!=set(items):
+        raise HTTPException(409,'模板已被其他人修改，请刷新后再调整顺序')
+    old=[{'id':phase['id'],'stage_key':phase['stage_key'],'item_ids':[item['id'] for item in phase['work_items']]} for phase in catalog]
+    for position,group in enumerate(body.groups):
+        phase=db.get(Phase,group.id);phase.stage_key=group.stage_key;phase.sort_order=position
+        for index,item_id in enumerate(group.item_ids):
+            task=db.get(Task,item_id)
+            if items[item_id]!=group.id:
+                if not task.phase_id and task.module_id and not task.group_label:
+                    module=db.get(Module,task.module_id);task.group_label=module.name if module else ''
+                task.phase_id=group.id
+            task.sort_order=index
+    db.flush()
+    _draft(db,template_id)
+    log_change(db,None,'template','default' if template_id=='default' else template_id,'update',user.id,'调整模板工作分组与工作项顺序',{'groups':old},body.model_dump())
+    db.commit()
+    return {'phases':_catalog(db,template_id=template_id)}
+
+
 @router.post('/templates/{template_id}/work-phases')
 @route_permission('system.templates.manage')
 def create_template_phase(template_id:str,body:PhaseCreate,user:User=Depends(require_admin),db:Session=Depends(get_db)):
