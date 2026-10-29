@@ -15,7 +15,7 @@
 | 需要了解 | 说明 |
 |---|---|
 | 项目人工状态、实际签单日期 | [项目状态](project-lifecycle-v3.md)、[关键事件](project-events.md)、[完成核对](completion-review.md)、[发车前资料](pre-dispatch-documents.md) |
-| 资料要求、文件、截止与触发 | [模板](document-requirement-templates.md)、[项目清单](project-documents.md)、[截止提醒](document-deadlines.md)、[事故/质量/离场触发](triggered-documents.md) |
+| 资料要求、文件、截止与触发 | [模板阶段主线](template-stage-backbone.md)、[资料要求模板](document-requirement-templates.md)、[项目清单](project-documents.md)、[截止提醒](document-deadlines.md)、[事故/质量/离场触发](triggered-documents.md) |
 | 表单与车辆事实 | [生成 Excel/Word](generated-document-forms.md)、[车辆进度](vehicle-progress.md)、[逐车检查](vehicle-checks.md)、[逐车资料](vehicle-documents.md) |
 | 权限与分享 | [账号预设](permission-presets.md)、[保密](confidential-documents.md)、[外部查看](external-view.md)、[二次验证](two-factor-auth.md) |
 | 上传、清理与数据保全 | [续传和存储](resumable-storage.md)、[加密备份](encrypted-backups.md)、[回收站](project-retention.md)、[功能下线](retired-features.md) |

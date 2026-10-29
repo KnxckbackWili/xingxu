@@ -27,7 +27,9 @@ def test_overview_overdue_matches_document_action_list(client, pm_headers):
     p = _generated_project(client, pm_headers)
     _legacy_past_schedule(p['id'])
     with SessionLocal() as db:
-        row = db.query(ProjectDocument).filter_by(project_id=p['id'], status='pending').first()
+        # an applicable row: platform-limited and legacy rows never appear in overdue lists
+        row = (db.query(ProjectDocument).filter_by(project_id=p['id'], status='pending', platform=None)
+               .filter(ProjectDocument.stage_key != 'legacy').order_by(ProjectDocument.code, ProjectDocument.id).first())
         row.due_at = datetime(2020, 1, 1); db.commit(); overdue_id = row.id
     detail = client.get(f"/api/projects/{p['id']}/overdue", headers=pm_headers)
     overview = client.get(f"/api/projects/{p['id']}/overview", headers=pm_headers)
