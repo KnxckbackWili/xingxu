@@ -12,7 +12,7 @@ RUN npm run build
 # A1/A2：容器内由 supervisord 托管 postgres / web / scheduler，
 # USE_POSTGRES=1 时启用容器内 PostgreSQL（单容器架构，不额外起容器）。
 FROM python:3.12-slim-trixie
-ARG APP_VERSION=3.1.0
+ARG APP_VERSION=3.2.0
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     TZ=Asia/Shanghai \
