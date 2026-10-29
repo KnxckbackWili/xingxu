@@ -62,7 +62,38 @@ def list_templates(user: User = Depends(get_current_user), db: Session = Depends
             "status": t.status or "draft",
             "usage_count": db.query(_P).filter(_P.template_id == t.id).count(),
         })
+    summaries = _template_summaries(db)
+    for row in result:
+        row["summary"] = summaries(row["id"])
     return result
+
+
+def _template_summaries(db):
+    """Per-stage work and document counts of every template, read in two grouped queries (template library cards)."""
+    from sqlalchemy import func
+    from sqlalchemy.orm import aliased
+    from app.models import DocumentRequirement
+    from app.services.template_stages import DEFAULT_WORK_STAGE
+    module = aliased(Module)
+    phase = aliased(Phase)
+    work = {}
+    rows = (db.query(Task.template_id, phase.stage_key, func.count(Task.id))
+            .outerjoin(module, module.id == Task.module_id)
+            .join(phase, phase.id == func.coalesce(Task.phase_id, module.phase_id))
+            .filter(Task.project_id.is_(None), phase.name.notin_(REMINDER_ONLY_PHASE_NAMES))
+            .group_by(Task.template_id, phase.stage_key).all())
+    for tid, stage, count in rows:
+        bucket = work.setdefault(tid or DEFAULT_TEMPLATE_ID, {})
+        stage = stage or DEFAULT_WORK_STAGE
+        bucket[stage] = bucket.get(stage, 0) + count
+    documents = {}
+    for tid, stage, count in (db.query(DocumentRequirement.template_id, DocumentRequirement.stage_key, func.count(DocumentRequirement.id))
+                              .filter(DocumentRequirement.is_group.is_(False))
+                              .group_by(DocumentRequirement.template_id, DocumentRequirement.stage_key).all()):
+        documents.setdefault(tid or DEFAULT_TEMPLATE_ID, {})[stage] = count
+    def summary(tid):
+        return {"work": work.get(tid, {}), "documents": documents.get(tid, {}), "vehicle_steps": len(_vehicle_template_steps(db, tid))}
+    return summary
 
 
 class TemplateCreate(BaseModel):

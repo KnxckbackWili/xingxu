@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { Alert, Button, Empty, Form, Input, InputNumber, Modal, Popconfirm, Select, Skeleton, Space, Switch, Tag, Typography, Upload, message } from 'antd'
-import { DeleteOutlined, DisconnectOutlined, DownloadOutlined, EditOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons'
+import { Alert, Button, Dropdown, Empty, Form, Input, InputNumber, Modal, Select, Skeleton, Space, Switch, Tag, Typography, message } from 'antd'
+import { DeleteOutlined, DisconnectOutlined, DownloadOutlined, EditOutlined, MoreOutlined, PaperClipOutlined, PlusOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons'
+import { stageLabel } from '../../constants/stages'
+import { StageOutline, StageSection, outlineStages } from './TemplateOutline'
 import { IconAction } from '../../components/IconAction'
 import { api } from '../../api/client'
 
@@ -26,13 +28,12 @@ export function timingLabel(row: Requirement) {
   return `${EVENTS[row.timing_event ?? ''] ?? ''}${row.timing_type === 'before_event' ? '前' : '后'} ${row.timing_offset_hours} 小时`
 }
 
-/** With stageKey the list is pinned to one stage of the template backbone (historical unclassified rows stay visible below). */
-export default function TemplateDocumentsTab({ templateId, editMode, refreshToken, stageKey, onChanged }: { templateId: string; editMode: boolean; refreshToken?: unknown; stageKey?: string; onChanged?: () => unknown }) {
+/** Document requirements along the stage backbone; a row opens its rule, file and delete actions sit in one menu. */
+export default function TemplateDocumentsTab({ templateId, editMode, refreshToken, onChanged }: { templateId: string; editMode: boolean; refreshToken?: unknown; onChanged?: () => unknown }) {
   const [rows, setRows] = useState<Requirement[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
   const [keyword, setKeyword] = useState('')
-  const [stageFilter, setStageFilter] = useState<string>()
   const [editing, setEditing] = useState<Requirement | 'new' | null>(null)
   const [busy, setBusy] = useState(false)
   const sequence = useRef(0)
@@ -81,7 +82,7 @@ export default function TemplateDocumentsTab({ templateId, editMode, refreshToke
   }
   const open = (row: Requirement | 'new') => {
     form.resetFields()
-    form.setFieldsValue(row === 'new' ? { ...RULE_EMPTY, stage_key: stageKey ?? (STAGES.some(stage => stage.value === stageFilter) ? stageFilter : '6'), code: '', name: '', template_no: '', is_group: false, required: true, scope: 'project', platform: null, parent_id: null, timing_type: 'on_demand', confidential_default: false, external_visible_default: false, external_never_visible: false, sort_order: rows.length, note: '' } : row.stage_key === 'legacy' ? { ...row, stage_key: undefined, code: '', parent_id: null } : row)
+    form.setFieldsValue(row === 'new' ? { ...RULE_EMPTY, stage_key: '6', code: '', name: '', template_no: '', is_group: false, required: true, scope: 'project', platform: null, parent_id: null, timing_type: 'on_demand', confidential_default: false, external_visible_default: false, external_never_visible: false, sort_order: rows.length, note: '' } : row.stage_key === 'legacy' ? { ...row, stage_key: undefined, code: '', parent_id: null } : row)
     setEditing(row)
   }
   const save = async () => {
@@ -98,65 +99,90 @@ export default function TemplateDocumentsTab({ templateId, editMode, refreshToke
       const link = document.createElement('a'); link.href = url; link.download = row.blank_file?.filename ?? '空白模板'; link.click(); URL.revokeObjectURL(url)
     } catch { message.error('空白模板下载失败，请重试或联系管理员核对文件') }
   }
-  const activeStage = stageKey ?? stageFilter
-  const filtered = rows.filter(row => (!activeStage || row.stage_key === activeStage || (!!stageKey && row.stage_key === 'legacy')) && `${row.code} ${row.name} ${row.template_no}`.toLowerCase().includes(keyword.toLowerCase()))
   const eventOptions = Object.entries(EVENTS).filter(([key]) => kind === 'after_milestone' ? MILESTONES.includes(key) : key !== 'vehicle_arrival' || (kind === 'after_event' && scope === 'vehicle')).map(([value, label]) => ({ value, label }))
-
-  const stageLabel = (key: string) => key === 'legacy' ? '历史待分类' : STAGES.find(stage => stage.value === key)?.label ?? `第${key}阶段`
-  const stageKeys = [...STAGES.map(stage => stage.value), 'legacy'].filter(key => rows.some(row => row.stage_key === key))
-  const count = (key: string) => rows.filter(row => row.stage_key === key && !row.is_group).length
-  const blankActions = (row: Requirement) => editMode && !row.is_group && <>
-    <Upload showUploadList={false} disabled={busy} beforeUpload={file => { const data = new FormData(); data.append('file', file); void act(() => api.post(`/templates/${templateId}/document-requirements/${row.id}/blank-file`, data), '空白模板已上传'); return false }}>
-      <IconAction label={row.blank_file ? `替换空白模板${row.code}` : `上传空白模板${row.code}`} icon={<UploadOutlined />} disabled={busy} />
-    </Upload>
-    {row.blank_file && <Popconfirm title="移除当前空白模板引用？历史版本保留。" onConfirm={() => act(() => api.delete(`/templates/${templateId}/document-requirements/${row.id}/blank-file`), '已移除引用')}>
-      <IconAction label={`移除空白模板${row.code}`} icon={<DisconnectOutlined />} danger disabled={busy} />
-    </Popconfirm>}
+  const term = keyword.trim().toLowerCase()
+  const hit = (row: Requirement) => !term || `${row.code} ${row.name} ${row.template_no}`.toLowerCase().includes(term)
+  const parentsOfHits = new Set(rows.filter(row => !row.is_group && hit(row)).map(row => row.parent_id))
+  const shown = rows.filter(row => row.is_group ? hit(row) || parentsOfHits.has(row.id) : hit(row))
+  const counts: Record<string, number> = {}
+  for (const row of shown) if (!row.is_group) counts[row.stage_key] = (counts[row.stage_key] ?? 0) + 1
+  const hasLegacy = rows.some(row => row.stage_key === 'legacy')
+  const stages = outlineStages(counts, hasLegacy ? [{ key: 'legacy', name: '历史待分类', count: counts.legacy ?? 0 }] : [])
+  const uploadInput = useRef<HTMLInputElement>(null)
+  const uploadFor = useRef<Requirement>()
+  const remove = (row: Requirement) => Modal.confirm({ title: row.is_group ? `删除分组「${row.name}」？` : `删除资料要求「${row.code} ${row.name}」？`, content: '既有项目与历史文件保留。', okText: '删除', okButtonProps: { danger: true }, cancelText: '取消',
+    onOk: () => act(() => api.delete(`/templates/${templateId}/document-requirements/${row.id}`), '资料要求已删除') })
+  const rowMenu = (row: Requirement) => {
+    const items = [
+      ...(row.blank_file ? [{ key: 'download', icon: <DownloadOutlined />, label: `下载空白模板（${row.blank_file.filename}）` }] : []),
+      ...(editMode && !row.is_group ? [{ key: 'upload', icon: <UploadOutlined />, label: row.blank_file ? '替换空白模板' : '上传空白模板' }] : []),
+      ...(editMode && row.blank_file ? [{ key: 'unlink', icon: <DisconnectOutlined />, label: '移除空白模板引用', danger: true }] : []),
+      ...(editMode ? [{ key: 'edit', icon: <EditOutlined />, label: row.is_group ? '编辑分组' : '编辑' }, { type: 'divider' as const }, { key: 'delete', icon: <DeleteOutlined />, label: row.is_group ? '删除分组' : '删除资料要求', danger: true }] : []),
+    ]
+    if (!items.length) return null
+    return <Dropdown trigger={['click']} disabled={busy} menu={{ items, onClick: ({ key }) => {
+      if (key === 'download') void download(row)
+      if (key === 'upload') { uploadFor.current = row; uploadInput.current?.click() }
+      if (key === 'unlink') Modal.confirm({ title: '移除当前空白模板引用？', content: '历史版本保留。', okText: '移除', cancelText: '取消', onOk: () => act(() => api.delete(`/templates/${templateId}/document-requirements/${row.id}/blank-file`), '已移除引用') })
+      if (key === 'edit') open(row)
+      if (key === 'delete') remove(row)
+    } }}><IconAction label={`资料${row.code}操作`} icon={<MoreOutlined />} /></Dropdown>
+  }
+  const flags = (row: Requirement) => <>
+    {row.stage_key === 'legacy' && <Tag color="orange">历史待分类</Tag>}
+    {row.scope === 'vehicle' && <span className="tpl-row-tag">每台车</span>}
+    {row.platform && <span className="tpl-row-tag">{row.platform === 'integrated' ? '集成' : row.platform}</span>}
+    {!row.required && <span className="tpl-row-tag">非必需</span>}
+    {row.confidential_default && <span className="tpl-row-tag is-warn">保密</span>}
+    {row.external_never_visible && <span className="tpl-row-tag">禁止外部查看</span>}
+    {row.external_visible_default && <span className="tpl-row-tag">对外可见</span>}
   </>
-  const requirementRow = (row: Requirement) => row.is_group
-    ? <li key={row.id} className="template-doc-group"><span className="template-doc-code">{row.code}</span><strong>{row.name}</strong>
-      {editMode && <span className="row-icon-actions"><IconAction label={`编辑资料${row.code}`} icon={<EditOutlined />} onClick={() => open(row)} disabled={busy} />
-        <Popconfirm title="删除此分组？既有项目与历史文件保留。" onConfirm={() => act(() => api.delete(`/templates/${templateId}/document-requirements/${row.id}`), '资料要求已删除')}><IconAction label={`删除资料${row.code}`} icon={<DeleteOutlined />} danger disabled={busy} /></Popconfirm></span>}</li>
-    : <li key={row.id} className={`template-doc-row${row.parent_code ? ' is-child' : ''}`}>
-      <div className="template-doc-main">
-        <span className="template-doc-title"><span className="template-doc-code">{row.code}</span>{row.name}{row.stage_key === 'legacy' && <Tag color="orange">历史待分类</Tag>}</span>
-        <span className="template-doc-meta">
-          <span>{timingLabel(row)}</span>
-          {row.scope === 'vehicle' && <span>每台车</span>}
-          {row.platform && <span>{row.platform === 'integrated' ? '集成' : row.platform}</span>}
-          {row.template_no && <span>{row.template_no}</span>}
-          {row.required ? <Tag color="blue">必需</Tag> : <Tag>非必需</Tag>}
-          {row.confidential_default && <Tag color="orange">默认保密</Tag>}
-          {row.external_never_visible && <Tag>禁止外部查看</Tag>}
-          {row.external_visible_default && <Tag>默认对外可见</Tag>}
-        </span>
-        {row.note && <Typography.Text type="secondary" className="template-doc-note">{row.note}</Typography.Text>}
-        {row.source_metadata && <details><summary>历史来源（只读）</summary><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: 180, overflow: 'auto' }}>{JSON.stringify(row.source_metadata, null, 2)}</pre></details>}
-      </div>
-      {row.blank_file && <Button type="link" size="small" className="template-doc-blank" icon={<DownloadOutlined />} onClick={() => void download(row)}>{row.blank_file.filename}</Button>}
-      <span className="row-icon-actions">
-        {blankActions(row)}
-        {editMode && <IconAction label={`${row.stage_key === 'legacy' ? '分类历史资料' : '编辑资料'}${row.code}`} icon={<EditOutlined />} onClick={() => open(row)} disabled={busy} />}
-        {editMode && <Popconfirm title="删除此资料要求？既有项目与历史文件保留。" onConfirm={() => act(() => api.delete(`/templates/${templateId}/document-requirements/${row.id}`), '资料要求已删除')}><IconAction label={`删除资料${row.code}`} icon={<DeleteOutlined />} danger disabled={busy} /></Popconfirm>}
-      </span>
+  const requirementRow = (row: Requirement) => {
+    if (row.is_group) return <li key={row.id} className="tpl-subhead">
+      <span className="tpl-code">{row.code}</span><strong>{row.name}</strong><span className="tpl-group-count">{shown.filter(child => child.parent_id === row.id).length}</span>{rowMenu(row)}
     </li>
+    const body = <>
+      <span className="tpl-row-title"><span className="tpl-code">{row.code}</span><span className="tpl-row-name">{row.name}</span>{flags(row)}</span>
+      <span className="tpl-row-meta">
+        {row.template_no && <span className="tpl-meta">{row.template_no}</span>}
+        <span className="tpl-meta">{timingLabel(row)}</span>
+        {row.blank_file && <span className="tpl-meta" title={`空白模板：${row.blank_file.filename}`}><PaperClipOutlined aria-label="已有空白模板" /></span>}
+      </span>
+      {row.note && <span className="tpl-row-note">{row.note}</span>}
+    </>
+    return <li key={row.id} className={row.parent_id ? 'is-child' : undefined}>
+      <div className="tpl-row-line">
+        {editMode ? <button type="button" className="tpl-row" disabled={busy} onClick={() => open(row)}>{body}</button> : <div className="tpl-row is-static">{body}</div>}
+        {rowMenu(row)}
+      </div>
+      {row.source_metadata && <details className="tpl-source"><summary>历史来源（只读）</summary><pre>{JSON.stringify(row.source_metadata, null, 2)}</pre></details>}
+    </li>
+  }
 
-  return <div className="template-docs">
-    <div className="template-work-toolbar">
-      <Input.Search aria-label="搜索资料要求" allowClear placeholder="搜编号、资料或模板编号" value={keyword} onChange={e => setKeyword(e.target.value)} />
+  return <div className="tpl-tab">
+    <div className="tpl-toolbar">
+      <Input allowClear prefix={<SearchOutlined />} aria-label="搜索资料要求" placeholder="搜编号、资料名称或模板编号" value={keyword} onChange={e => setKeyword(e.target.value)} />
       {editMode && <Button type="primary" icon={<PlusOutlined />} onClick={() => open('new')} disabled={busy}>新增资料要求</Button>}
     </div>
-    {!stageKey && <div className="template-stage-chips" role="group" aria-label="筛选资料阶段">
-      <button type="button" aria-pressed={!stageFilter} onClick={() => setStageFilter(undefined)}>全部 {rows.filter(row => !row.is_group).length}</button>
-      {stageKeys.map(key => <button key={key} type="button" aria-pressed={stageFilter === key} onClick={() => setStageFilter(key)}>{stageLabel(key)} {count(key)}</button>)}
-    </div>}
+    <input ref={uploadInput} type="file" hidden aria-hidden="true" onChange={event => {
+      const file = event.target.files?.[0]; const row = uploadFor.current; event.target.value = ''
+      if (!file || !row) return
+      const data = new FormData(); data.append('file', file)
+      void act(() => api.post(`/templates/${templateId}/document-requirements/${row.id}/blank-file`, data), '空白模板已上传')
+    }} />
     {error ? <Alert type="error" message="资料要求加载失败" action={<Button onClick={() => void load()}>重试</Button>} />
       : loading && !rows.length ? <Skeleton active paragraph={{ rows: 6 }} />
-      : !filtered.length ? <Empty description={stageKey ? (keyword ? '本阶段没有匹配的资料要求' : '本阶段还没有资料要求') : rows.length ? '没有匹配的资料要求' : '此模板尚未配置资料要求'} />
-      : <div className="template-doc-stages">{stageKeys.filter(key => filtered.some(row => row.stage_key === key)).map(key => <section key={key} aria-label={stageLabel(key)}>
-        {(!stageKey || key === 'legacy') && <h3>{stageLabel(key)}<Typography.Text type="secondary">{filtered.filter(row => row.stage_key === key && !row.is_group).length} 项</Typography.Text></h3>}
-        <ul>{filtered.filter(row => row.stage_key === key).map(requirementRow)}</ul>
-      </section>)}</div>}
+      : !rows.length ? <Empty description="此模板尚未配置资料要求" />
+      : term && !shown.length ? <Empty description="没有匹配的资料要求" />
+      : <StageOutline id="tpl-docs" label="资料" unit="份资料" stages={stages}>
+        {stages.map(stage => {
+          const list = shown.filter(row => row.stage_key === stage.key)
+          if (term && !list.length) return null
+          return <StageSection key={stage.key} outlineId="tpl-docs" stage={stage.key} title={stage.key === 'legacy' ? '历史待分类' : stageLabel(stage.key)} meta={stage.count ? `${stage.count} 份` : '暂无资料'}>
+            {!!list.length && <ul className="tpl-list tpl-doc-list">{list.map(requirementRow)}</ul>}
+          </StageSection>
+        })}
+      </StageOutline>}
     <Modal title={editing === 'new' ? '新增资料要求' : '编辑资料要求'} open={editing !== null} onCancel={() => !busy && setEditing(null)} onOk={() => void save()} confirmLoading={busy} okText="保存" cancelText="取消" width={700} destroyOnHidden>
       <Form form={form} layout="vertical" preserve>
         {editing && editing !== 'new' && editing.stage_key === 'legacy' && <Alert type="info" showIcon message="请明确选择第4–9阶段并填写对应编号；历史来源只读保留，不会改写。" style={{ marginBottom: 12 }} />}

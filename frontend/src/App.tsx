@@ -19,6 +19,7 @@ const ProjectListPage = lazy(() => import('./pages/pm/ProjectListPage'))
 const ProjectLayout = lazy(() => import('./pages/pm/project/ProjectLayout'))
 const InventoryOverviewPage = lazy(() => import('./pages/pm/InventoryOverviewPage'))
 const TemplateEditorPage = lazy(() => import('./pages/pm/TemplateEditorPage'))
+const TemplateLibraryPage = lazy(() => import('./pages/pm/TemplateLibraryPage'))
 const DashboardPage = lazy(() => import('./pages/pm/DashboardPage'))
 const PeoplePlanPage = lazy(() => import('./pages/pm/PeoplePlanPage'))
 const UsersPage = lazy(() => import('./pages/pm/UsersPage'))
@@ -176,7 +177,8 @@ export default function App() {
         <Route path="people" element={<ProtectedRoute navKey="/pm/people">{load(<PeoplePlanPage />)}</ProtectedRoute>} />
         <Route path="projects/:projectId" element={<ProtectedRoute navKey="/pm/projects">{load(<ProjectLayout />)}</ProtectedRoute>} />
         <Route path="projects/:projectId/:tab" element={<ProtectedRoute navKey="/pm/projects">{load(<ProjectLayout />)}</ProtectedRoute>} />
-        <Route path="templates" element={<ProtectedRoute navKey="/pm/templates">{load(<TemplateEditorPage />)}</ProtectedRoute>} />
+        <Route path="templates" element={<ProtectedRoute navKey="/pm/templates">{load(<TemplateLibraryPage />)}</ProtectedRoute>} />
+        <Route path="templates/:templateId" element={<ProtectedRoute navKey="/pm/templates">{load(<TemplateEditorPage />)}</ProtectedRoute>} />
         <Route path="ai-assistant" element={<Navigate to="/pm/projects" replace />} />
         <Route path="progress" element={<Navigate to="/pm/dashboard" replace />} />
         <Route path="stats" element={<Navigate to="/pm/dashboard#statistics" replace />} />

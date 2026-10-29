@@ -107,3 +107,20 @@ def test_migration_places_existing_groups_on_the_backbone(client, tmp_path, monk
         if pg:
             with engine.begin() as connection:
                 connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
+
+
+def test_template_list_carries_stage_summary(client, admin_headers):
+    listed = client.get('/api/templates', headers=admin_headers)
+    assert listed.status_code == 200, listed.text
+    default = next(row for row in listed.json() if row['id'] == 'default')
+    phases = _phases(client, admin_headers)
+    by_stage = {}
+    for phase in phases:
+        by_stage[phase['stage_key']] = by_stage.get(phase['stage_key'], 0) + len(phase['work_items'])
+    assert default['summary']['work'] == {key: count for key, count in by_stage.items() if count}
+    documents = client.get('/api/templates/default/document-requirements', headers=admin_headers).json()
+    assert sum(default['summary']['documents'].values()) == len([row for row in documents if not row['is_group']])
+    assert default['summary']['vehicle_steps'] == len(client.get('/api/templates/default/vehicle-steps', headers=admin_headers).json())
+    copy = client.post('/api/templates', headers=admin_headers, json={'name': '摘要复制模板', 'copy_from': 'default'}).json()
+    copied = next(row for row in client.get('/api/templates', headers=admin_headers).json() if row['id'] == copy['id'])
+    assert copied['summary']['work'] == default['summary']['work'] and copied['summary']['documents'] == default['summary']['documents']
