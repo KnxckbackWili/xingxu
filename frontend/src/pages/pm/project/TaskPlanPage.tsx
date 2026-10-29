@@ -1,6 +1,7 @@
 import { ensureVerifiedAccount } from '../../../utils/verifiedAccount'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Button, Collapse, Drawer, Dropdown, Empty, Input, Modal, Progress, Select, Space, Table, Tag, Typography } from 'antd'
+import { STAGES, stageIndex, stageLabel } from '../../../constants/stages'
 import { DownOutlined, EllipsisOutlined, SearchOutlined } from '@ant-design/icons'
 import './TaskPlanPage.css'
 import { Link } from 'react-router-dom'
@@ -32,6 +33,7 @@ export default function TaskPlanPage({ projectId, focusTaskId, onWorkChanged, de
   const [detailId, setDetailId] = useState<string>()
   const [editor, setEditor] = useState<{ item?: WorkItem }>()
   const [phaseName, setPhaseName] = useState<string>()
+  const [phaseStage, setPhaseStage] = useState<string>('6')
   const [source, setSource] = useState<any>()
   const [append, setAppend] = useState(false)
   const [templates, setTemplates] = useState<{ id: string; name: string }[]>([])
@@ -83,7 +85,7 @@ export default function TaskPlanPage({ projectId, focusTaskId, onWorkChanged, de
     if (lock.current || !canPlan || !phaseName?.trim()) return
     const owner = current.current; const seq = generation.current
     lock.current = true; setBusy(true)
-    try { ensureVerifiedAccount(user?.id); await api.post(`/projects/${projectId}/work-phases`, { name: phaseName }); if (current.current !== owner || seq !== generation.current) return; setPhaseName(undefined); await changed() }
+    try { ensureVerifiedAccount(user?.id); await api.post(`/projects/${projectId}/work-phases`, { name: phaseName, stage_key: phaseStage }); if (current.current !== owner || seq !== generation.current) return; setPhaseName(undefined); await changed() }
     catch (e) { if (current.current === owner) setError(errMsg(e)) } finally { lock.current = false; if (current.current === owner) setBusy(false) }
   }
   const readScope = async (id: string) => {
@@ -109,12 +111,12 @@ export default function TaskPlanPage({ projectId, focusTaskId, onWorkChanged, de
     <WorkPageHeader title="工作项" description="按阶段维护工作；车辆完成看真实进度表，非车辆工作记录完成状态。"
       primary={canPlan ? <Button type="primary" disabled={!data?.phases.length} onClick={() => setEditor({})}>添加工作项</Button> : undefined}
       tools={<Dropdown trigger={['click']} menu={{ items: [
-        ...(canPlan ? [{ key: 'phase', label: '添加阶段', onClick: () => setPhaseName('') }, { key: 'template', label: '从模板带入', onClick: () => void openScope() }] : []),
+        ...(canPlan ? [{ key: 'phase', label: '添加工作分组', onClick: () => setPhaseName('') }, { key: 'template', label: '从模板带入', onClick: () => void openScope() }] : []),
         { key: 'refresh', label: '刷新工作项', onClick: () => void load() },
       ] }}><Button loading={loading}>更多 <DownOutlined /></Button></Dropdown>} />
     {error && <Alert type="error" showIcon message="工作项读取或操作未完成" description={error} action={<Button onClick={() => void load()}>刷新核对</Button>} />}
     {!!data?.legacy_work_items?.length && <Collapse items={[{ key: 'legacy', label: `历史准备工作来源（只读） ${data.legacy_work_items.length} 项`, children: data.legacy_work_items.map(item => <p key={item.id}>{item.name} {item.group_label && <Tag>{item.group_label}</Tag>}<Button onClick={() => void history(item)}>查看原记录</Button></p>) }]} />}
-    {data && !data.phases.length && <Empty description="尚无工作阶段，添加阶段后即可维护工作项" />}
+    {data && !data.phases.length && <Empty description="尚无工作分组，添加分组后即可维护工作项" />}
     {data && !!data.phases.length && <div className="plan-toolbar">
       <Input allowClear prefix={<SearchOutlined />} aria-label="查找工作项" placeholder="查找工作项" value={query} onChange={event => setQuery(event.target.value)} className="plan-search" />
       <div className="plan-filters" role="group" aria-label="筛选工作项">
@@ -132,7 +134,11 @@ export default function TaskPlanPage({ projectId, focusTaskId, onWorkChanged, de
       const current = data.phases.find(phase => phase.work_items.some(item => !item.is_completed))
       const open = narrowed ? phases.map(row => row.phase.id) : current ? [current.id] : []
       if (!phases.length) return <Empty description="没有符合条件的工作项" />
-      return <Collapse className="plan-phases" defaultActiveKey={open} key={`${projectId}:${filter}:${term}:${data.phases.map(p => p.id).join('|')}`} items={phases.map(({ phase, items }) => {
+      // One section per backbone stage (4–9); work groups keep their order inside it.
+      const stages = [...new Set(phases.map(row => row.phase.stage_key ?? '6'))].sort((a, b) => stageIndex(a) - stageIndex(b))
+      return stages.map(stage => { const rows = phases.filter(row => (row.phase.stage_key ?? '6') === stage); return <section key={stage} className="plan-stage" aria-label={`阶段：${stageLabel(stage)}`}>
+      <h3 className="plan-stage-title">{stageLabel(stage)}<span className="plan-phase-count">{rows.reduce((n, row) => n + row.phase.work_items.length, 0)} 项工作</span></h3>
+      <Collapse className="plan-phases" defaultActiveKey={open} key={`${projectId}:${stage}:${filter}:${term}:${data.phases.map(p => p.id).join('|')}`} items={rows.map(({ phase, items }) => {
         const done = phase.work_items.filter(item => item.is_completed).length
         const checks = phase.work_items.filter(item => item.quality_blocked).length
         const percent = phase.work_items.length ? Math.round(done / phase.work_items.length * 100) : 0
@@ -140,7 +146,7 @@ export default function TaskPlanPage({ projectId, focusTaskId, onWorkChanged, de
           <Progress className="plan-phase-progress" percent={percent} size="small" showInfo={false} aria-label={`${phase.name}完成进度`} /><span className="plan-phase-count">{done}/{phase.work_items.length} 完成</span>
           {checks > 0 && <Tag color="orange">{checks} 项待检查</Tag>}</span>,
           children: <Table<WorkItem> rowKey="id" size="small" pagination={false} dataSource={items} locale={{ emptyText: '本阶段尚无工作项' }} columns={[
-            { title: '工作项', key: 'name', render: (_, item) => <div className="plan-work-name"><Button type="link" onClick={() => setDetailId(item.id)}>{item.name}</Button>{item.group_label && <Tag>{item.group_label}</Tag>}{item.description && <Typography.Paragraph type="secondary" ellipsis={{ rows: 1 }}>{item.description}</Typography.Paragraph>}</div> },
+            { title: '工作项', key: 'name', render: (_, item) => <div className="plan-work-name"><Button type="link" onClick={() => setDetailId(item.id)}>{item.name}</Button>{item.group_label && item.group_label !== item.phase_name && <Tag>{item.group_label}</Tag>}{item.description && <Typography.Paragraph type="secondary" ellipsis={{ rows: 1 }}>{item.description}</Typography.Paragraph>}</div> },
             { title: '完成情况', key: 'state', width: 260, render: (_, item) => item.kind === 'vehicle' ? <div className="plan-work-state"><Tag color="blue">车辆环节 · {item.matrix?.name || '尚未关联环节'}</Tag><span>{item.matrix?.expected_count == null ? '数量待核对' : `${item.matrix.completed_count} / ${item.matrix.expected_count} 个车辆环节`}</span>{item.matrix?.warning && <Typography.Text type="warning">{item.matrix.warning}</Typography.Text>}</div>
               : <div className="plan-work-state"><Tag color={item.is_completed ? 'green' : 'default'}>{item.is_completed ? '已完成' : '未完成'}</Tag>{item.quality_blocked && <Tag color="orange">检查待确认</Tag>}</div> },
             { title: '操作', key: 'actions', width: 220, render: (_, item) => <Space size={6} className="plan-work-actions">
@@ -152,10 +158,15 @@ export default function TaskPlanPage({ projectId, focusTaskId, onWorkChanged, de
               ] }}><Button aria-label={`${item.name}的更多操作`} icon={<EllipsisOutlined />} /></Dropdown>
             </Space> },
           ]} /> }
-      })} />
+      })} /></section> })
     })()}
     <WorkItemEditor canEdit={canPlan} open={!!editor} projectId={projectId} item={editor?.item} phases={data?.phases || []} steps={steps} onClose={() => setEditor(undefined)} onSaved={changed} />
-    <Modal title="添加工作阶段" open={phaseName !== undefined} onCancel={() => { if (!busy) setPhaseName(undefined) }} onOk={() => void addPhase()} okText="保存阶段" confirmLoading={busy} okButtonProps={{ disabled: !phaseName?.trim() || !canPlan }}><Input aria-label="工作阶段名称" value={phaseName} maxLength={100} onChange={e => setPhaseName(e.target.value)} /></Modal>
+    <Modal title="添加工作分组" open={phaseName !== undefined} onCancel={() => { if (!busy) setPhaseName(undefined) }} onOk={() => void addPhase()} okText="保存分组" confirmLoading={busy} okButtonProps={{ disabled: !phaseName?.trim() || !canPlan }}>
+      <Space direction="vertical" style={{ width: '100%' }}>
+        <Select aria-label="所属阶段" value={phaseStage} onChange={setPhaseStage} options={STAGES.map(stage => ({ value: stage.key, label: `${stage.key} · ${stage.name}` }))} style={{ width: '100%' }} />
+        <Input aria-label="工作分组名称" value={phaseName} maxLength={100} onChange={e => setPhaseName(e.target.value)} placeholder="例如：现场补充工作" />
+      </Space>
+    </Modal>
     <Modal title="从模板选择工作项" open={append} width={780} okText="带入所选工作" onCancel={() => { if (!busy) setAppend(false) }} onOk={() => void applyScope()} confirmLoading={busy} okButtonProps={{ disabled: !canPlan || !selectedWorkItems(scope, selected, excluded).length || busy }}><Select aria-label="工作来源模板" value={templateId} options={templates.map(t => ({ value: t.id, label: t.name }))} onChange={id => { setTemplateId(id); void readScope(id) }} /><TemplateScope phases={scope} selected={selected} onSelected={setSelected} excluded={excluded} onExcluded={setExcluded} disabled={busy} /></Modal>
     </>}
     <Drawer title={detail?.name || '工作项详情'} open={!!detailId} onClose={() => { setDetailId(undefined); onDetailClose?.() }} width={640}>

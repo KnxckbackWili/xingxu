@@ -15,3 +15,6 @@
 .plan-work-state { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 13px; }
 .plan-work-actions { flex-wrap: nowrap; }
 @media (max-width: 760px) { .plan-phase-progress.ant-progress { width: 100px; } .plan-search { width: 100%; } }
+/* Work groups sit under the stage backbone (4–9). */
+.plan-stage { margin-bottom: 18px; }
+.plan-stage-title { display: flex; align-items: baseline; gap: 10px; margin: 0 0 8px; font-size: 15px; font-weight: 650; }

@@ -26,7 +26,8 @@ export function timingLabel(row: Requirement) {
   return `${EVENTS[row.timing_event ?? ''] ?? ''}${row.timing_type === 'before_event' ? '前' : '后'} ${row.timing_offset_hours} 小时`
 }
 
-export default function TemplateDocumentsTab({ templateId, editMode, refreshToken }: { templateId: string; editMode: boolean; refreshToken?: unknown }) {
+/** With stageKey the list is pinned to one stage of the template backbone (historical unclassified rows stay visible below). */
+export default function TemplateDocumentsTab({ templateId, editMode, refreshToken, stageKey, onChanged }: { templateId: string; editMode: boolean; refreshToken?: unknown; stageKey?: string; onChanged?: () => unknown }) {
   const [rows, setRows] = useState<Requirement[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
@@ -73,14 +74,14 @@ export default function TemplateDocumentsTab({ templateId, editMode, refreshToke
     setBusy(true)
     try {
       await operation()
-      if (ticket === mutation.current && owner === current.current) { message.success(success); setEditing(null); await load() }
+      if (ticket === mutation.current && owner === current.current) { message.success(success); setEditing(null); await load(); void onChanged?.() }
     } catch (err: any) {
       if (ticket === mutation.current) { const detail = err.response?.data?.detail; message.error(typeof detail === 'string' ? detail : '操作未完成，请检查输入后重试') }
     } finally { if (ticket === mutation.current) { busyRef.current = false; setBusy(false) } }
   }
   const open = (row: Requirement | 'new') => {
     form.resetFields()
-    form.setFieldsValue(row === 'new' ? { ...RULE_EMPTY, stage_key: STAGES.some(stage => stage.value === stageFilter) ? stageFilter : '6', code: '', name: '', template_no: '', is_group: false, required: true, scope: 'project', platform: null, parent_id: null, timing_type: 'on_demand', confidential_default: false, external_visible_default: false, external_never_visible: false, sort_order: rows.length, note: '' } : row.stage_key === 'legacy' ? { ...row, stage_key: undefined, code: '', parent_id: null } : row)
+    form.setFieldsValue(row === 'new' ? { ...RULE_EMPTY, stage_key: stageKey ?? (STAGES.some(stage => stage.value === stageFilter) ? stageFilter : '6'), code: '', name: '', template_no: '', is_group: false, required: true, scope: 'project', platform: null, parent_id: null, timing_type: 'on_demand', confidential_default: false, external_visible_default: false, external_never_visible: false, sort_order: rows.length, note: '' } : row.stage_key === 'legacy' ? { ...row, stage_key: undefined, code: '', parent_id: null } : row)
     setEditing(row)
   }
   const save = async () => {
@@ -97,7 +98,8 @@ export default function TemplateDocumentsTab({ templateId, editMode, refreshToke
       const link = document.createElement('a'); link.href = url; link.download = row.blank_file?.filename ?? '空白模板'; link.click(); URL.revokeObjectURL(url)
     } catch { message.error('空白模板下载失败，请重试或联系管理员核对文件') }
   }
-  const filtered = rows.filter(row => (!stageFilter || row.stage_key === stageFilter) && `${row.code} ${row.name} ${row.template_no}`.toLowerCase().includes(keyword.toLowerCase()))
+  const activeStage = stageKey ?? stageFilter
+  const filtered = rows.filter(row => (!activeStage || row.stage_key === activeStage || (!!stageKey && row.stage_key === 'legacy')) && `${row.code} ${row.name} ${row.template_no}`.toLowerCase().includes(keyword.toLowerCase()))
   const eventOptions = Object.entries(EVENTS).filter(([key]) => kind === 'after_milestone' ? MILESTONES.includes(key) : key !== 'vehicle_arrival' || (kind === 'after_event' && scope === 'vehicle')).map(([value, label]) => ({ value, label }))
 
   const stageLabel = (key: string) => key === 'legacy' ? '历史待分类' : STAGES.find(stage => stage.value === key)?.label ?? `第${key}阶段`
@@ -144,15 +146,15 @@ export default function TemplateDocumentsTab({ templateId, editMode, refreshToke
       <Input.Search aria-label="搜索资料要求" allowClear placeholder="搜编号、资料或模板编号" value={keyword} onChange={e => setKeyword(e.target.value)} />
       {editMode && <Button type="primary" icon={<PlusOutlined />} onClick={() => open('new')} disabled={busy}>新增资料要求</Button>}
     </div>
-    <div className="template-stage-chips" role="group" aria-label="筛选资料阶段">
+    {!stageKey && <div className="template-stage-chips" role="group" aria-label="筛选资料阶段">
       <button type="button" aria-pressed={!stageFilter} onClick={() => setStageFilter(undefined)}>全部 {rows.filter(row => !row.is_group).length}</button>
       {stageKeys.map(key => <button key={key} type="button" aria-pressed={stageFilter === key} onClick={() => setStageFilter(key)}>{stageLabel(key)} {count(key)}</button>)}
-    </div>
+    </div>}
     {error ? <Alert type="error" message="资料要求加载失败" action={<Button onClick={() => void load()}>重试</Button>} />
       : loading && !rows.length ? <Skeleton active paragraph={{ rows: 6 }} />
-      : !filtered.length ? <Empty description={rows.length ? '没有匹配的资料要求' : '此模板尚未配置资料要求'} />
+      : !filtered.length ? <Empty description={stageKey ? (keyword ? '本阶段没有匹配的资料要求' : '本阶段还没有资料要求') : rows.length ? '没有匹配的资料要求' : '此模板尚未配置资料要求'} />
       : <div className="template-doc-stages">{stageKeys.filter(key => filtered.some(row => row.stage_key === key)).map(key => <section key={key} aria-label={stageLabel(key)}>
-        <h3>{stageLabel(key)}<Typography.Text type="secondary">{filtered.filter(row => row.stage_key === key && !row.is_group).length} 项</Typography.Text></h3>
+        {(!stageKey || key === 'legacy') && <h3>{stageLabel(key)}<Typography.Text type="secondary">{filtered.filter(row => row.stage_key === key && !row.is_group).length} 项</Typography.Text></h3>}
         <ul>{filtered.filter(row => row.stage_key === key).map(requirementRow)}</ul>
       </section>)}</div>}
     <Modal title={editing === 'new' ? '新增资料要求' : '编辑资料要求'} open={editing !== null} onCancel={() => !busy && setEditing(null)} onOk={() => void save()} confirmLoading={busy} okText="保存" cancelText="取消" width={700} destroyOnHidden>

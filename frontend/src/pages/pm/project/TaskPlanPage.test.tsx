@@ -48,3 +48,14 @@ it('filters by state and search, opening every matching phase', async () => {
   fireEvent.change(screen.getByRole('textbox', { name: '查找工作项' }), { target: { value: '不存在的工作' } })
   expect(screen.getByText('没有符合条件的工作项')).toBeVisible()
 })
+it('groups work groups under the stage backbone in stage order', async () => {
+  const staged = { ...source, phases: [
+    { id: 'late', name: '培训验收', color: '#1677ff', stage_key: '7', work_items: [work({ id: 'train', phase_id: 'late', name: '操作培训' })] },
+    { id: 'early', name: '进场准备', color: '#1677ff', stage_key: '5', work_items: [work({ id: 'survey', phase_id: 'early', name: '场地勘测' })] },
+  ] }
+  get.mockImplementation(async (url: string) => ({ data: url.endsWith('/work-items') ? staged : url.endsWith('/vehicle-progress') ? { steps: [] } : {} }))
+  post.mockResolvedValue({ data: {} })
+  show({ canManage: true, projectStatus: 'preparing' })
+  const sections = await screen.findAllByRole('region', { name: /^阶段：/ })
+  expect(sections.map(section => section.getAttribute('aria-label'))).toEqual(['阶段：5 · 发车前', '阶段：7 · 验收'])
+})

@@ -1,17 +1,17 @@
 import { ensureVerifiedAccount } from '../../utils/verifiedAccount'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Alert, Button, Collapse, Drawer, Dropdown, Empty, Input, Modal, Tag, Tooltip, Typography, Upload, message } from 'antd'
+import { Alert, Button, Drawer, Dropdown, Empty, Input, Modal, Popconfirm, Tag, Tooltip, Typography, Upload, message } from 'antd'
 import {
-  CarOutlined, CheckSquareOutlined, CopyOutlined, DownloadOutlined, EditOutlined, MoreOutlined, PaperClipOutlined, PlusOutlined,
-  SafetyCertificateOutlined, SearchOutlined, StarFilled, UploadOutlined, FileTextOutlined,
+  CarOutlined, CheckSquareOutlined, CopyOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, MoreOutlined, PaperClipOutlined, PlusOutlined,
+  SafetyCertificateOutlined, SearchOutlined, StarFilled, SwapOutlined, UploadOutlined, FileTextOutlined, SettingOutlined,
 } from '@ant-design/icons'
 import { api, errMsg } from '../../api/client'
 import { workItemsApi, type WorkItem, type WorkPhase } from '../../api/workItems'
 import { useAuth } from '../../stores/auth'
 import { hasSystemPermission } from '../../constants/systemPermissions'
+import { STAGES, STAGE_NAME, stageLabel } from '../../constants/stages'
 import { WorkPageHeader } from '../../components/WorkPage'
-import Tabs from '../../components/VisibleTabs'
 import TemplateDocumentsTab from './TemplateDocumentsTab'
 import TemplateProcurementsTab from './TemplateProcurementsTab'
 import TemplateVehicleSteps from '../../components/TemplateVehicleSteps'
@@ -21,8 +21,12 @@ import { IconAction, RefreshAction } from '../../components/IconAction'
 import './TemplateEditorPage.css'
 
 type TemplateRow = { id: string; name: string; description?: string; version?: number; status?: string; usage_count?: number; is_system: boolean }
+type GroupDialog = { mode: 'create' | 'rename'; phase?: WorkPhase; name: string }
 
-/** Templates as a list on the left and the chosen template's content on the right; actions act on the chosen template. */
+/**
+ * A template is one stage backbone (document stages 4–9). Each stage holds its work groups and work items,
+ * its document requirements, and — where they belong — vehicle steps (实施) and procurement (发车前).
+ */
 export default function TemplateEditorPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -33,30 +37,47 @@ export default function TemplateEditorPage() {
   const [tid, setTid] = useState('default')
   const [phases, setPhases] = useState<WorkPhase[]>([])
   const [steps, setSteps] = useState<{ key: string; name: string }[]>([])
+  const [docCounts, setDocCounts] = useState<Record<string, number>>({})
+  const [stage, setStage] = useState<string>(STAGES[0].key)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [editor, setEditor] = useState<{ item?: WorkItem }>()
-  const [phaseName, setPhaseName] = useState<string>()
+  const [editor, setEditor] = useState<{ item?: WorkItem; phaseId?: string }>()
+  const [group, setGroup] = useState<GroupDialog>()
   const [copyName, setCopyName] = useState<string>()
   const [docs, setDocs] = useState<WorkItem>()
+  const [stepsOpen, setStepsOpen] = useState(false)
   const [keyword, setKeyword] = useState('')
   const [busy, setBusy] = useState(false)
   const importInput = useRef<HTMLInputElement>(null)
   const lock = useRef(false)
   const generation = useRef(0)
+  const stagePicked = useRef<symbol | null>(null)
   const identityKey = `${user?.id}:${tid}`
   const identity = useMemo(() => Symbol(identityKey), [identityKey])
   const current = useRef(identity)
   current.current = identity
   const load = async () => {
     const id = tid; const owner = identity; const seq = ++generation.current; setLoading(true)
-    const results = await Promise.allSettled([api.get('/templates'), workItemsApi.template(id), api.get(`/templates/${id}/vehicle-steps`)])
+    const results = await Promise.allSettled([api.get('/templates'), workItemsApi.template(id), api.get(`/templates/${id}/vehicle-steps`), api.get(`/templates/${id}/document-requirements`)])
     if (current.current !== owner || seq !== generation.current) return
-    const [meta, work, vehicle] = results
-    if (meta.status === 'fulfilled' && work.status === 'fulfilled') { setTemplates(meta.value.data); setPhases(work.value.phases); setError('') }
+    const [meta, work, vehicle, documents] = results
+    if (meta.status === 'fulfilled' && work.status === 'fulfilled') {
+      setTemplates(meta.value.data); setPhases(work.value.phases); setError('')
+      // Open a template on its first stage that has work; later reloads keep the stage being edited.
+      if (stagePicked.current !== owner) {
+        stagePicked.current = owner
+        const first = STAGES.find(s => work.value.phases.some(phase => (phase.stage_key ?? '6') === s.key && phase.work_items.length))
+        setStage(first?.key ?? STAGES[0].key)
+      }
+    }
     else { setPhases([]); setError('模板读取失败，请重试。') }
     if (vehicle.status === 'fulfilled') setSteps(vehicle.value.data)
     else { setSteps([]); setError('车辆环节读取失败；已有工作保留，刷新后再选择关联。') }
+    if (documents.status === 'fulfilled' && Array.isArray(documents.value.data)) {
+      const counts: Record<string, number> = {}
+      for (const row of documents.value.data) if (!row.is_group) counts[row.stage_key] = (counts[row.stage_key] ?? 0) + 1
+      setDocCounts(counts)
+    }
     setLoading(false)
   }
   useEffect(() => { current.current = identity; setPhases([]); setEditor(undefined); setDocs(undefined); setKeyword(''); void load(); return () => { generation.current++; current.current = Symbol('closed') } }, [identity])
@@ -67,9 +88,21 @@ export default function TemplateEditorPage() {
     catch (e) { if (current.current === owner) setError(errMsg(e)) }
     finally { lock.current = false; if (current.current === owner) setBusy(false) }
   }
-  const createPhase = async () => {
-    if (!phaseName?.trim()) return
-    await mutate(async () => { await api.post(`/templates/${tid}/work-phases`, { name: phaseName }); setPhaseName(undefined) })
+  const saveGroup = async () => {
+    if (!group?.name.trim()) return
+    const name = group.name.trim()
+    await mutate(async () => {
+      if (group.mode === 'create') await api.post(`/templates/${tid}/work-phases`, { name, stage_key: stage })
+      else await api.put(`/templates/${tid}/work-phases/${group.phase!.id}`, { name })
+      setGroup(undefined)
+    })
+  }
+  const moveGroup = (phase: WorkPhase, target: string) => void mutate(async () => { await api.put(`/templates/${tid}/work-phases/${phase.id}`, { stage_key: target }); message.success(`已移到「${STAGE_NAME[target]}」`) })
+  const deleteGroup = (phase: WorkPhase) => void mutate(() => api.delete(`/templates/${tid}/work-phases/${phase.id}`))
+  const createStep = async (name: string) => {
+    const key = `step_${globalThis.crypto?.randomUUID?.().replace(/-/g, '') ?? Date.now().toString(36)}`
+    await api.put(`/templates/${tid}/vehicle-steps`, { steps: [...steps, { key, name }] })
+    return key
   }
   const copy = async () => {
     if (!copyName?.trim() || lock.current || !canManage) return
@@ -88,9 +121,14 @@ export default function TemplateEditorPage() {
 
   const selected = templates.find(t => t.id === tid)
   const workCount = phases.reduce((n, p) => n + p.work_items.length, 0)
+  const stageOf = (phase: WorkPhase) => phase.stage_key ?? '6'
+  const stagePhases = phases.filter(phase => stageOf(phase) === stage)
+  const stageWork = (key: string) => phases.filter(phase => stageOf(phase) === key).reduce((n, p) => n + p.work_items.length, 0)
   const term = keyword.trim().toLowerCase()
-  const visiblePhases = phases.map(phase => ({ phase, items: term ? phase.work_items.filter(item => `${item.name} ${item.group_label ?? ''} ${item.description ?? ''}`.toLowerCase().includes(term)) : phase.work_items }))
+  const visiblePhases = stagePhases.map(phase => ({ phase, items: term ? phase.work_items.filter(item => `${item.name} ${item.group_label ?? ''} ${item.description ?? ''}`.toLowerCase().includes(term)) : phase.work_items }))
     .filter(row => !term || row.items.length)
+  const vehicleItems = phases.flatMap(phase => phase.work_items.filter(item => item.kind === 'vehicle'))
+  const stageVehicleItems = stagePhases.flatMap(phase => phase.work_items.filter(item => item.kind === 'vehicle'))
   const stepName = (item: WorkItem) => steps.find(s => s.key === item.vehicle_step_key)?.name
   const moreItems = [
     ...(canManage ? [{ key: 'copy', icon: <CopyOutlined />, label: '复制为新模板' }] : []),
@@ -98,9 +136,9 @@ export default function TemplateEditorPage() {
     ...(canImport ? [{ key: 'import', icon: <UploadOutlined />, label: '导入模板 JSON', disabled: busy }] : []),
   ]
 
-  const workRow = (item: WorkItem) => <li key={item.id} className="template-work-row">
+  const workRow = (phase: WorkPhase) => (item: WorkItem) => <li key={item.id} className="template-work-row">
     <div className="template-work-main">
-      <span className="template-work-name">{item.name}{item.group_label && <Tag className="template-work-group">{item.group_label}</Tag>}</span>
+      <span className="template-work-name">{item.name}{item.group_label && item.group_label !== phase.name && <Tag className="template-work-group">{item.group_label}</Tag>}</span>
       {item.description && <Typography.Text type="secondary" ellipsis={{ tooltip: item.description }} className="template-work-desc">{item.description}</Typography.Text>}
     </div>
     <div className="template-work-meta">
@@ -115,8 +153,23 @@ export default function TemplateEditorPage() {
     </span>
   </li>
 
+  const groupBlock = ({ phase, items }: { phase: WorkPhase; items: WorkItem[] }) => <section key={phase.id} className="template-group" aria-label={`工作分组：${phase.name}`}>
+    <header className="template-group-head">
+      <strong>{phase.name}</strong><Typography.Text type="secondary">{items.length} 项</Typography.Text>
+      {canManage && <span className="row-icon-actions">
+        <IconAction label={`在「${phase.name}」添加工作项`} icon={<PlusOutlined />} onClick={() => setEditor({ phaseId: phase.id })} disabled={busy} />
+        <IconAction label={`重命名分组「${phase.name}」`} icon={<EditOutlined />} onClick={() => setGroup({ mode: 'rename', phase, name: phase.name })} disabled={busy} />
+        <Dropdown trigger={['click']} menu={{ items: STAGES.filter(s => s.key !== stageOf(phase)).map(s => ({ key: s.key, label: `移到 ${s.key} · ${s.name}` })), onClick: ({ key }) => moveGroup(phase, key) }}>
+          <IconAction label={`把分组「${phase.name}」移到其他阶段`} icon={<SwapOutlined />} disabled={busy} />
+        </Dropdown>
+        {!phase.work_items.length && <Popconfirm title={`删除空分组「${phase.name}」？`} onConfirm={() => deleteGroup(phase)}><IconAction label={`删除分组「${phase.name}」`} icon={<DeleteOutlined />} danger disabled={busy} /></Popconfirm>}
+      </span>}
+    </header>
+    {items.length ? <ul className="template-work-list">{items.map(workRow(phase))}</ul> : <p className="template-group-empty">还没有工作项</p>}
+  </section>
+
   return <div className="template-studio-page">
-    <WorkPageHeader title="项目模板" description="新项目从模板带入工作项、资料要求、采购项和车辆环节；修改模板不影响已创建的项目。" />
+    <WorkPageHeader title="项目模板" description="模板按第4–9阶段组织：每个阶段里放这一段的工作、要交的资料，发车前阶段还有采购物料，实施阶段还有逐车的车辆环节。修改模板不影响已创建的项目。" />
     {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
     <div className="template-studio">
       <nav className="template-list" aria-label="项目模板列表">
@@ -130,7 +183,7 @@ export default function TemplateEditorPage() {
         <header className="template-detail-head">
           <div className="template-detail-title">
             <h2>{selected?.name ?? '项目模板'}</h2>
-            <span>{selected?.is_system ? '系统模板' : selected?.status === 'published' ? '已发布' : '草稿'} · v{selected?.version || 1} · {workCount} 项工作 · {steps.length} 个车辆环节</span>
+            <span>{selected?.is_system ? '系统模板' : selected?.status === 'published' ? '已发布' : '草稿'} · v{selected?.version || 1} · {workCount} 项工作 · {Object.values(docCounts).reduce((a, b) => a + b, 0)} 项资料 · {steps.length} 个车辆环节</span>
             {selected?.description && <Typography.Paragraph type="secondary" className="template-detail-desc">{selected.description}</Typography.Paragraph>}
           </div>
           <div className="template-detail-actions">
@@ -145,32 +198,63 @@ export default function TemplateEditorPage() {
             <input ref={importInput} type="file" accept=".json" hidden aria-hidden="true" onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; if (file) importJson(file) }} />
           </div>
         </header>
-        <Tabs items={[
-          { key: 'work', label: `工作项 ${workCount}`, children: <>
-            <div className="template-work-toolbar">
-              <Input allowClear prefix={<SearchOutlined />} placeholder="查找工作项" aria-label="查找工作项" value={keyword} onChange={e => setKeyword(e.target.value)} />
-              {canManage && <><Button onClick={() => setPhaseName('')}>添加阶段</Button><Button type="primary" icon={<PlusOutlined />} disabled={!phases.length || loading} onClick={() => setEditor({})}>添加工作项</Button></>}
+
+        <ol className="template-stage-rail" aria-label="模板阶段">{STAGES.map(s => <li key={s.key}>
+          <button type="button" aria-current={stage === s.key ? 'step' : undefined} onClick={() => { setStage(s.key); setKeyword('') }}>
+            <span className="template-stage-index">{s.key}</span>
+            <span className="template-stage-copy"><strong>{s.name}</strong><small><span>{stageWork(s.key)} 工作</span> · <span>{docCounts[s.key] ?? 0} 资料</span></small></span>
+          </button>
+        </li>)}</ol>
+
+        <div className="template-stage-panel" aria-label={`阶段：${stageLabel(stage)}`}>
+          <section className="template-stage-section" aria-labelledby="template-stage-work">
+            <div className="template-section-head">
+              <h3 id="template-stage-work">工作</h3>
+              <Input allowClear prefix={<SearchOutlined />} placeholder="在本阶段查找工作项" aria-label="查找工作项" value={keyword} onChange={e => setKeyword(e.target.value)} />
+              {canManage && <><Button onClick={() => setGroup({ mode: 'create', name: '' })}>添加工作分组</Button>
+                <Button type="primary" icon={<PlusOutlined />} disabled={!stagePhases.length || loading} onClick={() => setEditor({ phaseId: stagePhases[0]?.id })}>添加工作项</Button></>}
             </div>
-            {!phases.length && !loading && <Empty description="暂无实施阶段" />}
-            {term && !visiblePhases.length && <Empty description="没有匹配的工作项" />}
-            <Collapse className="template-phases" key={`${tid}:${phases.map(p => p.id).join('|')}:${term ? 'search' : ''}`}
-              defaultActiveKey={term ? visiblePhases.map(row => row.phase.id) : phases.slice(0, 1).map(p => p.id)}
-              items={visiblePhases.map(({ phase, items }) => ({ key: phase.id,
-                label: <span className="template-phase-label">{phase.name}<Typography.Text type="secondary">{items.length} 项</Typography.Text></span>,
-                children: <ul className="template-work-list">{items.map(workRow)}</ul> }))} />
-          </> },
-          { key: 'documents', label: '资料要求', children: <TemplateDocumentsTab templateId={tid} editMode={canManage} /> },
-          { key: 'procurements', label: '采购库', children: <TemplateProcurementsTab templateId={tid} editMode={canManage} /> },
-          { key: 'vehicle_steps', label: `车辆环节 ${steps.length}`, children: <TemplateVehicleSteps templateId={tid} canManage={canManage} /> },
-        ]} />
+            {!stagePhases.length && !loading && <Empty description={`「${STAGE_NAME[stage]}」阶段还没有工作分组`} />}
+            {term && stagePhases.length > 0 && !visiblePhases.length && <Empty description="本阶段没有匹配的工作项" />}
+            {visiblePhases.map(groupBlock)}
+          </section>
+
+          {(stage === '6' || stageVehicleItems.length > 0) && <section className="template-stage-section" aria-labelledby="template-stage-steps">
+            <div className="template-section-head">
+              <h3 id="template-stage-steps">车辆环节</h3>
+              <Typography.Text type="secondary">每台车按这些环节逐车记录；逐车工作在添加工作项时选择或新建环节</Typography.Text>
+              {canManage && <Button icon={<SettingOutlined />} onClick={() => setStepsOpen(true)}>调整环节顺序与名称</Button>}
+            </div>
+            <ol className="template-step-summary">{steps.map((s, index) => {
+              const count = vehicleItems.filter(item => item.vehicle_step_key === s.key).length
+              return <li key={s.key}><span className="template-step-index">{index + 1}</span><span>{s.name}</span><Typography.Text type="secondary">{count ? `${count} 项逐车工作` : '暂无逐车工作'}</Typography.Text></li>
+            })}</ol>
+          </section>}
+
+          {stage === '5' && <section className="template-stage-section" aria-labelledby="template-stage-procurement">
+            <div className="template-section-head"><h3 id="template-stage-procurement">采购物料</h3></div>
+            <TemplateProcurementsTab templateId={tid} editMode={canManage} />
+          </section>}
+
+          <section className="template-stage-section" aria-labelledby="template-stage-docs">
+            <div className="template-section-head"><h3 id="template-stage-docs">要交的资料</h3></div>
+            <TemplateDocumentsTab templateId={tid} editMode={canManage} stageKey={stage} onChanged={load} />
+          </section>
+        </div>
       </section>
     </div>
-    <WorkItemEditor canEdit={canManage} open={!!editor} templateId={tid} item={editor?.item} phases={phases} steps={steps} onClose={() => setEditor(undefined)} onSaved={load} />
-    <Modal title="添加模板阶段" open={phaseName !== undefined} onCancel={() => { if (!busy) setPhaseName(undefined) }} onOk={() => void createPhase()} confirmLoading={busy} okText="保存阶段" okButtonProps={{ disabled: !canManage || !phaseName?.trim() }}><Input aria-label="模板阶段名称" value={phaseName} onChange={e => setPhaseName(e.target.value)} maxLength={100} /></Modal>
+    <WorkItemEditor canEdit={canManage} open={!!editor} templateId={tid} item={editor?.item} defaultPhaseId={editor?.phaseId} phases={phases} steps={steps}
+      onCreateStep={canManage ? createStep : undefined} onClose={() => setEditor(undefined)} onSaved={load} />
+    <Modal title={group?.mode === 'rename' ? '重命名工作分组' : `在「${STAGE_NAME[stage]}」添加工作分组`} open={!!group} onCancel={() => { if (!busy) setGroup(undefined) }} onOk={() => void saveGroup()} confirmLoading={busy} okText="保存分组" okButtonProps={{ disabled: !canManage || !group?.name.trim() }}>
+      <Input aria-label="工作分组名称" value={group?.name} onChange={e => setGroup(old => old && { ...old, name: e.target.value })} maxLength={100} placeholder="例如：现场勘测、单车调试" />
+    </Modal>
     <Modal title="复制为新模板" open={copyName !== undefined} onCancel={() => { if (!busy) setCopyName(undefined) }} onOk={() => void copy()} confirmLoading={busy} okText="创建模板" okButtonProps={{ disabled: !canManage || !copyName?.trim() }}>
       <Typography.Paragraph type="secondary">以「{selected?.name}」的全部内容为起点。</Typography.Paragraph>
       <Input aria-label="新模板名称" value={copyName} onChange={e => setCopyName(e.target.value)} maxLength={200} />
     </Modal>
+    <Drawer title="车辆环节" open={stepsOpen} onClose={() => { setStepsOpen(false); void load() }} width={560} destroyOnHidden>
+      <TemplateVehicleSteps templateId={tid} canManage={canManage} />
+    </Drawer>
     <Drawer title={`${docs?.name || ''} · 参考文档`} open={!!docs} onClose={() => setDocs(undefined)} width={600}>{docs && <>
       {!docs.reference_docs.length && <Empty description="暂无参考文档" />}
       <ul className="template-ref-list">{docs.reference_docs.map((ref: any) => <li key={ref.id}>

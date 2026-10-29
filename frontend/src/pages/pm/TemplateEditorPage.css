@@ -20,9 +20,6 @@
 .template-detail-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .template-work-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
 .template-work-toolbar > .ant-input-affix-wrapper, .template-work-toolbar > .ant-input-search { flex: 1 1 220px; max-width: 360px; }
-.template-phases .ant-collapse-content-box { padding: 0 !important; }
-.template-phase-label { display: inline-flex; gap: 10px; align-items: baseline; font-weight: 600; }
-.template-phase-label .ant-typography { font-weight: 400; font-size: 13px; }
 .template-work-list { list-style: none; margin: 0; padding: 0; }
 .template-work-row { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-top: 1px solid var(--agv-border-soft); }
 .template-work-row:first-child { border-top: 0; }
@@ -75,3 +72,37 @@
 .template-step-index { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--agv-primary-soft); color: var(--agv-primary); font-size: 13px; font-weight: 600; }
 .template-step-list .ant-input { flex: 1; }
 .template-step-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Stage backbone: 4–9 across the top, one stage's content below. */
+.template-stage-rail { list-style: none; margin: 12px 0 18px; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.template-stage-rail button { width: 100%; height: 100%; display: flex; align-items: center; gap: 8px; padding: 10px 8px; border-radius: 12px; border: 1px solid var(--agv-border-soft);
+  background: var(--agv-bg-container); color: var(--agv-text); font: inherit; text-align: left; cursor: pointer; }
+.template-stage-rail button:hover { border-color: var(--agv-primary); }
+.template-stage-rail button[aria-current='step'] { border-color: var(--agv-primary); background: var(--agv-primary-soft); }
+.template-stage-rail button:focus-visible { outline: 2px solid var(--agv-primary); outline-offset: 2px; }
+.template-stage-index { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--agv-bg-subtle); color: var(--agv-text-secondary); font-weight: 650; font-size: 13px; }
+.template-stage-rail button[aria-current='step'] .template-stage-index { background: var(--agv-primary); color: #fff; }
+.template-stage-copy { min-width: 0; display: flex; flex-direction: column; }
+.template-stage-copy strong { font-weight: 600; font-size: 14px; line-height: 1.3; word-break: keep-all; }
+.template-stage-copy small { color: var(--agv-text-secondary); font-size: 12px; line-height: 1.4; }
+.template-stage-copy small span { white-space: nowrap; }
+.template-stage-panel { display: flex; flex-direction: column; gap: 22px; }
+.template-section-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-bottom: 10px; }
+.template-section-head h3 { margin: 0 8px 0 0; font-size: 16px; font-weight: 650; }
+.template-section-head > .ant-input-affix-wrapper { flex: 1 1 200px; max-width: 300px; }
+.template-section-head > .ant-typography { flex: 1 1 200px; font-size: 12px; }
+.template-group { border: 1px solid var(--agv-border-soft); border-radius: 12px; overflow: hidden; margin-bottom: 10px; }
+.template-group-head { display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 14px; background: var(--agv-bg-subtle); }
+.template-group-head > strong { font-weight: 600; }
+.template-group-head > .ant-typography { flex: 1; font-size: 12px; }
+.template-group-empty { margin: 0; padding: 12px 14px; color: var(--agv-text-secondary); font-size: 13px; }
+.template-step-summary { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.template-step-summary li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 10px 12px; border: 1px solid var(--agv-border-soft); border-radius: 12px; }
+.template-step-summary li > .ant-typography { flex-basis: 100%; padding-left: 36px; font-size: 12px; }
+@media (max-width: 1199px) {
+  .template-stage-rail { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  .template-stage-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .template-group-head { flex-wrap: wrap; }
+}
