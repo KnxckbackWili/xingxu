@@ -225,10 +225,17 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
   const failureAlert = statusFailure && <Alert type="error" showIcon message="项目阶段尚未更新" description={statusFailure.message}
     action={<Space wrap>{failureLinks.length ? failureLinks.map(link => <Button key={link.path} onClick={() => { setMilestoneTarget(null); setArchiveModal(false); setSuspendOpen(false); go(link.path) }}>{link.label}</Button>)
       : <Button onClick={() => { setMilestoneTarget(null); setArchiveModal(false); setSuspendOpen(false); setStatusFailure(null); setLoadAttempt(value => value + 1) }}>重新查看项目</Button>}</Space>} />
+  const pushTarget = stageGuidance && !fieldStaff && canManageStatus && stageGuidance.next && (stageGuidance.next !== 'archived' || canArchive) ? stageGuidance.next : null
+  const reviewLabel = projectStatus === 'completed' ? '归档前核对' : '完成前核对'
   const statusItems = [
     ...allowedNext.map((status) => ({ key: status, label: `${status === milestoneNext[projectStatus] ? '确认进入' : '切换到'}「${STATUS_LABEL[status]}」`, onClick: () => requestStatus(status) })),
-    ...(canManageStatus && SUSPENDABLE_STATUSES.includes(projectStatus) ? [{ key: 'suspend', label: '突发停工', danger: true, onClick: () => { setSuspendReason(''); setSuspendOpen(true) } }] : []),
+    ...(canManageStatus && ['executing', 'acceptance', 'completed'].includes(projectStatus) ? [{ key: 'review', label: reviewLabel, onClick: () => setReviewOpen(true) }] : []),
+    ...(canManageStatus && SUSPENDABLE_STATUSES.includes(projectStatus) ? [{ type: 'divider' as const }, { key: 'suspend', label: '突发停工', danger: true, onClick: () => { setSuspendReason(''); setSuspendOpen(true) } }] : []),
   ]
+  const menuOf = (items: typeof statusItems) => items.some(item => 'label' in item) && <Dropdown trigger={['click']} menu={{ items }}><Button loading={changingStatus}>调整项目状态 <DownOutlined /></Button></Dropdown>
+  const statusMenu = menuOf(statusItems)
+  const checklistMenu = menuOf(statusItems.filter(item => item.key !== pushTarget))
+  const lifecycleTip = stageGuidance && !fieldStaff && <ContextTip id="project-lifecycle" title="项目怎么推进"><p>{stageGuidance.description}</p><p>发车前资料确认的就绪状态单独跟踪；完成与归档仍会检查当前证据。</p>{!canManageStatus && <p>由有权限的负责人确认项目状态，你可以查阅相关资料。</p>}</ContextTip>
   const link = (title: string, path: string, detail?: string, urgent = false) => <a
     className={`overview-tree-link${urgent ? ' is-urgent' : ''}`} href={`/pm/projects/${projectId}${path}`}
     onClick={event => { if (event.button !== 0 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return; event.preventDefault(); go(path) }}>
@@ -256,29 +263,32 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
       <CompletionReview key={projectId} projectId={projectId} target={projectStatus === 'completed' ? 'archived' : 'completed'} open={reviewOpen} onClose={() => setReviewOpen(false)} />
       {statusFailure && !archiveModal && !milestoneTarget && !suspendOpen && failureAlert}
       {projectStatus === 'suspended' && <Alert type="warning" showIcon message="项目已停工" description={projectSuspension?.reason || '请联系项目负责人了解恢复安排。'} />}
-      <section className="overview-tree-status" aria-label="当前行动">
-        <div className="overview-current-context"><div className="overview-current-status"><span>当前项目状态</span><strong>{projectStatusMeta(projectStatus).label}</strong></div>
+      {!checklist && <section className="overview-next" aria-label="当前行动">
+        <div className="overview-next-copy">
+          <span className="overview-next-kicker"><strong>{projectStatusMeta(projectStatus).label}</strong>{stageGuidance?.next && !fieldStaff && <span>下一项目状态：{STATUS_LABEL[stageGuidance.next]}</span>}{lifecycleTip}</span>
           <p>{projectStatus === 'suspended' && canManageStatus ? '处理停工原因后恢复原状态，现场实施仍需核对进场条件。' : actionDescription}</p>
-          {stageGuidance && !fieldStaff && <span className="overview-next-state">{stageGuidance.next ? `下一项目状态：${STATUS_LABEL[stageGuidance.next]}` : '项目状态说明'}
-            <ContextTip id="project-lifecycle" title="项目怎么推进"><p>{stageGuidance.description}</p><p>发车前资料确认的就绪状态单独跟踪；完成与归档仍会检查当前证据。</p>{!canManageStatus && <p>由有权限的负责人确认项目状态，你可以查阅相关资料。</p>}</ContextTip>
-          </span>}
         </div>
         <div className="overview-status-actions">
-        <Button type="primary" loading={changingStatus} disabled={projectStatus === 'suspended' && canManageStatus && !projectSuspension?.status_before}
-          icon={projectStatus === 'suspended' && canManageStatus ? <PlayCircleOutlined aria-hidden="true" /> : undefined}
-          onClick={() => projectStatus === 'suspended' && canManageStatus ? changeStatus(projectSuspension.status_before) : nextAction.status && canManageStatus ? requestStatus(nextAction.status) : go(nextAction.path)}>
-          {projectStatus === 'suspended' && canManageStatus ? '恢复项目' : nextAction.status && !canManageStatus ? '查看准备情况' : nextAction.title}<RightOutlined aria-hidden="true" />
-        </Button>
-        {stageGuidance && !fieldStaff && canManageStatus && stageGuidance.next && (stageGuidance.next !== 'archived' || canArchive) && stageGuidance.next !== nextAction.status && <Button loading={changingStatus} onClick={() => requestStatus(stageGuidance.next!)}>推进至「{STATUS_LABEL[stageGuidance.next]}」</Button>}
-        <Button onClick={() => setReviewOpen(true)}>{projectStatus === 'completed' ? '归档前核对' : '完成前核对'}</Button>
-        {statusItems.length > 0 && <Dropdown trigger={['click']} menu={{ items: statusItems }}><Button loading={changingStatus}>调整项目状态 <DownOutlined /></Button></Dropdown>}
+          <Button type="primary" loading={changingStatus} disabled={projectStatus === 'suspended' && canManageStatus && !projectSuspension?.status_before}
+            icon={projectStatus === 'suspended' && canManageStatus ? <PlayCircleOutlined aria-hidden="true" /> : undefined}
+            onClick={() => projectStatus === 'suspended' && canManageStatus ? changeStatus(projectSuspension.status_before) : nextAction.status && canManageStatus ? requestStatus(nextAction.status) : go(nextAction.path)}>
+            {projectStatus === 'suspended' && canManageStatus ? '恢复项目' : nextAction.status && !canManageStatus ? '查看准备情况' : nextAction.title}
+          </Button>
+          {!canManageStatus && !fieldStaff && ['executing', 'acceptance', 'completed'].includes(projectStatus) && <Button onClick={() => setReviewOpen(true)}>{reviewLabel}</Button>}
+          {statusMenu}
         </div>
-      </section>
+      </section>}
 
       <div className="overview-layout">
         <div className="overview-main">
-          <section className="overview-next-work overview-card" aria-label="待处理工作">
-            <h2>{checklist ? (pendingSteps ? `进入「现场实施」还差 ${pendingSteps} 项` : '准备清单已全部核对') : '现在要处理'}</h2>
+          <section className="overview-next-work overview-card" aria-label={checklist ? '当前行动' : '待处理工作'}>
+            <div className="overview-card-head">
+              <h2>{checklist ? (pendingSteps ? `进入「现场实施」还差 ${pendingSteps} 项` : '准备清单已全部核对') : '现在要处理'}{checklist && lifecycleTip}</h2>
+              {checklist && (pushTarget || checklistMenu) && <div className="overview-status-actions">
+                {pushTarget && <Button type={pendingSteps ? 'default' : 'primary'} loading={changingStatus} onClick={() => requestStatus(pushTarget)}>推进至「{STATUS_LABEL[pushTarget]}」</Button>}
+                {checklistMenu}
+              </div>}
+            </div>
             {checklist && <ol aria-label="准备清单" className="overview-checklist">{checklist.map(item => <li key={item.title} className={item.done ? 'is-done' : ''}>
               <span className="overview-check-mark" aria-hidden="true">{item.done ? '✓' : '!'}</span>
               <span className="overview-check-copy"><Button type="link" onClick={() => go(item.path)}>{item.title}</Button><small>{item.path === '/documents?review=1' && !entryReady(prep) ? preparationDetail : item.description}</small></span>
@@ -305,7 +315,7 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
             <h2>进度</h2>
             <div className="overview-side-metric"><span>总进度</span><strong>{data?.progress_known === false ? '未知（数量待补）' : `${data?.percent ?? 0}%`}</strong></div>
             <Progress percent={data?.percent ?? 0} showInfo={false} aria-label="项目概况进度" strokeColor="var(--agv-primary)" />
-            {currentPhase && <p className="overview-side-note">待完成阶段：{currentPhase.name}</p>}
+            {currentPhase && <p className="overview-side-note">下一个未完成分组：{currentPhase.name}</p>}
             <button type="button" className="overview-side-toggle" aria-expanded={dataOpen} aria-controls={`overview-evidence-${projectId}`} onClick={() => setDataOpen(value => !value)}>进度与记录 <RightOutlined aria-hidden="true" rotate={dataOpen ? 90 : 0} /></button>
           </section>
           <section className="overview-card overview-side-counts">

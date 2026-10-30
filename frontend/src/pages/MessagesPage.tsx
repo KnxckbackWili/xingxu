@@ -18,7 +18,7 @@ import { NOTIFICATION_READ_EVENT, notifyReadStateChanged } from '../utils/notifi
 import { formatDateTime } from '../utils/date'
 import { FONT } from '../constants/theme'
 import EmptyState from '../components/EmptyState'
-import { IconAction, RefreshAction } from '../components/IconAction'
+import { RefreshAction } from '../components/IconAction'
 
 interface NotificationT {
   id: string
@@ -170,11 +170,7 @@ export default function MessagesPage() {
   return (
     <div className="settings-work-page messages-work-page">
       <WorkPageHeader title={NAV_LABEL['/pm/messages']} description={NAV_DESCRIPTION['/pm/messages']}
-        primary={!detail && !selected.size ? <Button type="primary" disabled={loading || !items.length} onClick={() => {
-          detailTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
-          void openOne(items.find(item => !item.is_read) ?? items[0])
-        }}>{items.some(item => !item.is_read) ? '查看未读' : '查看消息'}</Button> : undefined}
-        tools={<Space><RefreshAction onClick={() => load(false)} /><IconAction bordered label="全部已读" icon={<CheckOutlined />} onClick={markAllRead} /></Space>} />
+        tools={<Space><RefreshAction onClick={() => load(false)} /><Button icon={<CheckOutlined />} aria-label="全部已读" onClick={markAllRead}>全部已读</Button></Space>} />
       <WorkSection title="收件箱" description={loading ? '正在加载消息' : `${items.length} 条已加载 · ${items.filter(item => !item.is_read).length} 条未读`} filters={
       <Space style={{ marginBottom: 16 }} wrap>
         <Segmented

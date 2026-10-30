@@ -1,10 +1,17 @@
-.events-table-wrap { overflow-x: auto; }
-.events-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.events-table thead th { text-align: left; font-size: 13px; font-weight: 500; color: var(--agv-text-secondary); background: var(--agv-bg-subtle); padding: 8px 12px; }
-.events-table tbody th, .events-table td { padding: 10px 12px; border-top: 1px solid var(--agv-border-soft); vertical-align: top; text-align: left; }
-.events-table tbody th { font-weight: 400; }
-.events-table-name { display: block; font-weight: 500; }
-.events-table tbody th small { display: block; color: var(--agv-text-secondary); font-size: 12px; line-height: 1.5; }
-.events-table td { color: var(--agv-text-secondary); white-space: nowrap; }
-.events-table tr.is-done td:nth-child(3) { color: var(--agv-success, #067647); }
-.events-table-actions { text-align: right !important; white-space: nowrap; }
+/* Key events as a compact vertical timeline: a dot per event, filled once it has happened. */
+.events-timeline { list-style: none; margin: 0; padding: 0; }
+.events-timeline > li { position: relative; display: flex; align-items: flex-start; gap: 12px; padding: 7px 0 7px 2px; }
+.events-timeline > li:not(:last-child)::before { content: ''; position: absolute; left: 7px; top: 22px; bottom: -8px; width: 2px; background: var(--agv-border-soft); }
+.events-dot { position: relative; z-index: 1; flex: none; width: 12px; height: 12px; margin-top: 5px; border: 2px solid var(--agv-border); border-radius: 50%; background: var(--agv-bg-container); }
+.events-timeline > li.is-done .events-dot { border-color: var(--agv-success, #067647); background: var(--agv-success, #067647); }
+.events-copy { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; }
+.events-copy strong { font-size: 14px; font-weight: 500; }
+.events-dates { color: var(--agv-text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }
+.events-timeline > li.is-done .events-dates { color: var(--agv-success, #067647); }
+.events-copy small { flex-basis: 100%; color: var(--agv-text-secondary); font-size: 12px; line-height: 1.5; }
+.events-actions { flex: none; display: inline-flex; }
+.events-actions .ant-btn { height: 24px; padding: 0 4px; }
+@media (hover: hover) {
+  .events-actions { opacity: 0; transition: opacity .12s; }
+  .events-timeline > li:hover .events-actions, .events-timeline > li:focus-within .events-actions { opacity: 1; }
+}

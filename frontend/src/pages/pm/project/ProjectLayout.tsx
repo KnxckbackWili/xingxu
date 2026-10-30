@@ -227,12 +227,11 @@ export default function ProjectLayout() {
         <div className="project-title-row">
           <Button aria-label="返回项目列表" icon={<ArrowLeftOutlined />} type="text" onClick={() => navigateSafely(projectListPath)} />
           <Typography.Title level={4} title={project.name} style={{ margin: 0 }}>{project.name}</Typography.Title>
+          <Tag color={st.color}>{st.label}</Tag>
         </div>
         <div className="project-context-row">
-          <Tag color={st.color}>{st.label}</Tag>
-
-          <span className="project-context-summary" title={[project.client, project.location].filter(Boolean).join(' · ') || project.manager_name}>{[project.client, project.location].filter(Boolean).join(' · ') || (project.manager_name ? `负责人 ${project.manager_name}` : '客户与地点待补充')}</span>
-          <Button className="project-info-trigger" type="text" onClick={() => setInfoOpen(true)}>项目信息</Button>
+          <span className="project-context-summary" title={[project.client, project.location].filter(Boolean).join(' · ') || project.manager_name}>{[project.client, project.location].filter(Boolean).join(' · ') || '客户与地点待补充'}{project.manager_name ? ` · 负责人 ${project.manager_name}` : ''} · 计划至 {project.end_date}</span>
+          <Button className="project-info-trigger" type="link" size="small" onClick={() => setInfoOpen(true)}>项目信息</Button>
         </div>
         {!unknownStatus && <ProjectStageBar status={project.status} statusBefore={project.suspension?.status_before ?? null} />}
       </div>

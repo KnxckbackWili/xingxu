@@ -3,7 +3,7 @@
 .project-workspace.project-tree-workspace > .project-workspace-header { margin: 0 0 12px; padding: 8px 14px; border: 1px solid var(--agv-border-soft); border-radius: 14px; background: var(--agv-bg-container); color: var(--agv-text); }
 .project-tree-workspace .project-title-row { display: flex; align-items: center; gap: 8px; }
 .project-tree-workspace .project-title-row > .ant-btn { flex: 0 0 44px; width: 44px; height: 44px; }
-.project-tree-workspace .project-title-row h4.ant-typography { flex: 1; min-width: 0; margin: 0; color: var(--agv-text); font-size: 20px; line-height: 1.4; overflow-wrap: anywhere; }
+.project-tree-workspace .project-title-row h4.ant-typography { flex: 0 1 auto; min-width: 0; margin: 0; color: var(--agv-text); font-size: 20px; line-height: 1.4; overflow-wrap: anywhere; }
 .project-tree-workspace .project-context-row { display: flex; align-items: center; gap: 8px; margin-left: 52px; min-width: 0; }
 .project-tree-workspace .project-context-row .ant-tag { flex-shrink: 0; margin: 0; }
 .project-context-summary { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--agv-text-secondary); font-size: 12px; }
@@ -82,7 +82,7 @@
 @media (max-width:600px) { .project-daily-navigation > button { padding:8px 10px; } }
 
 /* Six-stage bar under the project title */
-.project-stage-bar { list-style: none; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; margin: 10px 0 2px 52px; padding: 0; }
+.project-stage-bar { list-style: none; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin: 10px 0 2px 52px; padding: 0; }
 .project-stage-bar li { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .project-stage-track { height: 5px; border-radius: 3px; background: var(--agv-border-soft); }
 .project-stage-bar li.is-past .project-stage-track { background: color-mix(in srgb, var(--agv-primary) 45%, transparent); }
@@ -104,3 +104,14 @@
   .project-daily-navigation > button { flex:1 0 auto; flex-direction:column; gap:2px; padding:6px 2px; font-size:12px; min-width:46px; }
   .project-tab-icon { font-size:18px; }
 }
+
+/* Header: status beside the name, context and info link on one line. */
+.project-tree-workspace .project-title-row > .ant-tag { flex-shrink: 0; margin: 0; }
+.project-tree-workspace .project-context-summary { flex: 0 1 auto; min-width: 0; color: var(--agv-text-secondary); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-tree-workspace .project-info-trigger.ant-btn { min-height: 28px; padding-inline: 4px; }
+.project-more-current { margin-left: 4px; font-weight: 600; }
+/* Inside a project the tab already names the page: its page heading becomes a slim toolbar. */
+.project-workspace-main .work-page-header { align-items: center; margin-bottom: 16px; gap: 10px 16px; }
+.project-workspace-main .work-page-heading { display: flex; align-items: center; gap: 8px; flex: 1 1 200px; }
+.project-workspace-main .work-page-heading h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.project-workspace-main .work-page-meta { margin-top: 0; font-size: 13px; }

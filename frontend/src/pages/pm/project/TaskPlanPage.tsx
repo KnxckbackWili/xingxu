@@ -148,9 +148,9 @@ export default function TaskPlanPage({ projectId, focusTaskId, onWorkChanged, de
           children: <Table<WorkItem> rowKey="id" size="small" pagination={false} dataSource={items} locale={{ emptyText: '本阶段尚无工作项' }} columns={[
             { title: '工作项', key: 'name', render: (_, item) => <div className="plan-work-name"><Button type="link" onClick={() => setDetailId(item.id)}>{item.name}</Button>{item.group_label && item.group_label !== item.phase_name && <Tag>{item.group_label}</Tag>}{item.description && <Typography.Paragraph type="secondary" ellipsis={{ rows: 1 }}>{item.description}</Typography.Paragraph>}</div> },
             { title: '完成情况', key: 'state', width: 260, render: (_, item) => item.kind === 'vehicle' ? <div className="plan-work-state"><Tag color="blue">车辆环节 · {item.matrix?.name || '尚未关联环节'}</Tag><span>{item.matrix?.expected_count == null ? '数量待核对' : `${item.matrix.completed_count} / ${item.matrix.expected_count} 个车辆环节`}</span>{item.matrix?.warning && <Typography.Text type="warning">{item.matrix.warning}</Typography.Text>}</div>
-              : <div className="plan-work-state"><Tag color={item.is_completed ? 'green' : 'default'}>{item.is_completed ? '已完成' : '未完成'}</Tag>{item.quality_blocked && <Tag color="orange">检查待确认</Tag>}</div> },
+              : <div className="plan-work-state">{item.is_completed ? <Tag color="green">已完成</Tag> : <Typography.Text type="secondary">未完成</Typography.Text>}{item.quality_blocked && <Tag color="orange">检查待确认</Tag>}</div> },
             { title: '操作', key: 'actions', width: 220, render: (_, item) => <Space size={6} className="plan-work-actions">
-              <WorkCompletionAction projectId={projectId} item={item} canRecord={canRecord} canOverride={!!data.permissions.override} onSaved={changed} />
+              <WorkCompletionAction projectId={projectId} item={item} canRecord={canRecord} canOverride={!!data.permissions.override} blockedHint={['preparing', 'suspended'].includes(data.project_status ?? '') ? '进入现场实施后可登记' : undefined} onSaved={changed} />
               <Dropdown trigger={['click']} menu={{ items: [
                 { key: 'detail', label: '查看详情与检查', onClick: () => setDetailId(item.id) },
                 ...(canPlan ? [{ key: 'edit', label: '编辑', onClick: () => setEditor({ item }) }] : []),

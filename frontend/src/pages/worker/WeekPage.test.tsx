@@ -71,7 +71,7 @@ it('按真实周计划范围显示逐车检查与统一完成事实', async () =
   fireEvent.click(await screen.findByText('待完成检查 1 项'))
   expect(await screen.findByText('范围内检查')).toBeInTheDocument()
   expect(screen.queryByText('其它批次检查')).not.toBeInTheDocument()
-  expect(screen.getByText('当前完成 0 / 累计计划 1')).toBeInTheDocument()
+  expect(screen.getByText(/已完成 0 \/ 1/)).toBeInTheDocument()
   expect(screen.getByRole('button', { name: /AGV-A/ })).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: /AGV-B/ })).not.toBeInTheDocument()
 })
@@ -80,7 +80,7 @@ it('shows repeated warnings and the shared not-on-site notice once, naming the p
   const other = { ...plan, id: 'cell-2', project_id: 'project-2', project_name: '项目乙', project_status: 'preparing', can_record: false }
   mocks.get.mockResolvedValue({ data: { ...base, plans: [{ ...plan, project_status: 'preparing', can_record: false }, other],
     warnings: [{ project_id: 'project-1', message: '必需或安全检查仍需核对' }, { project_id: 'project-2', message: '必需或安全检查仍需核对' }, { project_id: 'project-2', message: '同周被安排到多个项目' }] } }); draw()
-  expect(await screen.findByText('有 3 条需要核对的提醒')).toBeInTheDocument()
+  expect(await screen.findByText('3 条计划提醒')).toBeInTheDocument()
   expect(screen.getByText('必需或安全检查仍需核对（2 处）')).toBeInTheDocument()
   expect(screen.getAllByText(/项目进入「现场实施」后才能登记完成和检查/)).toHaveLength(1)
   expect(screen.getByText(/项目甲、项目乙：项目进入「现场实施」后/)).toBeInTheDocument()

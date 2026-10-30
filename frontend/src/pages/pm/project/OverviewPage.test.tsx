@@ -34,7 +34,6 @@ describe('项目总览按需展开', () => {
     const current = within(screen.getByRole('region', { name: '当前行动' }))
     expect(current.getByRole('button', { name: /^资料清单$/ })).toBeVisible()
     expect(current.queryByRole('button', { name: /调整项目状态/ })).not.toBeInTheDocument()
-    expect(screen.getByRole('region', { name: '待处理工作' })).toBeVisible()
     // 准备阶段周计划只在准备清单中出现一次
     expect(screen.getAllByText(/89 格周计划/)).toHaveLength(1)
     expect(screen.getByText('89 格周计划，89 格草稿')).toBeVisible()
@@ -50,7 +49,8 @@ describe('项目总览按需展开', () => {
       phases: [{ id: 'phase1', name: '进场准备', percent: 100, modules: [{ id: 'm1', name: '安全检查', percent: 100, tasks: [{ id: 't/1', name: '确认现场安全围栏', percent: 100 }] }] }],
     } } })
     render(<OverviewPage projectId="p1" projectStatus="preparing" />)
-    expect(await screen.findByText('准备')).toBeVisible()
+    // the stage is named in the project header; the overview opens on what is left to prepare
+    expect(await screen.findByText(/进入「现场实施」还差/)).toBeVisible()
     fireEvent.click(screen.getByRole('button', { name: '进度与记录' })); expect(screen.getByText('各任务阶段数量进度已达标')).toBeVisible()
     expect(screen.queryByText('安全检查')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '任务阶段进度' })).not.toBeInTheDocument()
@@ -91,7 +91,8 @@ describe('项目总览按需展开', () => {
   it('a visible next milestone still requires an explicit decision and does not follow percent automatically', async () => {
     render(<OverviewPage projectId="p1" projectStatus="executing" canManageStatus />)
     expect(await screen.findByText('下一项目状态：验收中')).toBeVisible()
-    fireEvent.click(screen.getByRole('button', { name: '推进至「验收中」' }))
+    fireEvent.click(screen.getByRole('button', { name: /调整项目状态/ }))
+    fireEvent.click(await screen.findByText('确认进入「验收中」'))
     expect(apiPost).not.toHaveBeenCalled()
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '确认推进阶段' }))
     await waitFor(() => expect(apiPost).toHaveBeenCalledWith('/projects/p1/status', expect.objectContaining({ status: 'acceptance' })))
@@ -114,7 +115,8 @@ describe('项目总览按需展开', () => {
   it('completion failure retains the server reason and links directly to each required repair page', async () => {
     apiPost.mockRejectedValue({ response: { data: { detail: '仍有未完成或检查未通过的任务：安全检查' } } })
     render(<OverviewPage projectId="p1" projectStatus="acceptance" canManageStatus />)
-    fireEvent.click(await screen.findByRole('button', { name: '推进至「已完成」' }))
+    fireEvent.click(await screen.findByRole('button', { name: /调整项目状态/ }))
+    fireEvent.click(await screen.findByText('切换到「已完成」'))
     expect(apiPost).not.toHaveBeenCalled()
     fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '确认推进阶段' }))
     // 失败原因留在确认弹窗中（jsdom 下弹窗动画未结束，按存在性断言）。
@@ -141,7 +143,6 @@ describe('项目总览按需展开', () => {
   it('unknown state keeps original value visible and offers read-only audit navigation', async () => {
     render(<OverviewPage projectId="p1" projectStatus="legacy_unknown" canManageStatus />)
     expect(await screen.findByText('未知历史状态（legacy_unknown）')).toBeInTheDocument()
-    expect(screen.getByText('当前项目状态')).toBeVisible()
     fireEvent.click(screen.getByRole('button', { name: /查阅历史记录/ }))
     expect(navigate).toHaveBeenCalledWith('/pm/projects/p1/activity')
     expect(screen.queryByRole('button', { name: /调整项目状态/ })).toBeNull()
@@ -175,8 +176,11 @@ describe('项目总览按需展开', () => {
     render(<OverviewPage projectId="p2" projectStatus="preparing" canManageStatus />)
     await screen.findByRole('button', { name: '进度与记录' })
     expect(apiGet.mock.calls.map(([url]) => url)).toEqual(['/projects/p2/overview'])
+    // entering 现场实施 is the one push from 准备; the menu keeps only the other changes
+    expect(screen.getByRole('button', { name: '推进至「现场实施」' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /调整项目状态/ }))
-    expect(await screen.findByText('切换到「现场实施」')).toBeInTheDocument()
+    expect(await screen.findByText('突发停工')).toBeInTheDocument()
+    expect(screen.queryByText('切换到「现场实施」')).not.toBeInTheDocument()
     expect(screen.queryByText('切换到「计划中」')).not.toBeInTheDocument()
     expect(apiPost).not.toHaveBeenCalled()
   })
@@ -225,8 +229,7 @@ describe('项目总览按需展开', () => {
   it('blocked entry offers current review instead of a warning-confirm bypass', async () => {
     apiPost.mockRejectedValue({ response: { status: 400, data: { detail: '当前进场条件未满足，请先评审并明确批准风险进场' } } })
     render(<OverviewPage projectId="p1" projectStatus="preparing" canManageStatus />)
-    fireEvent.click(await screen.findByRole('button', { name: /调整项目状态/ }))
-    fireEvent.click(await screen.findByText('切换到「现场实施」'))
+    fireEvent.click(await screen.findByRole('button', { name: '推进至「现场实施」' }))
     fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '确认推进阶段' }))
     expect(await screen.findByText('当前进场条件未满足，请先评审并明确批准风险进场')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '仍然切换' })).not.toBeInTheDocument()
@@ -254,8 +257,7 @@ describe('项目总览按需展开', () => {
     const changed = vi.fn()
     apiPost.mockResolvedValue({ data: { requires_confirmation: true, warnings: ['缺少入场证'] } })
     render(<OverviewPage projectId="p1" projectStatus="preparing" canManageStatus onStatusChange={changed} />)
-    fireEvent.click(await screen.findByRole('button', { name: /调整项目状态/ }))
-    fireEvent.click(await screen.findByText('切换到「现场实施」'))
+    fireEvent.click(await screen.findByRole('button', { name: '推进至「现场实施」' }))
     fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '确认推进阶段' }))
     expect(await screen.findByText(/缺少入场证；请到资料清单核对发车前资料/)).toBeInTheDocument()
     expect(changed).not.toHaveBeenCalled()

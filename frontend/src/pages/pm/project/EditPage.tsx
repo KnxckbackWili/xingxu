@@ -2,7 +2,6 @@ import ExternalSharePanel from './ExternalSharePanel'
 import TeamPage from './TeamPage'
 import VehicleLifecyclePage from './VehicleLifecyclePage'
 import { useLocation, useNavigate } from 'react-router-dom'
-import HolidayCalendarNotice from '../../../components/HolidayCalendarNotice'
 import { DISPATCH_PLATFORMS, PLAN_EVENTS, PROJECT_EVENT_LABELS, planFormValues, planPayload, plannedDate } from '../../../constants/projectEvents'
 import { useProjectCapability, useProjectWriteBlocked } from '../../../hooks/useProjectCapability'
 import ProjectOwnerPanel from './ProjectOwnerPanel'
@@ -186,7 +185,6 @@ export default function EditPage({ project, onReload }: { project: Project; onRe
 
   return (
     <>
-    <HolidayCalendarNotice years={project?.missing_holiday_years} />
     <WorkPageHeader title="项目设置" description="维护项目资料、成员、车型与负责人；工作项及周计划到「计划」调整。" />
     <Tabs
       className="project-settings-tabs"
@@ -232,13 +230,13 @@ export default function EditPage({ project, onReload }: { project: Project; onRe
             </Card>
           ),
         },
-        { key:'members',label:'成员',disabled:saving,children:<TeamPage key={`${project.id}:${coDraftEpoch}`} project={project} onReload={onReload} canEdit={canEdit && project.capabilities?.includes('project.manage_members') !== false} inlineSetup onDirtyChange={membersDirty} onSchedule={()=>navigate(`/pm/projects/${project.id}/plan?view=weeks`)} /> },
-        { key:'schedule',label:'排期设置',disabled:saving,children:<WeeklyPlanSettings key={`${project.id}:${coDraftEpoch}`} project={project} onReload={onReload} onDirtyChange={scheduleDirty}/> },
         { key:'vehicles',label:'车型配置',disabled:saving,children:<VehicleLifecyclePage key={`${project.id}:${coDraftEpoch}`} project={project} onReload={onReload} configurationOnly onDirtyChange={vehiclesDirty} /> },
+        { key:'schedule',label:'排期设置',disabled:saving,children:<WeeklyPlanSettings key={`${project.id}:${coDraftEpoch}`} project={project} onReload={onReload} onDirtyChange={scheduleDirty}/> },
+        { key:'members',label:'成员',disabled:saving,children:<TeamPage key={`${project.id}:${coDraftEpoch}`} project={project} onReload={onReload} canEdit={canEdit && project.capabilities?.includes('project.manage_members') !== false} inlineSetup onDirtyChange={membersDirty} onSchedule={()=>navigate(`/pm/projects/${project.id}/plan?view=weeks`)} /> },
         {
           key: 'member-permissions',
           disabled: saving,
-          label: '成员授权',
+          label: '成员权限',
           children: <MemberPermissions key={project.id} project={project}
             members={(project.members ?? []).map(id => users.find(person => person.id === id) ?? { id, display_name: id })} onReload={onReload} />,
         },
@@ -249,16 +247,16 @@ export default function EditPage({ project, onReload }: { project: Project; onRe
           children: <ProjectCoManagers key={`${project.id}:${coDraftEpoch}`} project={project} users={users} canEdit={isOwner && canEdit} onReload={onReload} onDirtyChange={coManagersDirty} />,
         },
         {
+          key: 'owner',
+          disabled: saving,
+          label: '移交负责人',
+          children: <ProjectOwnerPanel key={`${project.id}:${coDraftEpoch}`} project={project} onReload={onReload} onDirtyChange={ownerDirty} />,
+        },
+        {
           key: 'external',
           disabled: saving,
           label: '外部查看',
           children: <ExternalSharePanel key={`${project.id}:${coDraftEpoch}`} projectId={project.id} enabled={user?.id === project.manager && hasEditPermission && user?.permission_overrides?.['project.read'] !== false} onDirtyChange={externalDirty} />,
-        },
-        {
-          key: 'owner',
-          disabled: saving,
-          label: '负责人',
-          children: <ProjectOwnerPanel key={`${project.id}:${coDraftEpoch}`} project={project} onReload={onReload} onDirtyChange={ownerDirty} />,
         },
       ]}
     />

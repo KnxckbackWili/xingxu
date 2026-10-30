@@ -96,3 +96,7 @@
   .project-recent-link { transition: none; }
 }
 .project-library-table .project-table-client { display: block; font-size: 12px; margin-top: 2px; }
+.project-progress-cell { display: flex; flex-direction: column; gap: 2px; }
+.vehicle-progress-compact { font-size: 12px; }
+.project-overdue-docs.ant-tag { cursor: pointer; font-size: 11px; }
+.project-card-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }

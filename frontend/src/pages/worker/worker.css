@@ -93,3 +93,5 @@
 .week-plan-checks .ant-collapse-content-box { padding-inline: 0 !important; }
 .week-plan-checks p { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 8px; }
 @media (max-width: 991px) { .week-layout { grid-template-columns: minmax(0, 1fr); } }
+.week-notice-fold { padding: 8px 12px; border-radius: 8px; background: rgb(250 173 20 / 10%); font-size: 13px; }
+.week-notice-fold summary { cursor: pointer; color: #ad6800; }

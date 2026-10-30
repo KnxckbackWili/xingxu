@@ -1,3 +1,4 @@
+import dayjs from 'dayjs'
 import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, Card, Collapse, DatePicker, Empty, Modal, Space, Tag, Typography, Upload } from 'antd'
 import { Link } from 'react-router-dom'
@@ -47,11 +48,13 @@ export default function WeekPage({ projectId = '' }: { projectId?: string }) {
     const step = matrix?.steps.find(row => row.key === (plan.vehicle_step_key || work.vehicle_step_key) && (!work.vehicle_step_key || work.vehicle_step_key === row.key))
     const units = matrix?.units.filter(unit => (!plan.scope?.vehicle_unit_ids?.length || plan.scope.vehicle_unit_ids.includes(unit.id)) && (!plan.scope?.vehicle_type || unit.vehicle_type === plan.scope.vehicle_type)) || []
     const checks = work.check_items?.filter(check => !check.is_done && check.is_applicable && (!check.vehicle_unit_id || units.some(unit => unit.id === check.vehicle_unit_id))) ?? []
-    return <Card key={plan.id} size="small" title={work.name} extra={<Tag>{plan.mode === 'in_progress' ? '进行中' : '计划完成'}</Tag>} className="week-plan-card">
-      <p className="week-plan-meta">{plan.project_name} · {work.phase_name} · {plan.week_start} 当周{assist ? ` · 协助 ${plan.assignees.map(p => p.name).join('、')}` : ''}{plan.scope?.label ? ` · ${plan.scope.label}` : ''}</p>
-      {plan.completion && <p><Tag color={plan.completion.overdue ? 'red' : plan.completion.is_complete ? 'green' : undefined}>{plan.completion.quantity_unknown ? '当前完成范围待核对' : plan.completion.is_complete ? '当前核验已完成' : plan.completion.overdue ? '计划完成已逾期' : '当前仍待完成'}</Tag>{work.kind === 'vehicle' && <span>当前完成 {plan.completion.completed_count ?? '未知'} / 累计计划 {plan.completion.required_count ?? (plan.mode === 'in_progress' ? '进行中' : '待核对')}</span>}</p>}
+    const completion = plan.completion
+    const completionTag = completion && (completion.quantity_unknown ? <Tag>完成范围待核对</Tag> : completion.is_complete ? <Tag color="green">已完成</Tag> : completion.overdue ? <Tag color="red">已逾期</Tag> : null)
+    const hideRecord = !!recordBlocked && sharedBlocked.has(recordBlocked)
+    return <Card key={plan.id} size="small" title={work.name} extra={<>{plan.mode === 'in_progress' && <Tag>进行中</Tag>}{completionTag}</>} className="week-plan-card">
+      <p className="week-plan-meta">{plan.project_name} · {work.phase_name}{assist ? ` · 协助 ${plan.assignees.map(p => p.name).join('、')}` : ''}{plan.scope?.label ? ` · ${plan.scope.label}` : ''}{completion && work.kind === 'vehicle' ? ` · 已完成 ${completion.completed_count ?? '未知'} / ${completion.required_count ?? (plan.mode === 'in_progress' ? '进行中' : '待核对')}` : ''}</p>
       {recordBlocked && !sharedBlocked.has(recordBlocked) && <Alert type="info" showIcon message={recordBlocked} style={{ marginBottom: 8 }} />}
-      {work.kind === 'vehicle' ? step ? units.map(unit => { const cell = unit.cells[step.key]; return <p key={unit.id}><Button disabled={!recordAllowed || loading || !!cell?.is_done} onClick={() => open(plan, 'vehicle', unit.id, cell?.version || 0, true, `${unit.fleet_no || unit.asset_code} · ${step.name}`, step.key, assist)}>{cell?.is_done ? `已完成 ${cell.done_on || ''}` : '勾选完成'} · {unit.fleet_no || unit.asset_code}</Button></p> }) : <Alert type="warning" message="真实车辆环节尚未读取，不能按计划量填报" /> : <Button disabled={!recordAllowed || loading || work.is_completed} onClick={() => open(plan, 'work', work.id, work.version, true, work.name, '', assist)}>{work.is_completed ? '已完成' : '登记实际完成'}</Button>}
+      {hideRecord ? null : work.kind === 'vehicle' ? step ? units.map(unit => { const cell = unit.cells[step.key]; return <p key={unit.id}><Button disabled={!recordAllowed || loading || !!cell?.is_done} onClick={() => open(plan, 'vehicle', unit.id, cell?.version || 0, true, `${unit.fleet_no || unit.asset_code} · ${step.name}`, step.key, assist)}>{cell?.is_done ? `已完成 ${cell.done_on || ''}` : '勾选完成'} · {unit.fleet_no || unit.asset_code}</Button></p> }) : <Alert type="warning" message="真实车辆环节尚未读取，不能按计划量填报" /> : <Button disabled={!recordAllowed || loading || work.is_completed} onClick={() => open(plan, 'work', work.id, work.version, true, work.name, '', assist)}>{work.is_completed ? '已完成' : '登记实际完成'}</Button>}
       {!!checks.length && <Collapse ghost size="small" className="week-plan-checks" items={[{ key: 'checks', label: `待完成检查 ${checks.length} 项${checks.some(check => check.failed) ? '（含不通过）' : ''}`,
         children: checks.map(check => <p key={check.id}><span>{check.vehicle_label ? `${check.vehicle_label} · ` : ''}{check.name} </span>{check.failed && <Tag color="red">不通过</Tag>}<Button size="small" disabled={!recordAllowed || loading} onClick={() => open(plan, 'check', check.id, check.version, true, check.name, '', assist)}>登记检查通过</Button></p>) }]} />}
       <Link to={`/pm/projects/${plan.project_id}/overview`}>查看项目</Link>
@@ -77,10 +80,10 @@ export default function WeekPage({ projectId = '' }: { projectId?: string }) {
     } finally { uploadLock.current = false; if (active.current === owner) setUploadBusy(false) }
   }
   return <div className="worker-work-page">
-    <WorkPageHeader title={canAccessNav('/pm/dashboard', user) ? '我的本周' : '工作台'} description="本周分配给你的工作；登记实际完成日期，协助登记会同时保留操作人和被协助人。" tools={<Space wrap><DatePicker picker="week" aria-label="计划周" onChange={value => setWeek(value?.subtract((value.day() + 6) % 7, 'day').format('YYYY-MM-DD'))} /><RefreshAction onClick={load} loading={loading} /></Space>} />
+    <WorkPageHeader title={canAccessNav('/pm/dashboard', user) ? '我的本周' : '工作台'} description="本周分配给你的工作；登记实际完成日期，协助登记会同时保留操作人和被协助人。" tools={<Space wrap><DatePicker picker="week" aria-label="计划周" value={week ? dayjs(week) : dayjs()} allowClear={false} onChange={value => setWeek(value?.subtract((value.day() + 6) % 7, 'day').format('YYYY-MM-DD'))} /><RefreshAction onClick={load} loading={loading} /></Space>} />
     {error && <Alert type="error" message="本周信息未能读取" description={error} />}
-    {warningGroups.size > 0 && <Alert type="warning" showIcon className="week-notice" message={warningGroups.size === 1 ? [...warningGroups.keys()][0] : `有 ${data!.warnings.length} 条需要核对的提醒`}
-      description={warningGroups.size > 1 || data!.warnings.length > 1 ? <ul className="week-notice-list">{[...warningGroups].map(([message, count]) => <li key={message}>{message}{count > 1 ? `（${count} 处）` : ''}</li>)}</ul> : undefined} />}
+    {warningGroups.size > 0 && <details className="week-notice week-notice-fold"><summary>{data!.warnings.length} 条计划提醒</summary>
+      <ul className="week-notice-list">{[...warningGroups].map(([message, count]) => <li key={message}>{message}{count > 1 ? `（${count} 处）` : ''}</li>)}</ul></details>}
     {[...sharedBlocked].map(reason => <Alert key={reason} type="info" showIcon className="week-notice" message={`${[...blockedGroups.get(reason)!].join('、')}：${reason}`} />)}
     {!!pendingCount && <Alert type="info" message={`${pendingCount} 条操作仍在本机队列，未计作服务器完成`} action={<Button disabled={!online} onClick={() => void flush().then(load)}>同步原操作</Button>} />}
     {!!rejected.length && <Card size="small" title="需核对的离线操作">{rejected.map(row => <p key={row.client_uuid}>{row.reason} <Button onClick={() => retry(row.client_uuid)}>重试原操作</Button><Button onClick={() => remove(row.client_uuid)}>移除本机待核对项</Button></p>)}</Card>}

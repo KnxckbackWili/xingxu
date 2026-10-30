@@ -18,13 +18,13 @@ const show=()=>render(page())
 beforeEach(()=>{vi.clearAllMocks();h.user={id:'pm',role:'pm',permission_version:0,permission_overrides:{}};h.list.mockResolvedValue(fixture());h.create.mockResolvedValue(cell('new'));h.update.mockResolvedValue(cell());h.publish.mockResolvedValue({});h.draft.mockResolvedValue({});h.defaultRules.mockResolvedValue({rules:[],suggestions:[],warnings:[]});h.verify.mockImplementation(()=>undefined)})
 it('shows work by week and keeps planned people separate from actual completion',async()=>{
  show();expect(await screen.findByRole('region',{name:'周计划表'})).toBeVisible()
- expect(screen.getByText('接线核对')).toBeVisible();expect(screen.getByText('李工')).toBeVisible();expect(screen.getByText('计划完成')).toBeVisible()
- expect(screen.queryByText('计划 0 项')).toBeNull();expect(screen.getByRole('link',{name:'排期设置'})).toHaveAttribute('href','/pm/projects/p1/edit?section=schedule')
+ expect(screen.getByText('接线核对')).toBeVisible();expect(screen.getByText(/李工/)).toBeVisible();expect(screen.getByText('计划完成')).toBeVisible()
+ expect(screen.queryByText('计划 0 项')).toBeNull();fireEvent.click(screen.getByRole('button',{name:'更多周计划操作'}));expect(await screen.findByRole('link',{name:'排期设置'})).toHaveAttribute('href','/pm/projects/p1/edit?section=schedule')
 })
 it('allows a server-authorized field role and honors an explicit system denial',async()=>{
- h.user={id:'worker',role:'worker',permission_overrides:{}};const view=show();await screen.findByRole('button',{name:'新增计划格'})
+ h.user={id:'worker',role:'worker',permission_overrides:{}};const view=show();await screen.findByRole('button',{name:/新增计划格/})
  h.user={...h.user,permission_version:1,permission_overrides:{'project.manage_schedule':false}};view.rerender(page())
- await waitFor(()=>expect(h.list).toHaveBeenCalledTimes(2));expect(screen.queryByRole('button',{name:'新增计划格'})).toBeNull();expect(await screen.findByText('接线核对')).toBeVisible()
+ await waitFor(()=>expect(h.list).toHaveBeenCalledTimes(2));expect(screen.queryByRole('button',{name:/新增计划格/})).toBeNull();expect(await screen.findByText('接线核对')).toBeVisible()
 })
 it('creates non-vehicle completion plans without a quantity and rejects duplicate clicks',async()=>{
  let finish!:(v:any)=>void;h.create.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve}));show()
@@ -34,7 +34,7 @@ it('creates non-vehicle completion plans without a quantity and rejects duplicat
  await act(async()=>finish(cell('new')))
 })
 it('requires positive vehicle targets and never invents a zero target',async()=>{
- show();fireEvent.click(await screen.findByRole('button',{name:'安排单车检查 '+start}));expect(screen.getByRole('button',{name:'保存计划'})).toBeDisabled()
+ show();fireEvent.click(await screen.findByRole('switch',{name:'显示全部工作项'}));fireEvent.click(await screen.findByRole('button',{name:'安排单车检查 '+start}));expect(screen.getByRole('button',{name:'保存计划'})).toBeDisabled()
  fireEvent.change(screen.getByRole('spinbutton',{name:'计划完成车辆台数'}),{target:{value:'2'}});fireEvent.click(screen.getByRole('button',{name:'保存计划'}))
  await waitFor(()=>expect(h.create).toHaveBeenCalledWith('p1',expect.objectContaining({task_id:'w2',target_count:2,scope:{vehicle_unit_ids:[]}})))
 })
@@ -55,7 +55,7 @@ it('previews generation before saving and binds the confirmed body to its token'
  await waitFor(()=>expect(h.draft).toHaveBeenCalledWith('p1',{phase_rules:[{phase_id:'phase',anchor:'before_ship',offset_weeks:0,mode:'finish'}],preview_token:'preview-sha'}))
 })
 it('shows failed reads as unknown without empty-plan statistics',async()=>{
- h.list.mockRejectedValueOnce(new Error('当前不可读取'));show();expect(await screen.findByText('周计划暂不可读取')).toBeVisible();expect(screen.queryByText(/已发布 0/)).toBeNull();expect(screen.queryByRole('button',{name:'新增计划格'})).toBeNull()
+ h.list.mockRejectedValueOnce(new Error('当前不可读取'));show();expect(await screen.findByText('周计划暂不可读取')).toBeVisible();expect(screen.queryByText(/已发布 0/)).toBeNull();expect(screen.queryByRole('button',{name:/新增计划格/})).toBeNull()
  fireEvent.click(screen.getByRole('button',{name:'重试读取'}));expect(await screen.findByRole('region',{name:'周计划表'})).toBeVisible()
 })
 it('ignores a late response for the previous project',async()=>{
@@ -90,4 +90,12 @@ it('requires an explicit source review and reason to resolve uncertain legacy pl
  h.list.mockResolvedValue(fixture({cells:[cell('legacy',{intent_review_required:true,published:true,completion:{...cell().completion,state:'unknown',is_complete:false,overdue:false}})]}));show();expect(await screen.findByText('原计划意图待核对')).toBeVisible();fireEvent.click(screen.getByRole('button',{name:'编辑接线核对 '+start+' 本工作项'}));await waitFor(()=>expect(screen.getByText('旧计划的完成意图待核对')).toBeVisible());expect(screen.getByRole('button',{name:'保存计划'})).toBeDisabled()
  fireEvent.click(screen.getByRole('checkbox',{name:'已核对原始来源，按本次填写重新定义计划'}));expect(screen.getByRole('button',{name:'保存计划'})).toBeDisabled();fireEvent.change(screen.getByLabelText('旧计划意图核对理由'),{target:{value:'按原始会议记录重新明确本周进行中'}});fireEvent.mouseDown(screen.getByRole('combobox',{name:'计划方式'}));fireEvent.click(await screen.findByText('本周进行中'));fireEvent.click(screen.getByRole('button',{name:'保存计划'}))
  await waitFor(()=>expect(h.update).toHaveBeenCalledWith('p1','legacy',expect.objectContaining({version:4,mode:'in_progress',target_count:null,confirm_intent:true,reason:'按原始会议记录重新明确本周进行中'})))
+})
+
+it('shows only arranged work by default and offers a draft when nothing is arranged yet',async()=>{
+ h.list.mockResolvedValue(fixture({cells:[]}));show()
+ expect(await screen.findByText('这几周还没有安排')).toBeVisible()
+ expect(screen.getByRole('button',{name:'逐项安排'})).toBeVisible()
+ fireEvent.click(screen.getByRole('button',{name:'逐项安排'}))
+ expect(await screen.findByRole('button',{name:'安排单车检查 '+start})).toBeInTheDocument()
 })

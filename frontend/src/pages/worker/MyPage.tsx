@@ -1,3 +1,4 @@
+import dayjs from 'dayjs'
 import { useEffect, useState } from 'react'
 import { Alert, Button, Card, DatePicker, Empty, Space, Typography } from 'antd'
 import { Link } from 'react-router-dom'
@@ -11,7 +12,7 @@ import type { FieldRecord } from '../../api/fieldWeek'
 function PersonalReport() {
   const { user } = useAuth(); const [week, setWeek] = useState<string>(); const [data, setData] = useState<{ records: FieldRecord[]; summary: { completed: number; assisted: number; actual_records: number } }>(); const [error, setError] = useState(''); const [revision, setRevision] = useState(0)
   useEffect(() => { let live = true; setData(undefined); setError(''); api.get('/worker/week-report', { params: week ? { week_start: week } : undefined, headers: { 'X-AGV-Expected-Account': user?.id || '' } }).then(r => { if (live) setData(r.data) }).catch(e => { if (live) setError(errMsg(e)) }); return () => { live = false } }, [user?.id, week, revision])
-  return <Card title="我的周报" extra={<DatePicker picker="week" aria-label="周报周" onChange={value => setWeek(value?.subtract((value.day() + 6) % 7, 'day').format('YYYY-MM-DD'))} />}>
+  return <Card title="我的周报" extra={<DatePicker picker="week" aria-label="周报周" value={week ? dayjs(week) : dayjs()} allowClear={false} onChange={value => setWeek(value?.subtract((value.day() + 6) % 7, 'day').format('YYYY-MM-DD'))} />}>
     {error ? <Alert type="error" message={error} action={<Button onClick={() => setRevision(n => n + 1)}>重试</Button>} /> : data ? <><Typography.Paragraph>当前有效实际记录 {data.summary.actual_records} 条 · 完成 {data.summary.completed} 条 · 协助 {data.summary.assisted} 条</Typography.Paragraph>{data.records.map(row => <p key={row.id}>{row.completion_date} · {row.project_name} · {row.target_name} · {row.action === 'retract' ? row.restores_id ? '原事实已恢复' : '撤回' : row.is_done ? '完成' : '未完成'}{row.assisted_user_name ? ` · 协助 ${row.assisted_user_name}` : ''}</p>)}{!data.records.length && <Empty description="当周没有实际记录" />}</> : <Typography.Text>正在读取周报…</Typography.Text>}
   </Card>
 }

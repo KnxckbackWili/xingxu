@@ -12,12 +12,12 @@ from dataclasses import dataclass
 from fastapi import HTTPException
 
 ROLE_NAMES = {
-    "admin": "管理员",
+    "admin": "系统管理员",
     "director": "总监",
     "lead": "技术经理",
     "pm": "项目经理",
     "technician": "技术工程师",
-    "worker": "现场人员",
+    "worker": "实施工程师",
     "intern": "实习生",
     "readonly": "只读",
 }

@@ -240,9 +240,8 @@ export default function SystemPermissionsPage() {
   if (!isAdmin) return <Result status="403" title="只有系统管理员可管理系统权限" subTitle="项目内授权请使用项目中的人员与协管设置。" />
 
   return <div className="system-permissions-page">
-    <WorkPageHeader title="系统权限" description="先选择成员，再按功能模块调整。继承使用默认规则，允许和禁止是该成员的单独设置。"
+    <WorkPageHeader title="系统权限" description="先选择成员，再按功能模块调整。继承使用默认规则，允许和禁止是该成员的单独设置。权限只作用于该成员可见的项目，不会让他看到不相关项目；“组织全部项目可见”是单独的敏感权限。"
       tools={<RefreshAction label="刷新成员与目录" disabled={saving || refreshingLatest || directoryLoading} onClick={loadDirectory} />} />
-    <div className="permissions-scope-note"><strong>权限与项目范围是两回事</strong><p>项目内操作只作用于该成员可见的项目，不会让他看到不相关项目。继承的项目权限按具体项目职责或已有授权判断；组织全部项目可见属于单独的敏感权限。</p></div>
     {directoryError && <Alert type="error" showIcon message="暂时无法加载权限目录" description={directoryError} action={<Button onClick={() => void loadDirectory()}>重新加载目录</Button>} />}
     {directoryLoading && !catalog ? <Skeleton active paragraph={{ rows: 6 }} /> : catalog && <div className="permissions-workspace">
       <aside className="permissions-members" aria-label="成员列表">

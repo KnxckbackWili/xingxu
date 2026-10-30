@@ -172,3 +172,18 @@ html[data-theme='dark'] .overview-check-mark { background: var(--agv-bg-subtle);
 .overview-side-logs small { color: var(--agv-text-secondary); font-size: 12px; }
 .overview-side-logs .ant-btn-link { padding: 0; }
 @media (max-width: 991px) { .overview-layout { grid-template-columns: minmax(0, 1fr); } }
+
+/* One "next step" bar; stage changes and checks sit in a single 项目状态 menu. */
+.overview-next { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px 20px; padding: 14px 18px; border-radius: 12px; background: var(--agv-primary-soft); }
+.overview-next-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.overview-next-kicker { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; color: var(--agv-text-secondary); font-size: 12px; }
+.overview-next-kicker > strong { color: var(--agv-text); font-size: 15px; font-weight: 650; }
+.overview-next-copy p { margin: 0; color: var(--agv-text-secondary); font-size: 13px; line-height: 1.5; }
+.overview-card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-bottom: 10px; }
+.overview-work-page .overview-card-head h2 { display: inline-flex; align-items: center; gap: 6px; margin: 0; }
+.overview-work-page .overview-card-head .overview-status-actions { max-width: none; }
+@media (max-width: 760px) {
+  .overview-next { grid-template-columns: minmax(0, 1fr); padding: 12px 14px; }
+  .overview-work-page .overview-status-actions { justify-content: flex-start; max-width: none; }
+}
+.overview-checklist + .overview-work-cards { grid-template-columns: minmax(0, 1fr); border-block: 0; }

@@ -60,7 +60,7 @@ export function ProjectMenuContent({ projectId, activeParent, activeChild, activ
       {daily.map(item=><button key={item.key} type="button" aria-current={activeParent===item.key&&!activeSpecial?'page':undefined}
         onClick={()=>nav(item.path)} onMouseEnter={()=>onPrefetch?.(item.key)} onFocus={()=>onPrefetch?.(item.key)}>{item.icon&&<span className="project-tab-icon" aria-hidden="true">{item.icon}</span>}{item.label}</button>)}
       <button ref={trigger} type="button" className="project-more-trigger" aria-haspopup="dialog" aria-expanded={open} aria-current={PROJECT_MORE_KEYS.includes(current)?'page':undefined}
-        onClick={()=>{restore.current=false;setSearch('');setOpen(true)}}><MoreOutlined aria-hidden="true" />更多</button>
+        onClick={()=>{restore.current=false;setSearch('');setOpen(true)}}><MoreOutlined aria-hidden="true" />{PROJECT_MORE_KEYS.includes(current)?<>更多<span className="project-more-current">· {PROJECT_DISPLAY_LABEL[current]??''}</span></>:'更多'}</button>
     </nav>
     {activeParent==='field'&&<nav className="project-field-navigation" aria-label="现场内容">{field.children!.map(item=><button key={item.key} type="button" aria-current={activeChild===item.key?'page':undefined} onClick={()=>nav(item.path)}>{item.label}</button>)}</nav>}
     <Drawer title="更多" open={open} onClose={close} width="min(420px, calc(100vw - 16px))" rootClassName="project-navigation-drawer" destroyOnHidden afterOpenChange={value=>{if(value)input.current?.focus()}}>

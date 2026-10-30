@@ -148,7 +148,7 @@ export default function DashboardPage() {
           { title: '项目', render: (_, row) => <Link to={`/pm/projects/${encodeURIComponent(row.id)}/overview`}>{row.name}</Link> },
           { title: '状态', render: (_, row) => { const status = projectStatusMeta(row.status); return <Tag color={status.color}>{status.label}</Tag> } },
           { title: '车辆进度', render: (_, row) => <VehicleProgressSummary value={row.vehicle_progress} /> },
-          { title: '逾期资料', render: (_, row) => row.document_attention ? <Link to={`/pm/projects/${encodeURIComponent(row.id)}/documents?filter=overdue`}>{row.document_attention.overdue_count} 项</Link> : <Typography.Text type="secondary">未读取</Typography.Text> },
+          { title: '逾期资料', render: (_, row) => !row.document_attention ? <Typography.Text type="secondary">未读取</Typography.Text> : row.document_attention.overdue_count ? <Link className="dashboard-overdue-link" to={`/pm/projects/${encodeURIComponent(row.id)}/documents?filter=overdue`}>{row.document_attention.overdue_count} 项</Link> : <Typography.Text type="secondary">—</Typography.Text> },
         ]} />
       </section>}
     </div>

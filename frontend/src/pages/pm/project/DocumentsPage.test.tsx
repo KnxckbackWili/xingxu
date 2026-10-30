@@ -51,7 +51,7 @@ it('filters server-defined current-week work separately from on-demand inspectio
     overdue_count: 0, overdue: [], estimated_past_due_count: 0, on_demand: [], owner_warnings: [], period_key: '2026-W44', timezone: 'Asia/Shanghai', as_of: '2026-10-27T10:00:00Z',
   } })
   show(); await screen.findByText(/6.2 本周生命周期/)
-  fireEvent.click(screen.getByText('本周待交', { selector: '.ant-segmented-item-label' }))
+  fireEvent.click(screen.getByText('本周待交', { selector: '.ant-segmented-item-label span' }))
   expect(screen.queryByText(/抽查变更单/)).toBeNull()
   fireEvent.click(screen.getByText('抽查', { selector: '.ant-segmented-item-label' }))
   expect(screen.getByText(/抽查变更单/)).toBeVisible()

@@ -44,7 +44,7 @@ export default function WeeklyPlanSettings({project,onReload,onDirtyChange}:{pro
   }
   const reload=()=>Modal.confirm({title:'重新读取排期设置',content:'重新读取将替换本次尚未保存的设置。',okText:'重新读取',cancelText:'保留填写',onOk:()=>void read()})
   return <section aria-label="排期设置">
-    <HolidayCalendarNotice years={project.missing_holiday_years}/>
+    <HolidayCalendarNotice compact years={project.missing_holiday_years}/>
     {!allowed?<Alert type="info" message="本账号当前没有周计划维护权限"/>:<>
       <p>在周计划上标注休息与节假日，安排时核对现场可用日期。</p>
       {error&&<Alert type="error" message={error} action={<Button onClick={reload} disabled={busy}>重新读取设置</Button>}/>}

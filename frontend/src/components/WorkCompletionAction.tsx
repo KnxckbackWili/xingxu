@@ -7,7 +7,8 @@ import { ensureVerifiedAccount } from '../utils/verifiedAccount'
 import { useAuth } from '../stores/auth'
 import { hasSystemPermission } from '../constants/systemPermissions'
 
-export default function WorkCompletionAction({ projectId, item, canRecord, canOverride = false, onSaved }: { projectId: string; item: WorkItem; canRecord: boolean; canOverride?: boolean; onSaved: () => void | Promise<void> }) {
+/** `blockedHint` replaces a disabled button with the reason when recording is not possible yet. */
+export default function WorkCompletionAction({ projectId, item, canRecord, canOverride = false, blockedHint, onSaved }: { projectId: string; item: WorkItem; canRecord: boolean; canOverride?: boolean; blockedHint?: string; onSaved: () => void | Promise<void> }) {
   const { user } = useAuth()
   const allowed = canRecord && hasSystemPermission(user, 'worker.report')
   const [open, setOpen] = useState(false)
@@ -40,6 +41,7 @@ export default function WorkCompletionAction({ projectId, item, canRecord, canOv
     finally { if (owner.current === identityAtStart) { lock.current = false; setBusy(false) } }
   }
   if (item.kind === 'vehicle') return <Link to={`/pm/projects/${projectId}/vehicles`}>到车辆进度表登记</Link>
+  if (!allowed && blockedHint) return <Typography.Text type="secondary" className="work-completion-hint">{blockedHint}</Typography.Text>
   return <>
     {receipt && <Alert type="warning" message={receipt} />}
     <Button disabled={!allowed} onClick={() => { captured.current = item; setReason(''); setConfirmed(false); setError(''); setOpen(true) }}>{item.is_completed ? '重新打开' : '标记完成'}</Button>

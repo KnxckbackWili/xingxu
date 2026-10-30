@@ -102,6 +102,7 @@ export default function VehicleLifecyclePage({ project, onReload, configurationO
   const location = useLocation()
   const openedFromQuery = useRef('')
   const [units, setUnits] = useState<any[]>([])
+  const [loaded, setLoaded] = useState(false)
   const [vehicles, setVehicles] = useState<any[]>([])
   const [selected, setSelected] = useState<any | null>(null)
   const [unitOpen, setUnitOpen] = useState(false)
@@ -152,10 +153,11 @@ export default function VehicleLifecyclePage({ project, onReload, configurationO
       if (request !== loadSequence.current || generation !== currentProject.current.generation) return
       setUnits(list)
       setVehicles(types)
+      setLoaded(true)
     } catch (error) { if (request === loadSequence.current && generation === currentProject.current.generation) message.error(errMsg(error)) }
   }
   useEffect(() => {
-    setUnits([]); setVehicles([]); setSelected(null); load()
+    setUnits([]); setVehicles([]); setSelected(null); setLoaded(false); load()
     return () => { loadSequence.current++; currentProject.current.generation++ }
   }, [projectId])
 
@@ -347,14 +349,17 @@ export default function VehicleLifecyclePage({ project, onReload, configurationO
   return <div className="field-work-page">
     <WorkPageHeader title="车辆" description="按车号登记环节，查看车辆位置与问题履历。"
       primary={canManage && <Button type="primary" icon={<PlusOutlined />} onClick={() => setUnitOpen(true)}>添加车辆</Button>}
-      tools={<Space wrap>{canManage && <VehicleArrivalEditor key={projectId} project={project} units={units} onSaved={async () => { await load(); await onReload?.() }} />}<RefreshAction onClick={load} />{(canManage || canExport) && <Popover trigger="click" placement="bottomRight" content={<div className="field-secondary-actions">
+      tools={<Space wrap>{canManage && units.length > 0 && <VehicleArrivalEditor key={projectId} project={project} units={units} onSaved={async () => { await load(); await onReload?.() }} />}<RefreshAction onClick={load} />{(canManage || canExport) && <Popover trigger="click" placement="bottomRight" content={<div className="field-secondary-actions">
         {canManage && <Upload showUploadList={false} accept=".xlsx" beforeUpload={(f) => importLifecycle(f as File)}><Button icon={<UploadOutlined />}>导入车辆表</Button></Upload>}
         {canExport && <Button icon={<DownloadOutlined />} onClick={downloadLifecycle}>导出车辆表</Button>}
         <Typography.Text type="secondary">Excel 按车辆编号匹配，重复导入不重复建档；保留原生命周期表格式。</Typography.Text>
       </div>}><IconAction bordered label="导入与导出" icon={<SwapOutlined />} /></Popover>}</Space>}
       meta={<Space wrap><span>{units.length} 台车辆</span><span>{openIssues} 个未关闭问题</span></Space>} />
+    {loaded && !units.length ? <Empty className="vehicles-empty" image={Empty.PRESENTED_IMAGE_SIMPLE} description={<><strong>还没有车辆档案</strong><span>按车号建档后，就能逐车登记到场、调试等环节，并跟踪每台车的问题。{(project.vehicle_total ?? 0) > 0 ? `计划共 ${project.vehicle_total} 台。` : ''}</span></>}>
+      {canManage && <Button type="primary" icon={<PlusOutlined />} onClick={() => setUnitOpen(true)}>添加车辆</Button>}
+    </Empty> : <>
     <VehicleProgressMatrix projectId={projectId} status={project.status} onChanged={() => { void load(); void onReload?.() }} />
-    <Typography.Title level={4}>车辆档案与生命周期问题履历</Typography.Title>
+    <Typography.Title level={4}>车辆档案与问题履历</Typography.Title>
     {batchFailure && <Alert type="warning" showIcon closable onClose={() => setBatchFailure(null)}
       message="车辆批量建档已停止，请核对台账后补录"
       description={<div><div>已确认建档 {batchFailure.created.length} 台：{batchFailure.created.join('、') || '无'}</div>
@@ -383,6 +388,7 @@ export default function VehicleLifecyclePage({ project, onReload, configurationO
         {title:'操作',render:(_:any,unit:any)=><Button onClick={()=>openHistory(unit)}>车辆记录</Button>},
       ]} />}
     </WorkSection>
+    </>}
 
 
     <Modal className="field-work-modal" title="添加现场车辆" open={unitOpen} onCancel={() => { if (!unitSaving) { setUnitOpen(false); unitForm.resetFields() } }} onOk={() => unitForm.submit()} confirmLoading={unitSaving} cancelButtonProps={{ disabled: unitSaving }} okText="建立档案" width={520}>
