@@ -684,7 +684,9 @@ def draft(db, project, actor, rules, *, first_week=None, preview_token):
         raise HTTPException(409, '关键日期、工作范围或周计划已变化；原输入保留，请重新预览核对')
     created = []
     for proposal in preview['proposals']:
-        values = {key: proposal[key] for key in ('task_id', 'scope', 'mode', 'target_count', 'assignee_ids', 'notes')}
+        # The rule that produced the cell lives in its source; notes stay free for the person planning the week.
+        values = {key: proposal[key] for key in ('task_id', 'scope', 'mode', 'target_count', 'assignee_ids')}
+        values['notes'] = ''
         values['week_start'] = date.fromisoformat(proposal['week_start'])
         values['_draft_source'] = {'kind': 't40_event_draft', 'anchor': proposal['anchor'], 'anchor_date': proposal['anchor_date'],
             'offset_weeks': proposal['offset_weeks'], 'intent_only': True}

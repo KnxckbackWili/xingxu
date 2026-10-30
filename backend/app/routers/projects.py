@@ -206,6 +206,23 @@ def _valid_timezone(tz: str) -> str:
     return tz
 
 
+# Field names a reader recognises in the project log; anything else shows as "项目信息".
+PROJECT_FIELD_LABELS = {
+    'name': '名称', 'abbreviation': '简称', 'client': '客户', 'location': '地点', 'timezone': '时区', 'description': '说明',
+    'start_date': '开始日期', 'end_date': '计划结束日期', 'manager': '负责人', 'technical_manager': '技术负责人',
+    'co_managers': '协管', 'members': '成员', 'member_permissions': '成员权限', 'client_contacts': '联系人',
+    'entry_plan': '入场信息', 'planned_entry_date': '计划进场日期', 'rest_days': '休息日', 'rest_mode': '休息日规则',
+    'skip_holidays': '节假日规则', 'staffing_notes': '人员说明',
+}
+IGNORED_PROJECT_FIELDS = {'version', 'schedule_version', 'manager_name', 'technical_manager_name', 'id', 'status'}
+
+
+def _update_summary(name, old, new):
+    changed = [key for key in new if key not in IGNORED_PROJECT_FIELDS and (old or {}).get(key) != new.get(key)]
+    labels = list(dict.fromkeys(PROJECT_FIELD_LABELS.get(key, '项目信息') for key in changed))
+    return f"更新项目「{name}」" + (f"：{'、'.join(labels)}" if labels else '')
+
+
 def _project_dict(db: Session, p: Project, event_rows=None) -> dict:
     _mgr = db.get(User, p.manager) if p.manager else None
     from app.services.scope import active_co_manager
@@ -992,9 +1009,9 @@ def update_project(
         p.id,
         "update",
         user.id,
-        f"更新项目「{p.name}」",
+        _update_summary(p.name, old, new_dict := _project_dict(db, p)),
         old,
-        _project_dict(db, p),
+        new_dict,
     )
     db.commit()
     db.refresh(p)

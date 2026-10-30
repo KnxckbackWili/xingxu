@@ -382,7 +382,7 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
       </WorkSection>
 
       <Modal className="field-work-modal" title="上报问题" open={modalOpen} confirmLoading={submitting}
-        okText={createdIssueId ? '重试剩余附件' : '确定'}
+        okText={createdIssueId ? '重试剩余附件' : '提交问题'}
         closable={!submitting} maskClosable={!submitting} cancelButtonProps={{ disabled: submitting }}
         onCancel={() => setModalOpen(false)} onOk={() => form.submit()}>
         {createdIssueId && <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="问题已保存，请重试上传剩余附件。" />}

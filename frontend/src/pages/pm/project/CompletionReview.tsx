@@ -1,11 +1,20 @@
 import { useEffect, useState } from 'react'
-import { Alert, Button, Empty, Modal, Space, Spin, Tag, Typography } from 'antd'
+import { Alert, Button, Modal, Space, Spin, Tag, Typography } from 'antd'
 import { api, errMsg } from '../../../api/client'
 import { formatDateTime } from '../../../utils/date'
 interface Review {
   project_version: number; allowed: boolean; target: string
   blockers: Array<{ type: string; message: string; url: string }>
   ordinary_check_overrides: Array<{ task_id: string; task_name: string; reason: string; actor_name: string; recorded_at: string | null; url: string; checks: Array<{ check_id: string; name: string; failed_reason: string; still_current: boolean }> }>
+}
+// Server messages read "原因：甲、乙、丙…"; long lists show a short preview and fold the rest.
+const PREVIEW = 6
+function splitBlocker(message: string) {
+  const at = message.indexOf('：')
+  const items = at < 0 ? [] : message.slice(at + 1).split('、').map(item => item.trim()).filter(Boolean)
+  if (items.length <= 2) return { head: message, items: [] }
+  const head = message.slice(0, at)
+  return { head: /\d/.test(head) ? head : `${head}（${items.length} 项）`, items }
 }
 export default function CompletionReview({ projectId, target, open, onClose }: { projectId: string; target: 'completed' | 'archived'; open: boolean; onClose: () => void }) {
   const [data, setData] = useState<Review | null>(null)
@@ -29,10 +38,12 @@ export default function CompletionReview({ projectId, target, open, onClose }: {
     {loading && <Spin aria-label="正在核对完成条件" />}
     {error && <Alert type="error" showIcon message="核对清单加载失败" description={error} action={<Button onClick={() => setAttempt(value => value + 1)}>重新核对</Button>} />}
     {data && <>
-      <Alert type={data.allowed ? 'success' : 'warning'} showIcon message={data.allowed ? '当前证据已齐备' : `还有 ${data.blockers.length} 类缺项需要处理`} description={`读取项目版本 ${data.project_version}`} />
-      <ul className="completion-blockers">{data.blockers.map((item, index) => <li key={`${item.type}:${index}`} style={{ margin: '12px 0', overflowWrap: 'anywhere' }}><Typography.Paragraph>{item.message}</Typography.Paragraph><a href={link(item.url)}>去核对相关记录</a></li>)}</ul>
-      <Typography.Title level={5}>普通失败检查项的明确覆盖</Typography.Title>
-      {!data.ordinary_check_overrides.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有普通失败检查项覆盖记录" />}
+      <Alert type={data.allowed ? 'success' : 'warning'} showIcon message={data.allowed ? '当前证据已齐备' : `还有 ${data.blockers.length} 类缺项需要处理`} />
+      <ul className="completion-blockers">{data.blockers.map((item, index) => { const { head, items } = splitBlocker(item.message); return <li key={`${item.type}:${index}`} className="completion-blocker">
+        <div className="completion-blocker-head"><Typography.Text strong>{head}</Typography.Text><a href={link(item.url)}>去核对相关记录</a></div>
+        {items.length > 0 && <Typography.Paragraph type="secondary" className="completion-blocker-items">{items.slice(0, PREVIEW).join('、')}{items.length > PREVIEW && <details><summary>还有 {items.length - PREVIEW} 项</summary>{items.slice(PREVIEW).join('、')}</details>}</Typography.Paragraph>}
+      </li> })}</ul>
+      {data.ordinary_check_overrides.length > 0 && <Typography.Title level={5}>普通失败检查项的明确覆盖</Typography.Title>}
       {data.ordinary_check_overrides.map(row => <article key={row.task_id} className="field-record-card">
         <Typography.Text strong>{row.task_name}</Typography.Text><p>覆盖理由：{row.reason || '未记录，需重新核对'}</p>
         <Typography.Paragraph type="secondary">{row.actor_name} · {formatDateTime(row.recorded_at)}</Typography.Paragraph>

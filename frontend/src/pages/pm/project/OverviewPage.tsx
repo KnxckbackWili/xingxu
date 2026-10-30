@@ -1,4 +1,4 @@
-import { planWarningText, type WeeklyPlanSummary } from '../../../api/weeklyPlans'
+import { type WeeklyPlanSummary } from '../../../api/weeklyPlans'
 import CompletionReview from './CompletionReview'
 import ProjectEventsTimeline from '../../../components/ProjectEventsTimeline'
 import { ProjectCapabilitiesContext, useProjectWriteBlocked } from '../../../hooks/useProjectCapability'
@@ -166,7 +166,7 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
   const prepOverdue = prep?.overdue ?? 0
   const prepBlocked = prep?.blocked ?? 0
   const draftPlans = weeklyPlan?.draft_count ?? null
-  const weeklyWarnings = (weeklyPlan?.warnings??[]).map(planWarningText)
+  const weeklyWarnings = weeklyPlan?.warning_count ?? weeklyPlan?.warnings?.length ?? 0
   const severeIssueCount = openIssues.filter((i) => i.severity === 'critical' || i.severity === 'high').length
   const workflow = projectWorkflow({
     status: projectStatus, infoComplete, vehicles: vehicleTotal, tasks: taskCount,
@@ -222,9 +222,9 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
     : ['completed', 'archived'].includes(statusFailure?.target ?? '')
       ? [{ path: '/documents?acceptance=1', label: '核对验收与归档' }, { path: '/plan', label: '核对任务与质量' }, { path: '/documents', label: '核对必需资料' }, { path: '/issues', label: '处理未解决问题' }]
       : []
-  const failureAlert = statusFailure && <Alert type="error" showIcon message="项目阶段尚未更新" description={statusFailure.message}
-    action={<Space wrap>{failureLinks.length ? failureLinks.map(link => <Button key={link.path} onClick={() => { setMilestoneTarget(null); setArchiveModal(false); setSuspendOpen(false); go(link.path) }}>{link.label}</Button>)
-      : <Button onClick={() => { setMilestoneTarget(null); setArchiveModal(false); setSuspendOpen(false); setStatusFailure(null); setLoadAttempt(value => value + 1) }}>重新查看项目</Button>}</Space>} />
+  const failureAlert = statusFailure && <Alert type="error" showIcon message="项目阶段尚未更新" className="overview-failure"
+    description={<><div>{statusFailure.message}</div><Space wrap className="overview-failure-actions">{failureLinks.length ? failureLinks.map(link => <Button key={link.path} onClick={() => { setMilestoneTarget(null); setArchiveModal(false); setSuspendOpen(false); go(link.path) }}>{link.label}</Button>)
+      : <Button onClick={() => { setMilestoneTarget(null); setArchiveModal(false); setSuspendOpen(false); setStatusFailure(null); setLoadAttempt(value => value + 1) }}>重新查看项目</Button>}</Space></>} />
   const pushTarget = stageGuidance && !fieldStaff && canManageStatus && stageGuidance.next && (stageGuidance.next !== 'archived' || canArchive) ? stageGuidance.next : null
   const reviewLabel = projectStatus === 'completed' ? '归档前核对' : '完成前核对'
   const statusItems = [
@@ -299,7 +299,7 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
               {overdue.length > 0 && link(`${overdue.length} 项资料已逾期`, '/documents', overdueDetail, true)}
               {!fieldStaff && !checklist && workflow.setup && !entryReady(prep) && link('发车前资料确认', '/documents?review=1', preparationDetail, prepBlocked > 0)}
               {!fieldStaff && (!taskCount || unlinkedVehicleWorkCount > 0) && link('工作项范围待确认', '/plan', !taskCount ? '确认项目阶段与工作项范围' : `${unlinkedVehicleWorkCount} 项车辆工作尚未明确关联真实进度环节`)}
-              {!checklist && (workflow.setup || (draftPlans??0)>0 || (weeklyPlan?.warning_count??0)>0) && link('周计划', '/plan?view=weeks', [scheduleDetail,...weeklyWarnings].join('；'))}
+              {!checklist && (workflow.setup || (draftPlans??0)>0 || (weeklyPlan?.warning_count??0)>0) && link('周计划', '/plan?view=weeks', weeklyWarnings ? `${scheduleDetail} · ${weeklyWarnings} 条提醒待核对` : scheduleDetail, weeklyWarnings > 0)}
               {!!documentActions?.this_week_count && link('本周待交资料', '/documents?filter=week', `${documentActions.this_week_count} 项资料本周截止，按现场时区 ${documentActions.timezone}`)}
               {!checklist && (documentProgress === null || documentProgress.pending > 0) && link('项目资料', '/documents', deliveryDetail)}
               {!workflow.setup && !overdue.length && !openIssues.length && documentProgress !== null && !documentProgress.pending && link('查看周计划', '/plan?view=weeks', '查看已发布的工作和实际完成情况')}
@@ -313,8 +313,9 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
         <aside className="overview-side" aria-label="项目概要">
           <section className="overview-card overview-side-progress">
             <h2>进度</h2>
-            <div className="overview-side-metric"><span>总进度</span><strong>{data?.progress_known === false ? '未知（数量待补）' : `${data?.percent ?? 0}%`}</strong></div>
-            <Progress percent={data?.percent ?? 0} showInfo={false} aria-label="项目概况进度" strokeColor="var(--agv-primary)" />
+            <div className="overview-side-metric"><span>总进度</span><strong>{data?.progress_known === false ? '—' : `${data?.percent ?? 0}%`}</strong></div>
+            {data?.progress_known === false ? <p className="overview-side-note">车辆台数待补，进度暂不计算</p>
+              : <Progress percent={data?.percent ?? 0} showInfo={false} aria-label="项目概况进度" strokeColor="var(--agv-primary)" />}
             {currentPhase && <p className="overview-side-note">下一个未完成分组：{currentPhase.name}</p>}
             <button type="button" className="overview-side-toggle" aria-expanded={dataOpen} aria-controls={`overview-evidence-${projectId}`} onClick={() => setDataOpen(value => !value)}>进度与记录 <RightOutlined aria-hidden="true" rotate={dataOpen ? 90 : 0} /></button>
           </section>

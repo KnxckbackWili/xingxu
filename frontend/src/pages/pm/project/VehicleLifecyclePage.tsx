@@ -313,8 +313,7 @@ export default function VehicleLifecyclePage({ project, onReload, configurationO
     } catch (error) { message.error(errMsg(error)) }
   }
 
-  const configuration = <details className="field-details"><summary>车型与数量（计划 {vehicles.reduce((sum:number,v:any)=>sum+(v.quantity || 0),0)} 台）</summary>
-    <WorkSection title={`计划车型与数量（${vehicles.reduce((s: number, v: any) => s + (v.quantity || 0), 0)} 台）`}
+  const configuration = <WorkSection title={`计划车型与数量（${vehicles.reduce((s: number, v: any) => s + (v.quantity || 0), 0)} 台）`}
       extra={canConfigure && <Button size="small" type="primary" icon={<PlusOutlined />} onClick={addVehicleType}>添加车型</Button>}
       description="实车登记在「车辆」页；计划车型数量变化后，请核对周计划。">
       {dictError && <Alert type="error" showIcon style={{ marginBottom: 12 }} message="车型字典加载失败"
@@ -334,7 +333,6 @@ export default function VehicleLifecyclePage({ project, onReload, configurationO
         ...(canConfigure ? [{ title: '', width: 50, render: (_: any, rec: any) => <Popconfirm title="删除该车型配置？" onConfirm={() => removeVehicleType(rec.id)}><Button size="small" type="text" danger icon={<DeleteOutlined />} aria-label="删除车型配置" /></Popconfirm> }] : []),
       ]} />
     </WorkSection>
-    </details>
   const configurationModal = <Modal className="field-work-modal" title={`${typeConfig?.vehicle_type ?? ''} ${typeConfig?.model_name ?? ''} · 车型配置`} open={typeConfigOpen}
       onCancel={() => { onDirtyChange?.(false); setTypeConfigOpen(false); setTypeConfig(null) }} onOk={() => typeForm.submit()} okText="保存" okButtonProps={{ disabled: !canConfigure }} width={640}>
       <Form form={typeForm} layout="vertical" onFinish={saveTypeConfig} onValuesChange={()=>onDirtyChange?.(true)}>

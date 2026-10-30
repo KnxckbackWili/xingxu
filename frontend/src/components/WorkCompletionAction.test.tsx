@@ -56,3 +56,18 @@ it('distinguishes a committed work state from failure to refresh it', async () =
 it('does not close a new draft after switching A → B → A while an old response is pending', async () => {
   let done!: (value: any) => void; put.mockImplementation(() => new Promise(resolve => { done = resolve })); const p = props(); const v = view(p); fireEvent.click(screen.getByText('标记完成')); fireEvent.change(screen.getByLabelText('工作状态理由'), { target: { value: '旧请求' } }); fireEvent.click(screen.getByRole('button', { name: '保存工作状态' })); auth.user = { id: 'b', role: 'pm' }; v.rerender(<MemoryRouter><WorkCompletionAction {...p} /></MemoryRouter>); auth.user = { id: 'u', role: 'pm' }; v.rerender(<MemoryRouter><WorkCompletionAction {...p} /></MemoryRouter>); fireEvent.click(screen.getByText('标记完成')); fireEvent.change(screen.getByLabelText('工作状态理由'), { target: { value: '新的未提交依据' } }); await act(async () => done({ data: {} })); expect(screen.getByLabelText('工作状态理由')).toHaveValue('新的未提交依据'); expect(p.onSaved).not.toHaveBeenCalled()
 })
+it('lists required checks before completion and passes one from the dialog', async () => {
+  put.mockResolvedValue({ data: {} })
+  const check = { id: 'c1', name: '通道宽度确认', is_required: true, is_safety_critical: false, is_applicable: true, is_done: false, failed: false, version: 2 }
+  const p = { ...props(), item: work({ check_items: [check] }) }
+  const v = view(p); fireEvent.click(screen.getByRole('button', { name: '标记完成' }))
+  fireEvent.change(screen.getByLabelText('工作状态理由'), { target: { value: '现场确认' } })
+  expect(screen.getByRole('group', { name: '完成前必须通过的检查' })).toHaveTextContent('通道宽度确认')
+  expect(screen.getByRole('button', { name: '保存工作状态' })).toBeDisabled()
+  fireEvent.click(screen.getByRole('button', { name: '确认通过' }))
+  await waitFor(() => expect(put).toHaveBeenCalledWith('/projects/p/check-items/c1', { version: 2, is_done: true, failed: false, is_applicable: true }))
+  expect(p.onSaved).toHaveBeenCalledOnce()
+  v.rerender(<MemoryRouter><WorkCompletionAction {...p} item={work({ version: 8, check_items: [{ ...check, is_done: true, version: 3 }] })} /></MemoryRouter>)
+  expect(screen.queryByRole('group', { name: '完成前必须通过的检查' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '保存工作状态' })).toBeEnabled()
+})

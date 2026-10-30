@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Card, Typography, Spin, Empty, Avatar, Space, Tag, Button, Alert, Input } from 'antd'
+import { Card, Typography, Spin, Empty, Avatar, Space, Tag, Button, Alert, Input, Switch } from 'antd'
 import { UserOutlined } from '@ant-design/icons'
 import { api } from '../../../api/client'
 import { formatDateTime } from '../../../utils/date'
@@ -21,6 +21,7 @@ export default function HistoryPage({ projectId }: { projectId: string }) {
   const [retry, setRetry] = useState(0)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
+  const [includeAccess, setIncludeAccess] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -28,7 +29,7 @@ export default function HistoryPage({ projectId }: { projectId: string }) {
     setExpanded(new Set())
     const load = async () => {
       try {
-        const r = await api.get(`/projects/${projectId}/logs`)
+        const r = await api.get(`/projects/${projectId}/logs`, includeAccess ? { params: { include_access: true } } : undefined)
         if (!active) return
         const map = new Map<string, LogT[]>()
         r.data.forEach((l: LogT) => {
@@ -43,7 +44,7 @@ export default function HistoryPage({ projectId }: { projectId: string }) {
     }
     load()
     return () => { active = false }
-  }, [projectId, retry])
+  }, [projectId, retry, includeAccess])
 
   const term = search.trim().toLocaleLowerCase()
   const shown = groups.map(group => ({ ...group, logs: group.logs.filter(log => !term || `${group.name} ${formatAuditDetail(log.detail)} ${log.created_at ? formatDateTime(log.created_at) : ''}`.toLocaleLowerCase().includes(term)) })).filter(group => group.logs.length)
@@ -51,7 +52,10 @@ export default function HistoryPage({ projectId }: { projectId: string }) {
   return (
     <div className="project-history-page">
       <WorkPageHeader title="操作记录" description="查找谁在何时调整了项目、任务或日程。记录按操作人分组。" meta={loading ? '正在加载' : `${groups.reduce((count, group) => count + group.logs.length, 0)} 条已加载记录`} />
-      <Input.Search aria-label="搜索已加载记录" placeholder="搜索操作人、日期或记录内容" value={search} allowClear onChange={event => setSearch(event.target.value)} style={{ maxWidth: 480, marginBottom: 20 }} />
+      <Space wrap size={16} style={{ marginBottom: 20 }}>
+        <Input.Search aria-label="搜索已加载记录" placeholder="搜索操作人、日期或记录内容" value={search} allowClear onChange={event => setSearch(event.target.value)} style={{ maxWidth: 480 }} />
+        <label className="project-history-access"><Switch size="small" checked={includeAccess} onChange={setIncludeAccess} aria-label="包含保密资料查看与下载记录" /> 包含保密资料查看与下载记录</label>
+      </Space>
       {loading ? <div style={{ textAlign: 'center', padding: 60 }}><Spin /></div> : loadError ? <Alert type="error" showIcon message="变更记录加载失败" action={<Button onClick={() => setRetry(value => value + 1)}>重试</Button>} /> : !shown.length ? <Empty description={term ? '没有匹配的已加载记录' : '暂无变更记录'} style={{ padding: 40 }} /> : shown.map((g) => (
         <Card key={g.name} size="small" style={{ marginBottom: 12 }}
           title={

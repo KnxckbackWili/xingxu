@@ -18,6 +18,7 @@ import { deadlineLabel, basisLabel } from '../../../utils/documentDeadlines'
 import { useUnsavedNavigation } from '../../../hooks/useUnsavedNavigation'
 import { WorkPageHeader, WorkSection } from '../../../components/WorkPage'
 import { InfoHint } from '../../../components/IconAction'
+import FilePickField from '../../../components/FilePickField'
 import ProjectDocumentRequirementEditor from './ProjectDocumentRequirementEditor'
 import ProjectStoragePanel from '../../../components/ProjectStoragePanel'
 import DocumentConfidentialityModal, { type ConfidentialityTarget } from './DocumentConfidentialityModal'
@@ -254,7 +255,7 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
           columns={[
               { title: '资料', width: 260, render: (_, row) => <><Typography.Text strong>{row.code} {row.name}</Typography.Text><div>{row.vehicle_label}{row.period_key && ` · ${row.period_key}`}</div>{row.trigger_event && <div className="documents-note">{row.trigger_event.source_type==='issue'?`问题：${row.trigger_event.source_metadata.title || '原问题'}`:`人员离开：${row.trigger_event.source_metadata.member_name || '原成员'}`}<div>{row.trigger_event.source_metadata.note}</div></div>}{row.template_no && <Typography.Text type="secondary">{row.template_no}</Typography.Text>}</> },
             { title: '状态', width: 150, render: (_, row) => renderState(row) },
-            { title: '截止', width: 150, render: (_, row) => row.due_at ? <>{row.due_is_estimated && <Tag>预计</Tag>}{deadlineLabel(row.due_at, row.due_basis?.timezone || data?.timezone || 'Asia/Shanghai')}<div className="documents-note">{basisLabel(row)}</div></> : <Tooltip title={basisLabel(row)}><Typography.Text type="secondary" className="documents-due-pending">待定</Typography.Text></Tooltip> },
+            { title: '截止', width: 190, render: (_, row) => row.due_at ? <>{row.due_is_estimated && <Tooltip title={basisLabel(row)}><Tag className="documents-due-tag">预计</Tag></Tooltip>}<span className="documents-due">{deadlineLabel(row.due_at, row.due_basis?.timezone || data?.timezone || 'Asia/Shanghai')}</span>{row.due_basis?.kind !== 'planned_date_anchor' && basisLabel(row) && <div className="documents-note">{basisLabel(row)}</div>}</> : <Tooltip title={basisLabel(row)}><Typography.Text type="secondary" className="documents-due-pending">待定</Typography.Text></Tooltip> },
             { title: '负责人', width: 150, render: (_, row) => <>{row.effective_owner_name || '待指派'}{row.owner_warning && <div className="documents-note">{row.owner_warning}</div>}</> },
             { title: '最近文件', width: 200, render: (_, row) => renderFile(row) },
             { title: '操作', width: 310, render: (_, row) => renderActions(row) },
@@ -344,10 +345,7 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
             options={uploadMembers.map(member => ({ value: member.id, label: member.display_name }))} />}
         </>}
         {uploadMode === 'upload' && uploadConfidential && uploadPeopleError && <Alert type="error" message={uploadPeopleError} />}
-        {uploadMode === 'upload' ? <><Input type="file" aria-label="选择资料文件" disabled={busy} onChange={event => {
-          const file = event.target.files?.[0] ?? null
-          setUploadFile(file); setUploadError('')
-        }} /><Typography.Text type="secondary">支持分片续传，默认每个文件不超过 2 GB；服务器会核对当前上限。</Typography.Text></> : <>
+        {uploadMode === 'upload' ? <FilePickField label="选择资料文件" file={uploadFile} disabled={busy} hint="支持断点续传，单个文件默认不超过 2 GB" onChange={file => { setUploadFile(file); setUploadError('') }} /> : <>
           {filesError && <Alert type="error" message={filesError} action={<Button onClick={() => void getFiles()}>重试文件列表</Button>} />}
           <Select aria-label="本项目已有文件" showSearch optionFilterProp="label" value={existingFileId} onChange={setExistingFileId} loading={filesLoading} disabled={busy || !!filesError} style={{ width: '100%' }} placeholder="选择已上传的文件" options={existingFiles.map(file => ({ value: file.id, label: file.filename }))} />
         </>}

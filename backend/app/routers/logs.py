@@ -18,13 +18,17 @@ def list_logs(
     limit: int = Query(default=200, le=1000),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    include_access: bool = Query(default=False),
 ):
     """List change logs for a project (newest first)."""
     from app.services.scope import ensure_project_visible
     project=ensure_project_visible(db, project_id, user)
+    query = db.query(ChangeLog).filter(ChangeLog.project_id == project_id)
+    if include_access is not True:
+        # Every visit to a confidential page records a view; leave those out unless the reader asks for them.
+        query = query.filter(ChangeLog.action.notin_(('confidential_view', 'confidential_dl', 'confidential_export')))
     logs = (
-        db.query(ChangeLog)
-        .filter(ChangeLog.project_id == project_id)
+        query
         .order_by(ChangeLog.created_at.desc())
         .limit(limit)
         .all()

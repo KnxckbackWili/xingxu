@@ -388,7 +388,7 @@ def project_activity(project_id: str, limit: int = 30) -> str:
             raise HTTPException(400, "limit 应为 1–100")
         from app.routers.logs import list_logs
 
-        return list_logs(project.id, limit, user, db)
+        return list_logs(project.id, limit, user, db, include_access=False)
 
     return _project_read(project_id, "activity:read", read)
 

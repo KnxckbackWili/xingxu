@@ -351,7 +351,7 @@ export default function InventoryPage({ projectId, canManage: managePermission }
       tools={<Space wrap><RefreshAction onClick={()=>activeTab==='items'?load():loadApplications()} /><ContextTip id="inventory-quick-status" title="物品快捷调整">有管理权限时，可直接改状态；收货、领用和数量变动请记录在收发记录中。</ContextTip></Space>}
       meta={<Space wrap>{statItems.filter(([label])=>['全部物品','需要关注'].includes(String(label))).map(([label,value])=><span key={label}>{label} {value}</span>)}</Space>} />
     {loadError && <Alert type="error" showIcon message="物品列表加载失败" action={<Button onClick={()=>load()}>重试</Button>} />}
-    <Tabs activeKey={activeTab} onChange={setActiveTab} items={[{key:'items',label:'物品',children:itemsContent},{key:'applications',label:`申请${apps.filter(app=>app.status==='pending').length ? ` (${apps.filter(app=>app.status==='pending').length})` : ''}`,children:applicationsContent}]} />
+    <Tabs activeKey={activeTab} onChange={setActiveTab} items={[{key:'items',label:'物品清单',children:itemsContent},{key:'applications',label:`物资申请${apps.filter(app=>app.status==='pending').length ? ` (${apps.filter(app=>app.status==='pending').length})` : ''}`,children:applicationsContent}]} />
 
     <Modal className="field-work-modal" title={editingApp ? canManage ? '编辑物品申请' : '查看物品申请' : '新建物品申请'} open={appModalOpen} onCancel={() => { if (!appSaving) setAppModalOpen(false) }} onOk={saveApplication} footer={canManage ? undefined : null} confirmLoading={appSaving} width={640} destroyOnClose>
       <Form form={appForm} layout="vertical" requiredMark={false} disabled={!canManage}>

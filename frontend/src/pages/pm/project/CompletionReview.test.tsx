@@ -29,3 +29,11 @@ it('ignores a previous project response and refuses off-project or external acti
   const view = render(show()); view.rerender(show('p2')); expect(await screen.findByText('新项目资料待处理')).toBeInTheDocument()
   await act(async () => old({ data: response })); expect(screen.queryByText('缺少真实验收单')).toBeNull(); expect(screen.getByRole('link', { name: '去核对相关记录' })).toHaveAttribute('href', '/pm/projects/p2/overview')
 })
+it('long blocker lists show a short preview and fold the rest', async () => {
+  const names = Array.from({ length: 9 }, (_, index) => `任务${index + 1}`)
+  h.get.mockResolvedValue({ data: { ...response, blockers: [{ type: 'tasks', message: `仍有未完成或检查未通过的任务：${names.join('、')}`, url: '/pm/projects/p1/plan' }], ordinary_check_overrides: [] } })
+  render(show()); const modal = within(await screen.findByRole('dialog'))
+  expect(await modal.findByText('仍有未完成或检查未通过的任务（9 项）')).toBeInTheDocument()
+  expect(modal.getByText('还有 3 项')).toBeInTheDocument()
+  expect(modal.queryByText('普通失败检查项的明确覆盖')).toBeNull()
+})

@@ -47,6 +47,7 @@ export default function ProjectListPage() {
   })
   const switchView = (v: any) => { setViewMode(v); try { localStorage.setItem('agvpm_proj_view', v) } catch { /* The current view still works. */ } }
   const [progressMap, setProgressMap] = useState<Record<string, { percent: number; overdue: boolean; critical: number }>>({})
+  const [progressFailed, setProgressFailed] = useState(false)
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { user } = useAuth()
@@ -83,9 +84,10 @@ export default function ProjectListPage() {
     setLoading(true)
     setLoadError(false)
     try {
+      const wantsProgress = hasSystemPermission(user, 'workspace.view')
       const [list, ov] = await Promise.all([
         projectApi.list(),
-        hasSystemPermission(user, 'workspace.view') ? api.get('/dashboard/overview').catch(() => null) : Promise.resolve(null),
+        wantsProgress ? api.get('/dashboard/overview').catch(() => null) : Promise.resolve(null),
       ])
       const m: Record<string, { percent: number; overdue: boolean; critical: number }> = {}
       if (ov?.data?.projects) {
@@ -93,7 +95,7 @@ export default function ProjectListPage() {
           if (typeof p.percent === 'number' && Number.isFinite(p.percent)) m[p.id] = { percent: p.percent, overdue: !!p.overdue, critical: p.critical_issues ?? 0 }
         })
       }
-      if (isCurrent()) { setProjectData({ actor, projects: list }); setProgressMap(m) }
+      if (isCurrent()) { setProjectData({ actor, projects: list }); setProgressMap(m); setProgressFailed(wantsProgress && !ov) }
     } catch (e) {
       if (isCurrent()) setLoadError(true)
     } finally {
@@ -150,14 +152,14 @@ export default function ProjectListPage() {
   const cardPageCount = Math.max(1, Math.ceil(filtered.length / cardPageSize))
   const currentCardPage = Math.min(cardPage, cardPageCount)
   const shownCards = filtered.slice((currentCardPage - 1) * cardPageSize, currentCardPage * cardPageSize)
-  const unavailableProgressCount = projects.filter(project => !progressMap[project.id]).length
 
 
   return (
     <div className="project-library-page">
       {loadError && <Alert type="warning" showIcon message="项目列表加载失败" description="列表可能不是最新的，请重新加载。" action={<Button onClick={load}>重新加载</Button>} style={{ marginBottom: 16 }} />}
-      {!loading && !loadError && unavailableProgressCount > 0 && <Alert type="warning" showIcon message="部分项目进度与风险暂不可用"
-        description={`${unavailableProgressCount} 个项目尚未取得进度与风险数据；这些项目不会计入进度筛选，项目本身仍可打开。`}
+      {/* A project without a known vehicle count says so in its own row; the banner is for a failed progress request. */}
+      {!loading && !loadError && progressFailed && <Alert type="warning" showIcon message="项目进度与风险暂不可用"
+        description="进度数据读取失败，进度筛选暂不准确；项目本身仍可打开。"
         action={<Button onClick={() => void load()}>重试进度</Button>} style={{ marginBottom: 16 }} />}
       <WorkPageHeader title="项目" description="打开项目，查看工作项、维护周计划或处理现场问题。"
         meta={loadError ? '列表暂不可用' : `${filtered.length} 个项目`}
@@ -288,7 +290,7 @@ export default function ProjectListPage() {
                 {progressMap[p.id] ? <div className="project-progress-row">
                   <Progress percent={progressMap[p.id].percent} size="small" showInfo={false} style={{ flex: 1 }} aria-label={`${p.name} 进度`} />
                   <Typography.Text style={{ fontSize: 12 }}>{progressMap[p.id].percent}%</Typography.Text>
-                </div> : <Typography.Text type="secondary">进度暂不可用</Typography.Text>}
+                </div> : <Typography.Text type="secondary">{progressFailed ? '进度暂不可用' : '进度待核对'}</Typography.Text>}
                 <VehicleProgressSummary compact value={p.vehicle_progress} />
               </div>,
             },
@@ -362,7 +364,7 @@ export default function ProjectListPage() {
                       <Typography.Text className="project-card-percent">
                         {prog.percent}%
                       </Typography.Text>
-                    </div> : <Typography.Text type="secondary">进度暂不可用</Typography.Text>}
+                    </div> : <Typography.Text type="secondary">{progressFailed ? '进度暂不可用' : '进度待核对'}</Typography.Text>}
                     <div className="project-card-facts" aria-label={`${p.name}车辆进度`}><VehicleProgressSummary compact value={p.vehicle_progress}/>{overdueDocs(p)}</div>
                     <Typography.Text type="secondary" className="project-card-context">
                       {[p.client, p.location].filter(Boolean).join(' · ') || '客户与地点待补充'}

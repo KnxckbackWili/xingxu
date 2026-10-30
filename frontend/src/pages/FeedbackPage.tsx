@@ -152,7 +152,7 @@ export default function FeedbackPage() {
           >
             <Input.TextArea rows={3} maxLength={5000} showCount placeholder="如何复现这个问题？请分步骤描述（选填）" />
           </Form.Item>
-
+          {canSubmit && <Button type="primary" htmlType="submit" loading={submitting}>提交反馈</Button>}
         </Form>  </WorkSection>
   const feedbackList = <WorkSection title="反馈列表" description="点击一条反馈查看复现步骤并更新处理状态。" filters={
             <Select
@@ -202,8 +202,7 @@ export default function FeedbackPage() {
   return (
     <div className="settings-work-page feedback-page">
       <WorkPageHeader title={NAV_LABEL['/pm/feedback']} description={NAV_DESCRIPTION['/pm/feedback']}
-        primary={canSubmit ? manage && view !== 'create' ? <Button type="primary" onClick={() => setView('create')}>填写反馈</Button>
-          : <Button type="primary" loading={submitting} onClick={() => form.submit()}>提交反馈</Button> : undefined} />
+        primary={canSubmit && manage && view !== 'create' ? <Button type="primary" onClick={() => setView('create')}>填写反馈</Button> : undefined} />
       {manage ? <Tabs activeKey={view} onChange={setView} items={[
         { key: 'list', label: '处理反馈', children: feedbackList },
         { key: 'create', label: '填写反馈', children: submission },

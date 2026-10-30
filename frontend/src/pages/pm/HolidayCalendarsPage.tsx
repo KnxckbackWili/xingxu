@@ -98,7 +98,7 @@ export default function HolidayCalendarsPage() {
       {calendar.available && <Typography.Paragraph>来源：<a href={calendar.source_url} target="_blank" rel="noreferrer">{calendar.source_name}</a> · 发布于 {calendar.published_on}</Typography.Paragraph>}
       <Space wrap style={{ marginBottom: 12 }}><Button icon={<DownloadOutlined />} onClick={exportFile}>{calendar.available ? '导出年度JSON' : '下载年度JSON格式'}</Button>{canManage && <Upload accept=".json,application/json" showUploadList={false} beforeUpload={importFile} disabled={saving}><Button icon={<UploadOutlined />} disabled={saving}>从JSON文件填入</Button></Upload>}</Space>
       {imported && <Alert type="info" showIcon message="文件已填入，尚未保存；请核对全年放假及补班日期，再确认保存。" style={{ marginBottom: 12 }} />}
-      <Form form={form} layout="vertical" onFinish={save} disabled={!canManage || saving}>
+      <Form form={form} layout="vertical" style={{ maxWidth: 760 }} onFinish={save} disabled={!canManage || saving}>
         <Form.Item name="source_name" label="来源名称" rules={[{ required: true, whitespace: true }]}><Input maxLength={300} /></Form.Item>
         <Form.Item name="source_url" label="来源链接（HTTPS）" rules={[{ required: true, type: 'url' }]}><Input maxLength={1000} /></Form.Item>
         <Form.Item name="published_on" label="来源发布日期" rules={[{ required: true, pattern: /^\d{4}-\d{2}-\d{2}$/, message: '填写YYYY-MM-DD日期' }]}><Input placeholder="YYYY-MM-DD" /></Form.Item>

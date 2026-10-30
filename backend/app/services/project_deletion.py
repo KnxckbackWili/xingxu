@@ -248,12 +248,21 @@ def _authorized_locked_project(db, project_id, user, *, deleted=False):
     return project
 
 
+def ensure_backup_passphrase():
+    """Deletion always writes an encrypted backup first; say plainly when the backup passphrase is missing."""
+    try:
+        codec.get_passphrase(config.DATA_DIR)
+    except codec.BackupError as error:
+        raise HTTPException(409, f"项目未删除：{error}。删除前必须先生成加密备份。") from None
+
+
 def delete_project(db, project_id, user, version=None, reason=""):
     project = _authorized_locked_project(db, project_id, user)
     if version is None:
         raise HTTPException(400, "请重新读取项目并携带版本号确认删除")
     if version is not None and version != (project.version or 0):
         raise HTTPException(409, "项目已被修改，请刷新后重新确认删除")
+    ensure_backup_passphrase()
     deletion_id = str(uuid4())
     try:
         snapshot, path, digest, size = create_project_backup(db, project, deletion_id)

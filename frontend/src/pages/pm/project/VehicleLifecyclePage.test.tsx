@@ -75,7 +75,6 @@ describe('VehicleLifecyclePage 车型字典错误反馈', () => {
     installDictFail()
     render(<VehicleLifecyclePage project={PROJECT as any} configurationOnly />)
 
-    fireEvent.click(screen.getByText(/车型与数量（计划/))
     // 历史车型（字典外/已停用）仍显示在配置表中，不被静默清空
     expect(await screen.findByText('老式叉车')).toBeInTheDocument()
     expect(screen.getByText('L1')).toBeInTheDocument()
@@ -102,7 +101,6 @@ describe('VehicleLifecyclePage 车型字典错误反馈', () => {
     })
 
     render(<VehicleLifecyclePage project={PROJECT as any} configurationOnly />)
-    fireEvent.click(screen.getByText(/车型与数量（计划/))
     expect(await screen.findByText('车型字典加载失败')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /重\s*试/ }))

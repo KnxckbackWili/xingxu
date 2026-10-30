@@ -56,8 +56,26 @@ def test_recent_activity_leaves_out_access_audits(client, pm_headers, admin_head
     p = _generated_project(client, pm_headers)
     with SessionLocal() as db:
         log_change(db, p['id'], 'project_document_definition', 'd1', 'confidential_view', None, '查看已授权保密资料要求')
+        log_change(db, p['id'], 'project_document', 'd2', 'deadline', None, '按真实规则更新资料截止：8.1')
+        log_change(db, p['id'], 'attachment', 'a1', 'create', None, '完成并校验可恢复上传')
+        log_change(db, p['id'], 'project_document', 'd3', 'generate', None, '生成2026-W44资料：6.11.9 邮件往来记录')
         log_change(db, p['id'], 'project', p['id'], 'update', None, '修改项目说明')
         db.commit()
     logs = client.get(f"/api/projects/{p['id']}/overview", headers=admin_headers).json()['logs']
     details = [log['detail'] for log in logs]
-    assert '修改项目说明' in details and '查看已授权保密资料要求' not in details
+    assert '修改项目说明' in details
+    assert not {'查看已授权保密资料要求', '按真实规则更新资料截止：8.1', '完成并校验可恢复上传', '生成2026-W44资料：6.11.9 邮件往来记录'} & set(details)
+
+
+def test_project_log_page_hides_access_audits_unless_asked(client, pm_headers, admin_headers):
+    from app.db import SessionLocal
+    from app.services.change_log import log_change
+    p = _generated_project(client, pm_headers)
+    with SessionLocal() as db:
+        log_change(db, p['id'], 'project', p['id'], 'confidential_view', None, '查看已授权保密资料')
+        log_change(db, p['id'], 'project', p['id'], 'update', None, '修改项目说明')
+        db.commit()
+    plain = [log['detail'] for log in client.get(f"/api/projects/{p['id']}/logs", headers=admin_headers).json()]
+    assert '修改项目说明' in plain and '查看已授权保密资料' not in plain
+    full = [log['detail'] for log in client.get(f"/api/projects/{p['id']}/logs?include_access=true", headers=admin_headers).json()]
+    assert '查看已授权保密资料' in full

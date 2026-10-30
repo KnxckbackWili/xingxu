@@ -139,3 +139,27 @@ html[data-theme='dark'] .ant-btn-primary.ant-btn-background-ghost:not(:disabled)
 }
 .icon-count-action.ant-btn { color: var(--agv-text-secondary); padding-inline: 8px; }
 .ant-alert-message .info-hint { vertical-align: middle; margin-left: 4px; }
+
+/* File pick area (FilePickField). */
+.file-pick { position: relative; display: flex; align-items: center; justify-content: center; min-height: 92px; padding: 14px; border: 1px dashed var(--agv-border); border-radius: 12px; background: var(--agv-bg-subtle); text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+.file-pick:hover, .file-pick.is-over, .file-pick:focus-within { border-color: var(--agv-primary); background: var(--agv-primary-soft); }
+.file-pick.is-disabled { cursor: not-allowed; opacity: .6; }
+.file-pick.has-file { min-height: 64px; border-style: solid; }
+.file-pick-input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+.file-pick-empty, .file-pick-chosen { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.file-pick-chosen { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 4px 8px; }
+.file-pick .anticon { color: var(--agv-primary); font-size: 22px; }
+.file-pick-chosen .anticon { font-size: 16px; }
+.file-pick strong { font-weight: 500; }
+.file-pick small { color: var(--agv-text-secondary); font-size: 12px; }
+.project-history-access { display: inline-flex; align-items: center; gap: 8px; color: var(--agv-text-secondary); font-size: 13px; cursor: pointer; }
+.work-completion-blockers { display: grid; gap: 6px; margin: 0 0 12px; padding: 10px 12px; border-radius: 8px; background: var(--agv-bg-subtle); }
+.work-completion-blocker { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.week-other-documents { margin-top: 8px; color: var(--agv-text-secondary); }
+.week-other-documents > summary { cursor: pointer; font-size: 13px; padding: 4px 0; }
+.completion-blockers { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 8px; }
+.completion-blocker { padding: 10px 12px; border-radius: 8px; background: var(--agv-bg-subtle); overflow-wrap: anywhere; }
+.completion-blocker-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.completion-blocker-head > a { flex-shrink: 0; }
+.completion-blocker-items.ant-typography { margin: 4px 0 0; font-size: 13px; }
+.completion-blocker-items summary { cursor: pointer; color: var(--agv-primary); }

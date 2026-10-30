@@ -33,7 +33,8 @@ it('keeps other projects available when the dashboard lacks one progress value',
   expect(await screen.findByText('正常实施项目')).toBeVisible()
   expect(screen.getByText('65%')).toBeVisible()
   expect(screen.getByText('进度不可用项目')).toBeVisible()
-  expect(screen.getByText('进度暂不可用')).toBeVisible()
+  expect(screen.getByText('进度待核对')).toBeVisible()
+  expect(screen.queryByText('项目进度与风险暂不可用')).not.toBeInTheDocument()
   expect(screen.queryByText('项目列表加载失败')).not.toBeInTheDocument()
 })
 

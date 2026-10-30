@@ -385,3 +385,14 @@ def test_backup_is_cleaned_if_database_cas_fails_after_archive_creation(client, 
         assert db.get(Project, p['id']).version == p['version']
         assert db.get(Project, p['id']).deleted_at is None
         assert db.query(ProjectDeletionRecord).filter_by(project_id=p['id']).count() == 0
+
+
+def test_delete_without_backup_passphrase_explains_and_keeps_project(client, pm_headers):
+    from app.services import backup_crypto
+    p = _project(client, pm_headers)
+    with patch.object(backup_crypto, 'get_passphrase', side_effect=backup_crypto.BackupError('尚未设置备份口令')):
+        response = _delete(client, pm_headers, p)
+    assert response.status_code == 409, response.text
+    assert '尚未设置备份口令' in response.json()['detail'] and '项目未删除' in response.json()['detail']
+    with SessionLocal() as db:
+        assert db.get(Project, p['id']).deleted_at is None

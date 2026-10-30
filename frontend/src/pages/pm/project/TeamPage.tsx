@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Alert, Avatar, Button, Empty, Modal, Select, Skeleton, Typography, message } from 'antd'
+import { Alert, Avatar, Button, Empty, Modal, Select, Skeleton, Space, Typography, message } from 'antd'
 import { UserOutlined } from '@ant-design/icons'
 import { userApi, projectApi } from '../../../api'
 import { api, errMsg } from '../../../api/client'
@@ -71,15 +71,15 @@ export default function TeamPage({ project, onReload, canEdit: canManageMembers,
         {memberError && !membersOpen && <Alert type="error" showIcon message={memberError} action={<Button href={`/pm/projects/${project.id}/schedule`}>去日程改派</Button>} style={{ marginBottom: 12 }} />}
         {usersError && <Alert type="error" showIcon message="成员姓名加载失败" action={<Button onClick={loadUsers}>重试</Button>} />}
         {inlineSetup && <Typography.Paragraph type="secondary">选好参与人员并保存，再安排执行日期和任务。</Typography.Paragraph>}
-        {onSchedule && <Button onClick={onSchedule} style={{ marginBottom: 12 }}>下一步：分配日程</Button>}
         {inlineSetup && canEdit && !['completed', 'archived', 'suspended'].includes(project.status) && <div className="startup-member-picker">
           <label htmlFor="startup-members">选择实际参与项目的人员</label>
           <Select id="startup-members" aria-label="项目参与人员" mode="multiple" showSearch optionFilterProp="label" value={selectedMembers}
             disabled={savingMembers || usersLoading || usersError} onChange={setSelectedMembers} placeholder="输入姓名选择，可同时安排多人"
             options={[...users.map(user => ({ value: user.id, label: `${user.display_name || user.username}（${ROLE_NAME[user.role] ?? user.role}）` })), ...memberIds.filter(id => !users.some(user => user.id === id)).map(id => ({ value: id, label: `原成员 ${id}` }))]} />
-          <div><Button type="primary" loading={savingMembers} disabled={usersError || usersLoading || [...selectedMembers].sort().join(',') === [...memberIds].sort().join(',')} onClick={saveMembers}>保存人员安排</Button>
-          <Typography.Text type="secondary"> 保存后再继续排定日程。</Typography.Text></div>
+          <Space wrap><Button type="primary" loading={savingMembers} disabled={usersError || usersLoading || [...selectedMembers].sort().join(',') === [...memberIds].sort().join(',')} onClick={saveMembers}>保存人员安排</Button>
+          {onSchedule && memberIds.length > 0 && <Button onClick={onSchedule}>下一步：分配日程</Button>}</Space>
         </div>}
+        {onSchedule && !inlineSetup && memberIds.length > 0 && <Button onClick={onSchedule} style={{ marginBottom: 12 }}>下一步：分配日程</Button>}
         {usersLoading ? <Skeleton active paragraph={{ rows: 3 }} /> : members.length === 0 ? (
           <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未安排执行成员" />
         ) : (

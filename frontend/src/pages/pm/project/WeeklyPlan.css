@@ -63,3 +63,9 @@ td.is-empty .weekly-plan-add { position:absolute; inset:4px; width:auto; min-hei
   td:hover .weekly-plan-add, .weekly-plan-add:focus-visible { opacity:1; }
 }
 @media print { .weekly-plan-add { display:none; } }
+.weekly-plan-anchors { display:flex; flex-direction:column; gap:8px; margin:8px 0 12px; padding:12px; border-radius:10px; background:var(--agv-primary-soft); }
+.weekly-plan-anchors label { display:inline-flex; align-items:center; gap:6px; font-size:13px; }
+.weekly-plan-rule-head { margin:8px 0 -4px; color:var(--agv-text-secondary); font-size:12px; }
+.weekly-plan-rule-head span:nth-child(2) { width:145px; }
+.weekly-plan-rule-head span:nth-child(3) { width:120px; }
+.weekly-plan-rule .ant-input-number-group-wrapper { width:120px; }

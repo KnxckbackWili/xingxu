@@ -75,7 +75,7 @@ describe('InventoryPage 物品申请表单确认', () => {
     })
 
     renderPage()
-    fireEvent.click(screen.getByRole('tab', { name: /^申请/ }))
+    fireEvent.click(screen.getByRole('tab', { name: /^物资申请/ }))
     await waitFor(() => expect(screen.getByRole('button', { name: /新建申请/ })).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: /新建申请/ }))
 
@@ -96,7 +96,7 @@ describe('InventoryPage 物品申请表单确认', () => {
     apiPost.mockResolvedValue({ data: { id: 'app1' } })
 
     renderPage()
-    fireEvent.click(screen.getByRole('tab', { name: /^申请/ }))
+    fireEvent.click(screen.getByRole('tab', { name: /^物资申请/ }))
     await waitFor(() => expect(screen.getByRole('button', { name: /新建申请/ })).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: /新建申请/ }))
 
@@ -218,7 +218,7 @@ it('旧手工墙钟与新UTC流水按显示时间排序并明确来源，初始�
 it('shows full application information to a reader without a save or status mutation control', async () => {
   apiGet.mockImplementation(async (url:string)=>({data:url.endsWith('/item-applications')?[{id:'app-read',title:'现场吊车申请',item_name:'吊车',requirement:'停机窗口吊装',reason:'更换重件',status:'pending'}]:{items:[],summary:{},total:0}}))
   render(<InventoryPage projectId="p1" canManage={false} />)
-  fireEvent.click(await screen.findByRole('tab',{name:/^申请/}))
+  fireEvent.click(await screen.findByRole('tab',{name:/^物资申请/}))
   fireEvent.click(await screen.findByRole('button',{name:'查看申请'}))
   expect(screen.getByLabelText('原因')).toHaveValue('更换重件')
   expect(screen.getByLabelText('原因')).toBeDisabled()

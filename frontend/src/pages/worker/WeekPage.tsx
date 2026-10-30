@@ -79,6 +79,11 @@ export default function WeekPage({ projectId = '' }: { projectId?: string }) {
       else setUploadError(errMsg(e))
     } finally { uploadLock.current = false; if (active.current === owner) setUploadBusy(false) }
   }
+  // Documents I own (or nobody owns yet) come first; the rest of the project's due list stays folded.
+  const documents = data?.this_week_documents ?? []
+  const myDocuments = documents.filter(doc => !doc.effective_owner_id || doc.effective_owner_id === user?.id)
+  const otherDocuments = documents.filter(doc => !myDocuments.includes(doc))
+  const documentLine = (doc: Week['this_week_documents'][number]) => <p key={doc.document_id}><Link to={`/pm/projects/${doc.project_id}/documents?document=${doc.document_id}`}>{doc.project_name} · {doc.code} {doc.name}{doc.vehicle_label ? ` · ${doc.vehicle_label}` : ''}</Link><br /><Typography.Text type="secondary">{deadlineLabel(doc.due_at, doc.timezone || 'Asia/Shanghai')} · {doc.effective_owner_name || '负责人待核对'}</Typography.Text> {data?.permissions.upload && hasSystemPermission(user, 'worker.deliver') && <Button onClick={() => { setUploading(doc); setFile(undefined); setEventDate(''); setUploadError('') }}>上传当期资料</Button>}</p>
   return <div className="worker-work-page">
     <WorkPageHeader title={canAccessNav('/pm/dashboard', user) ? '我的本周' : '工作台'} description="本周分配给你的工作；登记实际完成日期，协助登记会同时保留操作人和被协助人。" tools={<Space wrap><DatePicker picker="week" aria-label="计划周" value={week ? dayjs(week) : dayjs()} allowClear={false} onChange={value => setWeek(value?.subtract((value.day() + 6) % 7, 'day').format('YYYY-MM-DD'))} /><RefreshAction onClick={load} loading={loading} /></Space>} />
     {error && <Alert type="error" message="本周信息未能读取" description={error} />}
@@ -92,7 +97,8 @@ export default function WeekPage({ projectId = '' }: { projectId?: string }) {
     {!!data?.unassigned.length && <Card title="待认领工作">{data.unassigned.map(plan => <p key={plan.id}>{plan.project_name} · {plan.work_item.name} <Button disabled={!canRecord || plan.permissions?.claim === false || !!claiming || !online} loading={claiming === plan.id} onClick={() => void claim(plan)}>认领</Button></p>)}</Card>}
     {!!data?.assistable.length && <Card title="协助同项目人员" extra={<Button onClick={() => setShowAssist(value => !value)}>{showAssist ? '收起' : '选择协助工作'}</Button>}>{showAssist ? data.assistable.map(plan => planCard(plan, true)) : <Typography.Text type="secondary">同项目有 {data.assistable.length} 项工作可协助登记。</Typography.Text>}</Card>}
     </div><div className="week-layout-side">
-    <Card title="本周待交资料">{data?.this_week_documents.length ? data.this_week_documents.map(doc => <p key={doc.document_id}><Link to={`/pm/projects/${doc.project_id}/documents?document=${doc.document_id}`}>{doc.project_name} · {doc.code} {doc.name}</Link><br /><Typography.Text type="secondary">{deadlineLabel(doc.due_at, doc.timezone || 'Asia/Shanghai')} · {doc.effective_owner_name || '负责人待核对'}</Typography.Text> {data.permissions.upload && hasSystemPermission(user, 'worker.deliver') && <Button onClick={() => { setUploading(doc); setFile(undefined); setEventDate(''); setUploadError('') }}>上传当期资料</Button>}</p>) : <Empty description={error ? '资料状态未知' : '本周没有可见待交资料'} />}</Card>
+    <Card title="本周待交资料">{myDocuments.length ? myDocuments.map(documentLine) : <Empty description={error ? '资料状态未知' : otherDocuments.length ? '本周没有我负责的待交资料' : '本周没有可见待交资料'} />}
+      {otherDocuments.length > 0 && <details className="week-other-documents"><summary>项目里其他人负责 {otherDocuments.length} 项</summary>{otherDocuments.map(documentLine)}</details>}</Card>
     <Card title="我的问题" extra={data?.permissions.issues && <Link to="/worker/issues">上报与处理问题</Link>}>{data?.my_issues.length ? data.my_issues.map(issue => <p key={issue.id}><Link to={`/worker/issues?issue=${issue.id}`}>{issue.project_name} · {issue.title}</Link> <Tag color={ISSUE_STATUS_MAP[issue.status]?.color}>{ISSUE_STATUS_MAP[issue.status]?.label ?? issue.status}</Tag></p>) : <Empty description="暂无本人未闭环问题" />}</Card>
     </div></div>
     {target && <FieldOperationModal key={`${identity}:${target.kind}:${target.target_id}`} target={target} onClose={() => setTarget(undefined)} onSaved={load} />}

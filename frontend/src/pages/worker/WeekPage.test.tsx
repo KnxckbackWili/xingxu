@@ -86,3 +86,13 @@ it('shows repeated warnings and the shared not-on-site notice once, naming the p
   expect(screen.getByText(/项目甲、项目乙：项目进入「现场实施」后/)).toBeInTheDocument()
   expect(screen.getAllByRole('link', { name: '查看项目' })[0]).toHaveAttribute('href', '/pm/projects/project-1/overview')
 })
+
+it('本周资料先列本人负责的，其他人负责的折叠并标明车号', async () => {
+  mocks.get.mockResolvedValue({ data: { ...base, this_week_documents: [
+    { document_id: 'mine', project_id: 'project-1', project_name: '项目甲', code: '6.2', name: '本人周表', due_at: null, effective_owner_id: 'worker-1', effective_owner_name: '本人', vehicle_label: '' },
+    { document_id: 'other', project_id: 'project-1', project_name: '项目甲', code: '6.11.2a', name: '车辆参数包', due_at: null, effective_owner_id: 'pm-1', effective_owner_name: '项目经理', vehicle_label: 'AGV-002' },
+  ] } }); draw()
+  expect(await screen.findByText(/本人周表/)).toBeVisible()
+  expect(screen.getByText('项目里其他人负责 1 项')).toBeVisible()
+  expect(screen.getByText(/车辆参数包 · AGV-002/)).not.toBeVisible()
+})

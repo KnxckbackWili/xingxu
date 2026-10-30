@@ -14,7 +14,10 @@ from app.services.progress import project_progress_tree, plan_vs_actual_timeline
 from app.services.system_permissions import has_permission
 
 router = APIRouter(tags=["进度"])
-ACCESS_AUDIT_ACTIONS = ('confidential_view', 'confidential_dl', 'confidential_export')
+# Overview "recent activity" shows people's changes; access audits, automatic deadline recalculation and the raw
+# upload record (always followed by the document submission it served) and documents the schedule creates by itself stay
+# on the full audit page.
+ACCESS_AUDIT_ACTIONS = ('confidential_view', 'confidential_dl', 'confidential_export', 'deadline')
 
 
 @router.get("/projects/{project_id}/progress")
@@ -63,8 +66,7 @@ def project_overview(project_id: str, user: User = Depends(get_current_user), db
     document_actions=action_summary(db,project,user,documents=document_rows)
     overdue_data={"count":document_actions["overdue_count"],"items":document_actions["overdue"]}
     overdue = [{**item, "id": item["document_id"]} for item in overdue_data["items"]]
-    # Recent activity shows changes; access audits (viewing/downloading confidential material) stay on the audit page.
-    logs = db.query(ChangeLog).filter(ChangeLog.project_id == project_id, ChangeLog.action.notin_(ACCESS_AUDIT_ACTIONS)).order_by(ChangeLog.created_at.desc()).limit(20).all() if has_permission(user, "system.audit.read") else []
+    logs = db.query(ChangeLog).filter(ChangeLog.project_id == project_id, ChangeLog.action.notin_(ACCESS_AUDIT_ACTIONS), ~((ChangeLog.entity_type == 'attachment') & (ChangeLog.action == 'create')), ~((ChangeLog.entity_type == 'project_document') & (ChangeLog.action == 'generate'))).order_by(ChangeLog.created_at.desc()).limit(20).all() if has_permission(user, "system.audit.read") else []
     task_names = {t.id: t.name for t in db.query(Task).filter(Task.project_id == project_id).all()}
 
     reporter_ids = {i.reporter_id for i in issues}

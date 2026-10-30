@@ -187,3 +187,4 @@ html[data-theme='dark'] .overview-check-mark { background: var(--agv-bg-subtle);
   .overview-work-page .overview-status-actions { justify-content: flex-start; max-width: none; }
 }
 .overview-checklist + .overview-work-cards { grid-template-columns: minmax(0, 1fr); border-block: 0; }
+.overview-failure-actions { margin-top: 10px; }

@@ -109,9 +109,11 @@
 .project-tree-workspace .project-title-row > .ant-tag { flex-shrink: 0; margin: 0; }
 .project-tree-workspace .project-context-summary { flex: 0 1 auto; min-width: 0; color: var(--agv-text-secondary); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project-tree-workspace .project-info-trigger.ant-btn { min-height: 28px; padding-inline: 4px; }
-.project-more-current { margin-left: 4px; font-weight: 600; }
+.project-more-current { white-space: pre; font-weight: 600; }
 /* Inside a project the tab already names the page: its page heading becomes a slim toolbar. */
 .project-workspace-main .work-page-header { align-items: center; margin-bottom: 16px; gap: 10px 16px; }
 .project-workspace-main .work-page-heading { display: flex; align-items: center; gap: 8px; flex: 1 1 200px; }
 .project-workspace-main .work-page-heading h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .project-workspace-main .work-page-meta { margin-top: 0; font-size: 13px; }
+/* A heading with nothing but its (hidden) title and a hint would leave a lone ⓘ: keep it for screen readers only. */
+.project-workspace-main .work-page-header:not(:has(.work-page-actions)):not(:has(.work-page-meta)) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); margin: 0; }

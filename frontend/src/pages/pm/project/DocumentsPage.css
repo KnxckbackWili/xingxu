@@ -18,3 +18,5 @@
 .documents-filter-count.is-danger { background: rgb(212 56 13 / 10%); color: #d4380d; }
 .documents-owner-warning { display: block; margin-bottom: 8px; font-size: 13px; }
 .documents-due-pending { cursor: help; border-bottom: 1px dotted var(--agv-border); }
+.project-documents-page .documents-due { white-space: nowrap; }
+.project-documents-page .documents-due-tag { margin-inline-end: 6px; }
