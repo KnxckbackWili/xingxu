@@ -9,10 +9,14 @@ export interface UpdateSource {
   has_token: boolean
   allow_http: boolean
   revision: number
+  /** github_release: install the CI image of the newest vX.Y.Z tag; gitea: build the source on the host. */
+  kind?: 'github_release' | 'gitea'
+  image?: string
 }
+export interface ReleaseNote { version: string; body: string }
 export interface UpdateTrust {
   status: 'pending' | 'trusted' | 'rejected'
-  method?: 'commit' | 'signed_tag'
+  method?: 'commit' | 'signed_tag' | 'release_image'
   message: string
 }
 export interface UpdateCheck {
@@ -23,6 +27,11 @@ export interface UpdateCheck {
   checked_at: string
   update_available: boolean
   trust?: UpdateTrust
+  kind?: 'github_release'
+  tag?: string
+  image?: string
+  notes?: ReleaseNote[]
+  release_url?: string
 }
 export interface UpdateJob {
   id: string
@@ -40,7 +49,7 @@ export interface SystemUpdates {
   sources: UpdateSource[]
   active_source_id: string
   maintenance?: boolean
-  runner: { online: boolean; last_seen: string | null; protocol: number; trust?: { configured: boolean; protocol: 1 } }
+  runner: { online: boolean; last_seen: string | null; protocol: number; release_images?: boolean; trust?: { configured: boolean; protocol: 1 } }
   check: UpdateCheck | null
   job: UpdateJob | null
 }

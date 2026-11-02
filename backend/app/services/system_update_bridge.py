@@ -14,7 +14,8 @@ def dispatch(request):
     action = request.get("action")
     runner_id = request.get("runner_id")
     if action == "heartbeat":
-        return updates.heartbeat(runner_id, request.get("protocol"), request.get("trust_protocol"), request.get("trust_configured"))
+        return updates.heartbeat(runner_id, request.get("protocol"), request.get("trust_protocol"), request.get("trust_configured"),
+                                 request.get("capabilities"))
     if action == "trust-request":
         return updates.trust_request(runner_id)
     if action == "trust-credentials":

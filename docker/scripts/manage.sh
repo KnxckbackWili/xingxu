@@ -63,6 +63,8 @@ set_env_value() {
 
 sync_build_version() {
   local mode version
+  # A verified release image arrives with its version, commit and digest set.
+  if [ "${AGV_PREBUILT_IMAGE:-0}" = 1 ]; then return 0; fi
   mode="$(env_value DEPLOY_MODE)"; mode="${mode:-build}"
   if [ -n "${AGV_BUILD_CONTEXT:-}" ]; then
     version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$AGV_BUILD_CONTEXT/frontend/package.json")"
@@ -122,6 +124,7 @@ deploy_current() {
 
 prepare_current() {
   local mode image
+  if [ "${AGV_PREBUILT_IMAGE:-0}" = 1 ]; then update_require_prebuilt_image; return; fi
   if [ -n "${AGV_BUILD_CONTEXT:-}" ]; then compose build; return; fi
   mode="$(env_value DEPLOY_MODE)"; mode="${mode:-build}"
   image="$(env_value AGV_IMAGE)"; image="${image:-agv-pm:2.1.2}"

@@ -23,6 +23,10 @@ from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
 TRUST_PROTOCOL = 1
 SHA = re.compile(r"[a-f0-9]{40}\Z")
+# Release images: an exact vX.Y.Z tag of the trusted repository and its
+# registry image, e.g. ghcr.io/owner/repo. No floating tags or digests here.
+RELEASE_TAG = re.compile(r"v((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))\Z")
+IMAGE = re.compile(r"[a-z0-9]+(?:[.-][a-z0-9]+)*(?::[0-9]{1,5})?(?:/[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*)+\Z")
 MAX_FETCH_BYTES = 512 * 1024 * 1024
 PUBLIC_REASONS = {
     "not_configured": "宿主尚未配置更新信任，请联系部署管理员登记此仓库提交或签名公钥",
@@ -35,6 +39,7 @@ PUBLIC_REASONS = {
     "content_changed": "已验证源码内容发生变化，拒绝安装",
     "tool_unavailable": "宿主缺少 Git 或配置的签名验证工具，请联系部署管理员",
     "fetch_failed": "宿主无法取得受信任仓库的 Git 对象，请检查网络和读取权限",
+    "image_unavailable": "宿主无法拉取发布镜像，请检查网络，私有镜像需先在宿主执行 docker login ghcr.io",
 }
 
 
@@ -107,6 +112,15 @@ def candidate_identity(candidate):
                 or result['ref'].startswith(('/', '-'))):
             raise ValueError()
         result['repository_url'] = repository_identity(result['repository_url'])
+        # Source candidates keep their original identity shape (and receipts).
+        kind = candidate.get('kind', 'source')
+        if kind == 'release_image':
+            image = candidate['image']
+            if not isinstance(image, str) or len(image) > 255 or not IMAGE.fullmatch(image):
+                raise ValueError()
+            result.update(kind=kind, image=image)
+        elif kind != 'source':
+            raise ValueError()
         return result
     except (KeyError, TypeError, ValueError):
         raise TrustError('receipt_invalid') from None
@@ -157,7 +171,10 @@ class Verifier:
                 raise ValueError()
             repositories = {}
             for entry in document['repositories']:
-                if not isinstance(entry, dict) or set(entry) - {'repository_url', 'allowed_commits', 'ssh_allowed_signers', 'openpgp_public_keys'}:
+                if not isinstance(entry, dict) or set(entry) - {'repository_url', 'allowed_commits', 'ssh_allowed_signers', 'openpgp_public_keys', 'release_image'}:
+                    raise ValueError()
+                release_image = entry.get('release_image')
+                if release_image is not None and (not isinstance(release_image, str) or not IMAGE.fullmatch(release_image)):
                     raise ValueError()
                 repository = repository_identity(entry['repository_url'])
                 commits = entry.get('allowed_commits', [])
@@ -165,7 +182,7 @@ class Verifier:
                 if repository in repositories or not isinstance(commits, list) or any(not isinstance(commit, str) or not SHA.fullmatch(commit) for commit in commits) or not isinstance(keys, list) or any(not isinstance(key, str) for key in keys):
                     raise ValueError()
                 paths = keys + ([entry['ssh_allowed_signers']] if entry.get('ssh_allowed_signers') else [])
-                if not commits and not paths:
+                if not commits and not paths and not release_image:
                     raise ValueError()
                 for name in paths:
                     self._boundary(name)
@@ -254,6 +271,9 @@ class Verifier:
     def verified(self, candidate, token=''):
         identity, entry, policy_digest = self.entry(candidate)
         self.work.mkdir(mode=0o700, parents=True, exist_ok=True)
+        if identity.get('kind') == 'release_image':
+            yield None, None, self._verified_release(identity, entry, policy_digest, token)
+            return
         with tempfile.TemporaryDirectory(prefix='.trust-git-', dir=self.work) as temporary:
             home = Path(temporary)
             repo = home / 'repository.git'
@@ -349,6 +369,87 @@ class Verifier:
             self.assert_policy(policy_digest)
             yield repo, env, metadata
 
+    @staticmethod
+    def _docker(args, *, timeout=60, limit=4 * 1024 * 1024):
+        # The host's own Docker login is used for private registries; the web
+        # process never supplies registry credentials.
+        if not shutil.which('docker'):
+            raise TrustError('tool_unavailable')
+        try:
+            result = subprocess.run(['docker', *args], capture_output=True, timeout=timeout)
+        except (OSError, subprocess.TimeoutExpired):
+            raise TrustError('image_unavailable') from None
+        if result.returncode or len(result.stdout) > limit:
+            raise TrustError('image_unavailable')
+        return result.stdout
+
+    def image_id(self, reference):
+        try:
+            value = self._docker(['image', 'inspect', '--format', '{{.Id}}', reference]).decode().strip()
+        except (TrustError, UnicodeError):
+            raise TrustError('content_changed') from None
+        if not re.fullmatch(r'sha256:[a-f0-9]{64}', value):
+            raise TrustError('content_changed')
+        return value
+
+    def _verified_release(self, identity, entry, policy_digest, token):
+        """Bind a GitHub-style release tag to the image built from its commit.
+
+        The tag's commit comes from the repository itself (not from the web
+        process); the image must carry that commit and version, and is pinned by
+        its registry digest so a later re-tag cannot change what is installed.
+        """
+        if entry.get('release_image') != identity['image']:
+            raise TrustError('source_not_allowed')
+        tag = RELEASE_TAG.fullmatch(identity['ref'])
+        if not tag or tag.group(1) != identity['version']:
+            raise TrustError('target_changed')
+        if not shutil.which('git'):
+            raise TrustError('tool_unavailable')
+        with tempfile.TemporaryDirectory(prefix='.trust-git-', dir=self.work) as temporary:
+            home = Path(temporary)
+            repo = home / 'repository.git'
+            env = self._environment(home, token)
+            try:
+                result = subprocess.run(['git', 'init', '--bare', '--object-format=sha1', str(repo)], env=env, capture_output=True, timeout=30)
+            except (OSError, subprocess.TimeoutExpired):
+                raise TrustError('fetch_failed') from None
+            if result.returncode:
+                raise TrustError('fetch_failed')
+            if token:
+                env.update(GIT_CONFIG_COUNT='1', GIT_CONFIG_KEY_0='http.' + identity['repository_url'] + '.extraHeader',
+                           GIT_CONFIG_VALUE_0='Authorization: Basic ' + base64.b64encode(('git:' + token).encode()).decode('ascii'))
+            name = 'refs/tags/' + identity['ref']
+            listing = self._git(repo, ['ls-remote', '--tags', identity['repository_url'], name, name + '^{}'], env).decode('ascii', 'replace')
+        refs = {}
+        for line in listing.splitlines():
+            parts = line.split('\t')
+            if len(parts) == 2 and SHA.fullmatch(parts[0]):
+                refs[parts[1]] = parts[0]
+        commit = refs.get(name + '^{}') or refs.get(name)
+        if commit is None:
+            raise TrustError('commit_not_allowed')
+        if commit != identity['commit']:
+            raise TrustError('target_changed')
+        reference = identity['image'] + ':' + identity['version']
+        self._docker(['pull', '--quiet', reference], timeout=1800)
+        try:
+            inspected = json.loads(self._docker(['image', 'inspect', reference]))[0]
+            config = inspected.get('Config') or {}
+            labels = config.get('Labels') or {}
+            env_values = dict(item.split('=', 1) for item in config.get('Env') or [] if '=' in item)
+            digests = [value for value in inspected.get('RepoDigests') or [] if value.startswith(identity['image'] + '@')]
+            image_id = inspected['Id']
+        except (ValueError, KeyError, IndexError, TypeError, AttributeError):
+            raise TrustError('image_unavailable') from None
+        if (labels.get('org.opencontainers.image.version') != identity['version'] or labels.get('org.opencontainers.image.revision') != commit
+                or env_values.get('APP_VERSION') != identity['version'] or env_values.get('GIT_SHA') != commit):
+            raise TrustError('target_changed')
+        if len(digests) != 1 or not re.fullmatch(re.escape(identity['image']) + r'@sha256:[a-f0-9]{64}', digests[0]) or not re.fullmatch(r'sha256:[a-f0-9]{64}', image_id):
+            raise TrustError('image_unavailable')
+        self.assert_policy(policy_digest)
+        return {'method': 'release_image', 'policy_digest': policy_digest, 'image_id': image_id, 'image_ref': digests[0]}
+
     def assert_policy(self, digest):
         if self.load()[1] != digest:
             raise TrustError('policy_changed')
@@ -374,9 +475,14 @@ def main():
     allow = command.add_parser('allow-commit')
     allow.add_argument('--repository', required=True)
     allow.add_argument('--commit', required=True)
+    release = command.add_parser('allow-release-image', help='trust vX.Y.Z release tags of REPOSITORY installed from IMAGE')
+    release.add_argument('--repository', required=True)
+    release.add_argument('--image', required=True, help='registry image, e.g. ghcr.io/owner/repo')
     args = parser.parse_args()
     if args.action == 'allow-commit' and not SHA.fullmatch(args.commit):
         parser.error('--commit 必须是 40 位小写的完整提交 SHA')
+    if args.action == 'allow-release-image' and not IMAGE.fullmatch(args.image):
+        parser.error('--image 必须是小写的镜像仓库地址，例如 ghcr.io/owner/repo，不带标签或摘要')
     os.umask(0o077)
     path = args.trust_file.absolute()
     try:
@@ -384,7 +490,7 @@ def main():
             Verifier(path, path.parent / '.verification-work').load()
             print('宿主信任策略及公钥文件验证通过。')
             return
-        if not SHA.fullmatch(args.commit):
+        if args.action == 'allow-commit' and not SHA.fullmatch(args.commit):
             raise TrustError('receipt_invalid')
         repository = repository_identity(args.repository)
         if path.is_symlink() or path.parent.is_symlink():
@@ -404,7 +510,10 @@ def main():
             if entry is None:
                 entry = {'repository_url': repository, 'allowed_commits': []}
                 policy['repositories'].append(entry)
-            entry['allowed_commits'] = sorted(set(entry.get('allowed_commits', [])) | {args.commit})
+            if args.action == 'allow-release-image':
+                entry['release_image'] = args.image
+            else:
+                entry['allowed_commits'] = sorted(set(entry.get('allowed_commits', [])) | {args.commit})
             fd, name = tempfile.mkstemp(prefix='.trust-policy-', dir=path.parent)
             temporary = Path(name)
             try:
@@ -421,7 +530,8 @@ def main():
                     os.close(directory)
             finally:
                 temporary.unlink(missing_ok=True)
-        print('已在宿主登记此仓库的完整提交；请在网页重新检查版本。')
+        print('已在宿主登记此仓库的发布镜像；请在网页重新检查版本。' if args.action == 'allow-release-image'
+              else '已在宿主登记此仓库的完整提交；请在网页重新检查版本。')
     except (TrustError, OSError, ValueError) as error:
         print(str(error) if isinstance(error, TrustError) else '宿主信任策略无法保存；原策略未被替换。', file=__import__('sys').stderr)
         raise SystemExit(1) from None

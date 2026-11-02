@@ -4,6 +4,33 @@
 
 网页负责检查和展示进度，宿主机上的更新服务负责备份、构建和切换容器。首次接入需要部署管理员在宿主机操作一次；接入后，日常更新从网页完成。系统不会因为检查到新版本就自动安装。
 
+## GitHub 正式版（3.4 起默认）
+
+默认来源是「GitHub 正式版」：`https://github.com/KnxckbackWili/xingxu`。版本由 GitHub Actions 在打 `vX.Y.Z` 标签时构建并发布到 `ghcr.io/knxckbackwili/xingxu:X.Y.Z`，部署主机**不再从源码构建**，直接安装这份镜像。
+
+**检查**（应用容器）：读取仓库最新的 `vX.Y.Z` 标签（不含预发布），核对该提交的 `frontend/package.json` 版本与标签一致、存在 `docker/update-protocol.json`，并从该提交的 `CHANGELOG.md` 取出比当前版本新的各节作为“更新内容”。只读公开接口，公开仓库无需令牌（GitHub 匿名接口每小时 60 次）；页面不会自动安装。
+
+**核对**（部署主机）：宿主更新服务自己用 `git ls-remote` 解析该标签对应的提交（不采信网页给的提交），拉取 `ghcr.io/…:X.Y.Z`，要求镜像的 `org.opencontainers.image.version`、`org.opencontainers.image.revision` 标签以及 `APP_VERSION`、`GIT_SHA` 环境与标签和提交完全一致，并记下镜像摘要（`@sha256:`）。安装时重新解析标签、重新拉取，必须得到同一个镜像；备份和切换前再核对本机镜像未被替换。之后的备份、维护停写、切换、健康检查和失败自动恢复与源码安装完全相同，只是跳过构建。
+
+**首次接入**（每台部署主机一次）：
+
+1. 更新宿主脚本：把本版本的 `docker/scripts/update-runner.py`、`update-trust.py`、`update-common.sh`、`manage.sh`、`deploy.sh` 放到可信安装目录，重启更新服务。旧版更新服务不支持发布镜像，网页会提示“部署主机的更新服务版本过旧”。
+2. 登记可信的发布镜像（只改宿主策略，不联网、不安装）：
+
+   ```bash
+   python3 /srv/xingxu/docker/scripts/update-trust.py \
+     --trust-file /var/lib/agv-update-runner/trust.json allow-release-image \
+     --repository https://github.com/KnxckbackWili/xingxu \
+     --image ghcr.io/knxckbackwili/xingxu
+   ```
+
+3. GHCR 镜像包默认是私有的。二选一：在 GitHub 的 Packages → xingxu → Package settings 中把可见性改为 Public；或在部署主机用运行更新服务的同一账号执行一次 `docker login ghcr.io`（用户名为 GitHub 账号，密码为只含 `read:packages` 权限的令牌）。网页不保存、也不传递镜像仓库凭据。
+4. 部署主机需能访问 `github.com`（ls-remote）和 `ghcr.io`，应用容器需能访问 `api.github.com`。
+
+**发布新版本**：先把版本号与 CHANGELOG 改成新版本并推送到 `master`，再在**这次提交上**建 `vX.Y.Z` 标签。标签若建在旧提交上，CI 会因版本不一致拒绝构建，网页检查也会提示“发布标签与应用版本号不一致”。
+
+原有 Gitea 来源（从源码构建）继续可用，在「更新来源 → 高级」中添加或选择即可。旧安装若一直使用原默认 Gitea 地址，升级后会自动保留为「原 Gitea 来源」（含已保存的令牌），默认改用 GitHub 正式版。
+
 ## 在网页中更新
 
 1. 打开「软件更新」，核对当前版本、当前提交和更新服务连接状态。
@@ -12,7 +39,7 @@
 4. 点击「安装更新」。确认其他成员已保存输入，再点击「自动备份并安装」。系统随后准备新版本、备份数据、切换容器并检查健康状态。
 5. 更新期间保留页面。页面每 6 秒读取进度，容器切换造成的暂时断连会显示等待恢复，不会直接判为更新失败。成功后点击「刷新页面使用新版本」；页面不会自动刷新。
 
-首次使用默认选择「我的 Gitea」：`https://gitea.arrowwood.top:8773/codex-mac/agv-project-workflow`，分支为 `main`。这里只预填来源，打开页面不会联网检查或自动安装。已有2.4.0单源配置会保留原地址、分支、令牌与选中状态，另增加默认项。
+首次使用默认选择「GitHub 正式版」：`https://github.com/KnxckbackWili/xingxu`（见上节）。这里只预填来源，打开页面不会联网检查或自动安装。3.4 以前的默认来源是 Gitea `https://gitea.arrowwood.top:8773/codex-mac/agv-project-workflow`，升级后保留为「原 Gitea 来源」。已有2.4.0单源配置会保留原地址、分支、令牌与选中状态，另增加默认项。
 
 可以保存最多20个来源（含默认项），每个来源分别保存分支、HTTP选项和加密令牌。新增来源后自动选中；切换时若有未保存输入会先确认。切换、编辑、添加或删除都会使先前检查失效，需要重新检查后才能安装；后台正在更新或等待人工处理时不能修改来源。
 

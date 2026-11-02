@@ -334,8 +334,10 @@ def test_default_is_preselected_without_network_or_config_write(tmp_path, monkey
     assert first == second
     assert first["active_source_id"] == "default-gitea"
     assert first["source"] == first["sources"][0]
-    assert first["source"]["name"] == "我的 Gitea"
-    assert first["source"]["repository_url"] == updates.DEFAULT_REPOSITORY_URL
+    assert first["source"]["name"] == "GitHub 正式版"
+    assert first["source"]["repository_url"] == updates.DEFAULT_REPOSITORY_URL == "https://github.com/KnxckbackWili/xingxu"
+    assert first["source"]["kind"] == "github_release"
+    assert first["source"]["image"] == "ghcr.io/knxckbackwili/xingxu"
     assert first["source"]["ref"] == "main"
     assert first["source"]["is_default"] is True
     assert first["source"]["has_token"] is False
@@ -635,3 +637,87 @@ def test_state_save_failure_keeps_new_revision_and_invalidates_old_check(monkeyp
         updates.request_install(old_check, "admin")
     with pytest.raises(updates.UpdateError, match="已被修改"):
         updates.select_source(added["active_source_id"], 1)
+
+
+RELEASE = {"commit": "c" * 40, "version": "2.5.0", "tag": "v2.5.0", "image": "ghcr.io/knxckbackwili/xingxu",
+           "notes": [{"version": "2.5.0", "body": "- 新功能"}], "release_url": "https://github.com/KnxckbackWili/xingxu/blob/v2.5.0/CHANGELOG.md"}
+
+
+def release_check(monkeypatch, capable=True):
+    monkeypatch.setattr(updates.update_source, "inspect_github_release", lambda url, token, current: dict(RELEASE))
+    runner = str(uuid.uuid4())
+    updates.heartbeat(runner, 1, trust_protocol=1, trust_configured=True, capabilities=["release_image"] if capable else None)
+    checked = updates.check_source(0)
+    return checked["check"], runner
+
+
+def test_old_gitea_default_moves_aside_and_github_releases_take_over(tmp_path):
+    encrypted = updates._fernet().encrypt(b"old-gitea-token").decode()
+    old = {"id": "default-gitea", "name": "我的 Gitea", "is_default": True, "repository_url": updates.PREVIOUS_DEFAULT_URL,
+           "ref": "main", "allow_http": False, "token_encrypted": encrypted}
+    raw = {"schema_version": 2, "revision": 5, "active_source_id": "default-gitea", "sources": [old], **old}
+    path = tmp_path / "system-update-config.json"
+    path.write_text(json.dumps(raw))
+    before = path.read_bytes()
+    status = updates.get_status()
+    assert path.read_bytes() == before
+    assert status["source"]["kind"] == "github_release" and status["source"]["repository_url"] == updates.DEFAULT_REPOSITORY_URL
+    retired = next(item for item in status["sources"] if item["id"] == updates.PREVIOUS_DEFAULT_ID)
+    assert retired["kind"] == "gitea" and retired["name"] == "原 Gitea 来源" and retired["has_token"] is True
+    selected = updates.select_source(updates.PREVIOUS_DEFAULT_ID, 5)
+    assert selected["source"]["repository_url"] == updates.PREVIOUS_DEFAULT_URL
+    assert updates._token(updates._source()) == "old-gitea-token"
+    assert updates.get_status()["source"]["id"] == updates.PREVIOUS_DEFAULT_ID
+
+
+def test_github_release_check_carries_tag_image_and_notes(monkeypatch):
+    check, _ = release_check(monkeypatch)
+    assert check["kind"] == "github_release" and check["tag"] == "v2.5.0" and check["update_available"] is True
+    assert check["notes"][0]["body"] == "- 新功能" and check["image"] == "ghcr.io/knxckbackwili/xingxu"
+
+
+def test_older_host_is_told_to_update_instead_of_judging_a_release(monkeypatch):
+    check, runner = release_check(monkeypatch, capable=False)
+    assert updates.trust_request(runner) == {"candidate": None}
+    status = updates.get_status()
+    assert status["check"]["trust"]["status"] == "rejected" and "版本过旧" in status["check"]["trust"]["message"]
+    assert status["runner"]["release_images"] is False
+    with pytest.raises(updates.UpdateError, match="版本过旧"):
+        updates.request_install(check["id"], "admin")
+
+
+def test_release_candidate_and_job_name_the_tag_and_image_for_the_host(monkeypatch):
+    check, runner = release_check(monkeypatch)
+    candidate = updates.trust_request(runner)["candidate"]
+    assert candidate["kind"] == "release_image" and candidate["ref"] == "v2.5.0" and candidate["image"] == RELEASE["image"]
+    assert candidate["commit"] == "c" * 40 and candidate["version"] == "2.5.0"
+    with pytest.raises(updates.UpdateError, match="无效"):
+        updates.trust_result(runner, check["id"], "trusted", method="commit")
+    updates.trust_result(runner, check["id"], "trusted", method="release_image")
+    assert updates.get_status()["check"]["trust"]["message"] == updates.TRUST_MESSAGES["release_image"]
+    updates.request_install(check["id"], "admin")
+    job = updates.claim(runner)["job"]
+    assert job["kind"] == "release_image" and job["ref"] == "v2.5.0" and job["image"] == RELEASE["image"]
+    assert job["target_commit"] == "c" * 40 and job["target_version"] == "2.5.0"
+
+
+def test_bridge_heartbeat_records_only_known_capabilities():
+    runner = str(uuid.uuid4())
+    dispatch({"action": "heartbeat", "runner_id": runner, "protocol": 1, "trust_protocol": 1, "trust_configured": True,
+              "capabilities": ["release_image", "run-anything"]})
+    assert updates._state()["runner"]["capabilities"] == ["release_image"]
+
+
+def test_an_old_gitea_check_does_not_carry_over_to_the_migrated_github_default(tmp_path):
+    old = {"id": "default-gitea", "name": "我的 Gitea", "is_default": True, "repository_url": updates.PREVIOUS_DEFAULT_URL,
+           "ref": "main", "allow_http": False, "token_encrypted": ""}
+    (tmp_path / "system-update-config.json").write_text(json.dumps({"schema_version": 2, "revision": 3, "active_source_id": "default-gitea", "sources": [old], **old}))
+    state = updates._state()
+    state["check"] = {"id": str(uuid.uuid4()), "source_revision": 3, "source_id": "default-gitea", "commit": "b" * 40, "version": "2.4.0",
+                      "checked_at": updates._now(), "update_available": True, "trust": {"status": "trusted", "message": "", "method": "commit"}}
+    updates._save(state)
+    assert updates.get_status()["check"] is None
+    runner = str(uuid.uuid4())
+    updates.heartbeat(runner, 1, trust_protocol=1, trust_configured=True, capabilities=["release_image"])
+    with pytest.raises(updates.UpdateError, match="失效"):
+        updates.request_install(state["check"]["id"], "admin")

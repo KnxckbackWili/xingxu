@@ -165,6 +165,13 @@ update_hold_writes() {
   return 1
 }
 
+update_require_prebuilt_image() {
+  # The host runner pulled and verified this exact digest; never pull or build here.
+  [ "${AGV_PREBUILT_IMAGE:-0}" = 1 ] || return 1
+  [ -n "${AGV_IMAGE:-}" ] && [ -n "${APP_VERSION:-}" ] && [ -n "${GIT_SHA:-}" ] || { echo "ERROR: 发布镜像信息不完整。" >&2; return 1; }
+  docker image inspect "$AGV_IMAGE" >/dev/null || { echo "ERROR: 已验证的发布镜像不在本机。" >&2; return 1; }
+}
+
 update_restore_git_sha() {
   # Compose may override GIT_SHA; restore the original image's value, not the
   # new source commit. Only this non-secret value is read from image metadata.
@@ -176,13 +183,14 @@ update_restore_git_sha() {
 }
 
 update_verify_built_image() {
-  [ -n "${AGV_BUILD_CONTEXT:-}" ] || return 0
+  # Applies to images built from verified source and to verified release images.
+  [ -n "${AGV_BUILD_CONTEXT:-}" ] || [ "${AGV_PREBUILT_IMAGE:-0}" = 1 ] || return 0
   # Refuse a source whose Dockerfile ignored the pinned build metadata before
   # entering maintenance; /health alone cannot establish source provenance.
   docker image inspect --format '{{json .Config.Env}}' "$AGV_IMAGE" | python3 -c '
 import json, sys
 values = dict(item.split("=", 1) for item in json.load(sys.stdin) if "=" in item)
-assert values.get("APP_VERSION") == sys.argv[1] and values.get("GIT_SHA") == sys.argv[2], "构建版本校验失败"
+assert values.get("APP_VERSION") == sys.argv[1] and values.get("GIT_SHA") == sys.argv[2], "镜像版本校验失败"
 ' "$APP_VERSION" "$GIT_SHA" || return 1
   # A source release may change its Debian base. Never attach an existing PG
   # cluster to another major version, even briefly during a failed activation.

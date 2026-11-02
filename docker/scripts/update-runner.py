@@ -39,8 +39,8 @@ MAX_SOURCE_FILES = 30000
 SEMVER = re.compile(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?")
 TERMINAL = {"succeeded", "failed", "rolled_back", "needs_attention"}
 MESSAGES = {
-    "downloading": "正在准备已确认版本的源码包。",
-    "building": "正在构建新镜像，当前应用继续运行。",
+    "downloading": "正在取得已确认的版本。",
+    "building": "正在准备新版本镜像，当前应用继续运行。",
     "backing_up": "正在停止写入并创建更新前备份。",
     "installing": "正在切换应用版本，请稍候。",
     "verifying": "正在检查新版本运行状态。",
@@ -297,7 +297,7 @@ class UpdateRunner:
 
     def heartbeat(self):
         return self.bridge("heartbeat", protocol=1, trust_protocol=TRUST.TRUST_PROTOCOL,
-                           trust_configured=self.verifier.configured())
+                           trust_configured=self.verifier.configured(), capabilities=["release_image"])
 
     def process_check(self):
         candidate = self.bridge("trust-request").get("candidate")
@@ -342,6 +342,12 @@ class UpdateRunner:
         if not authorization:
             raise TRUST.TrustError("receipt_invalid")
         self.verifier.assert_policy(authorization["policy_digest"])
+        if "image_id" in authorization:
+            # A release image is installed by digest; the local copy must still
+            # be exactly the image verified against the release tag.
+            if self.verifier.image_id(authorization["image_ref"]) != authorization["image_id"]:
+                raise TRUST.TrustError("content_changed")
+            return
         if TRUST.source_fingerprint(source) != authorization["source_fingerprint"]:
             raise TRUST.TrustError("content_changed")
 
@@ -350,11 +356,15 @@ class UpdateRunner:
         env = dict(os.environ)
         # Never inherit fault injection, unsafe checksum bypasses, or compose overrides.
         for key in list(env):
-            if key.startswith(("FAULT_", "COMPOSE_")) or key in {"AGV_COMPOSE_FILE", "AGV_INSTALLED_COMPOSE_FILE", "SKIP_SHA_CHECK", "APP_VERSION", "AGV_IMAGE", "GIT_SHA", "AGV_BACKUP_STAMP", "AGV_ROLLBACK_REF"}:
+            if key.startswith(("FAULT_", "COMPOSE_")) or key in {"AGV_COMPOSE_FILE", "AGV_INSTALLED_COMPOSE_FILE", "SKIP_SHA_CHECK", "APP_VERSION", "AGV_IMAGE", "GIT_SHA", "AGV_BACKUP_STAMP", "AGV_ROLLBACK_REF", "AGV_BUILD_CONTEXT", "AGV_PREBUILT_IMAGE"}:
                 del env[key]
         event_read, event_write = os.pipe()
-        env.update(AGV_BUILD_CONTEXT=str(source), APP_VERSION=job["target_version"], GIT_SHA=job["target_commit"],
-                   AGV_IMAGE="agv-managed-update:" + job["id"], COMPOSE_PROJECT_NAME=self.compose_project,
+        if "image_ref" in (self._active_trust or {}):
+            # Verified release image: nothing is built, the digest is deployed.
+            env.update(AGV_PREBUILT_IMAGE="1", AGV_IMAGE=self._active_trust["image_ref"])
+        else:
+            env.update(AGV_BUILD_CONTEXT=str(source), AGV_IMAGE="agv-managed-update:" + job["id"])
+        env.update(APP_VERSION=job["target_version"], GIT_SHA=job["target_commit"], COMPOSE_PROJECT_NAME=self.compose_project,
                    AGV_CONTAINER_NAME=self.container, AGV_CONTAINER=self.container, AGV_ENV_FILE=str(self.env_file),
                    BACKUP_DIR=str(self.work / "backups"), AGV_UPDATE_MANAGED="1", AGV_UPDATE_EVENT_FD=str(event_write))
         if self.custom_compose:
@@ -445,13 +455,21 @@ class UpdateRunner:
             # Git objects, signatures and the source/version binding are checked
             # again immediately before building. No app-supplied tar/hash wins.
             credentials = self.bridge("trust-credentials", job_id=job_id)
-            local_archive = job_dir / "source.tar.gz"
-            with self.verifier.verified(identity, credentials.get("token", "")) as (repo, env, metadata):
-                if metadata["tree"] != receipt["tree"] or metadata["policy_digest"] != receipt["policy_digest"]:
-                    raise TRUST.TrustError("target_changed")
-                self.verifier.export(repo, env, identity["commit"], local_archive)
-            source = extract_source(local_archive, job_dir / "source", job["target_version"])
-            self._active_trust = {**metadata, "source_fingerprint": TRUST.source_fingerprint(source)}
+            if identity.get("kind") == "release_image":
+                # Re-resolve the tag and re-pull: the same image must come back.
+                with self.verifier.verified(identity, credentials.get("token", "")) as (_, _, metadata):
+                    if metadata["image_id"] != receipt.get("image_id") or metadata["policy_digest"] != receipt["policy_digest"]:
+                        raise TRUST.TrustError("target_changed")
+                source = None
+                self._active_trust = dict(metadata)
+            else:
+                local_archive = job_dir / "source.tar.gz"
+                with self.verifier.verified(identity, credentials.get("token", "")) as (repo, env, metadata):
+                    if metadata["tree"] != receipt["tree"] or metadata["policy_digest"] != receipt["policy_digest"]:
+                        raise TRUST.TrustError("target_changed")
+                    self.verifier.export(repo, env, identity["commit"], local_archive)
+                source = extract_source(local_archive, job_dir / "source", job["target_version"])
+                self._active_trust = {**metadata, "source_fingerprint": TRUST.source_fingerprint(source)}
             # Revalidate immediately before allowing any trusted deployment command.
             self.verify_managed()
             outcome = self.run_deploy(job, source, job_dir)

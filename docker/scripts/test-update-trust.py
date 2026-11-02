@@ -606,5 +606,104 @@ class UpdateTrustTests(unittest.TestCase):
             self.assertEqual(authorization, 'Authorization: Basic ' + encoded)
 
 
+IMAGE = 'ghcr.io/team/workflow'
+
+
+class ReleaseVerifier(LocalVerifier):
+    """Real ls-remote against the local fixture; Docker answers from a fixture image."""
+    def __init__(self, policy, work, repositories, image):
+        super().__init__(policy, work, repositories)
+        self.image = image
+        self.docker_calls = []
+
+    def _git(self, repo, args, env, *, limit=2 * 1024 * 1024):
+        options = list(args)
+        if options and options[0] == 'ls-remote':
+            matches = [index for index, value in enumerate(options) if value in self.repositories]
+            if len(matches) != 1:
+                raise AssertionError('ls-remote must use one mapped fixture origin')
+            self.fetches.append(options[matches[0]])
+            options[matches[0]] = str(self.repositories[options[matches[0]]])
+            env = {**env, 'GIT_ALLOW_PROTOCOL': 'file'}
+            return trust.Verifier._git(repo, options, env, limit=limit)
+        return super()._git(repo, args, env, limit=limit)
+
+    def _docker(self, args, *, timeout=60, limit=4 * 1024 * 1024):
+        self.docker_calls.append(list(args))
+        if self.image is None:
+            raise trust.TrustError('image_unavailable')
+        if args[:2] == ['image', 'inspect'] and '--format' in args:
+            return (self.image['Id'] + '\n').encode()
+        if args[:2] == ['image', 'inspect']:
+            return json.dumps([self.image]).encode()
+        return b''
+
+
+class ReleaseImageTrustTests(unittest.TestCase):
+    # Same real fixture repository; only the release-specific tests run here.
+    setUp = UpdateTrustTests.setUp
+    command, git, make_key = UpdateTrustTests.command, UpdateTrustTests.git, UpdateTrustTests.make_key
+    write_signers = staticmethod(UpdateTrustTests.write_signers)
+    rejected, trust_cli = UpdateTrustTests.rejected, UpdateTrustTests.trust_cli
+
+    def release_image(self, version='9.1.0', commit=None):
+        commit = commit or self.commit
+        return {'Id': 'sha256:' + '1' * 64, 'RepoDigests': [IMAGE + '@sha256:' + '2' * 64],
+                'Config': {'Labels': {'org.opencontainers.image.version': version, 'org.opencontainers.image.revision': commit},
+                           'Env': ['APP_VERSION=' + version, 'GIT_SHA=' + commit]}}
+
+    def release_verifier(self, image=None, entries=None):
+        if entries is None:
+            entries = [{'repository_url': REPOSITORY, 'release_image': IMAGE}]
+        self.policy.write_text(json.dumps({'version': 1, 'repositories': entries}, indent=2) + '\n')
+        self.policy.chmod(0o600)
+        return ReleaseVerifier(self.policy, self.work, self.repositories, self.release_image() if image is None else image)
+
+    def release_candidate(self, **overrides):
+        return {**self.candidate, 'kind': 'release_image', 'image': IMAGE, **overrides}
+
+    def test_release_tag_and_image_bind_to_the_same_commit_and_pin_the_digest(self):
+        self.git(self.repo, 'tag', '-a', 'v9.1.0', '-m', 'release')
+        verifier = self.release_verifier()
+        with verifier.verified(self.release_candidate()) as (repo, env, metadata):
+            self.assertIsNone(repo)
+            self.assertEqual(metadata['method'], 'release_image')
+            self.assertEqual(metadata['image_ref'], IMAGE + '@sha256:' + '2' * 64)
+            self.assertEqual(metadata['image_id'], 'sha256:' + '1' * 64)
+        self.assertEqual(verifier.fetches, [REPOSITORY])
+        self.assertIn(['pull', '--quiet', IMAGE + ':9.1.0'], verifier.docker_calls)
+        identity = trust.candidate_identity(self.release_candidate())
+        self.assertEqual((identity['kind'], identity['image']), ('release_image', IMAGE))
+        self.assertNotIn('kind', trust.candidate_identity(self.candidate))
+
+    def test_release_is_rejected_when_tag_image_or_policy_disagree(self):
+        self.git(self.repo, 'tag', 'v9.1.0')
+        self.assertEqual(self.rejected(self.release_verifier(), self.release_candidate(commit='f' * 40)), 'target_changed')
+        self.assertEqual(self.rejected(self.release_verifier(image=self.release_image(commit='e' * 40)), self.release_candidate()), 'target_changed')
+        self.assertEqual(self.rejected(self.release_verifier(image=self.release_image(version='9.0.0')), self.release_candidate()), 'target_changed')
+        self.assertEqual(self.rejected(self.release_verifier(), self.release_candidate(ref='main')), 'target_changed')
+        self.assertEqual(self.rejected(self.release_verifier(), self.release_candidate(ref='v9.2.0', version='9.2.0')), 'commit_not_allowed')
+        self.assertEqual(self.rejected(self.release_verifier(), self.release_candidate(image='ghcr.io/attacker/workflow')), 'source_not_allowed')
+        self.assertEqual(self.rejected(self.release_verifier(image=False), self.release_candidate()), 'image_unavailable')
+        no_release = [{'repository_url': REPOSITORY, 'ssh_allowed_signers': str(self.signers)}]
+        self.assertEqual(self.rejected(self.release_verifier(entries=no_release), self.release_candidate()), 'source_not_allowed')
+        with self.assertRaises(trust.TrustError):
+            trust.candidate_identity(self.release_candidate(image='GHCR.IO/Upper/Case:tag'))
+
+    def test_release_digest_must_belong_to_the_trusted_image(self):
+        self.git(self.repo, 'tag', 'v9.1.0')
+        image = {**self.release_image(), 'RepoDigests': ['docker.io/other/image@sha256:' + '2' * 64]}
+        self.assertEqual(self.rejected(self.release_verifier(image=image), self.release_candidate()), 'image_unavailable')
+
+    def test_host_cli_enrolls_a_release_image(self):
+        policy = self.root / 'host-enrollment' / 'trust.json'
+        result = self.trust_cli(policy, 'allow-release-image', '--repository', REPOSITORY, '--image', IMAGE)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        entry = json.loads(policy.read_text())['repositories'][0]
+        self.assertEqual((entry['repository_url'], entry['release_image']), (REPOSITORY, IMAGE))
+        self.assertEqual(self.trust_cli(policy, 'verify-policy').returncode, 0)
+        self.assertNotEqual(self.trust_cli(policy, 'allow-release-image', '--repository', REPOSITORY, '--image', 'GHCR.io/Bad:latest').returncode, 0)
+
+
 if __name__ == '__main__':
     unittest.main()

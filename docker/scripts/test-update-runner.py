@@ -387,5 +387,54 @@ class TrustGateRunnerTests(unittest.TestCase):
                 self.assertEqual(self.docker.actions, [])
 
 
+class ReleaseFixtureVerifier(FixtureVerifier):
+    """A verified release image; local image ID answers are scripted per test."""
+    image_ref = "ghcr.io/team/workbench@sha256:" + "2" * 64
+    def __init__(self, work, package):
+        super().__init__(work, package)
+        self.local_ids = ["sha256:" + "1" * 64]
+    @contextmanager
+    def verified(self, candidate, token=""):
+        identity = runner.TRUST.candidate_identity(candidate)
+        assert identity["kind"] == "release_image"
+        yield None, None, {"method": "release_image", "policy_digest": "c" * 64, "image_id": "sha256:" + "1" * 64, "image_ref": self.image_ref}
+    def image_id(self, reference):
+        assert reference == self.image_ref
+        return self.local_ids[0] if len(self.local_ids) == 1 else self.local_ids.pop(0)
+    def export(self, repo, env, commit, destination):
+        raise AssertionError("release images are never exported as source")
+
+
+class ReleaseImageRunnerTests(unittest.TestCase):
+    setUp = RunnerTests.setUp
+    phases = staticmethod(RunnerTests.phases)
+
+    def release(self):
+        release = {"kind": "release_image", "ref": "v9.1.0", "image": "ghcr.io/team/workbench"}
+        self.docker.job.update(release); self.docker.candidate.update(release)
+        self.script.write_text(self.script.read_text().replace("#!/bin/bash\n",
+            '#!/bin/bash\nprintf "%s|%s|%s\\n" "${AGV_PREBUILT_IMAGE:-}" "$AGV_IMAGE" "${AGV_BUILD_CONTEXT:-none}" > "$PWD/deploy-env.txt"\n', 1))
+        app = runner.UpdateRunner(self.root, "standard", "fixture-app", self.root / "installed.env", self.root / "work", docker=self.docker)
+        app.verifier = ReleaseFixtureVerifier(app.work, self.package)
+        return app
+
+    def test_release_job_deploys_the_verified_digest_without_building_source(self):
+        app = self.release(); app.run_once()
+        self.assertEqual(self.docker.actions[-1]["status"], "succeeded")
+        self.assertEqual((self.root / "deploy-env.txt").read_text().strip(), "1|" + ReleaseFixtureVerifier.image_ref + "|none")
+        self.assertFalse(list((self.root / "work").rglob("source.tar.gz")))
+        heartbeat = next(a for a in self.docker.actions if a["action"] == "heartbeat")
+        self.assertEqual(heartbeat["capabilities"], ["release_image"])
+
+    def test_release_image_replaced_locally_before_backup_stops_the_update(self):
+        app = self.release()
+        # First check passes (before deploy starts); the copy then changes before backing_up.
+        app.verifier.local_ids = ["sha256:" + "1" * 64, "sha256:" + "9" * 64]
+        app.run_once()
+        statuses = [row.get("status") for row in self.docker.actions if row["action"] == "report"]
+        self.assertNotIn("installing", statuses)
+        self.assertIn(self.docker.actions[-1]["status"], {"failed", "needs_attention"})
+
+
 if __name__ == "__main__":
     unittest.main()

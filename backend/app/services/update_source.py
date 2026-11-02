@@ -33,8 +33,8 @@ CHUNK_BYTES = 64 * 1024
 
 _BAD_SOURCE = "Gitea 仓库地址无效，请填写完整的 HTTP(S) 仓库地址"
 _BAD_ADDRESS = "此 Gitea 地址不可用于网页更新"
-_NETWORK_ERROR = "无法读取 Gitea 更新来源，请检查地址、访问权限和网络"
-_BAD_DATA = "Gitea 更新来源返回的数据无效"
+_NETWORK_ERROR = "无法读取更新来源，请检查地址、访问权限和网络"
+_BAD_DATA = "更新来源返回的数据无效"
 _TOO_LARGE = "更新来源内容超过大小限制"
 _UNSUPPORTED = "此仓库版本未支持网页更新"
 _BAD_ARCHIVE = "更新源码包校验失败，包含不安全路径、文件类型或无效内容"
@@ -218,7 +218,7 @@ def _response(source: dict, token: str, suffix: str, limit: int):
         connection.request("GET", parsed.path + suffix, headers=headers)
         response = connection.getresponse()
         if 300 <= response.status < 400:
-            raise UpdateSourceError("Gitea 更新来源不允许重定向，请填写最终仓库地址")
+            raise UpdateSourceError("更新来源不允许重定向，请填写最终仓库地址")
         if response.status == 404:
             raise _NotFound(_NETWORK_ERROR)
         if response.status != 200:
@@ -436,3 +436,126 @@ def download_source(source: dict, token: str, commit: str, target: Path) -> dict
                 pending.unlink(missing_ok=True)
             except OSError:
                 pass
+
+
+# ---------------------------------------------------------------------------
+# GitHub releases: vX.Y.Z tags whose CI-built image is published to GHCR.
+# The web process only reads public metadata; the host verifies and installs.
+
+GITHUB_HOST = "github.com"
+_RELEASE_TAG = re.compile(r"v((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))\Z")
+_NO_RELEASE = "此仓库还没有 vX.Y.Z 格式的发布标签"
+MAX_NOTES_CHARS = 12_000
+MAX_NOTES_SECTIONS = 6
+
+
+def is_github(repository_url: str) -> bool:
+    try:
+        return urlsplit(repository_url.strip()).hostname == GITHUB_HOST
+    except (AttributeError, ValueError):
+        return False
+
+
+def github_release_source(repository_url: str) -> dict:
+    """A github.com/owner/repo address and the GHCR image its workflow publishes."""
+    normalized = normalize_source(repository_url)
+    parts = urlsplit(normalized["repository_url"])
+    segments = [unquote(part) for part in parts.path.strip("/").split("/")]
+    if parts.scheme != "https" or parts.hostname != GITHUB_HOST or parts.port or len(segments) != 2:
+        raise UpdateSourceError("GitHub 来源请填写 https://github.com/所有者/仓库")
+    owner, repo = segments
+    return {**normalized, "ref": "main",
+            "api_base": f"https://api.github.com/repos/{quote(owner, safe='')}/{quote(repo, safe='')}",
+            "image": f"ghcr.io/{owner.lower()}/{repo.lower()}"}
+
+
+def _get_any_json(source: dict, token: str, suffix: str):
+    from io import BytesIO
+    try:
+        with _response(source, token, suffix, MAX_JSON_BYTES) as (response, connection):
+            output = BytesIO()
+            _copy_response(response, connection, output, MAX_JSON_BYTES)
+        return json.loads(output.getvalue().decode("utf-8"))
+    except UpdateSourceError:
+        raise
+    except (ValueError, UnicodeError, RecursionError):
+        raise UpdateSourceError(_BAD_DATA) from None
+
+
+def _get_text(source: dict, token: str, path: str, commit: str, limit: int = 512 * 1024) -> str:
+    result = _get_json(source, token, f"/contents/{path}?ref={commit}")
+    content = result.get("content")
+    if result.get("type") != "file" or result.get("encoding") != "base64" or not isinstance(content, str):
+        raise UpdateSourceError(_BAD_DATA)
+    try:
+        decoded = base64.b64decode(re.sub(r"[\r\n\t ]", "", content), validate=True)
+    except (ValueError, binascii.Error):
+        raise UpdateSourceError(_BAD_DATA) from None
+    if len(decoded) > limit:
+        raise UpdateSourceError(_TOO_LARGE)
+    return decoded.decode("utf-8", errors="replace")
+
+
+def _semver_key(version: str) -> tuple:
+    return tuple(int(part) for part in version.split("."))
+
+
+def release_notes(changelog: str, current: str, target: str) -> list:
+    """Changelog sections for versions newer than `current`, up to `target`, newest first.
+
+    Headings look like "## 3.4.0" or "## 3.3.0（已发布镜像 v3.3.0，未部署验收）".
+    """
+    try:
+        low = _semver_key(current) if re.fullmatch(r"\d+\.\d+\.\d+", current or "") else (-1,)
+    except ValueError:
+        low = (-1,)
+    high = _semver_key(target)
+    sections, version, lines = [], None, []
+    for line in changelog.splitlines() + ["## end"]:
+        if line.startswith("## "):
+            if version is not None and low < _semver_key(version) <= high:
+                body = "\n".join(lines).strip()
+                if body:
+                    sections.append({"version": version, "body": body})
+            match = re.match(r"## +v?(\d+\.\d+\.\d+)", line)
+            version, lines = (match[1] if match else None), []
+        elif version is not None:
+            lines.append(line)
+    sections.sort(key=lambda item: _semver_key(item["version"]), reverse=True)
+    result, used = [], 0
+    for section in sections[:MAX_NOTES_SECTIONS]:
+        body = section["body"][:max(0, MAX_NOTES_CHARS - used)]
+        if not body:
+            break
+        result.append({**section, "body": body})
+        used += len(body)
+    return result
+
+
+def inspect_github_release(repository_url: str, token: str = "", current_version: str = "") -> dict:
+    """Newest vX.Y.Z tag, its commit, version files and release notes."""
+    source = github_release_source(repository_url)
+    tags = _get_any_json(source, token, "/tags?per_page=100")
+    if not isinstance(tags, list):
+        raise UpdateSourceError(_BAD_DATA)
+    releases = []
+    for tag in tags:
+        if not isinstance(tag, dict) or not isinstance(tag.get("name"), str):
+            continue
+        match = _RELEASE_TAG.fullmatch(tag["name"])
+        commit = (tag.get("commit") or {}).get("sha") if isinstance(tag.get("commit"), dict) else None
+        if match and isinstance(commit, str) and _SHA.fullmatch(commit):
+            releases.append((_semver_key(match[1]), match[1], tag["name"], commit.lower()))
+    if not releases:
+        raise UpdateSourceError(_NO_RELEASE)
+    _, version, tag_name, commit = max(releases)
+    package = _get_file(source, token, "frontend/package.json", commit)
+    if _package_version(package) != version:
+        raise UpdateSourceError("发布标签与应用版本号不一致")
+    _check_marker(_get_file(source, token, "docker/update-protocol.json", commit))
+    try:
+        notes = release_notes(_get_text(source, token, "CHANGELOG.md", commit), current_version, version)
+    except UpdateSourceError:
+        notes = []  # Notes are informative; a missing changelog does not block a release.
+    return {"commit": commit, "version": version, "tag": tag_name, "image": source["image"], "notes": notes,
+            "release_url": source["repository_url"] + "/blob/" + quote(tag_name, safe="") + "/CHANGELOG.md"}

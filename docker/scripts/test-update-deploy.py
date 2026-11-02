@@ -37,6 +37,8 @@ if args[0] == "inspect":
     else: raise RuntimeError("Unexpected inspect")
     sys.exit(0)
 if args[0] == "image" and args[1] == "inspect":
+    if scenario == "prebuilt_missing" and len(args) == 3:
+        sys.exit(1)
     if "{{json .Config.Env}}" in args:
         print(json.dumps(["APP_VERSION=" + os.environ["APP_VERSION"], "GIT_SHA=" + ("wrong" if scenario == "metadata_fail" else os.environ["GIT_SHA"])])); sys.exit(0)
     print("GIT_SHA=" + "d" * 40 + "\nAPP_VERSION=1.0.0"); sys.exit(0)
@@ -143,7 +145,7 @@ if os.environ["QA_UPDATE_CASE"] == "restore_fail": raise SystemExit(10)
 
 
 class DeployTests(unittest.TestCase):
-    def run_case(self, mode, scenario, *, custom=False, old_ref=None):
+    def run_case(self, mode, scenario, *, custom=False, old_ref=None, prebuilt=False):
         temporary = tempfile.TemporaryDirectory(); self.addCleanup(temporary.cleanup)
         root = Path(temporary.name); scripts = root / "docker/scripts"; scripts.mkdir(parents=True)
         installed = Path(__file__).resolve().parent
@@ -168,6 +170,10 @@ class DeployTests(unittest.TestCase):
                    QA_UPDATE_CASE=scenario, AGV_BUILD_CONTEXT=str(source), AGV_ENV_FILE=str(envfile),
                    BACKUP_DIR=str(root / "backups"), APP_VERSION="9.1.0", GIT_SHA="b" * 40,
                    AGV_IMAGE="target:9.1.0", AGV_CONTAINER="fixture", AGV_CONTAINER_NAME="fixture")
+        if prebuilt:
+            # A verified release image: no source context, deploy the digest as-is.
+            del env["AGV_BUILD_CONTEXT"]
+            env.update(AGV_PREBUILT_IMAGE="1", AGV_IMAGE="ghcr.io/team/workbench@sha256:" + "2" * 64)
         if custom:
             env["AGV_INSTALLED_COMPOSE_FILE"] = str(root / "trusted-installation.json")
             (root / "trusted-installation.json").write_text("{}")
@@ -176,13 +182,37 @@ class DeployTests(unittest.TestCase):
             env["QA_UPDATE_OLD_REF"] = old_ref
         result = subprocess.run(["bash", str(scripts / ("deploy.sh" if mode == "multica" else "manage.sh")), "update"],
                                 env=env, capture_output=True, text=True, timeout=15)
-        events = [json.loads(line) for line in (root / "events.jsonl").read_text().splitlines()]
+        log = root / "events.jsonl"
+        events = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
         if not custom:
             self.assertEqual(envfile.read_text(), "APP_VERSION=1.0.0\nAGV_IMAGE=original:1.0.0\n", result.stderr)
+        if prebuilt:
+            self.assertFalse([e for e in events if e["event"] == "build"], "a release image is never rebuilt")
+            return root, result, events
         build = next(e for e in events if e["event"] == "build")
         self.assertEqual(build["contexts"], [str(source.resolve())])
         self.assertEqual(build["version"], "9.1.0"); self.assertEqual(build["commit"], "b" * 40)
         return root, result, events
+
+    def test_verified_release_image_is_deployed_without_building_in_both_modes(self):
+        for mode in ("standard", "multica"):
+            with self.subTest(mode=mode):
+                root, result, events = self.run_case(mode, "success", prebuilt=True)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                names = [e["event"] for e in events]
+                self.assertIn("check_pg_major", names)
+                for first, second in (("check_pg_major", "marker_create"), ("stop", "backup"), ("backup", "activate")):
+                    self.assertLess(names.index(first), names.index(second))
+                self.assertIn("AGV_UPDATE_PHASE=succeeded", result.stdout)
+
+    def test_missing_release_image_stops_before_maintenance(self):
+        for mode in ("standard", "multica"):
+            with self.subTest(mode=mode):
+                root, result, events = self.run_case(mode, "prebuilt_missing", prebuilt=True)
+                self.assertNotEqual(result.returncode, 0)
+                names = [e["event"] for e in events]
+                self.assertNotIn("marker_create", names); self.assertNotIn("activate", names)
+                self.assertEqual((root / "data/value").read_text(), "original")
 
     def test_consistent_backup_window_and_success_for_both_modes(self):
         for mode in ("standard", "multica"):

@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, Checkbox, Input, Modal, Result, Skeleton } from 'antd'
-import { CheckOutlined, CloudDownloadOutlined, InfoCircleOutlined, LoadingOutlined, PlusOutlined, RightOutlined, ReloadOutlined, SettingOutlined } from '@ant-design/icons'
+import { CheckOutlined, CloudDownloadOutlined, InfoCircleOutlined, LoadingOutlined, PlusOutlined, RightOutlined, ReloadOutlined, SafetyCertificateOutlined, SettingOutlined } from '@ant-design/icons'
 import { WorkPageHeader } from '../../components/WorkPage'
 import { useAuth } from '../../stores/auth'
 import { APP_VERSION } from '../../version'
 import { errMsg } from '../../api/client'
 import { getOfflineAccount } from '../../offline/queue'
-import { systemUpdatesApi, type SystemUpdates, type UpdateCheck, type UpdateSource } from '../../api/systemUpdates'
+import { systemUpdatesApi, type ReleaseNote, type SystemUpdates, type UpdateCheck, type UpdateSource } from '../../api/systemUpdates'
 import './SystemUpdatesPage.css'
 import { InfoHint } from '../../components/IconAction'
 
@@ -14,12 +14,16 @@ type Draft = { name: string; repository_url: string; ref: string; allow_http: bo
 type Action = 'save' | 'check' | 'install' | 'add' | 'select' | 'delete'
 type SourceIntent = { kind: 'add' | 'select' | 'delete'; revision: number; source?: UpdateSource }
 const emptyDraft = (): Draft => ({ name: '', repository_url: '', ref: 'main', allow_http: false, token: '', clear_token: false })
-const sourceDraft = (source: UpdateSource): Draft => ({ ...emptyDraft(), name: source.name || '我的 Gitea', repository_url: source.repository_url, ref: source.ref || 'main', allow_http: source.allow_http })
+const sourceDraft = (source: UpdateSource): Draft => ({ ...emptyDraft(), name: source.name || '更新来源', repository_url: source.repository_url, ref: source.ref || 'main', allow_http: source.allow_http })
+// github.com addresses install the CI-built release image; anything else is a Gitea source build.
+const isGithub = (url: string) => { try { return new URL(url.trim()).hostname === 'github.com' } catch { return false } }
+const sourceSummary = (source: UpdateSource) => source.kind === 'github_release' ? `${source.name || 'GitHub 正式版'} · ${source.image || '发布镜像'}` : source.name || '更新来源'
 const jobBusy = (data: SystemUpdates | null) => !!data?.maintenance || (!!data?.job && !['succeeded', 'failed', 'rolled_back'].includes(data.job.status))
 const validateDraft = (draft: Draft) => {
   if (!draft.name.trim()) return '请填写来源名称。'
   let url: URL
-  try { url = new URL(draft.repository_url.trim()) } catch { return '请填写完整的 Gitea 仓库地址。' }
+  try { url = new URL(draft.repository_url.trim()) } catch { return '请填写完整的仓库地址。' }
+  if (url.hostname === 'github.com' && (url.protocol !== 'https:' || url.pathname.split('/').filter(Boolean).length !== 2)) return 'GitHub 来源请填写 https://github.com/所有者/仓库。'
   if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.search || url.hash || url.pathname.split('/').filter(Boolean).length < 2) return '请填写包含所属组织和仓库名的 HTTP 或 HTTPS 地址，不要在地址中填写令牌。'
   if (url.protocol === 'http:' && !draft.allow_http) return '使用局域网 HTTP 地址前，请勾选明确允许。'
   return ''
@@ -31,11 +35,35 @@ const statusLabel: Record<string, string> = {
   verifying: '验证新版本', succeeded: '更新已完成', failed: '更新未完成', rolled_back: '已恢复更新前版本', needs_attention: '更新需要人工处理',
 }
 const checkTrusted = (check: UpdateCheck | null | undefined, data: SystemUpdates | null) => check?.trust?.status === 'trusted' && data?.runner.trust?.configured === true && data.runner.trust.protocol === 1
-const trustedLabel = (check: UpdateCheck | null | undefined) => check?.trust?.method === 'signed_tag' ? '标签签名已验证' : check?.trust?.method === 'commit' ? '宿主已登记此仓库提交' : '宿主已验证此版本'
+const trustedLabel = (check: UpdateCheck | null | undefined) => check?.trust?.method === 'release_image' ? '宿主已核对发布标签、提交与镜像' : check?.trust?.method === 'signed_tag' ? '标签签名已验证' : check?.trust?.method === 'commit' ? '宿主已登记此仓库提交' : '宿主已验证此版本'
 const unverifiedMessage = '宿主尚未验证此版本，请重新检查或联系部署管理员'
 const updatePhases = ['downloading', 'building', 'backing_up', 'installing', 'verifying']
 const phaseLabels = ['下载', '准备', '备份', '安装', '验证']
 const dateLabel = (value: string | null) => value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '尚无记录'
+
+// Changelog sections are plain Markdown lists; render bullets, bold and code only.
+function inline(text: string) {
+  return text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((part, index) => part.startsWith('**') && part.endsWith('**') ? <strong key={index}>{part.slice(2, -2)}</strong>
+    : part.startsWith('`') && part.endsWith('`') ? <code key={index}>{part.slice(1, -1)}</code> : part)
+}
+function NoteBody({ body }: { body: string }) {
+  const blocks: { text: string; depth: number; item: boolean }[] = []
+  for (const line of body.split('\n')) {
+    const bullet = line.match(/^(\s*)[-*] (.*)$/)
+    if (bullet) blocks.push({ text: bullet[2], depth: bullet[1].length >= 2 ? 1 : 0, item: true })
+    else if (line.trim()) blocks.push({ text: line.trim(), depth: 0, item: false })
+  }
+  return <div className="updates-note-body">{blocks.map((block, index) => block.item
+    ? <p key={index} className={`updates-note-item depth-${block.depth}`}>{inline(block.text)}</p>
+    : <p key={index}>{inline(block.text)}</p>)}</div>
+}
+function ReleaseNotes({ notes, url }: { notes: ReleaseNote[]; url?: string }) {
+  return <section className="updates-notes" aria-labelledby="updates-notes-title">
+    <h2 id="updates-notes-title">更新内容</h2>
+    {notes.map(note => <article key={note.version}><h3>{note.version}</h3><NoteBody body={note.body} /></article>)}
+    {url && <a href={url} target="_blank" rel="noreferrer">在 GitHub 查看完整变更记录</a>}
+  </section>
+}
 
 export default function SystemUpdatesPage() {
   const { user } = useAuth()
@@ -66,7 +94,7 @@ function UpdatesEditor({ actorId }: { actorId: string }) {
   const alive = useRef(true)
   const sequence = useRef(0)
   const reading = useRef<number | null>(null)
-  const dirty = !!base && (draft.name !== (base.name || '我的 Gitea') || draft.repository_url !== base.repository_url || draft.ref !== (base.ref || 'main') || draft.allow_http !== base.allow_http || !!draft.token || draft.clear_token)
+  const dirty = !!base && (draft.name !== (base.name || '更新来源') || draft.repository_url !== base.repository_url || draft.ref !== (base.ref || 'main') || draft.allow_http !== base.allow_http || !!draft.token || draft.clear_token)
   const dirtyRef = useRef(dirty)
   dirtyRef.current = dirty
   const activeJob = jobBusy(data)
@@ -231,39 +259,43 @@ function UpdatesEditor({ actorId }: { actorId: string }) {
   const phaseIndex = updatePhases.indexOf(data?.job?.phase || data?.job?.status || '')
   const heroTitle = awaitingInstall ? '正在确认安装请求' : needsAttention ? '更新需要处理' : runningJob ? statusLabel[data!.job!.status]
     : data?.maintenance ? '系统维护中' : checking ? '正在检查更新…' : readError ? '暂时无法确认更新'
-      : previousAttemptFailed ? statusLabel[data!.job!.status] : trustBlocked ? trustPending ? '等待宿主验证版本' : '版本尚未通过宿主验证' : hasUpdate ? '有新版本可用' : latest ? '你的行序已是最新版本' : noUpdate ? '暂无可用更新' : usedCheck ? '更新已完成' : '让行序保持最新'
+      : previousAttemptFailed ? statusLabel[data!.job!.status] : trustBlocked ? trustPending ? '等待宿主验证版本' : '版本尚未通过宿主验证' : hasUpdate ? `可以更新到 ${validCheck?.version || '新版本'}` : latest ? '已是最新版本' : noUpdate ? '暂无可用更新' : usedCheck ? '更新已完成' : '检查是否有新版本'
   const heroDescription = awaitingInstall || runningJob ? '请保持页面打开，完成后可刷新使用新版本。'
     : needsAttention ? '请先完成恢复处理，再继续更新。' : data?.maintenance ? '维护完成后，即可继续检查和安装。'
       : checking ? '正在从所选来源获取版本信息。' : readError ? '当前保留上次读取的信息，请稍后重试。'
-        : previousAttemptFailed ? '请重新检查版本，再尝试安装。' : trustBlocked ? trustReason : hasUpdate ? `行序 ${validCheck?.version || '新版本'} 已准备好，安装前会自动备份。`
-          : latest ? '你正在使用所选来源的最新版本。' : noUpdate ? '所选来源没有比当前版本更新的版本。' : usedCheck ? (needsReload ? '新版本已安装，刷新页面后即可使用。' : '新版本已安装，可以继续使用。') : '检查新版本，获得最新的功能和改进。'
+        : previousAttemptFailed ? '请重新检查版本，再尝试安装。' : trustBlocked ? trustReason : hasUpdate ? '安装前会自动备份；新版本没通过健康检查会自动恢复原版本和数据。'
+          : latest ? '你正在使用所选来源的最新版本。' : noUpdate ? '所选来源没有比当前版本更新的版本。' : usedCheck ? (needsReload ? '新版本已安装，刷新页面后即可使用。' : '新版本已安装，可以继续使用。')
+            : data?.source.kind === 'github_release' ? '从 GitHub 正式版读取最新发布；只检查，不会自动安装。' : '从所选来源读取最新版本；只检查，不会自动安装。'
 
   return <div className="system-updates-page">
     <WorkPageHeader title="软件更新" description="检查并安装行序的新版本。" />
     {loading && !data ? <div className="updates-loading"><Skeleton active paragraph={{ rows: 5 }} /></div> : !data ? <Alert type="error" showIcon message="更新信息暂时无法读取" description={readError} action={<Button onClick={() => void load()}>重试</Button>} /> : <>
-      <section className="updates-hero" aria-labelledby="updates-hero-title">
-        <div className="updates-app-icon"><img src="/xingxu-icon-192.png" width="88" height="88" alt="" />
-          {latest && checkTrusted(validCheck, data) && !readError && !activeJob && !checking && <span className="updates-icon-check"><CheckOutlined aria-hidden="true" /></span>}
+      <section className="updates-overview" aria-labelledby="updates-hero-title">
+        <div className="updates-versions">
+          <div className="updates-version"><span>当前版本</span><strong>{data.current.version || '尚未提供'}</strong></div>
+          {validCheck && !noUpdate && <><RightOutlined className="updates-version-arrow" aria-hidden="true" /><div className={`updates-version${hasUpdate ? ' is-new' : ''}`}><span>{hasUpdate ? '新版本' : '发布版本'}</span><strong>{validCheck.version}</strong></div></>}
+          {latest && checkTrusted(validCheck, data) && !readError && !activeJob && !checking && <span className="updates-latest"><CheckOutlined aria-hidden="true" /> 最新</span>}
         </div>
-        <p className="updates-product">行序 <span>项目工作台</span></p>
-        <p className="updates-current-version">当前版本 <strong>{data.current.version || '尚未提供'}</strong></p>
         <div className="updates-hero-status" role="status" aria-live="polite">
           <h2 id="updates-hero-title">{(checking || runningJob || awaitingInstall) && <LoadingOutlined aria-hidden="true" />} {heroTitle}</h2>
           <p>{heroDescription}</p>
         </div>
         <div className="updates-primary-actions">
-          <Button type={hasUpdate ? 'default' : 'primary'} onClick={() => void check()} loading={checking} disabled={editorLocked || dirty || !data.source.repository_url}>检查更新</Button>
           {(hasUpdate || previousAttemptFailed || runningJob || awaitingInstall || needsAttention) && <Button type="primary" icon={<CloudDownloadOutlined aria-hidden="true" />} disabled={!canInstall} onClick={() => { if (canInstall && validCheck) setConfirmation(validCheck) }}>安装更新</Button>}
+          <Button type={hasUpdate ? 'default' : 'primary'} onClick={() => void check()} loading={checking} disabled={editorLocked || dirty || !data.source.repository_url}>检查更新</Button>
+          {trustRelevant && !trustBlocked && !activeJob && !awaitingInstall && <span className="updates-trusted"><SafetyCertificateOutlined aria-hidden="true" /> {trustedLabel(validCheck)}</span>}
+          {dirty ? <span className="updates-check-time">先保存更新来源的修改，再检查或安装。</span> : <span className="updates-check-time">{validCheck ? `上次检查：${dateLabel(validCheck.checked_at)}` : data.check ? '更新来源已变化，请重新检查版本。' : '尚未检查更新'}</span>}
         </div>
-        {dirty ? <p className="updates-check-time">先保存更新来源的修改，再检查或安装。</p> : <p className="updates-check-time">{validCheck ? `上次检查：${dateLabel(validCheck.checked_at)}` : data.check ? '更新来源已变化，请重新检查版本。' : '尚未检查更新'}</p>}
       </section>
+      {hasUpdate && !!validCheck?.notes?.length && <ReleaseNotes notes={validCheck.notes} url={validCheck.release_url} />}
       <div className="updates-notices">
-        {trustRelevant && !activeJob && !awaitingInstall && <Alert type={trustBlocked ? trustPending ? 'info' : 'warning' : 'success'} showIcon
-          message={trustBlocked ? trustPending ? '宿主正在验证此版本' : validCheck?.trust?.status === 'rejected' ? '此版本未通过信任验证' : unverifiedMessage : trustedLabel(validCheck)}
-          description={trustBlocked ? trustReason : '安装信任由部署管理员在宿主管理，网页不能修改。'} />}
+        {trustBlocked && !activeJob && !awaitingInstall && <Alert type={trustPending ? 'info' : 'warning'} showIcon
+          message={trustPending ? '宿主正在验证此版本' : validCheck?.trust?.status === 'rejected' ? '此版本未通过信任验证' : unverifiedMessage}
+          description={trustReason} />}
         {(readError || (!data.runner.online && activeJob)) && <Alert type="warning" showIcon message={needsAttention ? '恢复处理尚未完成' : activeJob || awaitingInstall ? '更新中，等待服务恢复' : '暂时无法刷新更新状态'}
           description={needsAttention ? '需要部署管理员检查备份和日志，完成恢复后再继续。' : activeJob || awaitingInstall ? '保留上次进度并每 6 秒重试连接。请勿重复安装，恢复后会继续显示结果。' : `${readError}。当前显示上次读取的信息。`} />}
-        {!data.runner.online && !activeJob && !awaitingInstall && <Alert type="info" showIcon message={<>安装功能暂不可用<InfoHint text="更新服务未连接。仍可保存来源和检查版本；请参照部署文档接入更新服务后再安装。" /></>} />}
+        {!data.runner.online && !activeJob && !awaitingInstall && <Alert type="info" showIcon message={<>部署主机的更新服务未连接，可以检查版本，暂不能安装<InfoHint text="请参照部署文档在部署主机接入更新服务后再安装。" /></>} />}
+        {data.runner.online && data.source.kind === 'github_release' && data.runner.release_images === false && !activeJob && <Alert type="warning" showIcon message="部署主机的更新服务版本过旧，不支持 GitHub 发布镜像" description="请按部署文档更新部署主机上的更新脚本后重启更新服务。" />}
         {data.maintenance && <Alert type="warning" showIcon message="系统维护中" description="来源编辑、切换和安装已暂停，维护完成后可继续操作。" />}
         {actionError && <Alert type="error" showIcon message={actionError} />}
         {sourceNotice && <Alert type="success" showIcon message={sourceNotice} />}
@@ -282,22 +314,22 @@ function UpdatesEditor({ actorId }: { actorId: string }) {
       </section>}
       <div className="updates-settings-group">
         <details className="updates-source-settings">
-          <summary aria-label="更新来源"><span className="updates-row-icon"><SettingOutlined aria-hidden="true" /></span><span className="updates-row-title">更新来源</span><span className="updates-row-value">{dirty ? '有未保存的修改' : data.source.name || '我的 Gitea'}</span>{data.source.is_default && <span className="updates-default-label">默认</span>}<RightOutlined className="updates-chevron" aria-hidden="true" /></summary>
+          <summary aria-label="更新来源"><span className="updates-row-icon"><SettingOutlined aria-hidden="true" /></span><span className="updates-row-title">更新来源</span><span className="updates-row-value">{dirty ? '有未保存的修改' : sourceSummary(data.source)}</span>{data.source.is_default && <span className="updates-default-label">默认</span>}<RightOutlined className="updates-chevron" aria-hidden="true" /></summary>
           <div className="updates-source-content">
-            <p className="updates-source-intro">日常检查和安装使用当前来源。保存修改后会重新检查版本。</p>
+            <p className="updates-source-intro">{isGithub(draft.repository_url) ? '使用 GitHub 上 vX.Y.Z 发布标签对应的镜像（由 GitHub Actions 构建）。保存修改后会重新检查版本。' : '从 Gitea 仓库取源码，在部署主机构建。保存修改后会重新检查版本。'}</p>
           <div className="updates-form">
             <label htmlFor="updates-name">来源名称</label>
-            <Input id="updates-name" value={draft.name} disabled={editorLocked} maxLength={60} autoComplete="off" placeholder="例如：我的 Gitea" onChange={event => change({ name: event.target.value })} />
-            <label htmlFor="updates-repository">Gitea 仓库完整地址</label>
-            <Input id="updates-repository" value={draft.repository_url} disabled={editorLocked} autoComplete="off" placeholder="https://git.example.com/team/workflow" onChange={event => change({ repository_url: event.target.value })} />
-            <label htmlFor="updates-ref">分支或标签</label>
-            <Input id="updates-ref" value={draft.ref} disabled={editorLocked} placeholder="main" onChange={event => change({ ref: event.target.value })} />
+            <Input id="updates-name" value={draft.name} disabled={editorLocked} maxLength={60} autoComplete="off" placeholder="例如：GitHub 正式版" onChange={event => change({ name: event.target.value })} />
+            <label htmlFor="updates-repository">仓库地址</label>
+            <Input id="updates-repository" value={draft.repository_url} disabled={editorLocked} autoComplete="off" placeholder="https://github.com/所有者/仓库 或 Gitea 仓库地址" onChange={event => change({ repository_url: event.target.value })} />
+            {!isGithub(draft.repository_url) && <><label htmlFor="updates-ref">分支或标签</label>
+            <Input id="updates-ref" value={draft.ref} disabled={editorLocked} placeholder="main" onChange={event => change({ ref: event.target.value })} /></>}
             <label htmlFor="updates-token">私有访问令牌</label>
             <Input.Password id="updates-token" value={draft.token} disabled={editorLocked || draft.clear_token} autoComplete="new-password" placeholder={base?.has_token ? '留空保留已保存的令牌' : '公开仓库可留空'} onChange={event => change({ token: event.target.value })} />
             <small><span>{base?.has_token ? '已保存访问令牌' : '尚未保存访问令牌'}</span> · 保存后不再显示令牌内容</small>
             {base?.has_token && draft.repository_url.trim() !== base.repository_url && <small>更换仓库会清除旧令牌；私有仓库请重新填写。</small>}
             {base?.has_token && <Checkbox checked={draft.clear_token} disabled={editorLocked} onChange={event => change({ clear_token: event.target.checked, token: '' })}>清除已保存的令牌</Checkbox>}
-            <Checkbox checked={draft.allow_http} disabled={editorLocked} onChange={event => change({ allow_http: event.target.checked })}>允许局域网 HTTP 地址</Checkbox>
+            {!isGithub(draft.repository_url) && <Checkbox checked={draft.allow_http} disabled={editorLocked} onChange={event => change({ allow_http: event.target.checked })}>允许局域网 HTTP 地址</Checkbox>}
             {draft.allow_http && <small>HTTP 连接不加密，仅用于你信任的局域网。</small>}
             {dirty && <p className="updates-draft-note">来源有未保存的修改，保存后才能检查或安装。</p>}
             {dirty && editorStale && <Alert type="warning" message="来源已被其他管理员修改" description={`你的填写仍属于「${base?.name || '原来源'}」，已保留且不会写入其他来源；请载入最新配置后重新修改。`} action={<Button onClick={() => apply(data, true)} disabled={editorLocked}>放弃修改并载入最新配置</Button>} />}
@@ -314,7 +346,7 @@ function UpdatesEditor({ actorId }: { actorId: string }) {
                 const source = data.sources?.find(item => item.id === event.target.value)
                 if (source) requestSource('select', source)
               }}>
-                {(data.sources?.length ? data.sources : [data.source]).map(source => <option key={source.id} value={source.id}>{source.name || '我的 Gitea'}{source.is_default ? '（默认）' : ''}</option>)}
+                {(data.sources?.length ? data.sources : [data.source]).map(source => <option key={source.id} value={source.id}>{source.name || '更新来源'}{source.is_default ? '（默认）' : ''}</option>)}
               </select>
               {!data.source.is_default && data.source.id && <Button danger disabled={editorLocked} onClick={() => requestSource('delete', data.source)}>删除来源</Button>}
             </div>
@@ -332,7 +364,7 @@ function UpdatesEditor({ actorId }: { actorId: string }) {
             {data.job && <div><dt>上次更新构建</dt><dd><code>{data.job.target_commit}</code></dd></div>}<div><dt>最近连接</dt><dd>{dateLabel(data.runner.last_seen)}</dd></div></dl>
         </details>
       </div>
-      <p className="updates-footnote">安装信任由部署管理员在宿主管理，网页不能修改。<br />更新前自动备份，完成后由你刷新页面。</p>
+      <p className="updates-footnote">部署主机先核对版本来源，通过后才允许安装；网页不能修改这项信任设置。<br />更新前自动备份，完成后由你刷新页面。</p>
     </>}
     <Modal title="添加更新来源" open={!!newSource} className="updates-source-modal" onCancel={() => { if (busy !== 'add') { setNewSource(null); setNewSourceError('') } }}
       onOk={() => void addSource()} okText="添加并使用" cancelText="取消" confirmLoading={busy === 'add'}
@@ -348,17 +380,17 @@ function UpdatesEditor({ actorId }: { actorId: string }) {
           <Input id="updates-new-name" value={newSource.draft.name} disabled={locked} maxLength={60} autoComplete="off" placeholder="例如：团队 Gitea"
             onChange={event => { setNewSource({ ...newSource, draft: { ...newSource.draft, name: event.target.value } }); setNewSourceError('') }} />
           <label htmlFor="updates-new-repository">新来源仓库地址</label>
-          <Input id="updates-new-repository" value={newSource.draft.repository_url} disabled={locked} autoComplete="off" placeholder="https://git.example.com/team/workflow"
+          <Input id="updates-new-repository" value={newSource.draft.repository_url} disabled={locked} autoComplete="off" placeholder="https://github.com/所有者/仓库 或 Gitea 仓库地址"
             onChange={event => { setNewSource({ ...newSource, draft: { ...newSource.draft, repository_url: event.target.value } }); setNewSourceError('') }} />
-          <label htmlFor="updates-new-ref">新来源分支或标签</label>
+          {!isGithub(newSource.draft.repository_url) && <><label htmlFor="updates-new-ref">新来源分支或标签</label>
           <Input id="updates-new-ref" value={newSource.draft.ref} disabled={locked} placeholder="main"
-            onChange={event => { setNewSource({ ...newSource, draft: { ...newSource.draft, ref: event.target.value } }); setNewSourceError('') }} />
+            onChange={event => { setNewSource({ ...newSource, draft: { ...newSource.draft, ref: event.target.value } }); setNewSourceError('') }} /></>}
           <label htmlFor="updates-new-token">新来源访问令牌</label>
           <Input.Password id="updates-new-token" value={newSource.draft.token} disabled={locked} autoComplete="new-password" placeholder="公开仓库可留空"
             onChange={event => { setNewSource({ ...newSource, draft: { ...newSource.draft, token: event.target.value } }); setNewSourceError('') }} />
           <small>仅用于这个来源，添加后不再显示令牌内容。</small>
-          <Checkbox checked={newSource.draft.allow_http} disabled={locked}
-            onChange={event => { setNewSource({ ...newSource, draft: { ...newSource.draft, allow_http: event.target.checked } }); setNewSourceError('') }}>允许新来源使用局域网 HTTP 地址</Checkbox>
+          {!isGithub(newSource.draft.repository_url) && <Checkbox checked={newSource.draft.allow_http} disabled={locked}
+            onChange={event => { setNewSource({ ...newSource, draft: { ...newSource.draft, allow_http: event.target.checked } }); setNewSourceError('') }}>允许新来源使用局域网 HTTP 地址</Checkbox>}
           {newSource.draft.allow_http && <small>HTTP 连接不加密，仅用于你信任的局域网。</small>}
         </div>
       </>}

@@ -13,6 +13,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.services import update_source as updates
+from app.services import update_source
 
 SHA = "a" * 40
 TOKEN = "test-only-gitea-secret-token"
@@ -420,3 +421,63 @@ def test_file_parent_conflicts_are_rejected_in_either_order(tmp_path):
         path.write_bytes(archive_bytes(extra=entries))
         with pytest.raises(updates.UpdateSourceError):
             updates.validate_archive(path)
+
+
+CHANGELOG = """# 版本历史
+
+## 2.6.0
+
+- 未来版本
+
+## 2.5.0
+
+- **新功能**：一项
+- 修复
+
+## 2.4.0（已发布镜像 v2.4.0）
+
+- 旧内容
+"""
+
+
+def test_release_notes_keep_only_newer_versions_up_to_target():
+    notes = update_source.release_notes(CHANGELOG, "2.3.8", "2.5.0")
+    assert [item["version"] for item in notes] == ["2.5.0", "2.4.0"]
+    assert notes[0]["body"].startswith("- **新功能**")
+    assert update_source.release_notes(CHANGELOG, "2.5.0", "2.5.0") == []
+
+
+def test_github_release_source_derives_the_ghcr_image():
+    source = update_source.github_release_source("https://github.com/KnxckbackWili/xingxu.git")
+    assert source["repository_url"] == "https://github.com/KnxckbackWili/xingxu"
+    assert source["api_base"] == "https://api.github.com/repos/KnxckbackWili/xingxu"
+    assert source["image"] == "ghcr.io/knxckbackwili/xingxu"
+    for bad in ("http://github.com/a/b", "https://github.com/a/b/c", "https://github.com/a"):
+        with pytest.raises(update_source.UpdateSourceError):
+            update_source.github_release_source(bad)
+
+
+def _github(monkeypatch, tags, version="2.5.0", changelog=CHANGELOG):
+    monkeypatch.setattr(update_source, "_get_any_json", lambda source, token, suffix: tags)
+    files = {"frontend/package.json": {"name": "agv-pm-frontend", "version": version},
+             "docker/update-protocol.json": {"application": "xingxu-workbench", "protocol": 1}}
+    monkeypatch.setattr(update_source, "_get_file", lambda source, token, path, commit: files[path])
+    monkeypatch.setattr(update_source, "_get_text", lambda source, token, path, commit: changelog)
+
+
+def test_github_release_picks_the_highest_strict_release_tag(monkeypatch):
+    tags = [{"name": "v2.4.0", "commit": {"sha": "a" * 40}}, {"name": "v2.5.0", "commit": {"sha": "B" * 40}},
+            {"name": "v9.0.0-rc.1", "commit": {"sha": "c" * 40}}, {"name": "edge", "commit": {"sha": "d" * 40}}]
+    _github(monkeypatch, tags)
+    result = update_source.inspect_github_release("https://github.com/KnxckbackWili/xingxu", "", "2.4.0")
+    assert result["tag"] == "v2.5.0" and result["commit"] == "b" * 40 and result["version"] == "2.5.0"
+    assert result["image"] == "ghcr.io/knxckbackwili/xingxu" and [n["version"] for n in result["notes"]] == ["2.5.0"]
+
+
+def test_github_release_refuses_a_tag_whose_files_carry_another_version(monkeypatch):
+    _github(monkeypatch, [{"name": "v2.5.0", "commit": {"sha": "a" * 40}}], version="2.4.9")
+    with pytest.raises(update_source.UpdateSourceError, match="不一致"):
+        update_source.inspect_github_release("https://github.com/KnxckbackWili/xingxu")
+    _github(monkeypatch, [{"name": "latest", "commit": {"sha": "a" * 40}}])
+    with pytest.raises(update_source.UpdateSourceError, match="发布标签"):
+        update_source.inspect_github_release("https://github.com/KnxckbackWili/xingxu")

@@ -352,7 +352,11 @@ update_app() {
   rollback_ref="${AGV_ROLLBACK_REF:-agv-pm-multica}:rollback-$stamp"
 
   update_event building
-  compose build
+  if [ "${AGV_PREBUILT_IMAGE:-0}" = 1 ]; then
+    update_require_prebuilt_image || die "已验证的发布镜像不可用，中止更新。"
+  else
+    compose build
+  fi
   update_verify_built_image
   # Preserve the exact old image before stopping any service.
   docker tag "$old_id" "$rollback_ref"

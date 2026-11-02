@@ -47,7 +47,10 @@ def _ids():
 
 
 def _leave(client, headers, uid, *, start=None, end=None):
-    today = date.today().isoformat()
+    # The people week is cut in the site's time zone; the server clock's date
+    # is the previous day on Sunday evenings UTC (already Monday in Shanghai).
+    from app.time_utils import project_today
+    today = project_today('Asia/Shanghai').isoformat()
     response = client.post(f"/api/users/{uid}/unavailability", headers=headers, json={
         "start_date": start or today, "end_date": end or today,
         "reason": "私人病假", "note": "私人医疗说明不可向同事公开",

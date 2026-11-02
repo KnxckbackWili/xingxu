@@ -40,13 +40,21 @@ TRUST_MESSAGES = {
     "content_changed": "已验证源码内容发生变化，拒绝安装",
     "tool_unavailable": "宿主缺少 Git 或配置的签名验证工具，请联系部署管理员",
     "fetch_failed": "宿主无法读取仓库的 Git 对象，请检查网络和读取权限",
+    "release_image": "宿主已核对发布标签、提交与镜像",
+    "image_unavailable": "宿主无法拉取发布镜像，请检查网络；私有镜像需先在宿主执行 docker login ghcr.io",
+    "runner_outdated": "宿主更新服务版本过旧，不支持发布镜像；请按部署文档更新宿主脚本",
 }
 HEARTBEAT_TTL = 60
 CHECK_TTL = 30 * 60
 SOURCE_SCHEMA = 2
 MAX_SOURCES = 20
-DEFAULT_SOURCE_ID = "default-gitea"
-DEFAULT_REPOSITORY_URL = "https://gitea.arrowwood.top:8773/codex-mac/agv-project-workflow"
+DEFAULT_SOURCE_ID = "default-gitea"  # historical id of the preselected source; kept so saved configs stay valid
+DEFAULT_REPOSITORY_URL = "https://github.com/KnxckbackWili/xingxu"
+DEFAULT_SOURCE_NAME = "GitHub 正式版"
+# Before 3.4 the preselected source was this Gitea repository. An untouched
+# old default moves aside (still selectable) and the GitHub releases take over.
+PREVIOUS_DEFAULT_URL = "https://gitea.arrowwood.top:8773/codex-mac/agv-project-workflow"
+PREVIOUS_DEFAULT_ID = "previous-gitea"
 _SOURCE_FIELDS = ("id", "name", "is_default", "repository_url", "ref", "allow_http", "token_encrypted")
 TERMINAL = {"succeeded", "failed", "rolled_back", "needs_attention"}
 STAGES = {"downloading", "building", "backing_up", "installing", "verifying"}
@@ -135,9 +143,39 @@ def _locked():
 
 
 def _default_source():
-    return {"id": DEFAULT_SOURCE_ID, "name": "我的 Gitea", "is_default": True,
+    return {"id": DEFAULT_SOURCE_ID, "name": DEFAULT_SOURCE_NAME, "is_default": True,
             "repository_url": DEFAULT_REPOSITORY_URL, "ref": "main", "allow_http": False,
             "token_encrypted": ""}
+
+
+def _kind(source):
+    return "github_release" if update_source.is_github(source["repository_url"]) else "gitea"
+
+
+def _normalized_source(repository_url, ref, allow_http):
+    if update_source.is_github(repository_url):
+        if allow_http:
+            raise update_source.UpdateSourceError("GitHub 来源只能使用 HTTPS")
+        return update_source.github_release_source(repository_url)
+    return update_source.normalize_source(repository_url, ref, allow_http)
+
+
+def _retire_previous_default(configuration):
+    """Read-side move of the old Gitea default; persisted by the next write."""
+    sources = configuration["sources"]
+    default = next(source for source in sources if source["id"] == DEFAULT_SOURCE_ID)
+    if update_source.normalize_source(default["repository_url"], default["ref"], default["allow_http"])["repository_url"] != PREVIOUS_DEFAULT_URL:
+        return configuration
+    if any(source["id"] == PREVIOUS_DEFAULT_ID for source in sources):
+        return configuration
+    retired = {**default, "id": PREVIOUS_DEFAULT_ID, "is_default": False,
+               "name": default["name"] if default["name"] != "我的 Gitea" else "原 Gitea 来源"}
+    replaced = [_default_source() if source["id"] == DEFAULT_SOURCE_ID else source for source in sources]
+    if len(replaced) < MAX_SOURCES:
+        replaced.append(retired)
+    else:
+        return configuration
+    return {**configuration, "sources": replaced}
 
 
 def _source_name(value):
@@ -173,11 +211,14 @@ def _configuration():
             if "schema_version" in raw or "active_source_id" in raw:
                 raise ValueError()
             legacy = {key: raw[key] for key in ("repository_url", "ref", "allow_http", "token_encrypted")}
-            normalized = update_source.normalize_source(legacy["repository_url"], legacy["ref"], legacy["allow_http"])
+            normalized = _normalized_source(legacy["repository_url"], legacy["ref"], legacy["allow_http"])
             if not isinstance(legacy["token_encrypted"], str):
                 raise ValueError()
             if (normalized["repository_url"], normalized["ref"]) == (default["repository_url"], default["ref"]):
                 sources = [{**default, **legacy}]
+            elif normalized["repository_url"] == PREVIOUS_DEFAULT_URL:
+                # A 2.4.0 install of the old default: keep it, selected, as its own source.
+                sources = [default, {"id": PREVIOUS_DEFAULT_ID, "name": "原 Gitea 来源", "is_default": False, **legacy}]
             else:
                 sources = [default, {"id": "legacy-source", "name": "原更新源", "is_default": False, **legacy}]
             return {"schema_version": SOURCE_SCHEMA, "revision": revision,
@@ -199,7 +240,7 @@ def _configuration():
                 raise ValueError()
             if _source_name(source["name"]) != source["name"] or not isinstance(source["token_encrypted"], str):
                 raise ValueError()
-            normalized = update_source.normalize_source(source["repository_url"], source["ref"], source["allow_http"])
+            normalized = _normalized_source(source["repository_url"], source["ref"], source["allow_http"])
             identity = (normalized["repository_url"], normalized["ref"])
             if identity in identities:
                 raise ValueError()
@@ -213,8 +254,8 @@ def _configuration():
         active = _active_source(configuration)
         if any(raw.get(key) != active[key] for key in _SOURCE_FIELDS):
             raise ValueError()
-        return configuration
-    except (KeyError, TypeError, ValueError):
+        return _retire_previous_default(configuration)
+    except (KeyError, TypeError, ValueError, StopIteration):
         raise UpdateError("更新源列表或兼容配置不一致，请联系部署管理员检查配置", 503) from None
 
 
@@ -262,8 +303,20 @@ def _online(state):
 
 
 def _public_source(source, revision):
+    kind = _kind(source)
+    extra = {"image": update_source.github_release_source(source["repository_url"])["image"]} if kind == "github_release" else {}
     return {**{key: source[key] for key in _SOURCE_FIELDS if key != "token_encrypted"},
-            "revision": revision, "has_token": bool(source.get("token_encrypted"))}
+            "revision": revision, "has_token": bool(source.get("token_encrypted")), "kind": kind, **extra}
+
+
+def _check_kind_matches(check, source):
+    # The migrated default keeps its id but changes kind: an old Gitea check
+    # must never count as a check of the GitHub release source (or vice versa).
+    return (check.get("kind") == "github_release") == (_kind(source) == "github_release")
+
+
+def _release_capable(runner):
+    return "release_image" in (runner.get("capabilities") or [])
 
 
 def _payload(state, configuration):
@@ -271,7 +324,7 @@ def _payload(state, configuration):
     runner = state.get("runner") or {}
     check = state.get("check")
     if check and (check["source_revision"] != source["revision"]
-                  or check.get("source_id", source["id"]) != source["id"]):
+                  or check.get("source_id", source["id"]) != source["id"] or not _check_kind_matches(check, source)):
         check = None
     return {
         "current": {"version": config.APP_VERSION, "commit": os.getenv("GIT_SHA", "unknown")},
@@ -280,6 +333,7 @@ def _payload(state, configuration):
         "active_source_id": source["id"],
         "maintenance": is_maintenance(),
         "runner": {"online": _online(state), "last_seen": runner.get("last_seen"), "protocol": PROTOCOL,
+                   "release_images": _release_capable(runner),
                    "trust": {"configured": runner.get("trust_protocol") == TRUST_PROTOCOL and runner.get("trust_configured") is True,
                              "protocol": runner.get("trust_protocol", 0)}},
         "check": check,
@@ -317,7 +371,7 @@ def _busy(state):
 
 
 def _validated_source(values, previous=None):
-    normalized = update_source.normalize_source(values["repository_url"], values["ref"], values["allow_http"])
+    normalized = _normalized_source(values["repository_url"], values.get("ref") or "main", values.get("allow_http", False))
     token = values.get("token")
     if token and (len(token) > 4096 or any(not 33 <= ord(c) <= 126 for c in token)):
         raise UpdateError("访问令牌格式不正确")
@@ -346,7 +400,7 @@ def _ensure_unique(configuration, source, ignored_id=None):
     for existing in configuration["sources"]:
         if existing["id"] == ignored_id:
             continue
-        normalized = update_source.normalize_source(existing["repository_url"], existing["ref"], existing["allow_http"])
+        normalized = _normalized_source(existing["repository_url"], existing["ref"], existing["allow_http"])
         if (normalized["repository_url"], normalized["ref"]) == (source["repository_url"], source["ref"]):
             raise UpdateError("相同仓库和分支的更新源已存在，请直接选择该更新源", 409)
 
@@ -400,7 +454,7 @@ def delete_source(source_id, revision):
         configuration, state = _configuration(), _state()
         _editable(configuration, state, revision)
         if source_id == DEFAULT_SOURCE_ID:
-            raise UpdateError("默认 Gitea 更新源不能删除")
+            raise UpdateError("默认更新源不能删除")
         if not any(source["id"] == source_id for source in configuration["sources"]):
             raise UpdateError("更新源不存在，请刷新后重试", 404)
         configuration["sources"] = [source for source in configuration["sources"] if source["id"] != source_id]
@@ -428,8 +482,12 @@ def check_source(source_revision):
         if source["revision"] != source_revision:
             raise UpdateError("配置已变化，请保存并重新检查", 409)
         if not source["repository_url"]:
-            raise UpdateError("请先保存 Gitea 更新源")
-    target = update_source.inspect_source(source, _token(source))
+            raise UpdateError("请先保存更新源")
+    release = _kind(source) == "github_release"
+    if release:
+        target = update_source.inspect_github_release(source["repository_url"], _token(source), config.APP_VERSION)
+    else:
+        target = update_source.inspect_source(source, _token(source))
     # Branch movement between inspection and installation cannot change this SHA.
     current_commit = os.getenv("GIT_SHA", "unknown")
     same_commit = current_commit != "unknown" and len(current_commit) >= 7 and target["commit"].startswith(current_commit)
@@ -444,6 +502,9 @@ def check_source(source_revision):
             "checked_at": _now(), "update_available": available,
             "trust": {"status": "pending", "message": TRUST_MESSAGES["pending"]},
         }
+        if release:
+            state["check"].update(kind="github_release", tag=target["tag"], image=target["image"],
+                                  notes=target["notes"], release_url=target["release_url"])
         _save(state)
         return _payload(state, current)
 
@@ -460,7 +521,7 @@ def request_install(check_id, actor_id):
             raise UpdateError("已有更新正在执行或等待人工处理", 409)
         check = state.get("check")
         if (not check or check["id"] != check_id or check["source_revision"] != source["revision"]
-                or check.get("source_id", source["id"]) != source["id"]):
+                or check.get("source_id", source["id"]) != source["id"] or not _check_kind_matches(check, source)):
             raise UpdateError("检查结果已失效，请重新检查更新", 409)
         age = time.time() - _timestamp(check["checked_at"])
         if age < 0 or age > CHECK_TTL:
@@ -472,6 +533,8 @@ def request_install(check_id, actor_id):
         runner = state.get("runner") or {}
         if runner.get("trust_protocol") != TRUST_PROTOCOL or runner.get("trust_configured") is not True:
             raise UpdateError(TRUST_MESSAGES["not_configured"], 409)
+        if check.get("kind") == "github_release" and not _release_capable(runner):
+            raise UpdateError(TRUST_MESSAGES["runner_outdated"], 409)
         if (check.get("trust") or {}).get("status") != "trusted":
             raise UpdateError("此版本尚未通过宿主信任校验，请等待验证或重新检查", 409)
         now = _now()
@@ -481,6 +544,8 @@ def request_install(check_id, actor_id):
             "target_version": check["version"], "target_commit": check["commit"],
             "created_at": now, "updated_at": now, "source": source,
         }
+        if check.get("kind") == "github_release":
+            state["job"].update(kind="release_image", target_ref=check["tag"], image=check["image"])
         _save(state)
         return _payload(state, configuration)
 
@@ -502,7 +567,7 @@ def _owned(state, runner_id, job_id):
     return job
 
 
-def heartbeat(runner_id, protocol, trust_protocol=None, trust_configured=False):
+def heartbeat(runner_id, protocol, trust_protocol=None, trust_configured=False, capabilities=None):
     _identity(runner_id)
     if type(protocol) is not int or protocol != PROTOCOL:
         raise UpdateError("更新服务协议不兼容，请更新宿主服务", 409)
@@ -513,7 +578,8 @@ def heartbeat(runner_id, protocol, trust_protocol=None, trust_configured=False):
             raise UpdateError("已有另一个更新服务连接此应用", 409)
         state["runner"] = {"id": runner_id, "protocol": PROTOCOL, "last_seen": _now(),
                            "trust_protocol": TRUST_PROTOCOL if type(trust_protocol) is int and trust_protocol == TRUST_PROTOCOL else 0,
-                           "trust_configured": trust_configured is True and type(trust_protocol) is int and trust_protocol == TRUST_PROTOCOL}
+                           "trust_configured": trust_configured is True and type(trust_protocol) is int and trust_protocol == TRUST_PROTOCOL,
+                           "capabilities": [item for item in ("release_image",) if isinstance(capabilities, list) and item in capabilities]}
         _save(state)
     return {"ok": True}
 
@@ -532,9 +598,13 @@ def _trusted_runner(state, runner_id):
 
 
 def _candidate(check, source):
-    return {"check_id": check["id"], "source_id": source["id"], "source_revision": source["revision"],
-            "repository_url": source["repository_url"], "ref": source["ref"],
-            "commit": check["commit"], "version": check["version"]}
+    candidate = {"check_id": check["id"], "source_id": source["id"], "source_revision": source["revision"],
+                 "repository_url": source["repository_url"], "ref": source["ref"],
+                 "commit": check["commit"], "version": check["version"]}
+    if check.get("kind") == "github_release":
+        # The host re-resolves this tag itself and only trusts its own answer.
+        candidate.update(kind="release_image", ref=check["tag"], image=check["image"])
+    return candidate
 
 
 def trust_request(runner_id):
@@ -543,9 +613,15 @@ def trust_request(runner_id):
         _host_runner(state, runner_id)
         check = state.get("check")
         source = _active_source(configuration)
-        if (not check or (check.get("trust") or {}).get("status") != "pending"
+        if (not check or (check.get("trust") or {}).get("status") != "pending" or not _check_kind_matches(check, source)
                 or check.get("source_id") != source["id"] or check.get("source_revision") != source["revision"]
                 or not 0 <= time.time() - _timestamp(check.get("checked_at")) <= CHECK_TTL):
+            return {"candidate": None}
+        if check.get("kind") == "github_release" and not _release_capable(state.get("runner") or {}):
+            # An older host would judge a release tag as a source build and
+            # reject it misleadingly; tell the administrator to update it.
+            check["trust"] = {"status": "rejected", "message": TRUST_MESSAGES["runner_outdated"], "reason": "runner_outdated"}
+            _save(state)
             return {"candidate": None}
         return {"candidate": _candidate(check, source)}
 
@@ -563,20 +639,23 @@ def trust_credentials(runner_id, check_id=None, job_id=None):
         else:
             check = state.get("check")
             source = _active_source(_configuration())
-            if not check or check.get("id") != check_id or check.get("source_id") != source["id"] or check.get("source_revision") != source["revision"]:
+            if (not check or check.get("id") != check_id or check.get("source_id") != source["id"]
+                    or check.get("source_revision") != source["revision"] or not _check_kind_matches(check, source)):
                 raise UpdateError("检查期间来源已变化", 409)
         return {"token": _token(source)}
 
 
 def trust_result(runner_id, check_id, status, method=None, reason=None):
-    if status not in {"trusted", "rejected"} or (status == "trusted" and method not in {"commit", "signed_tag"}):
+    if status not in {"trusted", "rejected"} or (status == "trusted" and method not in {"commit", "signed_tag", "release_image"}):
         raise UpdateError("宿主信任结果无效")
     with _locked():
         state, configuration = _state(), _configuration()
         _host_runner(state, runner_id)
         check, source = state.get("check"), _active_source(configuration)
+        if check and status == "trusted" and (method == "release_image") != (check.get("kind") == "github_release"):
+            raise UpdateError("宿主信任结果无效")
         if (not check or check.get("id") != check_id or check.get("source_id") != source["id"]
-                or check.get("source_revision") != source["revision"]
+                or check.get("source_revision") != source["revision"] or not _check_kind_matches(check, source)
                 or not 0 <= time.time() - _timestamp(check.get("checked_at")) <= CHECK_TTL):
             raise UpdateError("宿主验证期间检查结果已变化，请重新检查", 409)
         code = method if status == "trusted" else reason if reason in TRUST_MESSAGES else "receipt_invalid"
@@ -591,9 +670,12 @@ def trust_result(runner_id, check_id, status, method=None, reason=None):
 
 def _host_job(job):
     source = job["source"]
-    return {**_public_job(job), "check_id": job["check_id"],
-            "source_id": source["id"], "source_revision": source["revision"],
-            "repository_url": source["repository_url"], "ref": source["ref"]}
+    result = {**_public_job(job), "check_id": job["check_id"],
+              "source_id": source["id"], "source_revision": source["revision"],
+              "repository_url": source["repository_url"], "ref": source["ref"]}
+    if job.get("kind") == "release_image":
+        result.update(kind="release_image", ref=job["target_ref"], image=job["image"])
+    return result
 
 
 def claim(runner_id):
