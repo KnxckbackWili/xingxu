@@ -1,7 +1,10 @@
 # 版本历史
 
-## 3.5.0
+## 3.5.1
 
+3.5.0 的标签建在版本号未更新的提交上，没有发布镜像；其内容随 3.5.1 一起发布。
+
+- **一键发布正式版本**：Actions → 镜像构建 → Run workflow 勾选“发布正式版本”，按代码版本号自动创建标签和 Release 并发布镜像，不再需要手工建标签。
 - **软件更新改为 GitHub 正式版**：默认来源改为 `https://github.com/KnxckbackWili/xingxu`。检查时读取最新 `vX.Y.Z` 标签，核对版本文件，并把 CHANGELOG 中比当前版本新的部分显示为“更新内容”；安装时部署主机自行解析标签提交、拉取 `ghcr.io/knxckbackwili/xingxu` 镜像，核对镜像版本/提交并按摘要安装，不再在主机上从源码构建。备份、停写、健康检查和失败自动恢复不变。原 Gitea 来源保留为可选来源。部署主机需更新宿主脚本并执行一次 `update-trust.py allow-release-image`，私有镜像包还需 `docker login ghcr.io`，见[软件更新](docs/software-updates.md)。
 - **正式开源**：以 [MIT 许可证](LICENSE) 在 <https://github.com/KnxckbackWili/xingxu> 开源；README 和部署说明中的源码、镜像地址改为 GitHub / `ghcr.io/knxckbackwili/xingxu`，`publish.sh` 默认发布到 GHCR。登录页底部和账户菜单增加“开源地址（GitHub）”链接。
 - **软件更新页面重做**：版本对比（当前 → 新版本）、更新内容、安装按钮放在一处；去掉大图标和标语，宿主核对通过改为一行提示，GitHub 来源隐藏分支和 HTTP 选项。
