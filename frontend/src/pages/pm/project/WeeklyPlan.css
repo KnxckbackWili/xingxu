@@ -73,3 +73,9 @@ td.is-empty .weekly-plan-add { position:absolute; inset:4px; width:auto; min-hei
 .weekly-plan-rules { margin: 12px 0; }
 .weekly-plan-rules > summary { cursor: pointer; font-weight: 500; margin-bottom: 8px; }
 .weekly-plan-cell-body strong small { font-weight: 400; color: var(--agv-text-secondary); }
+/* Compact rows: work groups as header rows, the add button tucked in a corner of filled cells. */
+.weekly-plan-table th, .weekly-plan-table td { padding:6px; }
+.weekly-plan-table tbody th strong { display:flex; align-items:center; gap:4px; flex-wrap:wrap; font-weight:500; }
+.weekly-plan-table article:last-of-type { margin-bottom:0; }
+.weekly-plan-group th { background:var(--agv-bg-subtle) !important; color:var(--agv-text-secondary); font-size:12px; font-weight:600; padding:4px 8px !important; }
+td.has-plan .weekly-plan-add { position:absolute; right:4px; bottom:4px; width:22px; height:22px; min-height:0; padding:0; background:var(--agv-bg-container); }

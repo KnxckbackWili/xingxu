@@ -1,8 +1,8 @@
 import { ensureVerifiedAccount } from '../../../utils/verifiedAccount'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Button, Collapse, Drawer, Dropdown, Empty, Input, Modal, Progress, Select, Space, Table, Tag, Typography } from 'antd'
+import { Alert, Button, Collapse, Drawer, Dropdown, Empty, Input, Modal, Select, Space, Tag, Typography } from 'antd'
 import { STAGES, stageIndex, stageLabel } from '../../../constants/stages'
-import { DownOutlined, EllipsisOutlined, SearchOutlined } from '@ant-design/icons'
+import { CarOutlined, CheckCircleFilled, DownOutlined, EllipsisOutlined, PlusOutlined, RightOutlined, SearchOutlined } from '@ant-design/icons'
 import './TaskPlanPage.css'
 import { Link } from 'react-router-dom'
 import { api, errMsg } from '../../../api/client'
@@ -13,7 +13,6 @@ import WorkCompletionAction from '../../../components/WorkCompletionAction'
 import WorkItemEditor from '../../../components/WorkItemEditor'
 import WorkContextPanel, { WorkCheckAction } from '../../../components/WorkContextPanel'
 import TemplateScope, { selectedWorkItems } from '../../../components/TemplateScope'
-import { WorkPageHeader } from '../../../components/WorkPage'
 import { downloadDocumentResource } from '../../../api/projectDocuments'
 
 type Props = { projectId: string; projectStatus?: string; focusTaskId?: string; onWorkChanged?: () => void; detailsOnly?: boolean; onDetailClose?: () => void; [key: string]: unknown }
@@ -42,7 +41,8 @@ export default function TaskPlanPage({ projectId, focusTaskId, onWorkChanged, de
   const [selected, setSelected] = useState<string[]>([])
   const [excluded, setExcluded] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
-  const [filter, setFilter] = useState<'all' | 'open' | 'checks' | 'vehicle'>('all')
+  const [filter, setFilter] = useState<'all' | 'open' | 'vehicle'>('all')
+  const [folded, setFolded] = useState<Record<string, boolean>>({})
   const [query, setQuery] = useState('')
   const lock = useRef(false)
   const scopeSequence = useRef(0)
@@ -108,57 +108,66 @@ export default function TaskPlanPage({ projectId, focusTaskId, onWorkChanged, de
   }
   return <div>
     {!detailsOnly && <>
-    <WorkPageHeader title="工作项" description="按阶段维护工作；车辆完成看真实进度表，非车辆工作记录完成状态。"
-      primary={canPlan ? <Button type="primary" disabled={!data?.phases.length} onClick={() => setEditor({})}>添加工作项</Button> : undefined}
-      tools={<Dropdown trigger={['click']} menu={{ items: [
-        ...(canPlan ? [{ key: 'phase', label: '添加工作分组', onClick: () => setPhaseName('') }, { key: 'template', label: '从模板带入', onClick: () => void openScope() }] : []),
-        { key: 'refresh', label: '刷新工作项', onClick: () => void load() },
-      ] }}><Button loading={loading}>更多 <DownOutlined /></Button></Dropdown>} />
     {error && <Alert type="error" showIcon message="工作项读取或操作未完成" description={error} action={<Button onClick={() => void load()}>刷新核对</Button>} />}
-    {!!data?.legacy_work_items?.length && <Collapse items={[{ key: 'legacy', label: `历史准备工作来源（只读） ${data.legacy_work_items.length} 项`, children: data.legacy_work_items.map(item => <p key={item.id}>{item.name} {item.group_label && <Tag>{item.group_label}</Tag>}<Button onClick={() => void history(item)}>查看原记录</Button></p>) }]} />}
-    {data && !data.phases.length && <Empty description="尚无工作分组，添加分组后即可维护工作项" />}
-    {data && !!data.phases.length && <div className="plan-toolbar">
+    {data && <div className="plan-toolbar">
       <Input allowClear prefix={<SearchOutlined />} aria-label="查找工作项" placeholder="查找工作项" value={query} onChange={event => setQuery(event.target.value)} className="plan-search" />
       <div className="plan-filters" role="group" aria-label="筛选工作项">
-        {([['all', '全部', work.length], ['open', '未完成', work.filter(item => !item.is_completed).length], ['checks', '待检查', work.filter(item => item.quality_blocked).length], ['vehicle', '车辆工作', work.filter(item => item.kind === 'vehicle').length]] as const).map(([key, label, total]) =>
+        {([['all', '全部', work.length], ['open', '未完成', work.filter(item => !item.is_completed).length], ['vehicle', '车辆工作', work.filter(item => item.kind === 'vehicle').length]] as const).map(([key, label, total]) =>
           <button key={key} type="button" aria-pressed={filter === key} onClick={() => setFilter(key)}>{label} {total}</button>)}
       </div>
+      <span className="plan-toolbar-actions">
+        {canPlan && <Button type="primary" icon={<PlusOutlined />} disabled={!data.phases.length} onClick={() => setEditor({})}>添加工作项</Button>}
+        <Dropdown trigger={['click']} menu={{ items: [
+          ...(canPlan ? [{ key: 'phase', label: '添加工作分组', onClick: () => setPhaseName('') }, { key: 'template', label: '从模板带入', onClick: () => void openScope() }] : []),
+          { key: 'refresh', label: '刷新工作项', onClick: () => void load() },
+        ] }}><Button loading={loading}>更多 <DownOutlined /></Button></Dropdown>
+      </span>
     </div>}
+    {!!data?.legacy_work_items?.length && <Collapse items={[{ key: 'legacy', label: `历史准备工作来源（只读） ${data.legacy_work_items.length} 项`, children: data.legacy_work_items.map(item => <p key={item.id}>{item.name} {item.group_label && <Tag>{item.group_label}</Tag>}<Button onClick={() => void history(item)}>查看原记录</Button></p>) }]} />}
+    {data && !data.phases.length && <Empty description="尚无工作分组，添加分组后即可维护工作项" />}
     {data && !!data.phases.length && (() => {
       const term = query.trim().toLocaleLowerCase()
-      const match = (item: WorkItem) => (filter === 'all' || (filter === 'open' && !item.is_completed) || (filter === 'checks' && !!item.quality_blocked) || (filter === 'vehicle' && item.kind === 'vehicle'))
+      const match = (item: WorkItem) => (filter === 'all' || (filter === 'open' && !item.is_completed) || (filter === 'vehicle' && item.kind === 'vehicle'))
         && (!term || `${item.name} ${item.group_label ?? ''} ${item.description ?? ''}`.toLocaleLowerCase().includes(term))
       const narrowed = filter !== 'all' || !!term
       const phases = data.phases.map(phase => ({ phase, items: phase.work_items.filter(match) })).filter(row => !narrowed || row.items.length)
-      // Unfiltered: open only the first phase that still has unfinished work; filtered: open every matching phase.
-      const current = data.phases.find(phase => phase.work_items.some(item => !item.is_completed))
-      const open = narrowed ? phases.map(row => row.phase.id) : current ? [current.id] : []
       if (!phases.length) return <Empty description="没有符合条件的工作项" />
+      // Finished groups fold away unless searched or opened by hand; groups with open work stay open.
+      const isOpen = (phase: WorkPhase) => narrowed || (folded[phase.id] ?? phase.work_items.every(item => item.is_completed)) === false
+      const toggle = (phase: WorkPhase) => setFolded(old => ({ ...old, [phase.id]: isOpen(phase) }))
+      const blockedHint = ['preparing', 'suspended'].includes(data.project_status ?? '') ? '进入现场实施后可登记' : undefined
+      const row = (item: WorkItem) => <li key={item.id} className={`plan-row${item.is_completed ? ' is-done' : ''}`}>
+        <span className="plan-row-state" aria-hidden>{item.is_completed ? <CheckCircleFilled /> : item.kind === 'vehicle' ? <CarOutlined /> : <span className="plan-dot" />}</span>
+        <button type="button" className="plan-row-name" onClick={() => setDetailId(item.id)}>{item.name}</button>
+        {item.group_label && item.group_label !== item.phase_name && <Tag className="plan-row-tag">{item.group_label}</Tag>}
+        <span className="plan-row-meta">
+          {item.kind === 'vehicle' && <span className="plan-row-vehicle" title={item.matrix?.expected_count == null ? undefined : `${item.matrix.completed_count} / ${item.matrix.expected_count} 个车辆环节`}>{item.matrix?.name || '尚未关联环节'} {item.matrix?.expected_count == null ? '数量待核对' : `${item.matrix.completed_count}/${item.matrix.expected_count}`}</span>}
+          {item.kind === 'vehicle' && item.matrix?.warning && <Typography.Text type="warning" className="plan-row-warning">{item.matrix.warning}</Typography.Text>}
+          {item.kind !== 'vehicle' && <span className="plan-row-complete"><WorkCompletionAction compact projectId={projectId} item={item} canRecord={canRecord} canOverride={!!data.permissions.override} blockedHint={blockedHint} onSaved={changed} /></span>}
+          <Dropdown trigger={['click']} menu={{ items: [
+            { key: 'detail', label: '查看详情与检查', onClick: () => setDetailId(item.id) },
+            ...(canPlan ? [{ key: 'edit', label: '编辑', onClick: () => setEditor({ item }) }] : []),
+            ...(item.has_legacy_quantity ? [{ key: 'history', label: '历史来源', onClick: () => void history(item) }] : []),
+          ] }}><Button type="text" size="small" aria-label={`${item.name}的更多操作`} icon={<EllipsisOutlined />} /></Dropdown>
+        </span>
+      </li>
       // One section per backbone stage (4–9); work groups keep their order inside it.
       const stages = [...new Set(phases.map(row => row.phase.stage_key ?? '6'))].sort((a, b) => stageIndex(a) - stageIndex(b))
       return stages.map(stage => { const rows = phases.filter(row => (row.phase.stage_key ?? '6') === stage); return <section key={stage} className="plan-stage" aria-label={`阶段：${stageLabel(stage)}`}>
-      <h3 className="plan-stage-title">{stageLabel(stage)}<span className="plan-phase-count">{rows.reduce((n, row) => n + row.phase.work_items.length, 0)} 项工作</span></h3>
-      <Collapse className="plan-phases" defaultActiveKey={open} key={`${projectId}:${stage}:${filter}:${term}:${data.phases.map(p => p.id).join('|')}`} items={rows.map(({ phase, items }) => {
-        const done = phase.work_items.filter(item => item.is_completed).length
-        const checks = phase.work_items.filter(item => item.quality_blocked).length
-        const percent = phase.work_items.length ? Math.round(done / phase.work_items.length * 100) : 0
-        return { key: phase.id, label: <span className="plan-phase-head"><strong>{phase.name}</strong><span className="plan-phase-count">{phase.work_items.length} 项工作</span>
-          <Progress className="plan-phase-progress" percent={percent} size="small" showInfo={false} aria-label={`${phase.name}完成进度`} /><span className="plan-phase-count">{done}/{phase.work_items.length} 完成</span>
-          {checks > 0 && <Tag color="orange">{checks} 项待检查</Tag>}</span>,
-          children: <Table<WorkItem> rowKey="id" size="small" pagination={false} dataSource={items} locale={{ emptyText: '本阶段尚无工作项' }} columns={[
-            { title: '工作项', key: 'name', render: (_, item) => <div className="plan-work-name"><Button type="link" onClick={() => setDetailId(item.id)}>{item.name}</Button>{item.group_label && item.group_label !== item.phase_name && <Tag>{item.group_label}</Tag>}{item.description && <Typography.Paragraph type="secondary" ellipsis={{ rows: 1 }}>{item.description}</Typography.Paragraph>}</div> },
-            { title: '完成情况', key: 'state', width: 260, render: (_, item) => item.kind === 'vehicle' ? <div className="plan-work-state"><Tag color="blue">车辆环节 · {item.matrix?.name || '尚未关联环节'}</Tag><span>{item.matrix?.expected_count == null ? '数量待核对' : `${item.matrix.completed_count} / ${item.matrix.expected_count} 个车辆环节`}</span>{item.matrix?.warning && <Typography.Text type="warning">{item.matrix.warning}</Typography.Text>}</div>
-              : <div className="plan-work-state">{item.is_completed ? <Tag color="green">已完成</Tag> : <Typography.Text type="secondary">未完成</Typography.Text>}{item.quality_blocked && <Tag color="orange">检查待确认</Tag>}</div> },
-            { title: '操作', key: 'actions', width: 220, render: (_, item) => <Space size={6} className="plan-work-actions">
-              <WorkCompletionAction projectId={projectId} item={item} canRecord={canRecord} canOverride={!!data.permissions.override} blockedHint={['preparing', 'suspended'].includes(data.project_status ?? '') ? '进入现场实施后可登记' : undefined} onSaved={changed} />
-              <Dropdown trigger={['click']} menu={{ items: [
-                { key: 'detail', label: '查看详情与检查', onClick: () => setDetailId(item.id) },
-                ...(canPlan ? [{ key: 'edit', label: '编辑', onClick: () => setEditor({ item }) }] : []),
-                ...(item.has_legacy_quantity ? [{ key: 'history', label: '历史来源', onClick: () => void history(item) }] : []),
-              ] }}><Button aria-label={`${item.name}的更多操作`} icon={<EllipsisOutlined />} /></Dropdown>
-            </Space> },
-          ]} /> }
-      })} /></section> })
+        <h3 className="plan-stage-title">{stageLabel(stage)}<span className="plan-phase-count">{rows.reduce((n, row) => n + row.phase.work_items.filter(item => item.is_completed).length, 0)} / {rows.reduce((n, row) => n + row.phase.work_items.length, 0)} 完成</span></h3>
+        {rows.map(({ phase, items }) => {
+          const done = phase.work_items.filter(item => item.is_completed).length
+          const open = isOpen(phase)
+          return <div key={phase.id} className="plan-group" role="region" aria-label={`工作分组：${phase.name}`}>
+            <button type="button" className="plan-group-head" aria-expanded={open} onClick={() => toggle(phase)}>
+              {open ? <DownOutlined /> : <RightOutlined />}<strong>{phase.name}</strong>
+              <span className="plan-group-bar" aria-hidden><span style={{ width: `${phase.work_items.length ? done / phase.work_items.length * 100 : 0}%` }} /></span>
+              <span className="plan-phase-count">{done}/{phase.work_items.length}</span>
+            </button>
+            {open && <ul className="plan-rows">{items.map(row)}{!items.length && <li className="plan-row-empty">本分组尚无工作项</li>}</ul>}
+          </div>
+        })}
+      </section> })
     })()}
     <WorkItemEditor canEdit={canPlan} open={!!editor} projectId={projectId} item={editor?.item} phases={data?.phases || []} steps={steps} onClose={() => setEditor(undefined)} onSaved={changed} />
     <Modal title="添加工作分组" open={phaseName !== undefined} onCancel={() => { if (!busy) setPhaseName(undefined) }} onOk={() => void addPhase()} okText="保存分组" confirmLoading={busy} okButtonProps={{ disabled: !phaseName?.trim() || !canPlan }}>

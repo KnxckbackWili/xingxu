@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Button, Checkbox, DatePicker, Dropdown, Empty, Input, InputNumber, Modal, Select, Space, Spin, Switch, Table, Tag, Typography } from 'antd'
 import { LeftOutlined, MoreOutlined, PlusOutlined, RightOutlined } from '@ant-design/icons'
 import { Link, useLocation } from 'react-router-dom'
@@ -162,14 +162,16 @@ export default function SchedulePage({projectId,project,onProjectChange}: {proje
     ...(canExport?[{key:'excel',label:'导出 Excel'},{key:'print',label:'导出 PDF / 打印'}]:[]),
     {key:'settings',label:<Link to={`/pm/projects/${projectId}/edit?section=schedule`}>排期设置</Link>},
   ]
-  const groupLine=(item:PlanWork&{phase_name:string})=>[item.phase_name,item.group_label&&item.group_label!==item.phase_name?item.group_label:''].filter(Boolean).join(' · ')
+  const groupLine=(item:PlanWork&{phase_name:string})=>item.group_label&&item.group_label!==item.phase_name?item.group_label:''
+  // Rows are grouped under their work group, so each row only names its own work.
+  const startsGroup=(index:number)=>index===0||rows[index-1].phase_name!==rows[index].phase_name
   return <section className="weekly-plan-page">
-    <WorkPageHeader title="周计划" description="行是工作项，列是周；负责人和计划与实际完成分别记录。"
+    <WorkPageHeader title="周计划" description="行是工作项，列是周。点空格安排，点计划格修改；草稿发布后大家才看得到。"
       meta={data&&<span>已发布 {published.length} 格{allowed?` · 草稿 ${drafts.length} 格`:''}</span>}
       primary={allowed&&<Space wrap>
         <Button type="primary" icon={<PlusOutlined/>} disabled={busy} onClick={()=>openNew()}>新增计划格</Button>
         <Button disabled={busy} onClick={openDraft}>生成初稿</Button>
-        {data?.permissions.publish&&<Button disabled={busy||!drafts.length} onClick={publishDrafts}>{chosen.length?`发布已选 ${chosen.length} 格`:`发布草稿 ${drafts.length} 格`}</Button>}
+        {data?.permissions.publish&&drafts.length>0&&<Button disabled={busy} onClick={publishDrafts}>{chosen.length?`发布已选 ${chosen.length} 格`:`发布草稿 ${drafts.length} 格`}</Button>}
       </Space>}
       tools={<Space><RefreshAction label="刷新周计划" loading={loading} disabled={busy} onClick={load} />
         <Dropdown trigger={['click']} menu={{items:moreItems,onClick:({key})=>{if(key==='excel')void excel();if(key==='print')print()}}}><IconAction bordered label="更多周计划操作" icon={<MoreOutlined/>}/></Dropdown></Space>}/>
@@ -195,7 +197,7 @@ export default function SchedulePage({projectId,project,onProjectChange}: {proje
         <header><h2>{project?.name||'项目'} · 周计划</h2><p>{start} 起 {count} 周 · 现场时区 {data.timezone} · 当前范围已发布 {published.length}{allowed?` / 草稿 ${drafts.length}`:''}</p></header>
         {!visibleWorks.length?<Empty description="本范围尚无工作项，请先在计划的工作项页维护"/>
           :!rows.length?<Empty description="这几周还没有安排">{allowed&&<Space wrap><Button type="primary" onClick={openDraft} disabled={busy}>生成初稿</Button><Button onClick={()=>setShowAll(true)}>逐项安排</Button></Space>}</Empty>
-          :<div className="weekly-plan-scroll" role="region" aria-label="周计划表" tabIndex={0}><table className="weekly-plan-table"><thead><tr><th>工作项</th>{data.weeks.map(week=><th key={week.week_start}><strong>{week.week_start.slice(5)} — {week.week_end.slice(5)}</strong>{week.holiday_days.length>0&&<small>节假日：{week.holiday_days.map(day=>day.slice(5)).join('、')}</small>}{week.makeup_workdays.length>0&&<small>补班：{week.makeup_workdays.map(day=>day.slice(5)).join('、')}</small>}{restDays(week,data.settings).length>0&&<small>项目休息日：{restDays(week,data.settings).join('、')}</small>}{week.missing_holiday_years.length>0&&<small>年度安排待核对</small>}</th>)}</tr></thead><tbody>{rows.map(item=><tr key={item.id}><th><strong>{item.name}</strong><small>{groupLine(item)}{item.kind==='vehicle'&&<Tag className="weekly-plan-kind">逐车</Tag>}</small></th>{data.weeks.map(week=>{
+          :<div className="weekly-plan-scroll" role="region" aria-label="周计划表" tabIndex={0}><table className="weekly-plan-table"><thead><tr><th>工作项</th>{data.weeks.map(week=><th key={week.week_start}><strong>{week.week_start.slice(5)} — {week.week_end.slice(5)}</strong>{week.holiday_days.length>0&&<small>节假日：{week.holiday_days.map(day=>day.slice(5)).join('、')}</small>}{week.makeup_workdays.length>0&&<small>补班：{week.makeup_workdays.map(day=>day.slice(5)).join('、')}</small>}{restDays(week,data.settings).length>0&&<small>项目休息日：{restDays(week,data.settings).join('、')}</small>}{week.missing_holiday_years.length>0&&<small>年度安排待核对</small>}</th>)}</tr></thead><tbody>{rows.map((item,index)=><Fragment key={item.id}>{startsGroup(index)&&<tr className="weekly-plan-group"><th colSpan={data.weeks.length+1}>{item.phase_name}</th></tr>}<tr><th><strong>{item.name}{item.kind==='vehicle'&&<Tag className="weekly-plan-kind">逐车</Tag>}</strong>{groupLine(item)&&<small>{groupLine(item)}</small>}</th>{data.weeks.map(week=>{
           const cells=visibleCells.filter(cell=>cell.task_id===item.id&&cell.week_start===week.week_start)
           return <td key={week.week_start} className={cells.length?'has-plan':'is-empty'}>{cells.map(cell=>{
             const state=cell.completion.overdue?'已逾期':cell.completion.is_complete?'已完成':''
@@ -210,8 +212,8 @@ export default function SchedulePage({projectId,project,onProjectChange}: {proje
             {cell.completion.unidentified_completed!>0&&<small>含迁移车号待核对数量 {cell.completion.unidentified_completed}</small>}
             {cell.notes&&!(draftSource(cell)&&cell.notes.startsWith('初稿：按'))&&<p>{cell.notes}</p>}
             {!draftSource(cell)&&cell.source_metadata&&<details><summary>历史计划来源（只读）</summary><pre>{JSON.stringify(cell.source_metadata,null,2)}</pre></details>}
-          </article>})}{allowed&&<button type="button" className="weekly-plan-add" disabled={busy} aria-label={`安排${item.name} ${week.week_start}`} onClick={()=>openNew(item,week.week_start)}><PlusOutlined aria-hidden/>{cells.length?'另建范围':''}</button>}</td>
-        })}</tr>)}</tbody></table></div>}
+          </article>})}{allowed&&<button type="button" className="weekly-plan-add" disabled={busy} aria-label={`安排${item.name} ${week.week_start}`} onClick={()=>openNew(item,week.week_start)}><PlusOutlined aria-hidden/></button>}</td>
+        })}</tr></Fragment>)}</tbody></table></div>}
       </div>
     </>}
     <Modal title={editor?.cell?'修改周计划格':'新增周计划格'} open={!!editor&&!!data} onCancel={()=>{if(!busy)setEditor(undefined)}} onOk={save} okText="保存计划" confirmLoading={busy} okButtonProps={{disabled:!allowed||!valid||editStale}} cancelButtonProps={{disabled:busy}} maskClosable={!busy}>

@@ -14,7 +14,7 @@ beforeEach(() => {
 })
 function show(props: any = {}) { return render(<MemoryRouter><TaskPlanPage projectId="p" {...props} /></MemoryRouter>) }
 it('shows phase/work items, matrix identity warnings and history without editable quantities', async () => {
-  show(); expect(await screen.findByText('现场验证')).toBeVisible(); expect(screen.getAllByText('原模块标签')[0]).toBeVisible(); expect(screen.getByText('2 / 3 个车辆环节')).toBeVisible(); expect(screen.getByText(/不代表逐台核验/)).toBeVisible()
+  show(); expect(await screen.findByText('现场验证')).toBeVisible(); expect(screen.getAllByText('原模块标签')[0]).toBeVisible(); expect(screen.getByTitle('2 / 3 个车辆环节')).toBeVisible(); expect(screen.getByText(/不代表逐台核验/)).toBeVisible()
   expect(screen.queryByRole('spinbutton')).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: '现场验证的更多操作' })); fireEvent.click(await screen.findByRole('menuitem', { name: '历史来源' }))
   expect(await screen.findByText(/original-uuid/)).toBeVisible()

@@ -8,7 +8,7 @@ import { useAuth } from '../stores/auth'
 import { hasSystemPermission } from '../constants/systemPermissions'
 
 /** `blockedHint` replaces a disabled button with the reason when recording is not possible yet. */
-export default function WorkCompletionAction({ projectId, item, canRecord, canOverride = false, blockedHint, onSaved }: { projectId: string; item: WorkItem; canRecord: boolean; canOverride?: boolean; blockedHint?: string; onSaved: () => void | Promise<void> }) {
+export default function WorkCompletionAction({ projectId, item, canRecord, canOverride = false, blockedHint, onSaved, compact = false }: { projectId: string; item: WorkItem; canRecord: boolean; canOverride?: boolean; blockedHint?: string; onSaved: () => void | Promise<void>; compact?: boolean }) {
   const { user } = useAuth()
   const allowed = canRecord && hasSystemPermission(user, 'worker.report')
   const [open, setOpen] = useState(false)
@@ -61,7 +61,7 @@ export default function WorkCompletionAction({ projectId, item, canRecord, canOv
   if (!allowed && blockedHint) return <Typography.Text type="secondary" className="work-completion-hint">{blockedHint}</Typography.Text>
   return <>
     {receipt && <Alert type="warning" message={receipt} />}
-    <Button disabled={!allowed} onClick={() => { captured.current = item; setReason(''); setConfirmed(false); setError(''); setOpen(true) }}>{item.is_completed ? '重新打开' : '标记完成'}</Button>
+    <Button size={compact ? 'small' : undefined} type={compact && item.is_completed ? 'text' : undefined} disabled={!allowed} onClick={() => { captured.current = item; setReason(''); setConfirmed(false); setError(''); setOpen(true) }}>{item.is_completed ? '重新打开' : '标记完成'}</Button>
     <Modal title={`${captured.current.is_completed ? '重新打开' : '完成'}工作：${captured.current.name}`} open={open} okText="保存工作状态" cancelText="取消" confirmLoading={busy} okButtonProps={{ disabled: !allowed || !reason.trim() || (!captured.current.is_completed && (blockers.length > 0 || (!!failed.length && (!canOverride || !confirmed)))) }} onOk={() => void save()} onCancel={() => { if (!lock.current) setOpen(false) }} destroyOnClose>
       {error && <Alert type="error" showIcon message="工作状态未确认" description={error} />}
       <Typography.Paragraph>{captured.current.is_completed ? '写明重新打开的原因，原完成记录会保留。' : `写明完成依据，如确认人或照片位置，便于以后核对。${pendingChecks ? `还有 ${pendingChecks} 项检查未确认，标记完成不会替它们打勾。` : ''}`}</Typography.Paragraph>
