@@ -300,3 +300,18 @@ it('keeps item-by-item controls collapsed until advanced settings are opened', a
   fireEvent.click(screen.getByText('高级：逐项权限设置'))
   expect(screen.getByRole('region', { name: '权限：查看安排' })).toBeInTheDocument()
 })
+
+it('turns a whole job on with one switch and saves only the needed overrides', async () => {
+  const withBundle: PermissionCatalog = { ...catalog, groups: [...catalog.groups, { key: 'organization', name: '组织', description: '基础资料。', permissions: [
+    { key: 'system.templates.manage', name: '管理任务模板', description: '维护模板。', scope: 'global', risk: 'low', default_roles: ['admin'] },
+    { key: 'system.vehicle_types.manage', name: '管理车型字典', description: '维护车型。', scope: 'global', risk: 'low', default_roles: ['admin'] },
+  ] }] }
+  calls.catalog.mockResolvedValue(withBundle)
+  mount()
+  fireEvent.click(await screen.findByRole('button', { name: '选择成员：现场工程师A' }))
+  const toggle = await screen.findByRole('switch', { name: '开通：维护模板和车型' })
+  expect(toggle).not.toBeChecked()
+  fireEvent.click(toggle)
+  fireEvent.click(screen.getByRole('button', { name: '保存权限' }))
+  await waitFor(() => expect(calls.updateUser).toHaveBeenCalledWith('worker', { version: 4, overrides: { 'system.templates.manage': true, 'system.vehicle_types.manage': true } }))
+})

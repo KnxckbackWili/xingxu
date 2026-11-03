@@ -51,4 +51,5 @@ export class UploadQueuedError extends Error {
 export const isUploadQueued = (error: unknown): error is UploadQueuedError => error instanceof UploadQueuedError
 export const uploadJobKey = (owner: string, id: string) => `${owner}:${id}`
 export const DEFAULT_CHUNK_SIZE = 8 * 1024 * 1024
-export const DEFAULT_UPLOAD_LIMIT = 2048 * 1024 * 1024
+/** 0 = 不限大小；服务端设置了单文件上限时以服务端为准。 */
+export const DEFAULT_UPLOAD_LIMIT = 0

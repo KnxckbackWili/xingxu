@@ -42,12 +42,13 @@ def _vehicle_template_steps(db,template_id):
 def list_templates(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     result = [{
         "id": DEFAULT_TEMPLATE_ID,
-        "name": "系统默认模板",
-        "description": "标准 AGV 实施方案；可按现场需求选择工作范围与设备对接",
+        "name": "通用模板",
+        "description": "没有专用模板的车型用它；新建车型模板时也从它复制",
         "version": 1,
         "status": "published",
         "usage_count": 0,
         "is_system": True,
+        "vehicle_type": None,
     }]
     from app.models import Project as _P
     # The default template is represented by the virtual "default" entry above.
@@ -58,6 +59,7 @@ def list_templates(user: User = Depends(get_current_user), db: Session = Depends
             "name": t.name,
             "description": t.description,
             "is_system": False,
+            "vehicle_type": t.vehicle_type or None,
             "version": t.version or 1,
             "status": t.status or "draft",
             "usage_count": db.query(_P).filter(_P.template_id == t.id).count(),
@@ -100,6 +102,21 @@ class TemplateCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     description: str = ""
     copy_from: Optional[str] = None
+    vehicle_type: Optional[str] = Field(default=None, max_length=50)
+
+
+def _vehicle_type(db: Session, value: Optional[str], template_id: Optional[str] = None) -> Optional[str]:
+    """Blank = general template. One template per vehicle type, so a type already taken by another template is refused."""
+    value = (value or "").strip() or None
+    if value is None:
+        return None
+    taken = db.query(Template).filter(Template.vehicle_type == value, Template.is_system.is_(False))
+    if template_id:
+        taken = taken.filter(Template.id != template_id)
+    other = taken.first()
+    if other is not None:
+        raise HTTPException(status_code=409, detail=f"车型「{value}」已有模板「{other.name}」，一个车型只用一个模板")
+    return value
 
 
 @router.post("")
@@ -107,7 +124,7 @@ class TemplateCreate(BaseModel):
 def create_template(data: TemplateCreate, user: User = Depends(require_admin), db: Session = Depends(get_db)):
     if data.copy_from and data.copy_from != DEFAULT_TEMPLATE_ID and db.get(Template, data.copy_from) is None:
         raise HTTPException(status_code=404, detail="来源模板不存在，请刷新后重试")
-    t = Template(name=data.name, description=data.description, is_system=False)
+    t = Template(name=data.name, description=data.description, is_system=False, vehicle_type=_vehicle_type(db, data.vehicle_type))
     db.add(t)
     db.flush()
     src = data.copy_from or DEFAULT_TEMPLATE_ID
@@ -115,7 +132,7 @@ def create_template(data: TemplateCreate, user: User = Depends(require_admin), d
     db.flush()
     # C2-4：复制模板补审计
     log_change(db, None, "template", t.id, "create", user.id,
-               f"创建模板「{t.name}」（从{'系统默认模板' if src == DEFAULT_TEMPLATE_ID else src}复制）")
+               f"创建模板「{t.name}」（从{'通用模板' if src == DEFAULT_TEMPLATE_ID else src}复制）")
     db.commit()
     return {"id": t.id, "name": t.name}
 
@@ -123,13 +140,14 @@ def create_template(data: TemplateCreate, user: User = Depends(require_admin), d
 class TemplateUpdate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = Field(default=None, max_length=2000)
+    vehicle_type: Optional[str] = Field(default=None, max_length=50)
 
 
 @router.put("/{template_id}")
 @route_permission('system.templates.manage')
 def rename_template(template_id: str, data: TemplateUpdate, user: User = Depends(require_admin), db: Session = Depends(get_db)):
     if template_id == DEFAULT_TEMPLATE_ID:
-        raise HTTPException(status_code=400, detail="系统默认模板不能重命名")
+        raise HTTPException(status_code=400, detail="通用模板不能重命名")
     from app.services.document_requirements import lock_templates, recheck_authority
     if db.get(Template, template_id) is None:
         raise HTTPException(status_code=404, detail="模板不存在")
@@ -139,13 +157,15 @@ def rename_template(template_id: str, data: TemplateUpdate, user: User = Depends
     name = data.name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="模板名称不能为空")
-    old = {"name": t.name, "description": t.description}
+    old = {"name": t.name, "description": t.description, "vehicle_type": t.vehicle_type}
     t.name = name
     if data.description is not None:
         t.description = data.description.strip()
-    log_change(db, None, "template", t.id, "update", user.id, f"修改模板「{t.name}」的名称或说明", old, {"name": t.name, "description": t.description})
+    if "vehicle_type" in data.model_fields_set:
+        t.vehicle_type = _vehicle_type(db, data.vehicle_type, t.id)
+    log_change(db, None, "template", t.id, "update", user.id, f"修改模板「{t.name}」的名称、说明或车型", old, {"name": t.name, "description": t.description, "vehicle_type": t.vehicle_type})
     db.commit()
-    return {"id": t.id, "name": t.name, "description": t.description}
+    return {"id": t.id, "name": t.name, "description": t.description, "vehicle_type": t.vehicle_type}
 
 
 @router.post("/{template_id}/publish")
@@ -156,7 +176,7 @@ def publish_template(template_id: str, user: User = Depends(require_admin), db: 
     recheck_authority(db, user.id)
     # 发布：保存当前树为新版本（version+1, status=published）。已生成项目不受影响（任务快照），新项目用新版本。
     if template_id == DEFAULT_TEMPLATE_ID:
-        raise HTTPException(status_code=400, detail="系统默认模板始终为已发布状态")
+        raise HTTPException(status_code=400, detail="通用模板始终为已发布状态")
     t = db.get(Template, template_id)
     if t is None:
         raise HTTPException(status_code=404, detail="模板不存在")
@@ -204,7 +224,7 @@ def _remove_template(db: Session, t: Template, user: User):
 @route_permission('system.templates.manage')
 def delete_template(template_id: str, user: User = Depends(require_admin), db: Session = Depends(get_db)):
     if template_id == DEFAULT_TEMPLATE_ID:
-        raise HTTPException(status_code=400, detail="系统默认模板不能删除")
+        raise HTTPException(status_code=400, detail="通用模板不能删除")
     t = db.get(Template, template_id)
     if t is None:
         raise HTTPException(status_code=404, detail="模板不存在")
@@ -215,27 +235,6 @@ def delete_template(template_id: str, user: User = Depends(require_admin), db: S
     _remove_template(db, t, user)
     db.commit()
     return {"message": "模板已删除"}
-
-
-@router.post("/{template_id}/merge")
-@route_permission('system.templates.manage')
-def merge_template(template_id: str, user: User = Depends(require_admin), db: Session = Depends(get_db)):
-    """Fold a template into the standard one, then remove it: one template, choices made per project."""
-    if template_id == DEFAULT_TEMPLATE_ID:
-        raise HTTPException(status_code=400, detail="标准模板不能合并到自身")
-    t = db.get(Template, template_id)
-    if t is None:
-        raise HTTPException(status_code=404, detail="模板不存在")
-    from app.services.document_requirements import recheck_authority
-    from app.services.template_merge import merge_into_default
-    added = merge_into_default(db, template_id)
-    recheck_authority(db, user.id)
-    log_change(db, None, "template", template_id, "merge", user.id,
-               f"模板「{t.name}」并入标准模板：新增 {added['work_items']} 项工作、{added['documents']} 份资料要求、"
-               f"{added['vehicle_steps']} 个车辆环节、{added['procurement_items']} 个采购项", None, added)
-    _remove_template(db, t, user)
-    db.commit()
-    return {"message": "已并入标准模板", "added": added}
 
 
 # ===== Tree copy/delete =====
@@ -686,7 +685,7 @@ def _replace_template_tree(template_id, data, user, db, capability):
             restored.append(cap["name"])
     db.flush()
     # C2-4：保存树补审计
-    tpl_name = "系统默认模板"
+    tpl_name = "通用模板"
     if tid is not None:
         tpl = db.get(Template, template_id)
         if tpl:

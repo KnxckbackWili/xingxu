@@ -1,49 +1,33 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import TemplateProcurementsTab from './TemplateProcurementsTab'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import TemplateProcPanel from './TemplateProcPanel'
 const { get, post, put, del } = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), put: vi.fn(), del: vi.fn() }))
-vi.mock('../../api/client', () => ({ api: { get, post, put, delete: del } }))
-beforeEach(() => { vi.clearAllMocks(); get.mockResolvedValue({ data: [] }) })
-for (const [label, Component] of [['采购', TemplateProcurementsTab]] as const) {
-  it(`${label}加载失败可重试`, async () => {
-    get.mockRejectedValueOnce(new Error('offline'))
-    render(<Component templateId="default" editMode />)
-    expect(await screen.findByText('清单加载失败')).toBeVisible()
-    fireEvent.click(screen.getByRole('button', { name: /重.*试/ }))
-    await waitFor(() => expect(screen.queryByText('清单加载失败')).not.toBeInTheDocument())
-    expect(get).toHaveBeenCalledTimes(2)
-  })
-  it(`${label}保存失败保留输入，重复提交只发一次`, async () => {
-    render(<Component templateId="default" editMode />)
-    await waitFor(() => expect(get).toHaveBeenCalled())
-    fireEvent.click(screen.getByRole('button', { name: /添加常用项/ }))
-    const dialog = await screen.findByRole('dialog')
-    fireEvent.change(within(dialog).getByLabelText('物料名称'), { target: { value: '测试名称' } })
-    let rejectSave: (reason: Error) => void = () => {}
-    post.mockImplementation(() => new Promise((_resolve, reject) => { rejectSave = reject }))
-    const save = within(dialog).getByRole('button', { name: /保.*存/ })
-    fireEvent.click(save); fireEvent.click(save)
-    await waitFor(() => expect(post).toHaveBeenCalledTimes(1))
-    rejectSave(new Error('offline'))
-    expect(await screen.findByText('保存失败')).toBeVisible()
-    expect(within(dialog).getByLabelText('物料名称')).toHaveValue('测试名称')
-  })
-}
-for (const [label, Component] of [['采购', TemplateProcurementsTab]] as const) {
-  it(`${label}旧模板保存完成不能刷新覆盖新模板`, async () => {
-    get.mockImplementation(async (url: string) => ({ data: url.includes('/new/') ? [{ id: 'new-item', name: '新模板内容', category: 'scope' }] : [] }))
-    let resolveSave: (value: any) => void = () => {}
-    post.mockImplementation(() => new Promise(resolve => { resolveSave = resolve }))
-    const view = render(<Component templateId="old" editMode />)
-    fireEvent.click(screen.getByRole('button', { name: /添加常用项/ }))
-    const dialog = await screen.findByRole('dialog')
-    fireEvent.change(within(dialog).getByLabelText('物料名称'), { target: { value: '旧模板新增' } })
-    fireEvent.click(within(dialog).getByRole('button', { name: /保.*存/ }))
-    await waitFor(() => expect(post).toHaveBeenCalledTimes(1))
-    view.rerender(<Component templateId="new" editMode />)
-    expect(await screen.findByText('新模板内容')).toBeVisible()
-    resolveSave({ data: {} })
-    await waitFor(() => expect(get).toHaveBeenCalledTimes(2))
-    expect(screen.getByText('新模板内容')).toBeVisible()
-  })
-}
+vi.mock('../../api/client', () => ({ api: { get, post, put, delete: del }, errMsg: () => '保存失败' }))
+beforeEach(() => { vi.clearAllMocks() })
+const flushRef = { current: null as null | (() => Promise<void>) }
+
+it('a new procurement item is added once even when the button is pressed twice, and a failure keeps the input', async () => {
+  let reject: (reason: Error) => void = () => {}
+  post.mockImplementation(() => new Promise((_resolve, fail) => { reject = fail }))
+  const created = vi.fn()
+  render(<TemplateProcPanel templateId="default" editMode flushRef={flushRef} onChanged={vi.fn()} onCreated={created} onClose={vi.fn()} />)
+  fireEvent.change(screen.getByLabelText('物料名称'), { target: { value: '充电桩' } })
+  const add = screen.getByRole('button', { name: /添加采购物料/ })
+  fireEvent.click(add); fireEvent.click(add)
+  await waitFor(() => expect(post).toHaveBeenCalledTimes(1))
+  expect(post.mock.calls[0]).toEqual(['/templates/default/procurements', { name: '充电桩', unit: '台', spec: '', risk: 'low', is_required: false }])
+  await act(async () => reject(new Error('offline')))
+  expect(screen.getByLabelText('物料名称')).toHaveValue('充电桩')
+  expect(created).not.toHaveBeenCalled()
+})
+
+it('an existing item saves itself after typing stops, and switching rows saves first', async () => {
+  put.mockResolvedValue({ data: {} })
+  const changed = vi.fn()
+  render(<TemplateProcPanel templateId="t1" editMode item={{ id: 'p1', name: '工控机', unit: '台', spec: '', risk: 'low', is_required: true }} flushRef={flushRef} onChanged={changed} onCreated={vi.fn()} onClose={vi.fn()} />)
+  fireEvent.change(screen.getByLabelText('规格 / 型号 / 说明'), { target: { value: '含 4G 模块' } })
+  await act(async () => { await flushRef.current?.() })
+  expect(put).toHaveBeenCalledWith('/templates/t1/procurements/p1', { name: '工控机', unit: '台', spec: '含 4G 模块', risk: 'low', is_required: true })
+  expect(changed).toHaveBeenCalled()
+  expect(await screen.findByText('已保存')).toBeInTheDocument()
+})

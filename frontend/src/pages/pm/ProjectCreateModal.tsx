@@ -9,13 +9,13 @@ import { DEFAULT_TIMEZONE } from '../../constants/timezones'
 import { toVehicleTypeSelectOptions, useVehicleTypes } from '../../hooks/useVehicleTypes'
 import { useSubmitLock } from '../../hooks/useSubmitLock'
 
-type TemplateRow = { id: string; name: string; is_system?: boolean }
+type TemplateRow = { id: string; name: string; is_system?: boolean; vehicle_type?: string | null }
 type Work = { id: string; group_label?: string; phase_name?: string; applicable_vehicle_types?: string[] }
 // A work item belongs to an optional module when its label differs from its group (e.g. 电梯 under 联调工作).
 const moduleOf = (item: Work) => item.group_label && item.group_label !== item.phase_name ? item.group_label : ''
 type Values = { name: string; range: [Dayjs, Dayjs]; template: string }
 
-/** One screen: name, period and template. Customer, vehicles, people and documents are filled in the project's preparation checklist. */
+/** One screen: name, period, vehicle types and template (the vehicle type's own template is picked for you). Customer, people and documents are filled in the project's preparation checklist. */
 export default function ProjectCreateModal({ open, initialTemplate, onClose }: { open: boolean; initialTemplate?: string | null; onClose: () => void }) {
   const [form] = Form.useForm<Values>()
   const navigate = useNavigate()
@@ -30,6 +30,7 @@ export default function ProjectCreateModal({ open, initialTemplate, onClose }: {
   const [loadError, setLoadError] = useState('')
   const [saving, setSaving] = useState(false)
   const template = Form.useWatch('template', form)
+  const pickedByHand = useRef(false)
 
   const loadWork = async (tid: string) => {
     const ticket = ++request.current
@@ -49,7 +50,7 @@ export default function ProjectCreateModal({ open, initialTemplate, onClose }: {
   useEffect(() => {
     if (!open) return
     form.setFieldsValue({ name: '', range: [dayjs(), dayjs().add(3, 'month').subtract(1, 'day')], template: initialTemplate || 'default' })
-    creationKey.current = null
+    creationKey.current = null; pickedByHand.current = !!initialTemplate; setVehicleTypes([]); setSkipped([])
     void (async () => {
       try {
         const response = await api.get('/templates')
@@ -68,7 +69,16 @@ export default function ProjectCreateModal({ open, initialTemplate, onClose }: {
   // Work limited to certain vehicle types comes in only when the project has one of them (none chosen = everything).
   const fitsVehicles = (item: Work) => !vehicleTypes.length || !item.applicable_vehicle_types?.length || item.applicable_vehicle_types.some(type => vehicleTypes.includes(type))
   const workIds = work ? work.filter(item => !skipped.includes(moduleOf(item)) && fitsVehicles(item)).map(item => item.id) : null
-  const typeOptions = toVehicleTypeSelectOptions(vehicleDictionary, [...new Set((work ?? []).flatMap(item => item.applicable_vehicle_types ?? []))])
+
+  // One template per vehicle type: choosing types switches to the first type's own template, unless one was picked by hand.
+  const chooseTypes = (types: string[]) => {
+    setVehicleTypes(types)
+    if (pickedByHand.current) return
+    const own = types.map(type => templates.find(row => row.vehicle_type === type)).find(Boolean)
+    const next = own?.id ?? templates.find(row => row.is_system)?.id ?? 'default'
+    if (next !== form.getFieldValue('template')) form.setFieldValue('template', next)
+  }
+  const vehicleOptions = toVehicleTypeSelectOptions(vehicleDictionary, [...new Set([...(work ?? []).flatMap(item => item.applicable_vehicle_types ?? []), ...templates.flatMap(row => row.vehicle_type ? [row.vehicle_type] : [])])])
 
   const submit = async (values: Values) => {
     if (!workIds || !lock.tryAcquire()) return
@@ -107,12 +117,14 @@ export default function ProjectCreateModal({ open, initialTemplate, onClose }: {
         { validator: async (_, value?: [Dayjs, Dayjs]) => { if (value && value[1].isBefore(value[0], 'day')) throw new Error('结束日期不能早于开始日期') } }]}>
         <DatePicker.RangePicker style={{ width: '100%' }} allowClear={false} />
       </Form.Item>
+      <Form.Item label="车型">
+        <Select aria-label="车型" mode="multiple" allowClear placeholder="选车型后自动用它的模板" value={vehicleTypes} onChange={chooseTypes} options={vehicleOptions} />
+      </Form.Item>
       <Form.Item name="template" label="工作模板" hidden={templates.length <= 1}>
-        <Select aria-label="工作模板" loading={!templates.length && !loadError} options={templates.map(row => ({ value: row.id, label: row.name }))} />
+        <Select aria-label="工作模板" loading={!templates.length && !loadError} onChange={() => { pickedByHand.current = true }}
+          options={templates.map(row => ({ value: row.id, label: row.vehicle_type ? `${row.name}（${row.vehicle_type}）` : row.is_system ? `${row.name}（通用）` : row.name }))} />
       </Form.Item>
-      <Form.Item label="车型" extra={workIds ? `将带入 ${workIds.length} 项工作，进项目后可增删` : loadError ? undefined : '正在读取模板…'}>
-        <Select aria-label="车型" mode="multiple" allowClear placeholder="不选表示带入所有车型的工作" value={vehicleTypes} onChange={setVehicleTypes} options={typeOptions} />
-      </Form.Item>
+      {!loadError && <Typography.Paragraph type="secondary" className="project-quick-create-count">{workIds ? `将带入 ${workIds.length} 项工作，进项目后可增删` : '正在读取模板…'}</Typography.Paragraph>}
       {modules.length > 0 && <Form.Item label="这个现场需要的模块" extra="不勾选的模块，其工作不会带入。">
         <Checkbox.Group className="project-create-modules" aria-label="这个现场需要的模块" value={modules.filter(name => !skipped.includes(name))}
           onChange={value => setSkipped(modules.filter(name => !value.includes(name)))} options={modules} />
@@ -120,7 +132,7 @@ export default function ProjectCreateModal({ open, initialTemplate, onClose }: {
       {loadError && <Alert type="error" showIcon message="模板读取失败，暂不能创建" description={loadError}
         action={<Button size="small" onClick={() => void loadWork(form.getFieldValue('template'))}>重试</Button>} />}
       <Typography.Paragraph type="secondary" className="project-quick-create-note">
-        客户、地点、车型、人员和资料在项目的“准备清单”里补全。
+        客户、地点、具体车辆、人员和资料在项目的“准备清单”里补全。
       </Typography.Paragraph>
     </Form>
   </Modal>

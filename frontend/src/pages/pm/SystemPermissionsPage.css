@@ -90,3 +90,12 @@
   .permissions-save-bar.is-dirty .ant-btn { padding-inline: 10px; }
   .permissions-save-bar.is-dirty small { display: none; }
 }
+.permissions-bundles { margin-bottom: 18px; padding: 4px 16px 10px; border: 1px solid var(--agv-border-soft); border-radius: 12px; background: var(--agv-bg-container); }
+.permissions-bundles h3 { margin: 12px 0 6px; font-size: 15px; color: var(--agv-text); }
+.permissions-bundles .ant-alert { margin: 6px 0; }
+.permissions-bundle { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--agv-border-soft); cursor: pointer; }
+.permissions-bundle:last-of-type { border-bottom: 0; }
+.permissions-bundle > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.permissions-bundle strong { color: var(--agv-text); font-weight: 500; }
+.permissions-bundle small { color: var(--agv-text-secondary); font-size: 12px; line-height: 1.6; }
+.permissions-advanced > summary { cursor: pointer; color: var(--agv-text-secondary); margin: 6px 0 12px; }

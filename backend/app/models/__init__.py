@@ -711,6 +711,7 @@ class Template(Base):
     name = Column(String(200), nullable=False)
     description = Column(Text, default="")
     is_system = Column(Boolean, default=False)  # 系统默认模板不可删
+    vehicle_type = Column(String(50), nullable=True)  # 适用车型：一个车型一个模板；空 = 通用
     version = Column(Integer, default=1)  # 发布版本号（P3：每次发布 +1）
     status = Column(String(10), default="draft")  # draft / published
     snapshots = Column(JSON, default=list)  # C2-3 发布版本快照 [{version, at, by, snapshot}]

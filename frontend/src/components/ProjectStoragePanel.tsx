@@ -45,11 +45,11 @@ export default function ProjectStoragePanel({ projectId, canCleanup = false, onC
   }
   return <section aria-label="项目存储与保留策略">
     {error && <Alert type="error" showIcon message={error} />}
-    {info && <Typography.Paragraph>正式文件 {info.file_count} 个，占用 {storageSize(info.bytes)}；临时分片 {storageSize(info.temporary_bytes)}；已按策略清理 {storageSize(info.removed_bytes)}。</Typography.Paragraph>}
+    {info && <Typography.Paragraph>共 {info.file_count} 个文件，占用 {storageSize(info.bytes)}{info.temporary_bytes > 0 ? `；未完成的上传 ${storageSize(info.temporary_bytes)}` : ''}{info.removed_bytes > 0 ? `；已清理 ${storageSize(info.removed_bytes)}` : ''}。</Typography.Paragraph>}
     {info?.storage_warnings?.map((warning, i) => <Alert key={i} type="warning" showIcon message={warning} />)}
     {!!info?.missing_file_count && <Alert type="error" message={`有 ${info.missing_file_count} 个原文件缺失，请先核对备份。`} />}
     {canCleanup && <>
-      <Typography.Paragraph>仅清理旧周期资料文件；最新一期、最近 N 期及里程碑保护版本保留。版本元数据和清理凭据继续保留。确认后原文件字节无法从本系统恢复。</Typography.Paragraph>
+      <Typography.Paragraph type="secondary">空间不够时可清理旧的每周资料原件：最新几期和里程碑相关的版本会保留，清理记录也会保留；清理后的原件不能从本系统找回。</Typography.Paragraph>
       <Space wrap><label>保留最近 <InputNumber aria-label="保留周数" min={1} max={520} precision={0} value={keep} disabled={busy} onChange={value => { setKeep(value ?? 8); setStale(true) }} /> 期</label><Button loading={busy} onClick={() => void act(false)}>预览清理文件</Button></Space>
       {preview && <div style={{ marginTop: 16 }}>
         <Typography.Text strong>将清理 {preview.candidates.length} 个文件，{storageSize(preview.candidate_bytes)}</Typography.Text>

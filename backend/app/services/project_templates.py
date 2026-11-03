@@ -15,7 +15,7 @@ def project_template_info(db: Session, project: Project) -> dict:
     meta = db.get(Template, template_id) if template_id and template_id != 'default' else None
     return {
         'id': template_id,
-        'name': '系统默认模板' if template_id == 'default' else meta.name if meta else '来源模板已删除' if template_id else '未记录来源模板',
+        'name': '通用模板' if template_id == 'default' else meta.name if meta else '来源模板已删除' if template_id else '未记录来源模板',
         'version': project.template_version or None,
         'available': template_id == 'default' or meta is not None,
     }

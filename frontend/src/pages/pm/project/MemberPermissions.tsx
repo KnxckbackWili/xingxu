@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Alert, Button, Card, Checkbox, Modal, Space, Tag, Typography } from 'antd'
+import { Alert, Button, Card, Checkbox, Modal, Space, Switch, Tag, Typography, message } from 'antd'
 import { projectApi, type Project } from '../../../api'
 import { errMsg } from '../../../api/client'
 import { useAuth } from '../../../stores/auth'
@@ -52,38 +52,51 @@ export default function MemberPermissions({ project, members, onReload }: {
   const [error, setError] = useState('')
   const grants = project.member_permissions ?? []
   const grantable = project.grantable_capabilities ?? []
-  const save = async () => {
-    if (!editing || saveLock.current || snapshot.current.id !== project.id || writeBlocked || !grantable.length || !canGrant) return
+  const writeGrant = async (userId: string, capabilities: string[], base = snapshot.current) => {
+    if (saveLock.current || base.id !== project.id || writeBlocked || !grantable.length || !canGrant) return false
     saveLock.current = true
     setSaving(true); setError('')
     try {
       await projectApi.update(project.id, {
-        version: snapshot.current.version,
+        version: base.version,
         member_permissions: [
-          ...snapshot.current.grants.filter(grant => grant.user_id !== editing),
-          ...(selected.length ? [{ user_id: editing, capabilities: selected }] : []),
+          ...base.grants.filter(grant => grant.user_id !== userId),
+          ...(capabilities.length ? [{ user_id: userId, capabilities }] : []),
         ],
       })
-      setEditing(null)
       onReload?.()
-    } catch (err) { setError(errMsg(err)) }
+      return true
+    } catch (err) { setError(errMsg(err)); if (!editing) message.error(errMsg(err)); return false }
     finally { saveLock.current = false; setSaving(false) }
   }
+  const save = async () => { if (editing && await writeGrant(editing, selected)) setEditing(null) }
+  // One switch per member: on grants every operation this project can delegate, off takes the extra grants back.
+  const toggleAll = (userId: string, on: boolean) => void writeGrant(userId, on ? [...grantable] : [], { id: project.id, version: project.version, grants: grants.map(grant => ({ ...grant, capabilities: [...grant.capabilities] })) })
   return <Card title="成员操作授权" size="small" style={{ marginTop: 16 }}>
-    <Typography.Paragraph type="secondary">成员默认可查看项目。以下额外操作权限仅对本项目生效，不会变更账号角色，也不允许转授权限。清空选项并保存可撤销额外授权；负责人等既有职责权限仍保留。</Typography.Paragraph>
-    {members.map(member => <div key={member.id} style={{ marginBottom: 12 }}>
-      <Space wrap><Typography.Text strong>{member.display_name || member.id}</Typography.Text>
-        {canInspect(member.id) && <Button size="small" onClick={() => void explain(member.id)}>查看无权限原因</Button>}
-        {!!member.inherited_capabilities?.length && <Typography.Text type="secondary">职责自带（不可在此撤销）：{member.inherited_capabilities.map(cap => CAPABILITY_LABELS[cap] ?? cap).join('、')}</Typography.Text>}
-        {(grants.find(grant => grant.user_id === member.id)?.capabilities ?? []).map(cap => <Tag key={cap}>{CAPABILITY_LABELS[cap] ?? cap}</Tag>)}
-        {!grants.some(grant => grant.user_id === member.id && grant.capabilities.length) && <Typography.Text type="secondary">无额外操作授权</Typography.Text>}
-        {member.role === 'readonly' && <Typography.Text type="secondary">只读预设不能授予写权限</Typography.Text>}
-        {!!grantable.length && !writeBlocked && canGrant && member.role !== 'readonly' && <Button size="small" onClick={() => {
-          snapshot.current = { id: project.id, version: project.version, grants: grants.map(grant => ({ ...grant, capabilities: [...grant.capabilities] })) };
-          setEditing(member.id); setSelected(grants.find(grant => grant.user_id === member.id)?.capabilities ?? []); setError('')
-        }}>配置授权</Button>}
-      </Space>
-    </div>)}
+    <Typography.Paragraph type="secondary">成员默认可以查看项目、填报自己的工作。打开“协助管理”即一键开通本项目的全部管理操作；只想开部分时点“细项”。</Typography.Paragraph>
+    {error && !editing && <Alert type="error" showIcon message={error} style={{ marginBottom: 12 }} action={<Button size="small" onClick={() => { setError(''); onReload?.() }}>刷新</Button>} />}
+    {members.map(member => {
+      const own = grants.find(grant => grant.user_id === member.id)?.capabilities ?? []
+      const all = !!grantable.length && grantable.every(cap => own.includes(cap) || member.inherited_capabilities?.includes(cap))
+      const editable = !!grantable.length && !writeBlocked && canGrant && member.role !== 'readonly'
+      return <div key={member.id} className="member-grant-row" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '8px 0', borderBottom: '1px solid var(--agv-border-soft)' }}>
+        <Typography.Text strong style={{ minWidth: 96 }}>{member.display_name || member.id}</Typography.Text>
+        <span style={{ flex: 1, minWidth: 160 }}>
+          {all ? <Typography.Text type="secondary">已开通全部管理操作</Typography.Text>
+            : own.length ? own.map(cap => <Tag key={cap}>{CAPABILITY_LABELS[cap] ?? cap}</Tag>)
+            : !!member.inherited_capabilities?.length ? <Typography.Text type="secondary">职责自带：{member.inherited_capabilities.map(cap => CAPABILITY_LABELS[cap] ?? cap).join('、')}</Typography.Text>
+            : <Typography.Text type="secondary">{member.role === 'readonly' ? '只读账号' : '查看和填报'}</Typography.Text>}
+        </span>
+        <Space size={8}>
+          {editable && <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Switch size="small" aria-label={`${member.display_name || member.id}协助管理`} checked={all} loading={saving} disabled={saving} onChange={on => toggleAll(member.id, on)} />协助管理</label>}
+          {editable && <Button size="small" type="link" onClick={() => {
+            snapshot.current = { id: project.id, version: project.version, grants: grants.map(grant => ({ ...grant, capabilities: [...grant.capabilities] })) };
+            setEditing(member.id); setSelected(own); setError('')
+          }}>细项</Button>}
+          {canInspect(member.id) && <Button size="small" type="link" onClick={() => void explain(member.id)}>为什么不能操作</Button>}
+        </Space>
+      </div>
+    })}
     <Modal key={project.id} title={`查看权限原因 · ${members.find(member => member.id === reasonMember)?.display_name ?? ''}`} open={reasonMember !== null && reasonProjectId.current === project.id}
       onCancel={() => { reasonSequence.current++; setReasonMember(null) }} footer={<Button onClick={() => { reasonSequence.current++; setReasonMember(null) }}>关闭</Button>}>
       {reasonsLoading && <Typography.Paragraph>正在核对已保存的权限…</Typography.Paragraph>}

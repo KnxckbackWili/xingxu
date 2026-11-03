@@ -110,7 +110,7 @@ def owned(db,pid,identity,user):
 
 
 def validate_context(db,project,user,body,*,policy=True,completed=False):
-    if not completed and body.size>config.MAX_UPLOAD_BYTES:raise HTTPException(413,'文件超过当前上传上限')
+    if not completed and config.MAX_UPLOAD_BYTES and body.size>config.MAX_UPLOAD_BYTES:raise HTTPException(413,'文件超过当前上传上限')
     if completed:pass
     elif body.entity_type=='project':
         if body.entity_id not in ('',project.id):raise HTTPException(400,'文件挂载项目不一致')

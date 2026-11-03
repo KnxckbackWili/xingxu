@@ -191,10 +191,10 @@ export const uploadQueue = {
     if (!owner) throw new Error('请先登录后上传文件')
     if (!file.size) throw new Error('文件为空，不能提交资料')
     if (online()) {
-      try { const limit = (await uploadTransport.limits()).max_upload_size; if (Number.isSafeInteger(limit) && limit > 0) cachedLimit = limit } catch { /* The server rechecks its current limit. */ }
+      try { const limit = (await uploadTransport.limits()).max_upload_size; if (Number.isSafeInteger(limit) && limit >= 0) cachedLimit = limit } catch { /* The server rechecks its current limit. */ }
     }
     if (owner !== getOfflineAccount() || revision !== getOfflineAccountRevision()) throw new Error('账号已切换，请重新选择上传')
-    if (!Number.isSafeInteger(file.size) || file.size > cachedLimit) throw new Error(`文件超过当前上限 ${Math.floor(cachedLimit / 1024 / 1024)} MB`)
+    if (!Number.isSafeInteger(file.size) || (cachedLimit > 0 && file.size > cachedLimit)) throw new Error(`文件超过当前上限 ${Math.floor(cachedLimit / 1024 / 1024)} MB`)
     const frozen = { document_ids: [...(options.documentIds ?? [])], note: options.note ?? '', entity_type: options.entityType ?? 'project' as const,
       entity_id: options.entityId ?? '', category: options.category ?? '', confidential: options.confidential,
       confidential_user_ids: options.confidentialUserIds ? [...options.confidentialUserIds] : undefined,

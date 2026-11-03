@@ -61,17 +61,18 @@ REFRESH_TOKEN_EXPIRE_DAYS = 30
 UPLOAD_DIR = DATA_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 def _upload_mb(raw):
+    # 0 / 空 = 不限大小（文件放在 NAS，按实际空间存放）；需要时可设正数 MiB 限制单个文件。
     try:
         value=int(raw)
-        return value if 1<=value<=1048576 else 2048
-    except (TypeError,ValueError):return 2048
+        return value if 0<=value<=1048576 else 0
+    except (TypeError,ValueError):return 0
 
-MAX_UPLOAD_MB = _upload_mb(os.getenv('MAX_UPLOAD_MB','2048'))
-MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
+MAX_UPLOAD_MB = _upload_mb(os.getenv('MAX_UPLOAD_MB','0') or '0')
+MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024  # 0 = 不限
 # Buffered import/legacy multipart readers must never allocate a multi-GiB body.
 # Project evidence files use the streaming resumable protocol and MAX_UPLOAD_BYTES.
 MAX_BUFFERED_UPLOAD_SIZE = 10 * 1024 * 1024
-MAX_UPLOAD_SIZE = min(MAX_UPLOAD_BYTES,MAX_BUFFERED_UPLOAD_SIZE)
+MAX_UPLOAD_SIZE = min(MAX_UPLOAD_BYTES,MAX_BUFFERED_UPLOAD_SIZE) if MAX_UPLOAD_BYTES else MAX_BUFFERED_UPLOAD_SIZE
 UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024
 UPLOAD_SESSION_TTL_DAYS = 7
 MAX_BACKUP_UPLOAD_SIZE = int(os.getenv("MAX_BACKUP_UPLOAD_MB", "2048")) * 1024 * 1024

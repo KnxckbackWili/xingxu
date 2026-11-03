@@ -25,6 +25,16 @@ const risks: Record<string, { name: string; color: string }> = {
   high: { name: '高风险', color: 'orange' }, critical: { name: '敏感操作', color: 'red' },
 }
 
+/** One-click bundles: each switch turns a whole job on or off instead of listing every permission. */
+const BUNDLES: { key: string; name: string; description: string; permissions: string[] }[] = [
+  { key: 'projects', name: '新建和导入项目', description: '可以新建项目、从文件导入项目。', permissions: ['projects.create', 'system.import.create'] },
+  { key: 'all_projects', name: '查看全部项目和归档', description: '不是项目成员也能看到所有项目和历史归档（保密资料仍按原规则）。', permissions: ['projects.view_all', 'system.archives.read'] },
+  { key: 'templates', name: '维护模板和车型', description: '新建、修改、导入模板，维护车型字典。', permissions: ['system.templates.view', 'system.templates.manage', 'system.template_io.manage', 'system.vehicle_types.view', 'system.vehicle_types.manage'] },
+  { key: 'people', name: '管理人员账号', description: '新建和停用账号，安排人员可用时间。', permissions: ['system.users.read', 'system.users.manage', 'system.availability.manage'] },
+  { key: 'backups', name: '备份、通知和节假日', description: '创建、下载、恢复系统备份，配置通知渠道和节假日。', permissions: ['system.backups.read', 'system.backups.configure', 'system.backups.create', 'system.backups.download', 'system.backups.delete', 'system.backups.restore', 'system.notifications.configure', 'system.holidays.manage'] },
+  { key: 'feedback', name: '处理系统反馈', description: '查看并处理大家提交的使用反馈。', permissions: ['system.feedback.manage'] },
+]
+
 /** Project-context inheritance is conditional, never an unconditional deny. */
 function statusFor(permission: PermissionDefinition, policy: MemberPermissions, draft: PermissionOverrides) {
   if (!policy.user.is_active) return { allowed: false, label: '账号停用', source: '设置保留，启用账号后按规则生效', color: 'default' }
@@ -237,10 +247,27 @@ export default function SystemPermissionsPage() {
     updateDraft(next)
   }
 
+  const definitions = catalog ? catalog.groups.flatMap(group => group.permissions) : []
+  const bundleRows = !detail ? [] : BUNDLES.map(bundle => ({ ...bundle, rows: definitions.filter(permission => bundle.permissions.includes(permission.key) && !locked(permission)) }))
+    .filter(bundle => bundle.rows.length)
+  const bundleOn = (rows: PermissionDefinition[]) => !!detail && rows.every(permission => statusFor(permission, detail, draft).allowed)
+  const setBundle = (rows: PermissionDefinition[], on: boolean) => {
+    if (!detail || editDisabled) return
+    const next = { ...draft }
+    for (const permission of rows) {
+      // Match the role default where possible so the member keeps as few individual settings as needed.
+      const byRole = detail.defaults.includes(permission.key)
+      if (on === byRole) delete next[permission.key]
+      else next[permission.key] = on
+    }
+    updateDraft(next)
+  }
+  const writeBlocked = detail?.user.role === 'readonly' || !detail?.user.is_active
+
   if (!isAdmin) return <Result status="403" title="只有系统管理员可管理系统权限" subTitle="项目内授权请使用项目中的人员与协管设置。" />
 
   return <div className="system-permissions-page">
-    <WorkPageHeader title="系统权限" description="先选择成员，再按功能模块调整。继承使用默认规则，允许和禁止是该成员的单独设置。权限只作用于该成员可见的项目，不会让他看到不相关项目；“组织全部项目可见”是单独的敏感权限。"
+    <WorkPageHeader title="系统权限" description="选一位成员，按角色自带权限；需要多做什么，打开对应开关即可。"
       tools={<RefreshAction label="刷新成员与目录" disabled={saving || refreshingLatest || directoryLoading} onClick={loadDirectory} />} />
     {directoryError && <Alert type="error" showIcon message="暂时无法加载权限目录" description={directoryError} action={<Button onClick={() => void loadDirectory()}>重新加载目录</Button>} />}
     {directoryLoading && !catalog ? <Skeleton active paragraph={{ rows: 6 }} /> : catalog && <div className="permissions-workspace">
@@ -258,6 +285,19 @@ export default function SystemPermissionsPage() {
         <div className="permissions-mobile-member"><label>选择成员<Select aria-label="选择成员" popupClassName="permissions-member-popup" showSearch optionFilterProp="label" placeholder="选择要调整的成员" value={selectedId} disabled={saving || refreshingLatest} onChange={switchMember} options={members.map(member => ({ value: member.id, label: `${memberName(member)} · ${roleName(member.role)}${member.is_active ? '' : ' · 已停用'}` }))} /></label></div>
         {detailLoading ? <Skeleton active paragraph={{ rows: 6 }} /> : detailError ? <Alert type="error" showIcon message="暂时无法读取该成员权限" description={detailError} action={<Button onClick={() => selectedId && void loadMember(selectedId)}>重新读取权限</Button>} /> : !detail ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="选择一位成员，查看默认权限并按模块调整。" /> : <>
           <div className="permissions-member-heading"><div><h2>{memberName(detail.user)}</h2><p>{detail.user.username} · {roleName(detail.user.role)}</p></div><div><Tag color="blue">{roleName(detail.user.role)}默认</Tag>{!detail.user.is_active && <Tag>账号已停用</Tag>}<Tag>{Object.keys(draft).length} 项单独设置</Tag></div></div>
+          <section className="permissions-bundles" aria-label="一键开通">
+            <h3>一键开通</h3>
+            {writeBlocked && <Alert type="info" showIcon message={detail.user.is_active ? '只读账号不能开通写入功能，需要先在账号设置里换角色。' : '账号已停用，启用后设置才会生效。'} />}
+            {bundleRows.map(bundle => <label key={bundle.key} className="permissions-bundle">
+              <span><strong>{bundle.name}</strong><small>{bundle.description}</small></span>
+              <Switch aria-label={`开通：${bundle.name}`} checked={bundleOn(bundle.rows)} disabled={editDisabled || (detail.user.role === 'readonly' && bundle.rows.some(permission => !permission.read_only))} onChange={on => setBundle(bundle.rows, on)} />
+            </label>)}
+            {Object.keys(draft).length > 0 && <Button size="small" type="link" disabled={editDisabled} onClick={() => updateDraft({})}>恢复为角色默认</Button>}
+          </section>
+          {saveError && <Alert className="permissions-save-error" showIcon type={conflict ? 'warning' : 'error'} message={conflict ? '权限已被他人更新，本次修改仍保留' : '未能保存，本次修改仍保留'} description={saveError}
+            action={conflict ? <Button disabled={saving} loading={refreshingLatest} onClick={() => void readLatest()}>读取最新权限</Button> : undefined} />}
+          {conflict && latest && <div className="permissions-conflict"><strong>已读取最新版本，尚未替换你的输入</strong><p>保留并重试只覆盖你本次调整的权限；其他人的新设置会保留。</p><Button disabled={saving} onClick={retryWithLatest}>保留本次调整并重试</Button><Button disabled={saving} onClick={() => applyDetail(latest)}>使用最新权限，放弃本次修改</Button></div>}
+          {latestError && <Alert type="error" showIcon message="无法继续使用最新版本" description={latestError} />}
           <details className="permissions-advanced"><summary>高级：逐项权限设置</summary>
           <div className="permissions-filters">
             <Input.Search aria-label="搜索权限" placeholder="功能、说明或权限代码" allowClear value={permissionSearch} onChange={event => setPermissionSearch(event.target.value)} />
@@ -265,11 +305,7 @@ export default function SystemPermissionsPage() {
             <label><Switch checked={onlyAllowed} onChange={setOnlyAllowed} aria-label="仅看已允许" />仅看已允许</label>
             <Button onClick={() => setOpenGroups(current => current.length === catalog.groups.length ? [] : catalog.groups.map(group => group.key))}>展开 / 收起全部</Button>
           </div>
-          <p className="permissions-filter-note">“已调整”指单独设置的权限；项目继承项按项目职责判定，不列为无条件允许。</p>
-          {saveError && <Alert className="permissions-save-error" showIcon type={conflict ? 'warning' : 'error'} message={conflict ? '权限已被他人更新，本次修改仍保留' : '未能保存，本次修改仍保留'} description={saveError}
-            action={conflict ? <Button disabled={saving} loading={refreshingLatest} onClick={() => void readLatest()}>读取最新权限</Button> : undefined} />}
-          {conflict && latest && <div className="permissions-conflict"><strong>已读取最新版本，尚未替换你的输入</strong><p>保留并重试只覆盖你本次调整的权限；其他人的新设置会保留。</p><Button disabled={saving} onClick={retryWithLatest}>保留本次调整并重试</Button><Button disabled={saving} onClick={() => applyDetail(latest)}>使用最新权限，放弃本次修改</Button></div>}
-          {latestError && <Alert type="error" showIcon message="无法继续使用最新版本" description={latestError} />}
+          <p className="permissions-filter-note">权限只作用于该成员可见的项目，不会让他看到不相关项目。“已调整”指单独设置的权限；项目继承项按项目职责判定。</p>
           {shownGroups.length ? <Collapse className="permissions-modules" bordered={false} activeKey={activeGroups} onChange={keys => setOpenGroups(typeof keys === 'string' ? [keys] : keys)} items={shownGroups.map(group => {
             const editable = group.visible.filter(permission => !locked(permission))
             const allowed = group.permissions.filter(permission => statusFor(permission, detail, draft).allowed).length
@@ -292,15 +328,15 @@ export default function SystemPermissionsPage() {
               })}
             </> }
           })} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有匹配的权限"><Button onClick={() => { setPermissionSearch(''); setOnlyOverrides(false); setOnlyAllowed(false) }}>清除筛选</Button></Empty>}
+          </details>
           <div className={`permissions-save-bar${dirty ? ' is-dirty' : ''}`} role="region" aria-label="权限保存操作">
-            <div><strong>{dirty ? `${dirtyKeys.length} 项未保存修改` : conflict ? '本次修改已取消，需核对最新权限' : '当前设置已保存'}</strong><small>{saving ? '正在保存，请等待结果后再切换成员或离开。' : dirty ? '保存后才会生效；取消修改不会改变已保存权限。' : conflict ? '权限已被他人更新，请读取最新版本后继续。' : '调整功能时可以随时切换继承、允许或禁止。'}</small></div>
+            <div><strong>{dirty ? `${dirtyKeys.length} 项未保存修改` : conflict ? '本次修改已取消，需核对最新权限' : '当前设置已保存'}</strong><small>{saving ? '正在保存，请等待结果后再切换成员或离开。' : dirty ? '保存后才会生效；取消修改不会改变已保存权限。' : conflict ? '权限已被他人更新，请读取最新版本后继续。' : '打开或关闭开关后点“保存权限”生效。'}</small></div>
             <div><Button disabled={!dirty || saving || refreshingLatest} onClick={() => {
               if (latest) { applyDetail(latest); return }
               updateDraft({ ...detail.overrides })
               if (!conflict) { setSaveError(''); setLatestError('') }
             }}>取消修改</Button><Button type="primary" loading={saving} disabled={!dirty || conflict || refreshingLatest} onClick={() => void save()}>保存权限</Button></div>
           </div>
-          </details>
         </>}
       </main>
     </div>}

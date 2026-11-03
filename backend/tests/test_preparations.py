@@ -224,7 +224,7 @@ def test_template_list_exposes_single_system_default(client, pm_headers):
     """The virtual default and its legacy metadata row must not appear twice."""
     r = client.get("/api/templates", headers=pm_headers)
     assert r.status_code == 200
-    defaults = [item for item in r.json() if item["name"] == "系统默认模板"]
+    defaults = [item for item in r.json() if item["name"] == "通用模板"]
     assert len(defaults) == 1
     assert defaults[0]["id"] == "default"
     assert defaults[0]["is_system"] is True

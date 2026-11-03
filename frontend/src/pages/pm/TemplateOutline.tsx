@@ -1,7 +1,7 @@
-import { useRef, useState, type DragEvent, type Dispatch, type SetStateAction } from 'react'
+import { useRef, useState, type DragEvent, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import type { InputRef } from 'antd'
 import { Dropdown, Empty, Input, Modal, message } from 'antd'
-import { CarOutlined, CheckCircleOutlined, DeleteOutlined, DownOutlined, EditOutlined, HolderOutlined, MoreOutlined, PaperClipOutlined, PlusOutlined, RightOutlined, SearchOutlined } from '@ant-design/icons'
+import { CarOutlined, CheckCircleOutlined, DeleteOutlined, DownOutlined, EditOutlined, HolderOutlined, MoreOutlined, PaperClipOutlined, PlusOutlined, RightOutlined } from '@ant-design/icons'
 import { api, errMsg } from '../../api/client'
 import type { WorkItem, WorkPhase } from '../../api/workItems'
 import { STAGES, STAGE_NAME, stageIndex, stageLabel } from '../../constants/stages'
@@ -14,6 +14,13 @@ type Step = { key: string; name: string }
 type Props = {
   templateId: string; phases: WorkPhase[]; setPhases: Dispatch<SetStateAction<WorkPhase[]>>; steps: Step[]; canManage: boolean; loading: boolean
   onReload: () => Promise<void> | void; onCreateStep: (name: string) => Promise<string>
+  /** Lower-cased search text shared with documents and procurement. */
+  term: string; selectedId?: string; onSelect: (id?: string) => void
+  /** The rest of the template inside each stage: vehicle steps on top, documents and procurement below the work groups. */
+  stageTop?: (stage: string) => ReactNode; stageBottom?: (stage: string) => ReactNode; stageExtraCount?: (stage: string) => number
+  stageExtraLabel?: (stage: string) => string; afterStages?: ReactNode; toolbar: ReactNode
+  /** Side panel for a selected document or procurement item; the work panel is shown when a work item is selected. */
+  panel?: ReactNode; stageAddMenu?: (stage: string) => { key: string; label: string; onClick: () => void }[]
 }
 type Drag = { type: 'item' | 'group'; id: string }
 type Drop = { id: string; pos: 'before' | 'after' | 'end' }
@@ -23,13 +30,13 @@ const sortByStage = (groups: WorkPhase[]) => groups.map((g, i) => ({ g, i })).so
 const blank = (phase_id: string, name: string) => ({ phase_id, name, kind: 'other', description: '', group_label: '', vehicle_step_key: null, applicable_vehicle_types: [], scope_conditions: [], checks: [] })
 
 /**
- * Template work as an editable outline: stage → group → item. Names are typed in place, Enter keeps adding,
- * rows and groups are dragged to reorder or move, and the selected item is edited in the side panel. Everything saves itself.
+ * The whole template on one page, stage by stage (4–9): work groups with their items, plus the stage's documents,
+ * vehicle steps and procurement passed in by the editor. Names are typed in place, Enter keeps adding, rows and groups
+ * are dragged to reorder or move, and the selected row is edited in the side panel. Everything saves itself.
  */
-export default function TemplateWorkTab({ templateId, phases, setPhases, steps, canManage, loading, onReload, onCreateStep }: Props) {
+export default function TemplateOutline({ templateId, phases, setPhases, steps, canManage, loading, onReload, onCreateStep, term, selectedId, onSelect: setSelectedId,
+  stageTop, stageBottom, stageExtraCount, stageExtraLabel, afterStages, toolbar, panel, stageAddMenu }: Props) {
   const { user } = useAuth()
-  const [keyword, setKeyword] = useState('')
-  const [selectedId, setSelectedId] = useState<string>()
   const [adding, setAdding] = useState<string>()
   const [addingGroup, setAddingGroup] = useState<string>()
   const [renaming, setRenaming] = useState<string>()
@@ -39,7 +46,6 @@ export default function TemplateWorkTab({ templateId, phases, setPhases, steps, 
   const drag = useRef<Drag | null>(null)
   const latest = useRef(phases); latest.current = phases
   const queues = useRef(new Map<string, Promise<unknown>>())
-  const term = keyword.trim().toLowerCase()
   // Optional modules: labels that differ from their group's own name (e.g. 电梯 under 联调工作).
   const modules = [...new Set(phases.flatMap(phase => phase.work_items.map(item => item.group_label ?? '').filter(label => label && label !== phase.name)))]
   const matches = (item: WorkItem) => !term || `${item.name} ${item.group_label ?? ''} ${item.description ?? ''}`.toLowerCase().includes(term)
@@ -205,28 +211,30 @@ export default function TemplateWorkTab({ templateId, phases, setPhases, steps, 
   }
 
   const panelRow = selected
-  return <div className={`tpl-split${selected ? ' has-panel' : ''}`}>
+  return <div className={`tpl-split${selected || panel ? ' has-panel' : ''}`}>
     <div className="tpl-split-main">
-      <div className="tpl-toolbar">
-        <Input allowClear prefix={<SearchOutlined />} placeholder="查找工作项" aria-label="查找工作项" value={keyword} onChange={e => setKeyword(e.target.value)} />
-        {editable && <span className="tpl-toolbar-note">拖动 <HolderOutlined /> 调整顺序，或拖到别的分组、阶段</span>}
-      </div>
-      {term && !located.some(row => matches(row.item)) ? <Empty description="没有匹配的工作项" />
+      {toolbar}
+      {term && !located.some(row => matches(row.item)) && !STAGES.some(stage => stageExtraCount?.(stage.key)) ? <Empty description="没有匹配的内容" />
         : <div className="tpl-outline-body">{STAGES.map((stage, stageNumber) => {
           const groups = phases.filter(p => stageOf(p) === stage.key)
           const count = groups.reduce((n, p) => n + p.work_items.filter(matches).length, 0)
-          if (term && !count) return null
+          const extra = stageExtraCount?.(stage.key) ?? 0
+          if (term && !count && !extra) return null
+          const addItems = [{ key: 'group', label: '添加工作分组', onClick: () => setAddingGroup(stage.key) }, ...(stageAddMenu?.(stage.key) ?? [])]
           return <section key={stage.key} className={`tpl-stage-section${marker(`stage:${stage.key}`)}`} aria-label={stageLabel(stage.key)}
             onDragOver={over('group', { id: `stage:${stage.key}`, pos: 'end' })} onDrop={land(() => drag.current?.type === 'group' && moveGroup(drag.current.id, { stage: stage.key }))}>
             <header className="tpl-stage-head">
               <h3><span className="tpl-stage-key">{stageNumber + 1}</span>{stage.name}</h3>
-              <span className="tpl-stage-meta">{count ? `${count} 项` : '暂无工作'}</span>
-              {canManage && <span className="tpl-stage-actions"><IconAction label={`在「${stage.name}」添加工作分组`} icon={<PlusOutlined />} disabled={loading} onClick={() => setAddingGroup(stage.key)} /></span>}
+              <span className="tpl-stage-meta">{[count ? `${count} 项工作` : '', stageExtraLabel?.(stage.key) ?? ''].filter(Boolean).join(' · ') || '暂无内容'}</span>
+              {canManage && <span className="tpl-stage-actions"><Dropdown trigger={['click']} disabled={loading} menu={{ items: addItems.map(({ key, label }) => ({ key, label })), onClick: ({ key }) => addItems.find(row => row.key === key)?.onClick() }}>
+                <IconAction label={`在「${stage.name}」添加`} icon={<PlusOutlined />} disabled={loading} /></Dropdown></span>}
             </header>
+            {stageTop?.(stage.key)}
             {groups.map((phase, index) => groupBlock(phase, index, groups))}
             {addingGroup === stage.key && <div className="tpl-group is-adding">{inlineInput('新分组名称', '输入分组名称后回车', name => createGroup(stage.key, name), () => setAddingGroup(undefined))}</div>}
+            {stageBottom?.(stage.key)}
           </section>
-        })}</div>}
+        })}{afterStages}</div>}
     </div>
     {panelRow ? <TemplateWorkPanel key={panelRow.item.id} item={panelRow.item} phases={phases} steps={steps} templateId={templateId} canManage={canManage} save={saves[panelRow.item.id]} modules={modules}
       canMove={{ up: panelRow.index > 0 && !term, down: panelRow.index < panelRow.phase.work_items.length - 1 && !term }}
@@ -234,13 +242,13 @@ export default function TemplateWorkTab({ templateId, phases, setPhases, steps, 
       onCreateStep={onCreateStep} onClose={() => setSelectedId(undefined)}
       onUpload={file => { const body = new FormData(); body.append('file', file); void (async () => { try { guard(); await api.post(`/templates/${templateId}/tasks/${panelRow.item.id}/reference-docs`, body); await onReload() } catch (e) { fail(e) } })() }}
       onRemoveRef={(id) => void (async () => { try { guard(); await api.delete(`/templates/${templateId}/tasks/${panelRow.item.id}/reference-docs/${id}`); await onReload() } catch (e) { fail(e) } })()} />
-      : <aside className="tpl-panel is-empty" aria-label="编辑说明">
+      : panel ?? <aside className="tpl-panel is-empty" aria-label="编辑说明">
         <p><strong>点左边任意一项开始编辑</strong></p>
         <ul>
+          <li>工作、资料、车辆环节和采购物料都在这一页，按阶段排列。</li>
           <li>改动会自动保存，不需要点保存。</li>
-          {canManage && <li>分组右侧 <PlusOutlined /> 添加工作项，回车可连续添加。</li>}
-          {canManage && <li>拖动 <HolderOutlined /> 调整顺序，或拖到别的分组、阶段。</li>}
-          {canManage && <li>双击分组名改名；阶段标题右侧 <PlusOutlined /> 添加分组。</li>}
+          {canManage && <li>阶段标题右侧 <PlusOutlined /> 添加分组、资料或采购物料；分组右侧 <PlusOutlined /> 添加工作项，回车可连续添加。</li>}
+          {canManage && <li>拖动 <HolderOutlined /> 调整工作顺序，或拖到别的分组、阶段；双击分组名改名。</li>}
         </ul>
       </aside>}
   </div>

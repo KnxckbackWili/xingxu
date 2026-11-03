@@ -10,8 +10,6 @@ const { get, put, post, del } = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), 
 vi.mock('../../api/client', () => ({ api: { get, put, post, delete: del }, errMsg: (e: any) => e?.message ?? '失败' }))
 vi.mock('../../stores/auth', () => ({ useAuth: () => ({ user: { id: 'admin', role: 'admin' } }) }))
 vi.mock('../../hooks/useVehicleTypes', () => ({ useVehicleTypes: () => ({ options: [] }), toVehicleTypeSelectOptions: (_: unknown, extra: string[] = []) => extra.map(name => ({ label: name, value: name })) }))
-vi.mock('./TemplateDocumentsTab', () => ({ default: () => <div>资料要求列表</div> }))
-vi.mock('./TemplateProcurementsTab', () => ({ default: () => <div>采购物料清单</div> }))
 
 const phases = () => [
   { id: 'prep', name: '进场准备', color: '#1677ff', stage_key: '5', work_items: [
@@ -20,12 +18,14 @@ const phases = () => [
   { id: 'single', name: '单车调试', color: '#1677ff', stage_key: '6', work_items: [work({ id: 'w-nav', phase_id: 'single', name: '导航调试', kind: 'vehicle', vehicle_step_key: 'debug', group_label: '' })] },
   { id: 'empty', name: '空分组', color: '#1677ff', stage_key: '6', work_items: [] },
 ]
+const doc = (id: string, stage_key: string, code: string, name: string) => ({ id, stage_key, code, name, template_no: '', is_group: false, parent_id: null, required: true, scope: 'project', platform: null, timing_type: 'on_demand', timing_event: null, timing_offset_hours: null, timing_weekday: null, trigger_type: null, confidential_default: false, external_visible_default: false, external_never_visible: false, sort_order: 0, note: '', blank_file: null })
 const layoutOf = (call: any[]) => Object.fromEntries(call[1].groups.map((g: any) => [g.id, `${g.stage_key}:${g.item_ids.join(',')}`]))
 beforeEach(() => {
   setOfflineAccount('admin'); vi.clearAllMocks()
   get.mockImplementation(async (url: string) => ({ data: url === '/templates' ? [{ id: 't1', name: '叉车模板', description: '重载', is_system: false, status: 'draft', version: 2, usage_count: 3 }]
     : url.endsWith('/work-items') ? { phases: phases() } : url.endsWith('/vehicle-steps') ? [{ key: 'arrive', name: '到场点检' }, { key: 'debug', name: '单车调试' }]
-    : url.endsWith('/document-requirements') ? [{ stage_key: '4', is_group: false }, { stage_key: '6', is_group: false }, { stage_key: '6', is_group: true }] : [] }))
+    : url.endsWith('/document-requirements') ? [doc('d4', '4', '4.1', '启动会纪要'), doc('d6', '6', '6.2', '调试记录'), { ...doc('g6', '6', '6.0', '实施资料'), is_group: true }]
+    : url.endsWith('/procurements') ? [{ id: 'p1', name: '充电桩', unit: '台', spec: '', risk: 'low', is_required: true }] : [] }))
   put.mockImplementation(async (url: string, body: any) => ({ data: url.endsWith('/work-layout') ? { phases: phases() } : body }))
   post.mockImplementation(async (url: string, body: any) => ({ data: url.endsWith('/work-items') ? work({ id: `new-${body.name}`, phase_id: body.phase_id, name: body.name, group_label: '', check_definitions: [] })
     : url.endsWith('/work-phases') ? { id: 'g-new', name: body.name, stage_key: body.stage_key, color: '#1677ff', work_items: [] } : {} }))
@@ -39,15 +39,19 @@ const show = (path = '/pm/templates/t1') => render(<ConfigProvider theme={{ toke
 const region = (name: string) => screen.getByRole('region', { name })
 const enter = (el: HTMLElement) => { fireEvent.keyDown(el, { key: 'Enter', code: 'Enter', keyCode: 13 }); fireEvent.keyUp(el, { key: 'Enter', code: 'Enter', keyCode: 13 }) }
 
-it('lays work out by stage and group with counts on the tabs', async () => {
+it('puts work, documents, vehicle steps and procurement on one page, stage by stage', async () => {
   show()
   expect(await screen.findByText('场地勘测')).toBeInTheDocument()
   expect(screen.getByLabelText('模板名称')).toHaveValue('叉车模板')
   expect(screen.getByText('已用于 3 个项目')).toBeInTheDocument()
-  expect(screen.getByRole('tab', { name: /工作\s*3/ })).toHaveAttribute('aria-selected', 'true')
-  expect(screen.getByRole('tab', { name: /资料\s*2/ })).toBeInTheDocument()
+  expect(screen.queryByRole('tab')).not.toBeInTheDocument()
+  expect(screen.getByText(/3 项工作 · 2 份资料 · 2 个车辆环节 · 1 个采购物料/)).toBeInTheDocument()
   expect(region('实施')).toHaveTextContent('导航调试')
-  expect(region('内部启动会')).toHaveTextContent('暂无工作')
+  expect(within(within(region('实施')).getByRole('region', { name: '车辆环节' })).getByLabelText('车辆环节2名称')).toHaveValue('单车调试')
+  expect(within(region('实施')).getByRole('region', { name: '资料：6' })).toHaveTextContent('调试记录')
+  expect(within(region('发车前')).getByRole('region', { name: '采购物料' })).toHaveTextContent('充电桩')
+  expect(region('内部启动会')).toHaveTextContent('1 份资料')
+  expect(region('验收')).toHaveTextContent('暂无内容')
   expect(within(region('工作分组：进场准备')).getAllByText('进场准备')).toHaveLength(1)
   expect(region('工作分组：空分组')).toHaveTextContent('还没有工作项')
   expect(screen.getByRole('complementary', { name: '编辑说明' })).toHaveTextContent('改动会自动保存')
@@ -67,7 +71,8 @@ it('adds work items one after another with Enter, and groups in a chosen stage',
   fireEvent.keyDown(screen.getByLabelText('新工作项名称'), { key: 'Escape' })
   expect(screen.queryByLabelText('新工作项名称')).not.toBeInTheDocument()
 
-  fireEvent.click(screen.getByRole('button', { name: '在「验收」添加工作分组' }))
+  fireEvent.click(screen.getByRole('button', { name: '在「验收」添加' }))
+  fireEvent.click(await screen.findByText('添加工作分组'))
   const group = screen.getByLabelText('新分组名称')
   fireEvent.change(group, { target: { value: '培训准备' } }); enter(group)
   await waitFor(() => expect(post).toHaveBeenCalledWith('/templates/t1/work-phases', { name: '培训准备', stage_key: '7' }))
@@ -107,7 +112,7 @@ it('moves an item with the arrows or by dragging, saving the whole order', async
 
   // drag 导航调试 into the empty group
   const transfer = { setData: vi.fn(), effectAllowed: '', dropEffect: '' }
-  const source = screen.getByText('导航调试').closest('li')!
+  const source = within(region('工作分组：单车调试')).getByText('导航调试').closest('li')!
   const target = within(region('工作分组：空分组')).getByRole('button', { name: /收起分组/ }).parentElement!
   fireEvent.dragStart(source, { dataTransfer: transfer })
   fireEvent.dragOver(target, { dataTransfer: transfer })
@@ -160,8 +165,6 @@ it('the template name and description save when you leave them; the menu can del
 
 it('vehicle steps are renamed and added in place; a step with work cannot be deleted', async () => {
   show(); await screen.findByText('场地勘测')
-  fireEvent.click(screen.getByRole('tab', { name: /车辆环节/ }))
-  expect(screen.getByLabelText('当前地址')).toHaveTextContent('/pm/templates/t1?tab=steps')
   expect(await screen.findByRole('button', { name: '车辆环节2仍有关联工作，不能删除' })).toBeDisabled()
   const first = screen.getByLabelText('车辆环节1名称')
   fireEvent.change(first, { target: { value: '到场检查' } }); fireEvent.blur(first)
@@ -170,13 +173,26 @@ it('vehicle steps are renamed and added in place; a step with work cannot be del
   fireEvent.change(add, { target: { value: '防撞测试' } }); enter(add)
   await waitFor(() => expect(put).toHaveBeenCalledTimes(2))
   expect(put.mock.calls[1][1].steps.map((s: any) => s.name)).toEqual(['到场检查', '单车调试', '防撞测试'])
-  fireEvent.click(screen.getByRole('tab', { name: /采购物料/ }))
-  expect(await screen.findByText('采购物料清单')).toBeInTheDocument()
 })
 
-it('opens the tab named in the address and returns to the library', async () => {
-  show('/pm/templates/t1?tab=documents')
-  expect(await screen.findByText('资料要求列表')).toBeInTheDocument()
+it('one side panel edits whichever row is clicked: work, document or procurement', async () => {
+  show(); await screen.findByText('场地勘测')
+  fireEvent.click(screen.getByRole('button', { name: /6\.2.*调试记录/ }))
+  expect(await screen.findByRole('complementary', { name: '编辑资料要求：6.2 调试记录' })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: /充电桩/ }))
+  expect(await screen.findByRole('complementary', { name: '编辑采购物料：充电桩' })).toBeInTheDocument()
+  expect(screen.queryByRole('complementary', { name: /编辑资料要求/ })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: /场地勘测/ }))
+  expect(await screen.findByRole('complementary', { name: '编辑工作项：场地勘测' })).toBeInTheDocument()
+  fireEvent.change(screen.getByLabelText('查找模板内容'), { target: { value: '充电' } })
+  expect(screen.queryByRole('region', { name: '实施' })).not.toBeInTheDocument()
+  expect(region('发车前')).toHaveTextContent('充电桩')
+})
+
+it('sets the vehicle type the template is for and returns to the library', async () => {
+  show()
+  await screen.findByText('场地勘测')
+  expect(screen.getByRole('combobox', { name: '模板车型' })).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: '返回模板库' }))
   expect(screen.getByLabelText('当前地址')).toHaveTextContent(/^\/pm\/templates$/)
 })

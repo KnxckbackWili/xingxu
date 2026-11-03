@@ -1,5 +1,5 @@
 export type TemplateRow = {
-  id: string; name: string; description?: string; version?: number; status?: string; usage_count?: number; is_system: boolean
+  id: string; name: string; description?: string; version?: number; status?: string; usage_count?: number; is_system: boolean; vehicle_type?: string | null
   summary?: { work: Record<string, number>; documents: Record<string, number>; vehicle_steps: number }
 }
 

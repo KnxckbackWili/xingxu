@@ -10,8 +10,8 @@ import { SaveBadge, type SaveState } from './TemplateWorkPanel'
 
 type Step = { key: string; name: string }
 
-/** Vehicle steps edited in place: rename by typing, reorder with the arrows, add with Enter. Each change saves the whole order. */
-export default function TemplateStepsTab({ templateId, steps, setSteps, phases, canManage }: { templateId: string; steps: Step[]; setSteps: (steps: Step[]) => void; phases: WorkPhase[]; canManage: boolean }) {
+/** Vehicle steps, shown inside the 实施 stage of the template outline: rename by typing, reorder with the arrows, add with Enter. Each change saves the whole order. */
+export default function TemplateStepsBlock({ templateId, steps, setSteps, phases, canManage }: { templateId: string; steps: Step[]; setSteps: (steps: Step[]) => void; phases: WorkPhase[]; canManage: boolean }) {
   const { user } = useAuth()
   const [names, setNames] = useState<Record<string, string>>({})
   const [save, setSave] = useState<SaveState>()
@@ -42,19 +42,22 @@ export default function TemplateStepsTab({ templateId, steps, setSteps, phases, 
     persist([...steps, { key: `step_${globalThis.crypto?.randomUUID?.().replace(/-/g, '') ?? Date.now().toString(36)}`, name: value }]); setAdding('')
   }
 
-  return <div className="tpl-tab tpl-steps">
-    <div className="tpl-toolbar">
-      <span className="tpl-toolbar-note">每台车按这个顺序逐车记录。逐车工作在“工作”页签里选择所属环节。</span>
+  return <div className="tpl-group tpl-steps" role="region" aria-label="车辆环节">
+    <div className="tpl-group-head">
+      <span className="tpl-block-icon" aria-hidden><CarOutlined /></span>
+      <strong>车辆环节</strong>
+      <span className="tpl-group-count">{steps.length}</span>
+      <span className="tpl-block-note">每台车按这个顺序逐车记录；逐车工作在工作项里选环节</span>
       <SaveBadge save={save} />
     </div>
-    <ol className="tpl-step-rows" aria-label="车辆环节">{steps.map((step, index) => {
+    <ol className="tpl-step-rows" aria-label="车辆环节顺序">{steps.map((step, index) => {
       const work = linked(step.key)
       return <li key={step.key}>
         <span className="tpl-stage-key">{index + 1}</span>
         <div className="tpl-step-main">
           <Input aria-label={`车辆环节${index + 1}名称`} value={names[step.key] ?? step.name} maxLength={50} disabled={!canManage} variant="borderless" className="tpl-step-name"
             onChange={e => setNames(old => ({ ...old, [step.key]: e.target.value }))} onBlur={() => rename(step.key)} onPressEnter={e => (e.target as HTMLInputElement).blur()} />
-          <span className="tpl-step-work">{work.length ? work.map(item => <span key={item.id}><CarOutlined aria-hidden />{item.name}</span>) : '暂无逐车工作'}</span>
+          {!!work.length && <span className="tpl-step-work">{work.map(item => <span key={item.id}>{item.name}</span>)}</span>}
         </div>
         {canManage && <span className="tpl-step-actions">
           <IconAction label={`上移车辆环节${index + 1}`} icon={<ArrowUpOutlined />} disabled={!index} onClick={() => swap(index, -1)} />
@@ -63,10 +66,11 @@ export default function TemplateStepsTab({ templateId, steps, setSteps, phases, 
             onClick={() => persist(steps.filter(s => s.key !== step.key))} />
         </span>}
       </li>
-    })}</ol>
-    {canManage && steps.length < 30 && <div className="tpl-step-add">
+    })}
+    {canManage && steps.length < 30 && <li className="tpl-step-add">
       <PlusOutlined aria-hidden />
       <Input aria-label="新车辆环节名称" placeholder="添加环节，回车保存" value={adding} maxLength={50} variant="borderless" onChange={e => setAdding(e.target.value)} onPressEnter={add} onBlur={add} />
-    </div>}
+    </li>}
+    </ol>
   </div>
 }

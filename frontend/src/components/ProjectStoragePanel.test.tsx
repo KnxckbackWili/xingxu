@@ -39,7 +39,7 @@ it('discards a delayed preview from the previous project', async () => {
 })
 it('shows usage without granting a cleanup action to a read-only viewer', async () => {
   render(<ProjectStoragePanel projectId="p1" />)
-  expect(await screen.findByText(/正式文件 1 个/)).toBeVisible()
+  expect(await screen.findByText(/共 1 个文件/)).toBeVisible()
   expect(screen.queryByRole('button', { name: /预览清理文件/ })).toBeNull()
   expect(h.preview).not.toHaveBeenCalled()
 })

@@ -1,6 +1,6 @@
 # 大文件与明确授权清理（T25）
 
-项目文件通过 `POST /api/projects/{pid}/uploads` 建立账号绑定的稳定UUID意图，然后逐片 `PUT /uploads/{sid}/chunks/{index}`。默认 `MAX_UPLOAD_MB=2048`，单位MiB，部署compose与示例配置均可覆盖；`GET /api/storage/limits` 是客户端上限真值。默认每片8MiB，每片SHA-256与服务端完整文件SHA-256均验证；失败不生成附件、资料版本或签单事实。旧表格、配置及内存型multipart接口仍最多10MiB。
+项目文件通过 `POST /api/projects/{pid}/uploads` 建立账号绑定的稳定UUID意图，然后逐片 `PUT /uploads/{sid}/chunks/{index}`。默认 `MAX_UPLOAD_MB=0` 表示单个文件不限大小（文件放在 NAS，按实际空间存放）；需要时可设正数（MiB）限制单个文件，部署compose与示例配置均可覆盖；`GET /api/storage/limits` 是客户端上限真值。默认每片8MiB，每片SHA-256与服务端完整文件SHA-256均验证；失败不生成附件、资料版本或签单事实。旧表格、配置及内存型multipart接口仍最多10MiB。
 
 每次start/status/chunk/finish重查当前用户、项目资格、可提交资料与统一保密策略；接收网络流前释放项目锁，落片前重新取得项目锁并核原会话版本。finish流式合并后再次核授权，附件/多项资料版本/明确签单日期/审计在同一事务提交；失败回收已发布文件。重复chunk/finish幂等，不重复提交版本或覆盖当前保密ACL。完成重试以当前ACL为准。私有缓存位于DATA_DIR/.upload-sessions（目录0700、文件0600），不挂HTTP下载。会话7天过期；启动及每小时任务回收过期缓存，同UUID与原本地文件可重新续传。正式文件仍为UPLOAD_DIR下平级UUID文件。
 

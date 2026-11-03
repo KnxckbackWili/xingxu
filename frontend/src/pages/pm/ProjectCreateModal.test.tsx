@@ -115,3 +115,15 @@ it('brings in vehicle-specific work only for the chosen vehicle types and hides 
   await waitFor(() => expect(projectApi.create).toHaveBeenCalledTimes(1))
   expect((vi.mocked(projectApi.create).mock.calls[0][0] as any).work_item_ids).toEqual(['all', 'fork'])
 })
+
+it('choosing a vehicle type switches to that type\'s own template', async () => {
+  vi.mocked(api.get).mockImplementation(async (url: string) => url === '/templates' ? { data: [{ ...templates[0], vehicle_type: '叉车式' }, templates[1]] } : url === '/templates/preset/work-items' ? work('p', 2) : work('d', 3))
+  show()
+  expect(await screen.findByText('将带入 3 项工作，进项目后可增删')).toBeInTheDocument()
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: '车型' }))
+  fireEvent.click(await screen.findByText(/^叉车式/, { selector: '.ant-select-item-option-content' }))
+  expect(await screen.findByText('将带入 2 项工作，进项目后可增删')).toBeInTheDocument()
+  fireEvent.change(screen.getByLabelText('项目名称'), { target: { value: '叉车项目' } })
+  fireEvent.click(screen.getByRole('button', { name: '创建并进入项目' }))
+  await waitFor(() => expect(projectApi.create).toHaveBeenCalledWith(expect.objectContaining({ template_id: 'preset', work_item_ids: ['p-0', 'p-1'] })))
+})

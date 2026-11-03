@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
-import { Alert, Button, Empty, Form, Input, InputNumber, Popconfirm, Select, Skeleton, Space, Switch, Tag, Upload, message } from 'antd'
-import { CloseOutlined, DeleteOutlined, DisconnectOutlined, DownloadOutlined, PaperClipOutlined, PlusOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons'
+import { useEffect, useRef, useState, type MutableRefObject } from 'react'
+import { Alert, Button, Form, Input, InputNumber, Popconfirm, Select, Space, Switch, Tag, Upload, message } from 'antd'
+import { CloseOutlined, DeleteOutlined, DisconnectOutlined, DownloadOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons'
 import { SaveBadge, type SaveState } from './TemplateWorkPanel'
 import { api, errMsg } from '../../api/client'
 
-const STAGES = [{ value: '4', label: '内部启动会' }, { value: '5', label: '发车前' }, { value: '6', label: '实施' }, { value: '7', label: '验收' }, { value: '8', label: '交付' }, { value: '9', label: '全项目周期' }]
+export const DOC_STAGES = [{ value: '4', label: '内部启动会' }, { value: '5', label: '发车前' }, { value: '6', label: '实施' }, { value: '7', label: '验收' }, { value: '8', label: '交付' }, { value: '9', label: '全项目周期' }]
 const TIMINGS: Record<string, string> = { on_demand: '需要时交（无固定截止）', weekly: '每周交', before_event: '某个事件之前', after_event: '某个事件之后', after_milestone: '某个节点完成后', on_trigger: '发生某种情况后', lifetime: '整个项目期间更新，归档前交' }
 // Offsets are stored in hours; people think in days.
 const days = (hours: number | null | undefined) => hours == null ? null : Math.round(hours / 24 * 100) / 100
@@ -17,7 +17,7 @@ const RULE_EMPTY = { timing_type: null, timing_event: null, timing_offset_hours:
 const FIELDS = ['stage_key', 'code', 'name', 'template_no', 'is_group', 'parent_id', 'required', 'scope', 'platform', 'timing_type', 'timing_event', 'timing_offset_hours', 'timing_weekday', 'trigger_type', 'confidential_default', 'external_visible_default', 'external_never_visible', 'sort_order', 'note']
 
 interface BlankFile { id: string; filename: string; file_size: number; sha256: string }
-interface Requirement { id: string; stage_key: string; code: string; name: string; template_no: string; is_group: boolean; parent_id: string | null; parent_code: string | null; required: boolean; scope: string | null; platform: string | null; timing_type: string | null; timing_event: string | null; timing_offset_hours: number | null; timing_weekday: number | null; trigger_type: string | null; confidential_default: boolean; external_visible_default: boolean; external_never_visible: boolean; sort_order: number; note: string; blank_file: BlankFile | null; source_metadata?: Record<string, unknown> | null }
+export interface Requirement { id: string; stage_key: string; code: string; name: string; template_no: string; is_group: boolean; parent_id: string | null; parent_code: string | null; required: boolean; scope: string | null; platform: string | null; timing_type: string | null; timing_event: string | null; timing_offset_hours: number | null; timing_weekday: number | null; trigger_type: string | null; confidential_default: boolean; external_visible_default: boolean; external_never_visible: boolean; sort_order: number; note: string; blank_file: BlankFile | null; source_metadata?: Record<string, unknown> | null }
 
 export function timingLabel(row: Requirement) {
   if (row.stage_key === 'legacy') return '历史待分类，输出规则待确认'
@@ -30,20 +30,32 @@ export function timingLabel(row: Requirement) {
   return `${event}${row.timing_type === 'before_event' ? '前' : '后'}${offsetText(row.timing_offset_hours)}`
 }
 
-/** Document requirements along the stage backbone, edited beside the list: changes to an existing requirement save themselves. */
-export default function TemplateDocumentsTab({ templateId, editMode, refreshToken, onChanged }: { templateId: string; editMode: boolean; refreshToken?: unknown; onChanged?: () => unknown }) {
-  const [rows, setRows] = useState<Requirement[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(false)
-  const [keyword, setKeyword] = useState('')
-  const [selected, setSelected] = useState<string | 'new' | null>(null)
+/** Small tags shown on a document row in the outline. */
+export const docFlags = (row: Requirement) => <>
+  {row.stage_key === 'legacy' && <Tag color="orange">历史待分类</Tag>}
+  {row.scope === 'vehicle' && <span className="tpl-row-tag">每台车</span>}
+  {row.platform && <span className="tpl-row-tag">{row.platform === 'integrated' ? '集成' : row.platform}</span>}
+  {!row.is_group && !row.required && <span className="tpl-row-tag">非必需</span>}
+  {row.confidential_default && <span className="tpl-row-tag is-warn">保密</span>}
+  {row.external_never_visible && <span className="tpl-row-tag">禁止外部查看</span>}
+</>
+
+type Target = Requirement | { stage: string }
+
+/**
+ * One document requirement edited beside the template outline. Changes to an existing requirement save themselves
+ * half a second after typing stops; a new one is added with the button. The parent awaits `flushRef` before switching.
+ */
+export default function TemplateDocPanel({ templateId, editMode, rows, target, flushRef, onChanged, onCreated, onClose }: {
+  templateId: string; editMode: boolean; rows: Requirement[]; target: Target; flushRef: MutableRefObject<(() => Promise<void>) | null>
+  onChanged: () => Promise<unknown> | unknown; onCreated: (id?: string) => void; onClose: () => void
+}) {
+  const current = 'id' in target ? target : undefined
   const [save, setSave] = useState<SaveState>()
   const [busy, setBusy] = useState(false)
-  const sequence = useRef(0)
   const owner = useRef(templateId); owner.current = templateId
   const timer = useRef<ReturnType<typeof setTimeout>>()
   const queue = useRef<Promise<unknown>>(Promise.resolve())
-  const selectedRef = useRef<string | null>(null)
   const lastSaved = useRef('')
   const [form] = Form.useForm()
   const kind = Form.useWatch('timing_type', form)
@@ -53,72 +65,49 @@ export default function TemplateDocumentsTab({ templateId, editMode, refreshToke
   const code = Form.useWatch('code', form)
   const confidential = Form.useWatch('confidential_default', form)
   const neverVisible = Form.useWatch('external_never_visible', form)
-  const current = selected && selected !== 'new' ? rows.find(row => row.id === selected) : undefined
-
-  const load = async () => {
-    const ticket = ++sequence.current
-    setLoading(true); setError(false)
-    try {
-      const response = await api.get(`/templates/${templateId}/document-requirements`)
-      if (ticket === sequence.current && owner.current === templateId) setRows(response.data)
-    } catch { if (ticket === sequence.current) { setError(true); setRows([]) } }
-    finally { if (ticket === sequence.current) setLoading(false) }
-  }
-  useEffect(() => {
-    selectedRef.current = null; setSelected(null); setSave(undefined); clearTimeout(timer.current); timer.current = undefined
-    void load()
-    return () => { sequence.current += 1; clearTimeout(timer.current) }
-  }, [templateId, refreshToken])
-  useEffect(() => { if (["6.11.6b", "6.11.6c"].includes(code)) form.setFieldsValue({ external_never_visible: true, external_visible_default: false }) }, [code])
 
   const bodyOf = () => {
     const values = form.getFieldsValue(true)
     return Object.fromEntries(FIELDS.map(key => [key, values[key] ?? (['parent_id', 'scope', 'platform', 'timing_type', 'timing_event', 'timing_offset_hours', 'timing_weekday', 'trigger_type'].includes(key) ? null : values[key])]))
   }
+  useEffect(() => {
+    const values = current ? (current.stage_key === 'legacy' ? { ...current, stage_key: undefined, code: '', parent_id: null } : current)
+      : { ...RULE_EMPTY, stage_key: (target as { stage: string }).stage, code: '', name: '', template_no: '', is_group: false, required: true, scope: 'project', platform: null, parent_id: null, timing_type: 'on_demand', confidential_default: false, external_visible_default: false, external_never_visible: false, sort_order: rows.length, note: '' }
+    form.setFieldsValue(values)
+    lastSaved.current = current ? JSON.stringify(bodyOf()) : ''
+  }, [])
+  useEffect(() => { if (["6.11.6b", "6.11.6c"].includes(code)) form.setFieldsValue({ external_never_visible: true, external_visible_default: false }) }, [code])
+
   const detail = (err: any) => { const text = err?.response?.data?.detail; return typeof text === 'string' ? text : errMsg(err) }
   const persist = async () => {
-    const id = selectedRef.current; const templateAtStart = templateId
-    if (!editMode || !id || id === 'new') return
+    const templateAtStart = templateId
+    if (!editMode || !current) return
     try { await form.validateFields() } catch { return }
-    if (selectedRef.current !== id) return
     const body = bodyOf(); const text = JSON.stringify(body)
     if (text === lastSaved.current) return
     lastSaved.current = text
     queue.current = queue.current.then(async () => {
       setSave({ state: 'saving' })
       try {
-        await api.put(`/templates/${templateId}/document-requirements/${id}`, body)
+        await api.put(`/templates/${templateId}/document-requirements/${current.id}`, body)
         if (owner.current !== templateAtStart) return
-        if (selectedRef.current === id) setSave({ state: 'saved' })
-        await load(); void onChanged?.()
-      } catch (err) { if (selectedRef.current === id) { lastSaved.current = ''; setSave({ state: 'error', error: detail(err) }) } }
+        setSave({ state: 'saved' }); await onChanged()
+      } catch (err) { lastSaved.current = ''; setSave({ state: 'error', error: detail(err) }) }
     })
     await queue.current
   }
   const schedule = () => { clearTimeout(timer.current); timer.current = setTimeout(() => { timer.current = undefined; void persist() }, 500) }
   const flush = async () => { if (timer.current) { clearTimeout(timer.current); timer.current = undefined; await persist() } }
-  const open = async (row: Requirement | 'new') => {
-    await flush()
-    setSave(undefined); form.resetFields()
-    const values = row === 'new' ? { ...RULE_EMPTY, stage_key: current && current.stage_key !== 'legacy' ? current.stage_key : '6', code: '', name: '', template_no: '', is_group: false, required: true, scope: 'project', platform: null, parent_id: null, timing_type: 'on_demand', confidential_default: false, external_visible_default: false, external_never_visible: false, sort_order: rows.length, note: '' } : row.stage_key === 'legacy' ? { ...row, stage_key: undefined, code: '', parent_id: null } : row
-    form.setFieldsValue(values)
-    lastSaved.current = row === 'new' ? '' : JSON.stringify(bodyOf())
-    selectedRef.current = row === 'new' ? 'new' : row.id
-    setSelected(selectedRef.current)
-  }
-  const close = async () => { await flush(); selectedRef.current = null; setSelected(null) }
+  useEffect(() => { flushRef.current = flush; return () => { if (flushRef.current === flush) flushRef.current = null } })
   const run = async (operation: () => Promise<any>, success: string, after?: (result: any) => void) => {
     if (busy) return
     setBusy(true)
-    try { const result = await operation(); message.success(success); await load(); void onChanged?.(); after?.(result) }
+    try { const result = await operation(); message.success(success); await onChanged(); after?.(result) }
     catch (err) { message.error(detail(err)) } finally { setBusy(false) }
   }
   const create = async () => {
     try { await form.validateFields() } catch { return }
-    await run(() => api.post(`/templates/${templateId}/document-requirements`, bodyOf()), '资料要求已添加', result => {
-      const id = result?.data?.id
-      if (id) { lastSaved.current = JSON.stringify(bodyOf()); selectedRef.current = id; setSelected(id) } else { selectedRef.current = null; setSelected(null) }
-    })
+    await run(() => api.post(`/templates/${templateId}/document-requirements`, bodyOf()), '资料要求已添加', result => onCreated(result?.data?.id))
   }
   const download = async (row: Requirement) => {
     try {
@@ -128,45 +117,20 @@ export default function TemplateDocumentsTab({ templateId, editMode, refreshToke
     } catch { message.error('空白模板下载失败，请重试或联系管理员核对文件') }
   }
   const eventOptions = Object.entries(EVENTS).filter(([key]) => kind === 'after_milestone' ? MILESTONES.includes(key) : key !== 'vehicle_arrival' || (kind === 'after_event' && scope === 'vehicle')).map(([value, label]) => ({ value, label }))
-  const term = keyword.trim().toLowerCase()
-  const hit = (row: Requirement) => !term || `${row.code} ${row.name} ${row.template_no}`.toLowerCase().includes(term)
-  const parentsOfHits = new Set(rows.filter(row => !row.is_group && hit(row)).map(row => row.parent_id))
-  const shown = rows.filter(row => row.is_group ? hit(row) || parentsOfHits.has(row.id) : hit(row))
-  const sections = [...STAGES.map(s => ({ key: s.value, title: s.label })), ...(rows.some(row => row.stage_key === 'legacy') ? [{ key: 'legacy', title: '历史待分类' }] : [])]
 
-  const flags = (row: Requirement) => <>
-    {row.stage_key === 'legacy' && <Tag color="orange">历史待分类</Tag>}
-    {row.scope === 'vehicle' && <span className="tpl-row-tag">每台车</span>}
-    {row.platform && <span className="tpl-row-tag">{row.platform === 'integrated' ? '集成' : row.platform}</span>}
-    {!row.is_group && !row.required && <span className="tpl-row-tag">非必需</span>}
-    {row.confidential_default && <span className="tpl-row-tag is-warn">保密</span>}
-    {row.external_never_visible && <span className="tpl-row-tag">禁止外部查看</span>}
-  </>
-  const row = (item: Requirement) => <li key={item.id} className={`tpl-node${item.is_group ? ' is-subhead' : ''}${item.parent_id ? ' is-child' : ''}${selected === item.id ? ' is-selected' : ''}`}>
-    <button type="button" className="tpl-node-row" aria-current={selected === item.id ? 'true' : undefined} onClick={() => void open(item)}>
-      <span className="tpl-code">{item.code}</span>
-      <span className="tpl-node-name">{item.name}</span>{flags(item)}
-      <span className="tpl-row-meta">
-        {!item.is_group && <span className="tpl-meta">{timingLabel(item)}</span>}
-        {item.blank_file && <span className="tpl-meta" title={`空白模板：${item.blank_file.filename}`}><PaperClipOutlined aria-label="已有空白模板" /></span>}
-      </span>
-    </button>
-    {item.source_metadata && <details className="tpl-source"><summary>历史来源（只读）</summary><pre>{JSON.stringify(item.source_metadata, null, 2)}</pre></details>}
-  </li>
-
-  const panel = selected && (selected === 'new' || current) ? <aside className="tpl-panel" aria-label={selected === 'new' ? '新增资料要求' : `编辑资料要求：${current?.code} ${current?.name}`}>
+  return <aside className="tpl-panel" aria-label={current ? `编辑资料要求：${current.code} ${current.name}` : '新增资料要求'}>
     <header className="tpl-panel-head">
-      <span className="tpl-panel-kicker">{selected === 'new' ? '新增资料要求' : current?.is_group ? '资料分组' : '资料要求'}</span>
+      <span className="tpl-panel-kicker">{!current ? '新增资料要求' : current.is_group ? '资料分组' : '资料要求'}</span>
       <SaveBadge save={save} />
-      <Button type="text" size="small" icon={<CloseOutlined />} aria-label="关闭编辑" onClick={() => void close()} />
+      <Button type="text" size="small" icon={<CloseOutlined />} aria-label="关闭编辑" onClick={() => void flush().then(onClose)} />
     </header>
     <div className="tpl-panel-body">
-      <Form form={form} layout="vertical" preserve disabled={!editMode} onValuesChange={() => { if (selected !== 'new') schedule() }}>
+      <Form form={form} layout="vertical" preserve disabled={!editMode} onValuesChange={() => { if (current) schedule() }}>
           {current?.stage_key === 'legacy' && <Alert type="info" showIcon message="请选择阶段并填写对应编号；历史来源只读保留，不会改写。" style={{ marginBottom: 12 }} />}
           <Form.Item name="name" label="资料名称" rules={[{ required: true, whitespace: true }]}><Input maxLength={300} /></Form.Item>
           <div className="tpl-form-pair">
             <Form.Item name="code" label="编号" rules={[{ required: true, message: '填写编号，如6.11.1a' }]}><Input maxLength={40} placeholder="如6.11.1a" /></Form.Item>
-            <Form.Item name="stage_key" label="阶段" rules={[{ required: true }]}><Select options={STAGES} onChange={() => form.setFieldValue('parent_id', null)} /></Form.Item>
+            <Form.Item name="stage_key" label="阶段" rules={[{ required: true }]}><Select options={DOC_STAGES} onChange={() => form.setFieldValue('parent_id', null)} /></Form.Item>
           </div>
           {!group && <>
             <Space wrap size={24} className="tpl-form-switches">
@@ -216,37 +180,11 @@ export default function TemplateDocumentsTab({ templateId, editMode, refreshToke
       </div>}
     </div>
     {editMode && <footer className="tpl-panel-foot">
-      {selected === 'new' ? <Button type="primary" icon={<PlusOutlined />} loading={busy} onClick={() => void create()}>添加资料要求</Button>
+      {!current ? <Button type="primary" icon={<PlusOutlined />} loading={busy} onClick={() => void create()}>添加资料要求</Button>
         : <Popconfirm title={current?.is_group ? '删除此分组？' : '删除此资料要求？'} description="既有项目与历史文件保留。" okText="删除" okButtonProps={{ danger: true }} cancelText="取消"
-          onConfirm={() => run(() => api.delete(`/templates/${templateId}/document-requirements/${current!.id}`), '资料要求已删除', () => { selectedRef.current = null; setSelected(null) })}>
+          onConfirm={() => run(() => api.delete(`/templates/${templateId}/document-requirements/${current!.id}`), '资料要求已删除', onClose)}>
           <Button danger type="text" icon={<DeleteOutlined />} disabled={busy}>{current?.is_group ? '删除分组' : '删除资料要求'}</Button>
         </Popconfirm>}
     </footer>}
-  </aside> : <aside className="tpl-panel is-empty" aria-label="编辑说明">
-    <p><strong>点左边任意一份资料开始编辑</strong></p>
-    <ul><li>改动会自动保存，不需要点保存。</li><li>同一阶段按编号排列；分组下的资料自动缩进。</li>{editMode && <li>“新增资料要求”在右侧填写后点“添加”。</li>}</ul>
   </aside>
-
-  return <div className={`tpl-split${selected ? ' has-panel' : ''}`}>
-    <div className="tpl-split-main">
-      <div className="tpl-toolbar">
-        <Input allowClear prefix={<SearchOutlined />} aria-label="搜索资料要求" placeholder="搜编号、资料名称或模板编号" value={keyword} onChange={e => setKeyword(e.target.value)} />
-        {editMode && <Button icon={<PlusOutlined />} onClick={() => void open('new')} disabled={busy}>新增资料要求</Button>}
-      </div>
-      {error ? <Alert type="error" message="资料要求加载失败" action={<Button onClick={() => void load()}>重试</Button>} />
-        : loading && !rows.length ? <Skeleton active paragraph={{ rows: 6 }} />
-        : !rows.length ? <Empty description="此模板尚未配置资料要求" />
-        : term && !shown.length ? <Empty description="没有匹配的资料要求" />
-        : <div className="tpl-outline-body">{sections.map((section, sectionNumber) => {
-          const list = shown.filter(item => item.stage_key === section.key)
-          if (term && !list.length) return null
-          const count = list.filter(item => !item.is_group).length
-          return <section key={section.key} className="tpl-stage-section" aria-label={section.title}>
-            <header className="tpl-stage-head"><h3><span className="tpl-stage-key">{section.key === 'legacy' ? '?' : sectionNumber + 1}</span>{section.title}</h3><span className="tpl-stage-meta">{count ? `${count} 份` : '暂无资料'}</span></header>
-            {!!list.length && <ul className="tpl-nodes">{list.map(row)}</ul>}
-          </section>
-        })}</div>}
-    </div>
-    {panel}
-  </div>
 }
