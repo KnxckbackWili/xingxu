@@ -259,7 +259,8 @@ GitHub 仓库的 `.github/workflows/docker-image.yml` 会自动构建 `linux/amd
 | 触发 | 发布的标签 | 用途 |
 |---|---|---|
 | 推送 `master` | `edge`、`sha-<7 位提交号>` | 试用最新代码；`sha-` 标签固定不变，可用于回滚 |
-| 推送 `v<版本>` 标签 | `<版本>`、`latest` | 正式版本；先运行 `release-check.sh`，标签必须与 `frontend/package.json` 版本一致 |
+| Actions → 镜像构建 → Run workflow，勾选“发布正式版本” | `<版本>`、`latest`，并创建 `v<版本>` 标签和 Release | 正式版本（推荐）：按代码里的版本号自动建标签，先运行 `release-check.sh` |
+| 手工推送 `v<版本>` 标签 | `<版本>`、`latest` | 标签必须建在版本号已改好的提交上，否则构建会拒绝 |
 
 源码仓库是公开的。镜像包在 GitHub 的 Packages → xingxu → Package settings 设为 Public 后可匿名拉取；仍为私有时，NAS 先用 GitHub 账号和一个只勾选 `read:packages` 的个人访问令牌执行 `docker login ghcr.io -u <GitHub 用户名>`。账号和令牌只交给 `docker login`，不要写入 `.env` 或 Compose 文件。切换为 registry 模式：
 

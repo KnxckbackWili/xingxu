@@ -27,7 +27,7 @@
 3. GHCR 镜像包默认是私有的。二选一：在 GitHub 的 Packages → xingxu → Package settings 中把可见性改为 Public；或在部署主机用运行更新服务的同一账号执行一次 `docker login ghcr.io`（用户名为 GitHub 账号，密码为只含 `read:packages` 权限的令牌）。网页不保存、也不传递镜像仓库凭据。
 4. 部署主机需能访问 `github.com`（ls-remote）和 `ghcr.io`，应用容器需能访问 `api.github.com`。
 
-**发布新版本**：先把版本号与 CHANGELOG 改成新版本并推送到 `master`，再在**这次提交上**建 `vX.Y.Z` 标签。标签若建在旧提交上，CI 会因版本不一致拒绝构建，网页检查也会提示“发布标签与应用版本号不一致”。
+**发布新版本**：先把版本号与 CHANGELOG 改成新版本并推送到 `master`，然后在 GitHub 打开 Actions → 镜像构建 → Run workflow，分支选 `master`，勾选“发布正式版本”。它按代码里的版本号创建 `vX.Y.Z` 标签和 Release（说明取自 CHANGELOG），并发布镜像。也可以手工建标签，但必须建在版本号已改好的提交上；建错时 CI 会拒绝构建，网页检查也会提示“发布标签与应用版本号不一致”。
 
 原有 Gitea 来源（从源码构建）继续可用，在「更新来源 → 高级」中添加或选择即可。旧安装若一直使用原默认 Gitea 地址，升级后会自动保留为「原 Gitea 来源」（含已保存的令牌），默认改用 GitHub 正式版。
 

@@ -1,6 +1,9 @@
 name: 镜像构建
 
-# master 每次推送发布 edge 与 sha-<短提交号>；推送 v<版本> 标签时先做发布一致性检查，再发布 <版本> 与 latest。
+# master 每次推送发布 edge 与 sha-<短提交号>。
+# 发布正式版本：Actions → 镜像构建 → Run workflow（分支 master，勾选“发布正式版本”）。
+# 它按代码里的版本号创建 v<版本> 标签和 Release，再发布 <版本> 与 latest，不需要手工建标签。
+# 手工推送的 v<版本> 标签仍然支持，但标签必须建在版本号已改好的提交上。
 on:
   push:
     branches:
@@ -8,20 +11,76 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      release:
+        description: 发布正式版本（按 frontend/package.json 的版本号创建 v<版本> 标签和 Release）
+        type: boolean
+        default: false
 
 permissions:
   contents: read
   packages: write
 
 concurrency:
-  group: docker-image-${{ github.ref }}
+  group: docker-image-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
+  release:
+    name: 创建发布标签与 Release
+    if: github.event_name == 'workflow_dispatch' && inputs.release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 核对版本并创建标签
+        id: tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF" != refs/heads/master ]; then
+            echo "只能从 master 发布正式版本，当前是 $GITHUB_REF" >&2; exit 1
+          fi
+          FAST=1 bash docker/scripts/release-check.sh
+          version="$(node -p "require('./frontend/package.json').version")"
+          tag="v$version"
+          existing="$(git ls-remote --tags origin "refs/tags/$tag^{}" "refs/tags/$tag" | awk 'NR==1{print $1}')"
+          if [ -n "$existing" ]; then
+            peeled="$(git rev-parse "$tag^{commit}")"
+            if [ "$peeled" != "$GITHUB_SHA" ]; then
+              echo "标签 $tag 已存在，但指向 ${peeled:0:7}，不是当前 master ${GITHUB_SHA:0:7}。" >&2
+              echo "请先在 GitHub 删除 $tag 的 Release 和标签，或先把代码版本号改成新版本，再重新运行。" >&2
+              exit 1
+            fi
+          else
+            git tag "$tag" "$GITHUB_SHA"
+            git push origin "refs/tags/$tag"
+          fi
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            # Release notes: this version's CHANGELOG section.
+            awk -v v="$version" '/^## /{p = ($2 == v || index($2, v "（") == 1)} p && !/^## /' CHANGELOG.md > notes.md
+            [ -s notes.md ] || echo "见 CHANGELOG.md" > notes.md
+            gh release create "$tag" --verify-tag --title "$tag" --notes-file notes.md
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
   image:
     name: 构建并发布多架构镜像
+    needs: release
+    # Ordinary pushes skip the release job; a failed release must not publish anything.
+    if: always() && (needs.release.result == 'success' || needs.release.result == 'skipped')
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    env:
+      IS_RELEASE: ${{ github.ref_type == 'tag' || needs.release.outputs.version != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -33,12 +92,13 @@ jobs:
           version="$(node -p "require('./frontend/package.json').version")"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
-            echo "标签 $GITHUB_REF_NAME 与 frontend/package.json 版本 $version 不一致" >&2
+            echo "标签 $GITHUB_REF_NAME 与 frontend/package.json 版本 $version 不一致：标签必须建在版本号已改好的提交上。" >&2
+            echo "请删除此标签，改用 Actions → 镜像构建 → Run workflow（勾选“发布正式版本”），会自动按代码版本号建标签。" >&2
             exit 1
           fi
 
       - name: 发布一致性检查
-        if: github.ref_type == 'tag'
+        if: env.IS_RELEASE == 'true'
         run: FAST=1 bash docker/scripts/release-check.sh
 
       - name: 生成镜像标签
@@ -50,8 +110,8 @@ jobs:
           tags: |
             type=raw,value=edge,enable={{is_default_branch}}
             type=sha,prefix=sha-
-            type=raw,value=${{ steps.version.outputs.version }},enable=${{ github.ref_type == 'tag' }}
-            type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
+            type=raw,value=${{ steps.version.outputs.version }},enable=${{ env.IS_RELEASE == 'true' }}
+            type=raw,value=latest,enable=${{ env.IS_RELEASE == 'true' }}
           labels: |
             org.opencontainers.image.title=AGV Project Management
             org.opencontainers.image.version=${{ steps.version.outputs.version }}
