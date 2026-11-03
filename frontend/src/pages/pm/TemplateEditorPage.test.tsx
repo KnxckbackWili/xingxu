@@ -8,7 +8,7 @@ import TemplateEditorPage from './TemplateEditorPage'
 const { get, put, auth } = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), auth: { user: { id: 'admin', role: 'admin' } as any } }))
 vi.mock('../../api/client', () => ({ api: { get, put, post: vi.fn(), delete: vi.fn() }, errMsg: () => '保存失败' }))
 vi.mock('../../stores/auth', () => ({ useAuth: () => auth }))
-vi.mock('../../hooks/useVehicleTypes', () => ({ useVehicleTypes: () => ({ options: [] }) }))
+vi.mock('../../hooks/useVehicleTypes', () => ({ useVehicleTypes: () => ({ options: [] }), toVehicleTypeSelectOptions: (_: unknown, extra: string[] = []) => extra.map(name => ({ label: name, value: name })) }))
 vi.mock('./TemplateDocumentsTab', () => ({ default: () => <div>资料要求保留</div> }))
 vi.mock('./TemplateProcurementsTab', () => ({ default: () => null }))
 const render = (ui: ReactElement) => rtlRender(ui, { wrapper: ({ children }) => <MemoryRouter initialEntries={['/pm/templates/default']}><Routes><Route path="/pm/templates/:templateId" element={children} /></Routes></MemoryRouter> })

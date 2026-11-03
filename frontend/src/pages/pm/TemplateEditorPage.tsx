@@ -2,7 +2,7 @@ import { ensureVerifiedAccount } from '../../utils/verifiedAccount'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Alert, Button, Dropdown, Input, Modal, Tabs, Tag, message } from 'antd'
-import { ArrowLeftOutlined, CopyOutlined, DeleteOutlined, DownloadOutlined, MoreOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, CopyOutlined, DeleteOutlined, DownloadOutlined, MergeCellsOutlined, MoreOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons'
 import { api, errMsg } from '../../api/client'
 import { workItemsApi, type WorkPhase } from '../../api/workItems'
 import { useAuth } from '../../stores/auth'
@@ -93,7 +93,7 @@ export default function TemplateEditorPage() {
     ...(canManage ? [{ key: 'copy', icon: <CopyOutlined />, label: '复制为新模板' }] : []),
     { key: 'export', icon: <DownloadOutlined />, label: '导出 JSON' },
     ...(canImport ? [{ key: 'import', icon: <UploadOutlined />, label: '导入 JSON（覆盖当前内容）', disabled: busy }] : []),
-    ...(canManage && tid !== 'default' ? [{ type: 'divider' as const }, { key: 'delete', icon: <DeleteOutlined />, label: '删除模板', danger: true, disabled: busy }] : []),
+    ...(canManage && tid !== 'default' ? [{ key: 'merge', icon: <MergeCellsOutlined />, label: '并入标准模板', disabled: busy }, { type: 'divider' as const }, { key: 'delete', icon: <DeleteOutlined />, label: '删除模板', danger: true, disabled: busy }] : []),
   ]
   const setTab = (key: string) => setParams(old => { const next = new URLSearchParams(old); if (key === 'work') next.delete('tab'); else next.set('tab', key); return next }, { replace: true })
 
@@ -129,6 +129,8 @@ export default function TemplateEditorPage() {
           if (key === 'copy') setCopyName(`${selected?.name ?? '模板'} 副本`)
           if (key === 'export') void exportJson()
           if (key === 'import') importInput.current?.click()
+          if (key === 'merge') Modal.confirm({ title: `把「${selected?.name ?? '此模板'}」并入标准模板？`, content: '只补充标准模板里还没有的内容，然后删除此模板；已建的项目不受影响。', okText: '并入', cancelText: '取消',
+            onOk: async () => { try { ensureVerifiedAccount(user?.id); await api.post(`/templates/${tid}/merge`); message.success('已并入标准模板'); navigate('/pm/templates/default') } catch (e) { setError(errMsg(e)) } } })
           if (key === 'delete') removeTemplate()
         } }}><IconAction bordered label="更多模板操作" icon={<MoreOutlined />} /></Dropdown>
         <input ref={importInput} type="file" accept=".json" hidden aria-hidden="true" onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; if (file) importJson(file) }} />

@@ -69,13 +69,40 @@ def test_stale_scope_rolls_back_creation(client, pm_headers):
     assert not any(project['name'] == '失效方案' for project in client.get('/api/projects', headers=pm_headers).json())
 
 
-def test_presets_have_real_content_and_selection(client, pm_headers):
-    templates = client.get('/api/templates', headers=pm_headers).json()
-    simple = next(template for template in templates if template['name'] == '潜伏式简版模板')
-    phases = client.get(f"/api/templates/{simple['id']}/tree", headers=pm_headers).json()
-    selected = {module['name'] for phase in phases for module in phase['modules'] if module['is_selected']}
-    assert selected == {'到货检查', '单车调试', '系统联调', '培训验收'}
-    assert sum(len(module['tasks']) for phase in phases for module in phase['modules']) > 20
+def test_a_fresh_install_has_one_standard_template(client, pm_headers):
+    names = [template['name'] for template in client.get('/api/templates', headers=pm_headers).json()]
+    assert names == ['系统默认模板']
+
+
+def test_merging_adds_only_missing_content_and_removes_the_source(client, admin_headers, pm_headers):
+    from app.db import SessionLocal
+    from app.models import Phase, Task, CheckItem, DocumentRequirement, Template, VehicleStep
+    copy = client.post('/api/templates', headers=admin_headers, json={'name': '叉车模板', 'copy_from': 'default'}).json()['id']
+    with SessionLocal() as db:
+        default_tasks = db.query(Task).filter(Task.template_id.is_(None), Task.project_id.is_(None)).count()
+        default_docs = db.query(DocumentRequirement).filter_by(template_id=None).count()
+        phase = db.query(Phase).filter_by(template_id=copy).filter(Phase.stage_key == '6').first()
+        extra = Task(template_id=copy, phase_id=phase.id, name='叉车货叉校准', group_label='叉车', applicable_vehicle_types=['叉车式'],
+                     quantity_type='fixed', unit='项', sort_order=999)
+        db.add(extra); db.flush()
+        db.add(CheckItem(template_id=copy, task_id=extra.id, name='货叉水平', is_required=True, is_safety_critical=False, sort_order=0))
+        db.add(DocumentRequirement(template_id=copy, stage_key='6', code='6.99', name='叉车点检表', template_no='', is_group=False, required=True,
+                                   scope='project', timing_type='on_demand', sort_order=999, note=''))
+        db.add(VehicleStep(template_id=copy, key='fork_check', name='货叉检查', sort_order=99))
+        db.commit()
+    merged = client.post(f'/api/templates/{copy}/merge', headers=admin_headers)
+    assert merged.status_code == 200, merged.text
+    assert merged.json()['added'] == {'work_items': 1, 'documents': 1, 'vehicle_steps': 1, 'procurement_items': 0}
+    with SessionLocal() as db:
+        assert db.get(Template, copy) is None
+        assert db.query(Task).filter(Task.template_id.is_(None), Task.project_id.is_(None)).count() == default_tasks + 1
+        added = db.query(Task).filter(Task.template_id.is_(None), Task.name == '叉车货叉校准').one()
+        assert added.applicable_vehicle_types == ['叉车式'] and added.group_label == '叉车'
+        assert [check.name for check in db.query(CheckItem).filter_by(task_id=added.id)] == ['货叉水平']
+        assert db.query(DocumentRequirement).filter_by(template_id=None).count() == default_docs + 1
+        assert db.query(VehicleStep).filter_by(template_id='default', key='fork_check').count() == 1
+    assert client.post('/api/templates/default/merge', headers=admin_headers).status_code == 400
+    assert client.post(f'/api/templates/{copy}/merge', headers=pm_headers).status_code == 403
 
 
 def test_template_edit_keeps_identity_documents_and_project_customization(client, admin_headers, pm_headers):

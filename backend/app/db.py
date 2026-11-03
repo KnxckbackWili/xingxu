@@ -207,8 +207,6 @@ def _init_db():
         seed_all(db)
         # These seeds previously lived inside the SQLite-only migration branch.
         seed_template_preparations(db)
-        from app.seed.seed_data import seed_preset_templates
-        seed_preset_templates(db)
         from app.seed.scope_preparations import migrate_scope_preparations
         migrate_scope_preparations(db)
         # 常用采购项库独立 seed（幂等）：seed_all 有 admin 守卫，旧库会早退。

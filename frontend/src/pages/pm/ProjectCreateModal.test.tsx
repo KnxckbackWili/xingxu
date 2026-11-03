@@ -99,3 +99,19 @@ it('lets the site leave out optional modules; their work is not brought in', asy
   await waitFor(() => expect(projectApi.create).toHaveBeenCalledTimes(1))
   expect((vi.mocked(projectApi.create).mock.calls[0][0] as any).work_item_ids).toEqual(['core', 'door'])
 })
+
+it('brings in vehicle-specific work only for the chosen vehicle types and hides a lone template picker', async () => {
+  vi.mocked(api.get).mockImplementation(async (url: string) => url === '/templates' ? { data: [templates[1]] } : { data: { phases: [{ id: 'g', name: '单车调试', work_items: [
+    { id: 'all', name: '导航调试', applicable_vehicle_types: [] }, { id: 'fork', name: '货叉校准', applicable_vehicle_types: ['叉车式'] },
+    { id: 'lift', name: '顶升测试', applicable_vehicle_types: ['潜伏式'] }] }] } })
+  show()
+  expect(await screen.findByText('将带入 3 项工作，进项目后可增删')).toBeInTheDocument()
+  expect(document.querySelector('[aria-label="工作模板"]')?.closest('.ant-form-item')).toHaveClass('ant-form-item-hidden')
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: '车型' }))
+  fireEvent.click(await screen.findByText(/^叉车式/, { selector: '.ant-select-item-option-content' }))
+  expect(screen.getByText('将带入 2 项工作，进项目后可增删')).toBeInTheDocument()
+  fireEvent.change(screen.getByLabelText('项目名称'), { target: { value: '叉车项目' } })
+  fireEvent.click(screen.getByRole('button', { name: '创建并进入项目' }))
+  await waitFor(() => expect(projectApi.create).toHaveBeenCalledTimes(1))
+  expect((vi.mocked(projectApi.create).mock.calls[0][0] as any).work_item_ids).toEqual(['all', 'fork'])
+})

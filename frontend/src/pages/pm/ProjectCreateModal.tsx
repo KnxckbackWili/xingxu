@@ -6,10 +6,11 @@ import { flatWorkItems, selectedWorkItems } from '../../components/TemplateScope
 import { projectApi } from '../../api'
 import { api, errMsg } from '../../api/client'
 import { DEFAULT_TIMEZONE } from '../../constants/timezones'
+import { toVehicleTypeSelectOptions, useVehicleTypes } from '../../hooks/useVehicleTypes'
 import { useSubmitLock } from '../../hooks/useSubmitLock'
 
 type TemplateRow = { id: string; name: string; is_system?: boolean }
-type Work = { id: string; group_label?: string; phase_name?: string }
+type Work = { id: string; group_label?: string; phase_name?: string; applicable_vehicle_types?: string[] }
 // A work item belongs to an optional module when its label differs from its group (e.g. 电梯 under 联调工作).
 const moduleOf = (item: Work) => item.group_label && item.group_label !== item.phase_name ? item.group_label : ''
 type Values = { name: string; range: [Dayjs, Dayjs]; template: string }
@@ -24,6 +25,8 @@ export default function ProjectCreateModal({ open, initialTemplate, onClose }: {
   const [templates, setTemplates] = useState<TemplateRow[]>([])
   const [work, setWork] = useState<Work[] | null>(null)
   const [skipped, setSkipped] = useState<string[]>([])
+  const [vehicleTypes, setVehicleTypes] = useState<string[]>([])
+  const { options: vehicleDictionary } = useVehicleTypes()
   const [loadError, setLoadError] = useState('')
   const [saving, setSaving] = useState(false)
   const template = Form.useWatch('template', form)
@@ -62,7 +65,10 @@ export default function ProjectCreateModal({ open, initialTemplate, onClose }: {
 
   useEffect(() => { if (open && template) void loadWork(template) }, [open, template])
   const modules = [...new Set((work ?? []).map(moduleOf).filter(Boolean))]
-  const workIds = work ? work.filter(item => !skipped.includes(moduleOf(item))).map(item => item.id) : null
+  // Work limited to certain vehicle types comes in only when the project has one of them (none chosen = everything).
+  const fitsVehicles = (item: Work) => !vehicleTypes.length || !item.applicable_vehicle_types?.length || item.applicable_vehicle_types.some(type => vehicleTypes.includes(type))
+  const workIds = work ? work.filter(item => !skipped.includes(moduleOf(item)) && fitsVehicles(item)).map(item => item.id) : null
+  const typeOptions = toVehicleTypeSelectOptions(vehicleDictionary, [...new Set((work ?? []).flatMap(item => item.applicable_vehicle_types ?? []))])
 
   const submit = async (values: Values) => {
     if (!workIds || !lock.tryAcquire()) return
@@ -101,8 +107,11 @@ export default function ProjectCreateModal({ open, initialTemplate, onClose }: {
         { validator: async (_, value?: [Dayjs, Dayjs]) => { if (value && value[1].isBefore(value[0], 'day')) throw new Error('结束日期不能早于开始日期') } }]}>
         <DatePicker.RangePicker style={{ width: '100%' }} allowClear={false} />
       </Form.Item>
-      <Form.Item name="template" label="工作模板" extra={workIds ? `将带入 ${workIds.length} 项工作，进项目后可增删` : loadError ? undefined : '正在读取模板…'}>
+      <Form.Item name="template" label="工作模板" hidden={templates.length <= 1}>
         <Select aria-label="工作模板" loading={!templates.length && !loadError} options={templates.map(row => ({ value: row.id, label: row.name }))} />
+      </Form.Item>
+      <Form.Item label="车型" extra={workIds ? `将带入 ${workIds.length} 项工作，进项目后可增删` : loadError ? undefined : '正在读取模板…'}>
+        <Select aria-label="车型" mode="multiple" allowClear placeholder="不选表示带入所有车型的工作" value={vehicleTypes} onChange={setVehicleTypes} options={typeOptions} />
       </Form.Item>
       {modules.length > 0 && <Form.Item label="这个现场需要的模块" extra="不勾选的模块，其工作不会带入。">
         <Checkbox.Group className="project-create-modules" aria-label="这个现场需要的模块" value={modules.filter(name => !skipped.includes(name))}

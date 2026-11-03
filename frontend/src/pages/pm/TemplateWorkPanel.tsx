@@ -3,7 +3,7 @@ import { AutoComplete, Button, Checkbox, Divider, Input, Popconfirm, Segmented, 
 import { ArrowDownOutlined, ArrowUpOutlined, CheckOutlined, CloseOutlined, DeleteOutlined, LoadingOutlined, PaperClipOutlined, PlusOutlined, UploadOutlined, WarningOutlined } from '@ant-design/icons'
 import type { WorkItem, WorkPhase } from '../../api/workItems'
 import { stageLabel } from '../../constants/stages'
-import { useVehicleTypes } from '../../hooks/useVehicleTypes'
+import { toVehicleTypeSelectOptions, useVehicleTypes } from '../../hooks/useVehicleTypes'
 import { downloadDocumentResource } from '../../api/projectDocuments'
 import { IconAction } from '../../components/IconAction'
 
@@ -92,7 +92,7 @@ export default function TemplateWorkPanel({ item, phases, steps, templateId, can
         </label>}
         {kind === 'vehicle' && item.kind !== 'vehicle' && <p className="tpl-field-hint">选好环节后才会改为逐车记录。</p>}
         {kind === 'vehicle' && <label className="tpl-field-row"><span>适用车型</span>
-          <Select aria-label="适用车型" mode="multiple" allowClear placeholder="全部车型" value={item.applicable_vehicle_types} disabled={disabled} options={vehicleTypes}
+          <Select aria-label="适用车型" mode="multiple" allowClear placeholder="全部车型" value={item.applicable_vehicle_types} disabled={disabled} options={toVehicleTypeSelectOptions(vehicleTypes, item.applicable_vehicle_types)}
             onChange={value => void onPatch({ applicable_vehicle_types: value })} />
         </label>}
         <label className="tpl-field-row"><span>可选模块</span>

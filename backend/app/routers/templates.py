@@ -186,6 +186,20 @@ def publish_template(template_id: str, user: User = Depends(require_admin), db: 
     return {"message": f"已发布 v{new_version}", "version": new_version}
 
 
+def _remove_template(db: Session, t: Template, user: User):
+    """Delete a non-default template's own rows; projects keep their frozen copies."""
+    from app.services.document_requirements import clear_requirements
+    template_id = t.id
+    clear_requirements(db, template_id)
+    _delete_tree(db, template_id)
+    from app.models import TemplateProcurementItem
+    db.query(TemplatePreparationItem).filter_by(template_id=template_id).delete()
+    db.query(TemplateProcurementItem).filter_by(template_id=template_id).delete()
+    from app.models import VehicleStep
+    db.query(VehicleStep).filter_by(template_id=template_id).delete()
+    db.delete(t)
+
+
 @router.delete("/{template_id}")
 @route_permission('system.templates.manage')
 def delete_template(template_id: str, user: User = Depends(require_admin), db: Session = Depends(get_db)):
@@ -194,20 +208,34 @@ def delete_template(template_id: str, user: User = Depends(require_admin), db: S
     t = db.get(Template, template_id)
     if t is None:
         raise HTTPException(status_code=404, detail="模板不存在")
-    from app.services.document_requirements import clear_requirements, lock_templates, recheck_authority
+    from app.services.document_requirements import lock_templates, recheck_authority
     lock_templates(db, template_id)
     recheck_authority(db, user.id)
-    clear_requirements(db, template_id)
-    _delete_tree(db, template_id)
-    from app.models import TemplateProcurementItem
-    db.query(TemplatePreparationItem).filter_by(template_id=template_id).delete()
-    db.query(TemplateProcurementItem).filter_by(template_id=template_id).delete()
     log_change(db, None, "template", template_id, "delete", user.id, f"删除模板「{t.name}」")
-    from app.models import VehicleStep
-    db.query(VehicleStep).filter_by(template_id=template_id).delete()
-    db.delete(t)
+    _remove_template(db, t, user)
     db.commit()
     return {"message": "模板已删除"}
+
+
+@router.post("/{template_id}/merge")
+@route_permission('system.templates.manage')
+def merge_template(template_id: str, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Fold a template into the standard one, then remove it: one template, choices made per project."""
+    if template_id == DEFAULT_TEMPLATE_ID:
+        raise HTTPException(status_code=400, detail="标准模板不能合并到自身")
+    t = db.get(Template, template_id)
+    if t is None:
+        raise HTTPException(status_code=404, detail="模板不存在")
+    from app.services.document_requirements import recheck_authority
+    from app.services.template_merge import merge_into_default
+    added = merge_into_default(db, template_id)
+    recheck_authority(db, user.id)
+    log_change(db, None, "template", template_id, "merge", user.id,
+               f"模板「{t.name}」并入标准模板：新增 {added['work_items']} 项工作、{added['documents']} 份资料要求、"
+               f"{added['vehicle_steps']} 个车辆环节、{added['procurement_items']} 个采购项", None, added)
+    _remove_template(db, t, user)
+    db.commit()
+    return {"message": "已并入标准模板", "added": added}
 
 
 # ===== Tree copy/delete =====

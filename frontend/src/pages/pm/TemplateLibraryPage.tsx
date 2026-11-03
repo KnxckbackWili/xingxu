@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Alert, Button, Empty, Input, Modal, Select, Skeleton, Tag } from 'antd'
+import { Alert, Button, Empty, Input, Modal, Select, Skeleton, Tag, message } from 'antd'
 import { FileTextOutlined, PlusOutlined, StarFilled } from '@ant-design/icons'
 import { api, errMsg } from '../../api/client'
 import { useAuth } from '../../stores/auth'
@@ -39,6 +39,23 @@ export default function TemplateLibraryPage() {
     catch (e) { setError(errMsg(e)) } finally { setBusy(false) }
   }
 
+  // One standard template is enough: vehicle types and optional modules are chosen per project.
+  const others = templates.filter(t => !t.is_system)
+  const mergeAll = () => Modal.confirm({
+    title: `把 ${others.length} 个模板并入标准模板？`,
+    content: <><p>只补充标准模板里还没有的工作、资料要求、车辆环节和采购物料，已有内容不变；之后删除这些模板。已建的项目不受影响。</p><ul>{others.map(t => <li key={t.id}>{t.name}</li>)}</ul></>,
+    okText: '全部并入', cancelText: '取消',
+    onOk: async () => {
+      setBusy(true)
+      try {
+        ensureVerifiedAccount(user?.id)
+        let work = 0, documents = 0
+        for (const t of others) { const result = await api.post(`/templates/${t.id}/merge`); work += result.data.added.work_items; documents += result.data.added.documents }
+        message.success(`已合并，标准模板新增 ${work} 项工作、${documents} 份资料要求`)
+      } catch (e) { setError(errMsg(e)) } finally { setBusy(false); void load() }
+    },
+  })
+
   const card = (t: TemplateRow) => {
     const work = total(t.summary?.work); const docs = total(t.summary?.documents)
     return <li key={t.id} className="tpl-card">
@@ -63,6 +80,9 @@ export default function TemplateLibraryPage() {
       primary={canManage && <Button type="primary" icon={<PlusOutlined />} onClick={() => setDraft({ name: '', from: 'default' })}>新建模板</Button>}
       tools={<RefreshAction label="刷新模板库" loading={loading} onClick={load} />} />
     {error && <Alert type="error" showIcon message={error} className="tpl-alert" action={<Button size="small" onClick={() => void load()}>重试</Button>} />}
+    {canManage && others.length > 0 && <Alert type="info" showIcon className="tpl-alert" message="一个标准模板就够用"
+      description="车型和可选模块（电梯、自动门、PLC 等）在新建项目时勾选，不必为每种车维护一份模板。"
+      action={<Button loading={busy} onClick={mergeAll}>全部并入标准模板</Button>} />}
     {loading && !templates.length ? <Skeleton active paragraph={{ rows: 6 }} />
       : !templates.length ? <Empty description="还没有模板" />
       : <ul className="tpl-card-grid" aria-label="模板库">{templates.map(card)}</ul>}

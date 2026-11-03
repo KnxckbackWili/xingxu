@@ -1,68 +1,5 @@
 """Seed default roles, admin user, and global template data."""
 
-def seed_preset_templates(db):
-    """预置场景模板（幂等：仅当没有用户模板时创建）。"""
-    from app.models import Template, Module as Mod, Phase, ChangeLog, DocumentRequirement
-    from app.routers.templates import copy_tree
-
-    if not db.query(Phase.id).filter(Phase.project_id.is_(None), Phase.template_id.is_(None), Phase.name != "项目准备").first():
-        return
-
-    PRESET_TEMPLATES = [
-        {
-            "name": "标准 AGV 实施模板",
-            "description": "全流程 9 阶段，适合大多数项目",
-            "selected_modules": None,
-        },
-        {
-            "name": "潜伏式简版模板",
-            "description": "单车型小项目：只保留到货/单车调试/联调/培训验收",
-            "selected_modules": ["到货检查", "单车调试", "系统联调", "培训验收"],
-        },
-        {
-            "name": "叉车重载项目模板",
-            "description": "叉车/堆高车场景：全核心 + PLC、自动充电",
-            "selected_modules": None,
-            "extra_modules": ["PLC", "自动充电"],
-        },
-        {
-            "name": "多车型集成模板",
-            "description": "多车型 + 外设全配：全模块（含相机/二维码/自动门/电梯）",
-            "selected_modules": None,
-            "extra_modules": None,
-        },
-    ]
-    for preset in PRESET_TEMPLATES:
-        t = db.query(Template).filter(Template.name == preset["name"]).first()
-        if t is not None:
-            # 只修复旧初始化过早生成的空预置方案；有内容或用户编辑记录的一律保留。
-            if db.query(DocumentRequirement.id).filter(DocumentRequirement.template_id == t.id).first() or t.description != preset["description"] or db.query(Phase.id).filter(Phase.template_id == t.id).first() or db.query(Mod.id).filter(Mod.template_id == t.id).first() or db.query(ChangeLog.id).filter(ChangeLog.entity_id == t.id, ChangeLog.entity_type == 'template').first():
-                continue
-        else:
-            t = Template(name=preset["name"], description=preset["description"], is_system=False)
-            db.add(t)
-            db.flush()
-        copy_tree(db, "default", t.id)
-        if preset.get("selected_modules") is not None:
-            for m in db.query(Mod).filter(Mod.template_id == t.id, Mod.project_id.is_(None)).all():
-                m.is_selected = m.name in preset["selected_modules"]
-        elif preset.get("extra_modules") is not None:
-            for m in db.query(Mod).filter(Mod.template_id == t.id, Mod.project_id.is_(None)).all():
-                if m.category == "extra":
-                    m.is_selected = m.name in preset["extra_modules"]
-        else:
-            for m in db.query(Mod).filter(Mod.template_id == t.id, Mod.project_id.is_(None)).all():
-                m.is_selected = True
-    # 发布一个种子模板：标准模板建好即发布，模板中心至少有一个可直接选用的已发布版本。
-    standard = db.query(Template).filter(Template.name == "标准 AGV 实施模板").first()
-    if standard and standard.status != "published":
-        standard.status = "published"
-        standard.version = max(standard.version or 1, 1)
-    db.flush()
-
-
-
-
 def _demo_password_hash(env_name: str, fallback_hash: str) -> str:
     """演示账号密码哈希：`DEMO_*_PASSWORD` 环境变量可覆盖默认值（轮换演示凭据，
     对外暴露前必须设置），未设置时退回预计算哈希（演示环境开箱可用、测试快速）。
@@ -479,8 +416,7 @@ def seed_all(db):
     db.add(Template(name="系统默认模板", description="标准 AGV 实施流程", is_system=True))
     db.flush()
 
-    # 预置场景模板（全部可编辑/复制/重命名/删除）
-    seed_preset_templates(db)
+    # 只有一个标准模板：车型和可选模块在新建项目时选择，不再预置多份几乎相同的场景模板。
     # 默认常用采购项库（项目经理显式勾选后才带入）
     seed_template_procurements(db)
 

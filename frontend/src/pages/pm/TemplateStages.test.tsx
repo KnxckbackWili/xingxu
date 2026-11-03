@@ -9,7 +9,7 @@ import TemplateEditorPage from './TemplateEditorPage'
 const { get, put, post, del } = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), post: vi.fn(), del: vi.fn() }))
 vi.mock('../../api/client', () => ({ api: { get, put, post, delete: del }, errMsg: (e: any) => e?.message ?? '失败' }))
 vi.mock('../../stores/auth', () => ({ useAuth: () => ({ user: { id: 'admin', role: 'admin' } }) }))
-vi.mock('../../hooks/useVehicleTypes', () => ({ useVehicleTypes: () => ({ options: [] }) }))
+vi.mock('../../hooks/useVehicleTypes', () => ({ useVehicleTypes: () => ({ options: [] }), toVehicleTypeSelectOptions: (_: unknown, extra: string[] = []) => extra.map(name => ({ label: name, value: name })) }))
 vi.mock('./TemplateDocumentsTab', () => ({ default: () => <div>资料要求列表</div> }))
 vi.mock('./TemplateProcurementsTab', () => ({ default: () => <div>采购物料清单</div> }))
 
