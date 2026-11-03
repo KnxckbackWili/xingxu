@@ -179,21 +179,23 @@ Linux/arm64离线镜像208769692B，SHA256 `4a317f9a4ed0409a0592d704ee237e983afe
 
 通过 SSH 登录 NAS。以下使用 `/volume1/docker/agv-pm`；QNAP 或其他 NAS 请替换为自己的绝对路径。
 
+源码在 GitHub 开源：<https://github.com/KnxckbackWili/xingxu>。`<版本>` 换成[最新发布标签](https://github.com/KnxckbackWili/xingxu/tags)去掉 `v` 的版本号，例如 `3.5.0`。
+
 ```bash
 mkdir -p /volume1/docker
 cd /volume1/docker
-git clone --branch v1.9.0 https://gitea.arrowwood.top:8773/claude/agv-pm.git
+git clone --branch v<版本> https://github.com/KnxckbackWili/xingxu.git agv-pm
 cd agv-pm
 cp .env.example .env
 chmod 600 .env
 ```
 
-编辑 `.env`，首次至少确认下面这些值：
+编辑 `.env`，首次至少确认下面这些值（不想在 NAS 上构建，可直接用下文 GHCR 镜像）：
 
 ```dotenv
 DEPLOY_MODE=build
-APP_VERSION=1.9.0
-AGV_IMAGE=agv-pm:1.9.0
+APP_VERSION=<版本>
+AGV_IMAGE=agv-pm:<版本>
 INITIAL_ADMIN_PASSWORD=请换成至少16位的独立强密码
 SEED_DEMO_USERS=0
 BIND_ADDRESS=127.0.0.1
@@ -250,19 +252,6 @@ bash docker/scripts/manage.sh status
 
 只向公网开放 HTTPS，禁止直接转发数据库目录、备份目录或 Docker API。域名证书生效后再设置 `FORCE_HTTPS=1`。
 
-### Registry 部署（外网鉴权修复后）
-
-镜像发布到 Gitea Registry 后，NAS 可跳过本地构建，直接拉取多架构镜像：
-
-```bash
-docker login gitea.arrowwood.top:8773
-sed -i 's|^DEPLOY_MODE=.*|DEPLOY_MODE=registry|' .env
-sed -i 's|^AGV_IMAGE=.*|AGV_IMAGE=gitea.arrowwood.top:8773/claude/agv-pm:1.9.0|' .env
-bash docker/scripts/manage.sh install
-```
-
-发布镜像需同时包含 `linux/amd64` 和 `linux/arm64`。账号密码只交给 `docker login`，不要写入 `.env` 或 Compose 文件。
-
 ### GitHub 自动构建（GHCR）
 
 GitHub 仓库的 `.github/workflows/docker-image.yml` 会自动构建 `linux/amd64` 与 `linux/arm64` 镜像，发布到 `ghcr.io/knxckbackwili/xingxu`：
@@ -272,16 +261,15 @@ GitHub 仓库的 `.github/workflows/docker-image.yml` 会自动构建 `linux/amd
 | 推送 `master` | `edge`、`sha-<7 位提交号>` | 试用最新代码；`sha-` 标签固定不变，可用于回滚 |
 | 推送 `v<版本>` 标签 | `<版本>`、`latest` | 正式版本；先运行 `release-check.sh`，标签必须与 `frontend/package.json` 版本一致 |
 
-仓库是私有的，镜像默认也是私有。NAS 先用 GitHub 账号和一个只勾选 `read:packages` 的个人访问令牌登录，再切换为 registry 模式：
+源码仓库是公开的。镜像包在 GitHub 的 Packages → xingxu → Package settings 设为 Public 后可匿名拉取；仍为私有时，NAS 先用 GitHub 账号和一个只勾选 `read:packages` 的个人访问令牌执行 `docker login ghcr.io -u <GitHub 用户名>`。账号和令牌只交给 `docker login`，不要写入 `.env` 或 Compose 文件。切换为 registry 模式：
 
 ```bash
-docker login ghcr.io -u <GitHub 用户名>
 sed -i 's|^DEPLOY_MODE=.*|DEPLOY_MODE=registry|' .env
-sed -i 's|^AGV_IMAGE=.*|AGV_IMAGE=ghcr.io/knxckbackwili/xingxu:3.4.0|' .env
+sed -i 's|^AGV_IMAGE=.*|AGV_IMAGE=ghcr.io/knxckbackwili/xingxu:<版本>|' .env
 bash docker/scripts/manage.sh install
 ```
 
-正式环境使用版本号或 `sha-` 标签，不要直接跟随 `edge`。
+正式环境使用版本号或 `sha-` 标签，不要直接跟随 `edge`。接入网页「软件更新」后，后续版本可在网页检查并安装，见[软件更新](software-updates.md)。
 
 默认只监听 NAS 本机 `127.0.0.1:8000`。在群晖/QNAP 的反向代理中创建一个 HTTPS 域名，将上游指向 `http://127.0.0.1:8000`，不要直接把 8000 端口映射到公网。如确需局域网直连，把 `.env` 的 `BIND_ADDRESS` 改为 `0.0.0.0`。
 
@@ -443,12 +431,12 @@ cd /volume1/docker/agv-pm && bash docker/scripts/manage.sh backup
 
 ## 后续更新
 
-发布新版本后，先安排短暂维护窗口。以 `v1.9.0` 为例：
+已接入网页「软件更新」时直接在网页检查和安装（[软件更新](software-updates.md)）。手动更新时先安排短暂维护窗口，`<版本>` 换成新发布的版本号：
 
 ```bash
 cd /volume1/docker/agv-pm
 git fetch --tags origin
-git checkout v1.9.0
+git checkout v<版本>
 bash docker/scripts/manage.sh update
 bash docker/scripts/manage.sh status
 ```

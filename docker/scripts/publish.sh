@@ -4,8 +4,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-REGISTRY="${REGISTRY:-gitea.arrowwood.top:8773}"
-IMAGE_NAME="${IMAGE_NAME:-claude/agv-pm}"
+# Releases are normally built by GitHub Actions on a vX.Y.Z tag; this is the manual fallback.
+REGISTRY="${REGISTRY:-ghcr.io}"
+IMAGE_NAME="${IMAGE_NAME:-knxckbackwili/xingxu}"
 PLATFORMS="${PLATFORMS:-linux/amd64,linux/arm64}"
 VERSION="$(node -p "require('$PROJECT_DIR/frontend/package.json').version")"
 IMAGE="$REGISTRY/$IMAGE_NAME:$VERSION"

@@ -4,20 +4,32 @@
 
 当前版本为 **3.4.0**（已准备发布，尚未部署验收）。功能说明不代表迁移总验收或部署已完成；历史版本与当时的验收记录见 [CHANGELOG](CHANGELOG.md)。
 
+开源地址：<https://github.com/KnxckbackWili/xingxu>（[MIT 许可证](LICENSE)）。正式版本的多架构镜像由 GitHub Actions 发布到 `ghcr.io/knxckbackwili/xingxu`。
+
 ## 快速开始
 
-在可信源码目录中为新安装准备配置：
+取得源码并为新安装准备配置（`<版本>` 用[最新发布标签](https://github.com/KnxckbackWili/xingxu/tags)的版本号）：
 
 ```sh
+git clone --branch v<版本> https://github.com/KnxckbackWili/xingxu.git
+cd xingxu
 cp .env.example .env
 # 编辑 .env，设置唯一的 INITIAL_ADMIN_PASSWORD，并核对部署安全配置
 bash docker/scripts/manage.sh install
 ```
 
-默认端口为 8000，首次账号为 admin，密码使用刚设置的值。已有实例升级、8002 部署、HTTPS/代理、加密备份和失败恢复请按[部署说明](docs/deployment.md)操作；软件更新接入见[更新指南](docs/software-updates.md)。
+默认端口为 8000，首次账号为 admin，密码使用刚设置的值。不想在本机构建时，可按[部署说明](docs/deployment.md)直接使用 GHCR 镜像。已有实例升级、8002 部署、HTTPS/代理、加密备份和失败恢复请按[部署说明](docs/deployment.md)操作；软件更新接入见[更新指南](docs/software-updates.md)。
 
 ## 文档
 
 - [项目经理](docs/quickstart-project-manager.md)、[实施工程师](docs/quickstart-engineer.md)、[管理员](docs/quickstart-admin.md)、[外部人员](docs/quickstart-external.md)：各一页说明。
 - [文档入口](docs/index.md)与[术语表](docs/glossary.md)：查当前流程、资料、车辆、权限和运维规则。
 - [开发约定](CLAUDE.md)、[版本历史](CHANGELOG.md)、[QA 证据归档与 SHA](docs/evidence-archive.md)。
+
+## 参与和反馈
+
+问题和建议请在 [GitHub Issues](https://github.com/KnxckbackWili/xingxu/issues) 提交；系统内的「使用反馈」只发给本单位管理员。提交代码前请阅读[开发约定](CLAUDE.md)，并运行 `npm test`、`npm run build` 和后端 pytest。
+
+## 许可证
+
+[MIT](LICENSE)。第三方依赖遵循各自的许可证。

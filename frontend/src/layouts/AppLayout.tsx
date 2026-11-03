@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Avatar, Drawer, Dropdown, Input, Modal, type InputRef, type MenuProps } from 'antd'
-import { LogoutOutlined, UserOutlined, SettingOutlined, BulbOutlined, SearchOutlined, CommentOutlined, LockOutlined, SafetyOutlined, HistoryOutlined } from '@ant-design/icons'
+import { SOURCE_URL } from '../version'
+import { LogoutOutlined, UserOutlined, SettingOutlined, BulbOutlined, SearchOutlined, CommentOutlined, LockOutlined, SafetyOutlined, HistoryOutlined, GithubOutlined } from '@ant-design/icons'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
@@ -77,6 +78,7 @@ export default function AppLayout() {
     { key: 'pwd', icon: <LockOutlined />, label: '修改密码', onClick: close(() => setPwdOpen(true)) },
     { key: 'theme', icon: <BulbOutlined />, label: themeMode === 'dark' ? '切换到浅色模式' : '切换到深色模式', onClick: close(toggleTheme) },
     ...(feedback ? [{ key: 'feedback', icon: <CommentOutlined />, label: '使用反馈', onClick: close(() => navigate(feedback)) }] : []),
+    { key: 'source', icon: <GithubOutlined />, label: '开源地址（GitHub）', onClick: close(() => { window.open(SOURCE_URL, '_blank', 'noopener,noreferrer') }) },
     { type: 'divider' as const },
     { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', onClick: close(signOut) },
   ]

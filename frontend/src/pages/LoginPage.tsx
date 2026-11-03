@@ -6,7 +6,7 @@ import { CheckCircleFilled, LockOutlined, SafetyCertificateOutlined, UserOutline
 import { useAuth } from '../stores/auth'
 import { errMsg } from '../api/client'
 import { systemHomeRoute } from '../constants/nav'
-import { APP_VERSION } from '../version'
+import { APP_VERSION, SOURCE_URL } from '../version'
 import { FONT } from '../constants/theme'
 import BrandMark from '../components/BrandMark'
 import MfaEnrollment, { RecoveryCodes } from '../components/MfaEnrollment'
@@ -99,7 +99,7 @@ export default function LoginPage() {
             ))}
           </div>
         </div>
-        <div className="login-context-footer">行序 · 项目工作台 · {APP_VERSION}</div>
+        <div className="login-context-footer">行序 · 项目工作台 · {APP_VERSION} · <a href={SOURCE_URL} target="_blank" rel="noreferrer">GitHub 开源</a></div>
       </section>
 
       <section className="login-form-section">
