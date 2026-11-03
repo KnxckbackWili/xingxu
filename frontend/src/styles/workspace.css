@@ -170,3 +170,5 @@ html[data-theme='dark'] .ant-btn-primary.ant-btn-background-ghost:not(:disabled)
 .project-settings-stack { display: grid; gap: 20px; }
 .project-settings-more > summary { cursor: pointer; color: var(--agv-text-secondary); font-size: 13px; padding: 6px 0; }
 .events-idle > summary { cursor: pointer; color: var(--agv-text-secondary); font-size: 13px; padding: 6px 0; }
+.tpl-more { margin-top: 4px; border-top: 1px solid var(--agv-border-soft); padding-top: 10px; }
+.tpl-more > summary { cursor: pointer; color: var(--agv-text-secondary); font-size: 13px; margin-bottom: 10px; }

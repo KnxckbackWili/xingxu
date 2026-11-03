@@ -35,8 +35,8 @@ describe('项目总览按需展开', () => {
     expect(current.getByRole('button', { name: /^资料清单$/ })).toBeVisible()
     expect(current.queryByRole('button', { name: /调整项目状态/ })).not.toBeInTheDocument()
     // 准备阶段周计划只在准备清单中出现一次
-    expect(screen.getAllByText(/89 格周计划/)).toHaveLength(1)
-    expect(screen.getByText('89 格周计划，89 格草稿')).toBeVisible()
+    expect(screen.getAllByText(/89 格草稿待发布/)).toHaveLength(1)
+    expect(screen.getByText('89 格草稿待发布')).toBeVisible()
     const quantities = screen.getByRole('list', { name: '各单位数量' })
     expect(within(quantities).getAllByRole('listitem')).toHaveLength(2)
     expect(within(quantities).getByText('1 / 2')).toBeVisible()

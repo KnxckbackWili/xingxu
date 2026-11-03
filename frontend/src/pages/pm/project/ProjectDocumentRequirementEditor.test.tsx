@@ -10,12 +10,12 @@ const definition = (extra = {}): ProjectDocumentDefinition => ({ id: 'r1', sourc
 function show(value: ProjectDocumentDefinition | 'new' = definition()) { return render(<ConfigProvider theme={{ token: { motion: false } }}><ProjectDocumentRequirementEditor canEdit projectId="p1" editing={value} onClose={h.close} onSaved={h.saved} onDirtyChange={h.dirty} /></ConfigProvider>) }
 beforeEach(() => { vi.resetAllMocks(); h.create.mockResolvedValue({}); h.update.mockResolvedValue({}) })
 it('preserves lifetime timing and directs existing confidentiality changes to the versioned scope editor', async () => {
-  show(); const modal = within(await screen.findByRole('dialog')); expect(modal.getByLabelText('默认保密')).toBeDisabled(); await waitFor(() => expect(modal.getByText(/保密范围.*版本校验/)).toBeVisible()); fireEvent.click(modal.getByRole('button', { name: '保存要求' }))
+  show(); const modal = within(await screen.findByRole('dialog')); expect(modal.getByLabelText('默认保密')).toBeDisabled(); fireEvent.click(modal.getByText('更多设置')); await waitFor(() => expect(modal.getByText(/保密范围请从“保密范围”设置/)).toBeVisible()); fireEvent.click(modal.getByRole('button', { name: '保存要求' }))
   await waitFor(() => expect(h.update).toHaveBeenCalledTimes(1)); expect(h.update.mock.calls[0][2]).toMatchObject({ timing_type: 'lifetime', timing_event: 'internal_kickoff', confidential_default: false, external_visible_default: true }); expect(h.update.mock.calls[0][2]).not.toHaveProperty('source_metadata')
 })
 it('requires explicit current-stage classification for a legacy source', async () => {
   show(definition({ stage_key: 'legacy', code: 'legacy-r1', source_metadata: { original: { private: '历史记录' } } })); const modal = within(await screen.findByRole('dialog')); fireEvent.click(modal.getByRole('button', { name: '保存要求' }))
-  expect(await modal.findByText('请将历史资料明确归类到第4–9阶段')).toBeInTheDocument(); expect(h.update).not.toHaveBeenCalled()
+  expect(await modal.findByText('请将历史资料明确归类到一个阶段')).toBeInTheDocument(); expect(h.update).not.toHaveBeenCalled()
   fireEvent.mouseDown(modal.getByLabelText('阶段')); fireEvent.click(await screen.findByText('内部启动会', { selector: '.ant-select-item-option-content' })); fireEvent.change(modal.getByLabelText('编号'), { target: { value: '4.8' } }); fireEvent.click(modal.getByRole('button', { name: '保存要求' }))
   await waitFor(() => expect(h.update).toHaveBeenCalledTimes(1)); expect(h.update.mock.calls[0][2]).toMatchObject({ stage_key: '4', code: '4.8' }); expect(h.update.mock.calls[0][2]).not.toHaveProperty('source_metadata')
 })

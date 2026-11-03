@@ -58,34 +58,46 @@ export default function ProjectDocumentRequirementEditor({ projectId, editing, o
     onCancel={() => { if (!busy) { onDirtyChange(false); onClose() } }} maskClosable={false} width={680} destroyOnHidden>
     <Form form={form} layout="vertical" preserve disabled={busy || !canEdit} onValuesChange={() => onDirtyChange(true)}>
       {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 12 }} />}
-      <Typography.Paragraph type="secondary">同一范围和周期中尚无提交历史的资料会更新要求；已有提交保留原规则。更改范围、平台或输出周期仅用于后续生成的资料。</Typography.Paragraph>
       {editing !== 'new' && editing?.source_metadata && <Typography.Paragraph type="secondary">原记录与审核信息保留；这里只修改本项目的资料要求。</Typography.Paragraph>}
-      <Form.Item name="stage_key" label="阶段" rules={[{ required: true, message: '请选择第4–9阶段' }, { validator: (_, value) => value === 'legacy' ? Promise.reject(new Error('请将历史资料明确归类到第4–9阶段')) : Promise.resolve() }]}>
-        <Select options={DOCUMENT_STAGES} placeholder="请选择资料所属阶段" />
-      </Form.Item>
+      <Form.Item name="name" label="资料名称" rules={[{ required: true, whitespace: true }]}><Input maxLength={300} /></Form.Item>
       <Space align="start" wrap>
-        <Form.Item name="code" label="编号" rules={[{ required: true, whitespace: true, message: '请填写阶段内编号，如6.12' }]}><Input maxLength={40} placeholder="如6.12" /></Form.Item>
-        <Form.Item name="name" label="资料名称" rules={[{ required: true, whitespace: true }]}><Input maxLength={300} style={{ width: 'min(330px, 70vw)' }} /></Form.Item>
+        <Form.Item name="code" label="编号" rules={[{ required: true, whitespace: true, message: '请填写编号，如6.12' }]}><Input maxLength={40} placeholder="如6.12" /></Form.Item>
+        <Form.Item name="stage_key" label="阶段" rules={[{ required: true, message: '请选择阶段' }, { validator: (_, value) => value === 'legacy' ? Promise.reject(new Error('请将历史资料明确归类到一个阶段')) : Promise.resolve() }]}>
+          <Select options={DOCUMENT_STAGES} placeholder="选择阶段" style={{ width: 160 }} />
+        </Form.Item>
       </Space>
-      <Form.Item name="owner_id" label="默认资料负责人" help="留空时由活跃技术负责人接收提醒，其次为项目经理；既有提交可在资料行单独指派。"><Select allowClear showSearch optionFilterProp="label" placeholder="技术负责人 / 项目经理" options={ownerOptions.map(person => ({ value: person.id, label: person.name }))} /></Form.Item>
-      <Form.Item name="template_no" label="模板编号或示例标识"><Input maxLength={100} /></Form.Item>
-      <Space align="start" wrap>
-        <Form.Item name="scope" label="范围" rules={[{ required: true }]}><Select style={{ width: 160 }} options={[{ value: 'project', label: '项目一份' }, { value: 'vehicle', label: '每台车一份' }]} onChange={value => { if (value !== 'vehicle' && form.getFieldValue('timing_event') === 'vehicle_arrival') form.setFieldValue('timing_event', null) }} /></Form.Item>
-        <Form.Item name="platform" label="适用平台"><Select style={{ width: 160 }} allowClear placeholder="全部平台" options={[{ value: 'NDC', label: 'NDC' }, { value: 'GRACE', label: 'GRACE' }, { value: 'integrated', label: '集成' }]} /></Form.Item>
-        <Form.Item name="required" label="必需资料" valuePropName="checked"><Switch /></Form.Item>
+      <Form.Item name="owner_id" label="负责人" help="留空时由技术负责人负责，其次为项目经理。"><Select allowClear showSearch optionFilterProp="label" placeholder="技术负责人 / 项目经理" options={ownerOptions.map(person => ({ value: person.id, label: person.name }))} /></Form.Item>
+      <Space align="start" wrap size={24}>
+        <Form.Item name="required" label="必须提交" valuePropName="checked"><Switch /></Form.Item>
+        <Form.Item name="scope" label="每台车一份" rules={[{ required: true }]} getValueProps={value => ({ checked: value === 'vehicle' })} getValueFromEvent={checked => checked ? 'vehicle' : 'project'}>
+          <Switch onChange={checked => { if (!checked && form.getFieldValue('timing_event') === 'vehicle_arrival') form.setFieldValue('timing_event', null) }} />
+        </Form.Item>
       </Space>
-      <Form.Item name="timing_type" label="输出时机" rules={[{ required: true }]}><Select options={Object.entries(DOCUMENT_TIMINGS).map(([value, label]) => ({ value, label }))} onChange={value => form.setFieldsValue({ ...DOCUMENT_RULE_EMPTY, timing_type: value, ...(value === 'lifetime' ? { timing_event: 'internal_kickoff' } : ['before_event', 'after_event', 'after_milestone', 'on_trigger'].includes(value) ? { timing_offset_hours: 0 } : {}) })} /></Form.Item>
-      {['before_event', 'after_event', 'after_milestone'].includes(kind) && <Form.Item name="timing_event" label="关键事件" rules={[{ required: true }]}><Select options={eventOptions.map(([value, label]) => ({ value, label }))} /></Form.Item>}
-      {['before_event', 'after_event', 'after_milestone', 'on_trigger'].includes(kind) && <Form.Item name="timing_offset_hours" label="偏移小时" rules={[{ required: true }]}><InputNumber min={0} max={876000} precision={0} /></Form.Item>}
-      {kind === 'weekly' && <Form.Item name="timing_weekday" label="每周截止星期" rules={[{ required: true, message: '每周规则必须选择星期' }]}><Select options={DOCUMENT_WEEKDAYS.map((label, index) => ({ label, value: index + 1 }))} /></Form.Item>}
-      {kind === 'on_trigger' && <Form.Item name="trigger_type" label="触发类型" rules={[{ required: true }]}><Select options={Object.entries(DOCUMENT_TRIGGERS).map(([value, label]) => ({ value, label }))} /></Form.Item>}
-      {kind === 'lifetime' && <Typography.Paragraph type="secondary">内部启动会建档，归档前提交；按需保留后续版本。</Typography.Paragraph>}
-      <Form.Item name="confidential_default" label="默认保密" valuePropName="checked"><Switch disabled={!canSetConfidentiality || editing !== 'new'} onChange={value => value && form.setFieldValue('external_visible_default', false)} /></Form.Item>
-      {editing && editing !== 'new' && <Typography.Paragraph type="secondary">现有资料要求的保密范围请从“保密范围”设置，按版本校验并作用于全部期次、历史版本和以后生成项。</Typography.Paragraph>}
-      <Form.Item name="external_never_visible" label="禁止外部查看" valuePropName="checked"><Switch disabled={forbiddenExternal || editing !== 'new'} onChange={value => value && form.setFieldValue('external_visible_default', false)} /></Form.Item>
-      <Form.Item name="external_visible_default" label="默认对外可见" valuePropName="checked"><Switch disabled={confidential || never || forbiddenExternal || editing !== 'new'} /></Form.Item>
-      <Form.Item name="sort_order" label="排序" rules={[{ required: true }]}><InputNumber min={0} max={100000} precision={0} /></Form.Item>
-      <Form.Item name="note" label="说明"><Input.TextArea rows={3} maxLength={5000} /></Form.Item>
+      <Form.Item name="timing_type" label="什么时候交" rules={[{ required: true }]}><Select options={Object.entries(DOCUMENT_TIMINGS).map(([value, label]) => ({ value, label }))} onChange={value => form.setFieldsValue({ ...DOCUMENT_RULE_EMPTY, timing_type: value, ...(value === 'lifetime' ? { timing_event: 'internal_kickoff' } : ['before_event', 'after_event', 'after_milestone', 'on_trigger'].includes(value) ? { timing_offset_hours: 0 } : {}) })} /></Form.Item>
+      {['before_event', 'after_event', 'after_milestone', 'on_trigger'].includes(kind) && <Space align="start" wrap>
+        {kind === 'on_trigger'
+          ? <Form.Item name="trigger_type" label="发生什么" rules={[{ required: true }]}><Select style={{ width: 200 }} options={Object.entries(DOCUMENT_TRIGGERS).map(([value, label]) => ({ value, label }))} /></Form.Item>
+          : <Form.Item name="timing_event" label={kind === 'after_milestone' ? '哪个节点' : '哪个事件'} rules={[{ required: true }]}><Select style={{ width: 200 }} options={eventOptions.map(([value, label]) => ({ value, label }))} /></Form.Item>}
+        <Form.Item name="timing_offset_hours" label={kind === 'before_event' ? '提前' : '之后'} rules={[{ required: true }]}
+          getValueProps={value => ({ value: value == null ? null : Math.round(value / 24 * 100) / 100 })} getValueFromEvent={value => value == null ? null : Math.round(Number(value) * 24)}>
+          <InputNumber min={0} max={36500} addonAfter="天" aria-label="相隔天数" />
+        </Form.Item>
+      </Space>}
+      {kind === 'weekly' && <Form.Item name="timing_weekday" label="每周几截止" rules={[{ required: true, message: '每周规则必须选择星期' }]}><Select options={DOCUMENT_WEEKDAYS.map((label, index) => ({ label, value: index + 1 }))} /></Form.Item>}
+      <Form.Item name="note" label="说明"><Input.TextArea rows={2} maxLength={5000} placeholder="可选：写给提交人的说明" /></Form.Item>
+      <details className="tpl-more">
+        <summary>更多设置</summary>
+        <Form.Item name="template_no" label="模板编号"><Input maxLength={100} placeholder="可选，如模板16" /></Form.Item>
+        <Form.Item name="platform" label="只用于某个调度平台"><Select allowClear placeholder="所有平台都用" options={[{ value: 'NDC', label: 'NDC' }, { value: 'GRACE', label: 'GRACE' }, { value: 'integrated', label: '集成' }]} /></Form.Item>
+        <Space align="start" wrap size={24}>
+          <Form.Item name="confidential_default" label="默认保密" valuePropName="checked"><Switch disabled={!canSetConfidentiality || editing !== 'new'} onChange={value => value && form.setFieldValue('external_visible_default', false)} /></Form.Item>
+          <Form.Item name="external_never_visible" label="禁止外部查看" valuePropName="checked"><Switch disabled={forbiddenExternal || editing !== 'new'} onChange={value => value && form.setFieldValue('external_visible_default', false)} /></Form.Item>
+          <Form.Item name="external_visible_default" label="默认对外可见" valuePropName="checked"><Switch disabled={confidential || never || forbiddenExternal || editing !== 'new'} /></Form.Item>
+        </Space>
+        {editing && editing !== 'new' && <Typography.Paragraph type="secondary">已有资料的保密范围请从“保密范围”设置。</Typography.Paragraph>}
+        <Form.Item name="sort_order" label="排序" rules={[{ required: true }]}><InputNumber min={0} max={100000} precision={0} /></Form.Item>
+        <Typography.Paragraph type="secondary">已有提交的资料保留原规则；改动只影响还没提交的和以后生成的资料。</Typography.Paragraph>
+      </details>
     </Form>
   </Modal>
 }

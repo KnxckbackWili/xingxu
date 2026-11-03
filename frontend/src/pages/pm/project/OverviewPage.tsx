@@ -249,7 +249,8 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
   const pendingSteps = checklist ? checklist.filter(item => !item.done).length : 0
   const groups: UnitQuantity[] = data?.quantities_by_unit ?? []
   const quantity = (value: number) => Number(value.toFixed(3))
-  const scheduleDetail = !weeklyPlan ? '周计划尚未读取' : `${weeklyPlan.total} 格周计划，${weeklyPlan.published_count} 格已发布${draftPlans===null?'':`，${draftPlans} 格草稿`}`
+  // Say what needs doing, not the bookkeeping.
+  const scheduleDetail = !weeklyPlan ? '周计划尚未读取' : draftPlans ? `${draftPlans} 格草稿待发布` : weeklyPlan.total ? `已发布 ${weeklyPlan.published_count} 格` : '还没有安排'
   const overdueFirst = overdue[0]
   const overdueDetail = overdueFirst ? [overdueFirst.code, overdueFirst.name, deadlineLabel(overdueFirst.due_at, documentActions?.timezone || 'Asia/Shanghai'), overdueFirst.effective_owner_name].filter(Boolean).join(' · ') : ''
   const preparationDetail = entryReady(prep) ? '发车前资料已确认' : [
@@ -299,7 +300,7 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
               {overdue.length > 0 && link(`${overdue.length} 项资料已逾期`, '/documents', overdueDetail, true)}
               {!fieldStaff && !checklist && workflow.setup && !entryReady(prep) && link('发车前资料确认', '/documents?review=1', preparationDetail, prepBlocked > 0)}
               {!fieldStaff && (!taskCount || unlinkedVehicleWorkCount > 0) && link('工作项范围待确认', '/plan', !taskCount ? '确认项目阶段与工作项范围' : `${unlinkedVehicleWorkCount} 项车辆工作尚未明确关联真实进度环节`)}
-              {!checklist && (workflow.setup || (draftPlans??0)>0 || (weeklyPlan?.warning_count??0)>0) && link('周计划', '/plan?view=weeks', weeklyWarnings ? `${scheduleDetail} · ${weeklyWarnings} 条提醒待核对` : scheduleDetail, weeklyWarnings > 0)}
+              {!checklist && (workflow.setup || (draftPlans??0)>0 || (weeklyPlan?.warning_count??0)>0) && link('周计划', '/plan?view=weeks', weeklyWarnings ? `${scheduleDetail} · ${weeklyWarnings} 条提醒` : scheduleDetail, weeklyWarnings > 0)}
               {!!documentActions?.this_week_count && link('本周待交资料', '/documents?filter=week', `${documentActions.this_week_count} 项资料本周截止，按现场时区 ${documentActions.timezone}`)}
               {!checklist && (documentProgress === null || documentProgress.pending > 0) && link('项目资料', '/documents', deliveryDetail)}
               {!workflow.setup && !overdue.length && !openIssues.length && documentProgress !== null && !documentProgress.pending && link('查看周计划', '/plan?view=weeks', '查看已发布的工作和实际完成情况')}

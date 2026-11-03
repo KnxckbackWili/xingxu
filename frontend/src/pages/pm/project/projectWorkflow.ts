@@ -36,7 +36,7 @@ export function projectWorkflow(x: WorkflowInput) {
     { title: '车型', description: x.vehicles ? `${x.vehicles} 台已配置` : '确认车型和台数', path: '/edit?section=vehicles', done: x.vehicles > 0 },
     { title: '人员', description: x.members ? `${x.members} 人已加入` : '确认参与人员', path: '/edit?section=members', done: x.members > 0 },
     { title: '资料清单', description: x.kickoffReady ? '第4阶段必需资料齐备' : '提交准备资料或说明不适用理由', path: '/documents?stage=4', done: x.kickoffReady === true },
-    { title: '周计划', description: x.plans===null ? '周计划尚未读取，请重新核对' : x.plans ? `${x.plans} 格周计划${x.drafts===null?'':`，${x.drafts} 格草稿`}` : '核对本周工作和负责人', path: '/plan?view=weeks', done: x.plans!==null && x.plans>0 && x.drafts===0 && x.unassigned===0 && !x.planWarnings },
+    { title: '周计划', description: x.plans===null ? '周计划尚未读取，请重新核对' : x.drafts ? `${x.drafts} 格草稿待发布` : x.plans ? `已发布 ${x.plans} 格` : '还没有安排，先生成初稿', path: '/plan?view=weeks', done: x.plans!==null && x.plans>0 && x.drafts===0 && x.unassigned===0 && !x.planWarnings },
     { title: '发车前资料确认', description: x.prepReady ? '资料确认已就绪' : '核对第5阶段资料与风险批准', path: '/documents?review=1', done: x.prepReady },
   ]
   const setup = x.status === 'preparing'

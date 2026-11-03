@@ -4,8 +4,8 @@ export const DOCUMENT_STAGES = [
   { value: '8', label: '交付' }, { value: '9', label: '全项目周期' },
 ]
 export const DOCUMENT_TIMINGS: Record<string, string> = {
-  before_event: '事件发生前', after_event: '事件发生后', weekly: '每周',
-  on_trigger: '事件触发', after_milestone: '里程碑完成后', on_demand: '按需抽查', lifetime: '全项目周期更新',
+  on_demand: '需要时交（无固定截止）', weekly: '每周交', before_event: '某个事件之前', after_event: '某个事件之后',
+  after_milestone: '某个节点完成后', on_trigger: '发生某种情况后', lifetime: '整个项目期间更新，归档前交',
 }
 export const DOCUMENT_EVENTS: Record<string, string> = {
   internal_kickoff: '内部启动会', ship: '发车', arrival_all: '全部到场', vehicle_arrival: '该车到场',
