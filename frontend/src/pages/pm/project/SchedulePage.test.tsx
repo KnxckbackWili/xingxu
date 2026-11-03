@@ -18,7 +18,7 @@ const show=()=>render(page())
 beforeEach(()=>{vi.clearAllMocks();h.user={id:'pm',role:'pm',permission_version:0,permission_overrides:{}};h.list.mockResolvedValue(fixture());h.create.mockResolvedValue(cell('new'));h.update.mockResolvedValue(cell());h.publish.mockResolvedValue({});h.draft.mockResolvedValue({});h.defaultRules.mockResolvedValue({rules:[],suggestions:[],warnings:[]});h.verify.mockImplementation(()=>undefined)})
 it('shows work by week and keeps planned people separate from actual completion',async()=>{
  show();expect(await screen.findByRole('region',{name:'周计划表'})).toBeVisible()
- expect(screen.getByText('接线核对')).toBeVisible();expect(screen.getByText(/李工/)).toBeVisible();expect(screen.getByText('计划完成')).toBeVisible()
+ expect(screen.getByText('接线核对')).toBeVisible();expect(screen.getByText(/李工/)).toBeVisible();expect(screen.queryByText('已发布')).toBeNull()
  expect(screen.queryByText('计划 0 项')).toBeNull();fireEvent.click(screen.getByRole('button',{name:'更多周计划操作'}));expect(await screen.findByRole('link',{name:'排期设置'})).toHaveAttribute('href','/pm/projects/p1/edit?section=schedule')
 })
 it('allows a server-authorized field role and honors an explicit system denial',async()=>{
@@ -50,7 +50,7 @@ it('edits an already published plan directly and preserves input after a stale r
 })
 it('previews generation before saving and binds the confirmed body to its token',async()=>{
  h.preview.mockResolvedValue({proposals:[{...cell(),kind:'other'}],warnings:['缺少发车日期的阶段未生成'],preview_token:'preview-sha'});show();fireEvent.click(await screen.findByRole('button',{name:'生成初稿'}))
- await waitFor(()=>expect(screen.getByRole('combobox',{name:'现场工作关键事件'})).toBeEnabled());fireEvent.mouseDown(screen.getByRole('combobox',{name:'现场工作关键事件'}));fireEvent.click(await screen.findByText('发车前倒推'));fireEvent.click(screen.getByRole('button',{name:'预览初稿'}))
+ await waitFor(()=>expect(screen.getByRole('combobox',{name:'现场工作关键事件'})).toBeEnabled());fireEvent.mouseDown(screen.getByRole('combobox',{name:'现场工作关键事件'}));fireEvent.click(await screen.findByText('发车前',{selector:'.ant-select-item-option-content'}));fireEvent.click(screen.getByRole('button',{name:'预览初稿'}))
  await screen.findByText('缺少发车日期的阶段未生成');expect(h.draft).not.toHaveBeenCalled();fireEvent.click(screen.getByRole('button',{name:'保存为草稿'}))
  await waitFor(()=>expect(h.draft).toHaveBeenCalledWith('p1',{phase_rules:[{phase_id:'phase',anchor:'before_ship',offset_weeks:0,mode:'finish'}],preview_token:'preview-sha'}))
 })
@@ -72,14 +72,14 @@ it('marks explicit rest days and holidays while keeping a makeup weekend as work
  expect(await screen.findByText('项目休息日：10-28、10-30、11-01')).toBeVisible();expect(screen.getByText('补班：10-31')).toBeVisible()
 })
 it('refuses an incomplete draft preview without enabling its confirmation',async()=>{
- h.preview.mockResolvedValue({proposals:[],warnings:[]});show();fireEvent.click(await screen.findByRole('button',{name:'生成初稿'}));await waitFor(()=>expect(screen.getByRole('combobox',{name:'现场工作关键事件'})).toBeEnabled());fireEvent.mouseDown(screen.getByRole('combobox',{name:'现场工作关键事件'}));fireEvent.click(await screen.findByText('发车前倒推'));fireEvent.click(screen.getByRole('button',{name:'预览初稿'}))
+ h.preview.mockResolvedValue({proposals:[],warnings:[]});show();fireEvent.click(await screen.findByRole('button',{name:'生成初稿'}));await waitFor(()=>expect(screen.getByRole('combobox',{name:'现场工作关键事件'})).toBeEnabled());fireEvent.mouseDown(screen.getByRole('combobox',{name:'现场工作关键事件'}));fireEvent.click(await screen.findByText('发车前',{selector:'.ant-select-item-option-content'}));fireEvent.click(screen.getByRole('button',{name:'预览初稿'}))
  await waitFor(()=>expect(screen.getByText('初稿响应不完整，请重新预览')).toBeVisible());expect(screen.getByRole('button',{name:'保存为草稿'})).toBeDisabled();expect(h.draft).not.toHaveBeenCalled()
 })
 
 it('uses source-based default rules and still requires preview before draft creation',async()=>{
  h.defaultRules.mockResolvedValue({rules:[{phase_id:'phase',anchor:'before_ship',offset_weeks:1,mode:'finish'}],suggestions:[{phase_id:'phase',phase_name:'现场工作',anchor:'before_ship',offset_weeks:1,mode:'finish',source_phase_id:'phase-01',source_label:'标准模板：进场准备',window_start:'2026-10-19',window_end:'2026-10-25',week_start:'2026-10-19',reason:'按模板来源安排在发车周之前'}],warnings:['自建阶段需要手工选择规则']});h.preview.mockResolvedValue({proposals:[cell()],warnings:[],preview_token:'verified-preview'});show()
- fireEvent.click(await screen.findByRole('button',{name:'生成初稿'}));await waitFor(()=>expect(screen.getByText('自建阶段需要手工选择规则')).toBeVisible());expect(screen.getByRole('button',{name:'保存为草稿'})).toBeDisabled();expect(h.draft).not.toHaveBeenCalled()
- fireEvent.click(screen.getByText('查看初始建议的来源、窗口与理由'));expect(screen.getByText('标准模板：进场准备')).toBeVisible();expect(screen.getByText('按模板来源安排在发车周之前')).toBeVisible()
+ fireEvent.click(await screen.findByRole('button',{name:'生成初稿'}));fireEvent.click(await screen.findByText('1 条提醒'));await waitFor(()=>expect(screen.getByText('自建阶段需要手工选择规则')).toBeVisible());expect(screen.getByRole('button',{name:'保存为草稿'})).toBeDisabled();expect(h.draft).not.toHaveBeenCalled()
+ 
  fireEvent.click(screen.getByRole('button',{name:'预览初稿'}));await waitFor(()=>expect(h.preview).toHaveBeenCalledWith('p1',{phase_rules:[{phase_id:'phase',anchor:'before_ship',offset_weeks:1,mode:'finish'}]}));await waitFor(()=>expect(screen.getByRole('button',{name:'保存为草稿'})).toBeEnabled());fireEvent.click(screen.getByRole('button',{name:'保存为草稿'}));await waitFor(()=>expect(h.draft).toHaveBeenCalledWith('p1',{phase_rules:[{phase_id:'phase',anchor:'before_ship',offset_weeks:1,mode:'finish'}],preview_token:'verified-preview'}))
 })
 it('preserves manual generation when default-rule reads fail',async()=>{

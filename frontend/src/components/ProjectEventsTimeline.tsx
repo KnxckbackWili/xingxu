@@ -53,14 +53,20 @@ export default function ProjectEventsTimeline({ projectId, canEdit, onChanged, i
   return <WorkSection title="关键事件" description={`调度平台：${data?.dispatch_platform === 'integrated' ? '集成' : data?.dispatch_platform || '未设置'} · 现场时区：${zone}`}>
     {error ? <Alert type="error" showIcon message="关键事件加载失败" description={error} action={<Button onClick={load}>重试关键事件</Button>} />
       : !data ? <Typography.Text type="secondary">正在读取关键事件…</Typography.Text>
-      : <ol className="events-timeline" aria-label="关键事件">{(data.events ?? []).map(event => {
-          const done = !!(event.actual_at || event.actual_date)
-          const actual = event.derived ? event.actual_date || '未全部到场' : event.actual_date ? event.actual_date : event.actual_at ? inProjectTime(event.actual_at, zone).format('YYYY-MM-DD HH:mm') : '未登记'
+      : (() => {
+        // Events with a plan or an actual date come first; the rest fold away until someone needs them.
+        const happened = (event: any) => !!(event.actual_at || event.actual_date)
+        const active = (data.events ?? []).filter(event => event.planned_date || happened(event) || event.derived)
+        const idle = (data.events ?? []).filter(event => !active.includes(event))
+        const item = (event: any) => {
+          const done = happened(event)
+          const actual = event.derived ? event.actual_date || '' : event.actual_date ? event.actual_date : event.actual_at ? inProjectTime(event.actual_at, zone).format('YYYY-MM-DD HH:mm') : ''
+          const dates = [event.planned_date && `计划 ${event.planned_date}`, actual && `实际 ${actual}`].filter(Boolean).join(' · ') || '未安排'
           return <li key={event.event_key} className={done ? 'is-done' : ''}>
             <span className="events-dot" aria-hidden="true" />
             <div className="events-copy">
               <strong>{event.label}</strong>
-              <span className="events-dates">计划 {event.planned_date || '未安排'} · 实际 {actual}</span>
+              <span className="events-dates">{dates}</span>
               {event.derived && summary && <small>计划 {summary.expected} 台 · 已建档 {summary.registered} 台 · 到场 {summary.arrived} 台{summary.registry_complete ? '' : '（车辆档案未齐）'}</small>}
               {(event.actual_date || event.actual_source?.kind === 'legacy_status_transition') && <small>{event.source_description}</small>}
               {event.note && <small>{event.note}</small>}
@@ -70,7 +76,13 @@ export default function ProjectEventsTimeline({ projectId, canEdit, onChanged, i
               {done && <Button size="small" type="link" danger aria-label={`清除${event.label}实际时间`} onClick={() => open(event, true)}>清除</Button>}
             </span>}
           </li>
-        })}</ol>}
+        }
+        return <>
+          {active.length > 0 && <ol className="events-timeline" aria-label="关键事件">{active.map(item)}</ol>}
+          {idle.length > 0 && <details className="events-idle" open={!active.length}><summary>{active.length ? `其余 ${idle.length} 个关键事件尚未安排` : `${idle.length} 个关键事件尚未安排`}</summary>
+            <ol className="events-timeline" aria-label="尚未安排的关键事件">{idle.map(item)}</ol></details>}
+        </>
+      })()}
     <Modal key={projectId} title={editing ? `${editing.clear ? '清除' : '登记'}${editing.event.label}实际时间` : ''} open={!!editing && editing.projectId === projectId}
       confirmLoading={saving} onCancel={() => { if (!busy.current) setEditing(null) }} onOk={() => form.submit()} okText="保存" okButtonProps={{ disabled: !canEdit }}>
       <Form form={form} layout="vertical" disabled={saving || !canEdit} onFinish={save}>

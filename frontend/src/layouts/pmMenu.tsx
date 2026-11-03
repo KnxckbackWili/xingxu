@@ -25,10 +25,11 @@ const item = (key: string): MenuChild => ({ key, icon: ICONS[key], label: NAV_LA
 
 /** Settings, grouped as one page instead of a flat drawer. Each entry keeps the route's own permission check. */
 const SETTINGS: { key: string; label: string; keys: string[] }[] = [
-  { key: 'team', label: '团队与权限', keys: ['/pm/users', '/pm/permissions'] },
-  { key: 'project', label: '项目配置', keys: ['/pm/templates', '/pm/vehicle-types', '/pm/holidays'] },
-  { key: 'data', label: '数据与安全', keys: ['/pm/backups', '/pm/storage', '/pm/project-recycle-bin'] },
-  { key: 'system', label: '系统', keys: ['/pm/notification-channels', '/pm/ai-tokens', '/pm/system-updates'] },
+  // Everyday first; rarely touched settings sit together under 高级.
+  { key: 'project', label: '项目', keys: ['/pm/templates', '/pm/vehicle-types', '/pm/holidays'] },
+  { key: 'team', label: '人员与数据', keys: ['/pm/users', '/pm/backups', '/pm/project-recycle-bin'] },
+  { key: 'system', label: '系统', keys: ['/pm/notification-channels', '/pm/system-updates'] },
+  { key: 'advanced', label: '高级', keys: ['/pm/permissions', '/pm/storage', '/pm/ai-tokens'] },
 ]
 export const MENU_GROUPS = (user?: NavigationUser): MenuGroup[] =>
   SETTINGS.map(group => ({ type: 'group' as const, key: group.key, label: group.label, children: group.keys.filter(key => canAccessNav(key, user)).map(item) }))

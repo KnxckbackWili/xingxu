@@ -245,22 +245,9 @@ export default function WorkerIssuesPage() {
       {!loadError && issues.length>0 && visible.length===0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="这个范围没有问题"><Button onClick={()=>{setScope('all');setSearch('')}}>查看全部问题</Button></Empty>}
       </WorkSection>
       <Modal className="worker-work-modal" title="上报问题" open={reportOpen} onCancel={() => { if (!submitting) setReportOpen(false) }} onOk={() => reportForm.submit()} okButtonProps={{ disabled: !canRaiseIssue }} confirmLoading={submitting} cancelText="暂时收起" cancelButtonProps={{ disabled: submitting }} closable={!submitting} maskClosable={false} okText="提交上报" width={520}>
-        <Typography.Paragraph type="secondary">先说明发生了什么，方便处理人接手。暂时收起后，本页会保留填写内容；离开或刷新页面会丢失尚未提交的内容。</Typography.Paragraph>
         <Form form={reportForm} layout="vertical" onFinish={submitReport} disabled={!canRaiseIssue || submitting} scrollToFirstError>
           <Form.Item name="project_id" label="所属项目" rules={[{ required: true, message: '请选择项目' }]}>
             <Select placeholder="选择项目" options={projects.map((p) => ({ value: p.id, label: p.name, disabled: isProjectWriteBlocked(p.status) }))} />
-          </Form.Item>
-          <Form.Item name="issue_type" label="问题类型" initialValue="other" rules={[{ required: true }]}>
-            <Select options={ISSUE_TYPES.map((t) => ({ value: t.value, label: ISSUE_TYPE_SHORT[t.value] ?? t.value }))} />
-          </Form.Item>
-          <Form.Item name="nature" label="问题性质" initialValue="normal" extra="事故和质量问题会自动建立对应资料；标准提交时限为24小时。" rules={[{required:true}]}><Select options={ISSUE_NATURES} /></Form.Item>
-          <Form.Item name="severity" label="严重程度" initialValue="medium" rules={[{ required: true }]}>
-            <Select options={[
-              { value: 'critical', label: '严重 · 安全风险或现场停工' },
-              { value: 'high', label: '高 · 关键工作受阻' },
-              { value: 'medium', label: '中 · 有影响，可暂时继续' },
-              { value: 'low', label: '低 · 一般改进，不影响工作' },
-            ]} />
           </Form.Item>
           <Form.Item name="title" label="问题标题" rules={[{ required: true, whitespace: true, message: '请填写问题标题' }]}>
             <Input placeholder="如：3号车避障传感器报警" />
@@ -268,21 +255,38 @@ export default function WorkerIssuesPage() {
           <Form.Item name="description" label="问题描述">
             <Input.TextArea rows={3} placeholder="发生时间、现象、影响范围等" />
           </Form.Item>
-          <Form.Item name={['extra', 'device']} label="涉及车辆/设备（可选）" extra="可从本项目车辆中选择，也可直接填写设备或部位。">
+          <Form.Item name={['extra', 'device']} label="涉及车辆/设备（可选）">
             <AutoComplete options={vehicleOptions} placeholder="如：3号车 · AGV-003 / 充电桩" allowClear filterOption={(input, option) => String(option?.value ?? '').toLowerCase().includes(input.toLowerCase())} />
           </Form.Item>
-          <Form.Item noStyle shouldUpdate={(prev, cur) => prev.issue_type !== cur.issue_type}>
-            {({ getFieldValue }) => (ISSUE_TYPE_FIELDS[getFieldValue('issue_type')] ?? []).filter(field => field.key !== 'device').map(field => (
-              <Form.Item key={field.key} name={['extra', field.key]} preserve={false} label={field.label}>
-                {field.type === 'select' ? <Select options={field.options} placeholder={field.placeholder} allowClear /> : <Input placeholder={field.placeholder} />}
-              </Form.Item>
-            ))}
-          </Form.Item>
-          <Form.Item label="照片或附件（可选）" extra={createdIssue ? '问题已保存，提交时只重试下面剩余的附件。' : '可拍照或选择文件；网络不稳定时附件会进入上传队列。'}>
+          <Form.Item label="照片或附件（可选）" extra={createdIssue ? '问题已保存，提交时只重试下面剩余的附件。' : undefined}>
             <Upload multiple fileList={fileList} beforeUpload={file => { setFileList(list => [...list, file]); return false }} onRemove={file => setFileList(list => list.filter(item => item.uid !== file.uid))} accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.txt">
-              <Button icon={<UploadOutlined />}>选择照片或文件</Button>
+              <Button icon={<UploadOutlined />}>拍照或选择文件</Button>
             </Upload>
           </Form.Item>
+          <div className="issue-form-pair">
+            <Form.Item name="issue_type" label="问题类型" initialValue="other" rules={[{ required: true }]}>
+              <Select options={ISSUE_TYPES.map((t) => ({ value: t.value, label: ISSUE_TYPE_SHORT[t.value] ?? t.value }))} />
+            </Form.Item>
+            <Form.Item name="severity" label="严重程度" initialValue="medium" rules={[{ required: true }]}>
+              <Select options={[
+                { value: 'critical', label: '严重 · 安全风险或停工' },
+                { value: 'high', label: '高 · 关键工作受阻' },
+                { value: 'medium', label: '中 · 可暂时继续' },
+                { value: 'low', label: '低 · 不影响工作' },
+              ]} />
+            </Form.Item>
+          </div>
+          <details className="issue-form-more">
+            <summary>更多信息（可选）</summary>
+            <Form.Item name="nature" label="问题性质" initialValue="normal" extra="选“事故”或“质量问题”会自动建立需要提交的报告。" rules={[{required:true}]}><Select options={ISSUE_NATURES} /></Form.Item>
+            <Form.Item noStyle shouldUpdate={(prev, cur) => prev.issue_type !== cur.issue_type}>
+              {({ getFieldValue }) => (ISSUE_TYPE_FIELDS[getFieldValue('issue_type')] ?? []).filter(field => field.key !== 'device').map(field => (
+                <Form.Item key={field.key} name={['extra', field.key]} preserve={false} label={field.label}>
+                  {field.type === 'select' ? <Select options={field.options} placeholder={field.placeholder} allowClear /> : <Input placeholder={field.placeholder} />}
+                </Form.Item>
+              ))}
+            </Form.Item>
+          </details>
         </Form>
       </Modal>
 

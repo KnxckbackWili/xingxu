@@ -27,7 +27,7 @@ describe('主导航与设置目录', () => {
     expect(appNavItems('readonly').map(item => item.label)).not.toContain('问题')
   })
   it('groups low-frequency tools into four settings groups without duplicate daily links', () => {
-    expect(MENU_GROUPS('admin').map(group => group.label)).toEqual(['团队与权限', '项目配置', '数据与安全', '系统'])
+    expect(MENU_GROUPS('admin').map(group => group.label)).toEqual(['项目', '人员与数据', '系统', '高级'])
     const items = MENU_ITEMS('admin'); const paths = items.map(item => item.key)
     for (const path of ['/pm/templates', '/pm/users', '/pm/permissions', '/pm/vehicle-types', '/pm/holidays', '/pm/notification-channels', '/pm/backups', '/pm/storage', '/pm/system-updates', '/pm/ai-tokens', '/pm/project-recycle-bin']) expect(paths).toContain(path)
     for (const path of ['/pm/dashboard', '/pm/projects', '/pm/people', '/pm/messages', '/pm/stats', '/pm/governance', '/pm/my-schedule', '/pm/team-schedule', '/pm/feedback', '/pm/inventory']) expect(paths).not.toContain(path)

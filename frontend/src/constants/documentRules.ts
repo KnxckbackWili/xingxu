@@ -1,7 +1,7 @@
 export const DOCUMENT_STAGES = [
-  { value: '4', label: '4 · 内部启动会' }, { value: '5', label: '5 · 发车前' },
-  { value: '6', label: '6 · 实施' }, { value: '7', label: '7 · 验收' },
-  { value: '8', label: '8 · 交付' }, { value: '9', label: '9 · 全项目周期更新' },
+  { value: '4', label: '内部启动会' }, { value: '5', label: '发车前' },
+  { value: '6', label: '实施' }, { value: '7', label: '验收' },
+  { value: '8', label: '交付' }, { value: '9', label: '全项目周期' },
 ]
 export const DOCUMENT_TIMINGS: Record<string, string> = {
   before_event: '事件发生前', after_event: '事件发生后', weekly: '每周',

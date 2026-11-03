@@ -163,3 +163,10 @@ html[data-theme='dark'] .ant-btn-primary.ant-btn-background-ghost:not(:disabled)
 .completion-blocker-head > a { flex-shrink: 0; }
 .completion-blocker-items.ant-typography { margin: 4px 0 0; font-size: 13px; }
 .completion-blocker-items summary { cursor: pointer; color: var(--agv-primary); }
+.issue-form-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.issue-form-more { margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--agv-border-soft); }
+.issue-form-more > summary { cursor: pointer; color: var(--agv-text-secondary); font-size: 13px; margin-bottom: 10px; }
+@media (max-width: 480px) { .issue-form-pair { grid-template-columns: 1fr; } }
+.project-settings-stack { display: grid; gap: 20px; }
+.project-settings-more > summary { cursor: pointer; color: var(--agv-text-secondary); font-size: 13px; padding: 6px 0; }
+.events-idle > summary { cursor: pointer; color: var(--agv-text-secondary); font-size: 13px; padding: 6px 0; }

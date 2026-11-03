@@ -18,9 +18,13 @@ import './WeeklyPlan.css'
 import { IconAction, RefreshAction } from '../../../components/IconAction'
 
 const monday = (value: string) => { const d = dayjs(value); return d.subtract((d.day() + 6) % 7, 'day').format('YYYY-MM-DD') }
-const stateText: Record<string,string> = { unknown:'完成情况待核对', completed:'已完成', overdue:'已逾期', in_progress:'计划进行中', planned:'计划完成' }
 type Edit = { cell?: PlanCell; input: PlanInput; scopeMode: 'all'|'type'|'batch'; confirmIntent: boolean; intentReason: string }
 const scopeText = (cell: PlanCell) => cell.scope.label || cell.scope.vehicle_type || (cell.scope.vehicle_unit_ids.length ? `指定 ${cell.scope.vehicle_unit_ids.length} 台` : cell.kind === 'vehicle' ? '全部适用车辆' : '本工作项')
+
+// Only a narrowed scope is worth a word; "all vehicles" / "this work item" is the default.
+const narrowScope = (cell: PlanCell) => cell.scope.label || cell.scope.vehicle_type || (cell.scope.vehicle_unit_ids.length ? `指定 ${cell.scope.vehicle_unit_ids.length} 台` : '')
+const people = (cell: PlanCell) => cell.assignees.length ? cell.assignees.map(person => `${person.name}${person.active ? '' : '（已停用）'}`).join('、') : '未分配'
+const goal = (cell: PlanCell) => cell.intent_review_required ? '原计划意图待核对' : cell.mode === 'in_progress' ? '进行中' : cell.kind === 'other' ? '完成' : cell.target_count == null ? '计划台数待核对' : `完成 ${cell.target_count} 台`
 
 const restDays = (week: PlanWeek, settings: PlanSettings) => Array.from({ length: 7 }, (_, offset) => dayjs(week.week_start).add(offset, 'day')).filter(date => {
   const value = date.format('YYYY-MM-DD')
@@ -193,22 +197,20 @@ export default function SchedulePage({projectId,project,onProjectChange}: {proje
           :!rows.length?<Empty description="这几周还没有安排">{allowed&&<Space wrap><Button type="primary" onClick={openDraft} disabled={busy}>生成初稿</Button><Button onClick={()=>setShowAll(true)}>逐项安排</Button></Space>}</Empty>
           :<div className="weekly-plan-scroll" role="region" aria-label="周计划表" tabIndex={0}><table className="weekly-plan-table"><thead><tr><th>工作项</th>{data.weeks.map(week=><th key={week.week_start}><strong>{week.week_start.slice(5)} — {week.week_end.slice(5)}</strong>{week.holiday_days.length>0&&<small>节假日：{week.holiday_days.map(day=>day.slice(5)).join('、')}</small>}{week.makeup_workdays.length>0&&<small>补班：{week.makeup_workdays.map(day=>day.slice(5)).join('、')}</small>}{restDays(week,data.settings).length>0&&<small>项目休息日：{restDays(week,data.settings).join('、')}</small>}{week.missing_holiday_years.length>0&&<small>年度安排待核对</small>}</th>)}</tr></thead><tbody>{rows.map(item=><tr key={item.id}><th><strong>{item.name}</strong><small>{groupLine(item)}{item.kind==='vehicle'&&<Tag className="weekly-plan-kind">逐车</Tag>}</small></th>{data.weeks.map(week=>{
           const cells=visibleCells.filter(cell=>cell.task_id===item.id&&cell.week_start===week.week_start)
-          return <td key={week.week_start} className={cells.length?'has-plan':'is-empty'}>{cells.map(cell=><article key={cell.id} className={`weekly-plan-cell${cell.is_cancelled?' is-cancelled':''}${cell.published?' is-published':' is-draft'}`}>
-            <div className="weekly-plan-cell-head">{allowed&&!cell.published&&!cell.is_cancelled&&<Checkbox aria-label={`选择${cell.task_name} ${cell.week_start} ${scopeText(cell)}`} checked={selection.includes(cell.id)} onChange={event=>setSelection(current=>event.target.checked?[...current,cell.id]:current.filter(id=>id!==cell.id))}/>}<span className="weekly-plan-badge">{cell.is_cancelled?'已取消':cell.published?'已发布':'草稿'}</span>
-              <span className={`weekly-plan-state${cell.completion.overdue?' is-overdue':cell.completion.is_complete?' is-done':''}`}>{stateText[cell.completion.state]||'完成情况待核对'}</span></div>
-            {cell.permissions.edit&&allowed?<button type="button" className="weekly-plan-cell-body" disabled={busy} aria-label={`编辑${cell.task_name} ${cell.week_start} ${scopeText(cell)}`} onClick={()=>openCell(cell)}>
-              <strong>{cell.intent_review_required?'原计划意图待核对':cell.mode==='in_progress'?'进行中':cell.kind==='other'?'完成工作项':cell.target_count==null?'计划台数待核对':`完成 ${cell.target_count} 台`}</strong>
-              <span>{scopeText(cell)} · {cell.assignees.length?cell.assignees.map(person=>`${person.name}${person.active?'':'（已停用）'}`).join('、'):'未分配'}</span>
-            </button>:<div className="weekly-plan-cell-body">
-              <strong>{cell.intent_review_required?'原计划意图待核对':cell.mode==='in_progress'?'进行中':cell.kind==='other'?'完成工作项':cell.target_count==null?'计划台数待核对':`完成 ${cell.target_count} 台`}</strong>
-              <span>{scopeText(cell)} · {cell.assignees.length?cell.assignees.map(person=>`${person.name}${person.active?'':'（已停用）'}`).join('、'):'未分配'}</span>
-            </div>}
-            {cell.completion.required_count!=null&&cell.kind==='vehicle'&&<small>实际 {cell.completion.completed_count??'未知'} / 累计计划 {cell.completion.required_count}</small>}
+          return <td key={week.week_start} className={cells.length?'has-plan':'is-empty'}>{cells.map(cell=>{
+            const state=cell.completion.overdue?'已逾期':cell.completion.is_complete?'已完成':''
+            const body=<><strong>{goal(cell)}{narrowScope(cell)&&<small> · {narrowScope(cell)}</small>}</strong><span>{people(cell)}</span></>
+            return <article key={cell.id} title={draftSource(cell)?`初稿依据：${draftBasis(cell.source_metadata)}`:undefined} className={`weekly-plan-cell${cell.is_cancelled?' is-cancelled':''}${cell.published?' is-published':' is-draft'}`}>
+            {(!cell.published||cell.is_cancelled||state)&&<div className="weekly-plan-cell-head">{allowed&&!cell.published&&!cell.is_cancelled&&<Checkbox aria-label={`选择${cell.task_name} ${cell.week_start} ${scopeText(cell)}`} checked={selection.includes(cell.id)} onChange={event=>setSelection(current=>event.target.checked?[...current,cell.id]:current.filter(id=>id!==cell.id))}/>}
+              {(cell.is_cancelled||!cell.published)&&<span className="weekly-plan-badge">{cell.is_cancelled?'已取消':'草稿'}</span>}
+              {state&&<span className={`weekly-plan-state${cell.completion.overdue?' is-overdue':' is-done'}`}>{state}</span>}</div>}
+            {cell.permissions.edit&&allowed?<button type="button" className="weekly-plan-cell-body" disabled={busy} aria-label={`编辑${cell.task_name} ${cell.week_start} ${scopeText(cell)}`} onClick={()=>openCell(cell)}>{body}</button>
+              :<div className="weekly-plan-cell-body">{body}</div>}
+            {cell.kind==='vehicle'&&cell.completion.required_count!=null&&!!cell.completion.completed_count&&<small>已完成 {cell.completion.completed_count} / {cell.completion.required_count} 台</small>}
             {cell.completion.unidentified_completed!>0&&<small>含迁移车号待核对数量 {cell.completion.unidentified_completed}</small>}
             {cell.notes&&!(draftSource(cell)&&cell.notes.startsWith('初稿：按'))&&<p>{cell.notes}</p>}
-            {draftSource(cell)?<small>初稿依据：{draftBasis(cell.source_metadata)}</small>
-              :cell.source_metadata&&<details><summary>历史计划来源（只读）</summary><pre>{JSON.stringify(cell.source_metadata,null,2)}</pre></details>}
-          </article>)}{allowed&&<button type="button" className="weekly-plan-add" disabled={busy} aria-label={`安排${item.name} ${week.week_start}`} onClick={()=>openNew(item,week.week_start)}><PlusOutlined aria-hidden/>{cells.length?'另建范围':''}</button>}</td>
+            {!draftSource(cell)&&cell.source_metadata&&<details><summary>历史计划来源（只读）</summary><pre>{JSON.stringify(cell.source_metadata,null,2)}</pre></details>}
+          </article>})}{allowed&&<button type="button" className="weekly-plan-add" disabled={busy} aria-label={`安排${item.name} ${week.week_start}`} onClick={()=>openNew(item,week.week_start)}><PlusOutlined aria-hidden/>{cells.length?'另建范围':''}</button>}</td>
         })}</tr>)}</tbody></table></div>}
       </div>
     </>}
@@ -246,12 +248,11 @@ export default function SchedulePage({projectId,project,onProjectChange}: {proje
       <p>仅发布下面 {chosen.length} 格；实际完成保持独立记录。</p><ul>{chosen.map(cell=><li key={cell.id}>{cell.task_name} · {cell.week_start} · {scopeText(cell)} · {cell.assignees.map(person=>person.name).join('、')||'未分配'}</li>)}</ul>
     </Modal>
     <Modal title="生成周计划初稿" open={draftOpen&&!!data} width={780} onCancel={()=>{if(!busy)setDraftOpen(false)}} okText="保存为草稿" confirmLoading={busy} okButtonProps={{disabled:!allowed||!preview||JSON.stringify(preview.body)!==JSON.stringify(draftBody)||!preview.value.proposals.length}} onOk={()=>preview&&void write(()=>weeklyPlansApi.draft(projectId,{...preview.body,preview_token:preview.value.preview_token}),()=>setDraftOpen(false))}>
-      <p>为需要安排的阶段选择关键事件。未选择的阶段不生成；缺少真实日期、明确台数或环节时保留警告。现有格不覆盖，负责人由你明确选择。</p>
-      {actionError&&<Alert type="error" message={actionError}/>}
-      <Space wrap><Button disabled={busy} onClick={reloadRecommendations}>重新读取初稿建议</Button>{busy&&<Spin aria-label="正在处理初稿"/>}</Space>
+      <p className="weekly-plan-draft-intro">按发车和全部到场的计划日期，把每个分组排到对应的周。生成的是草稿，已有的计划格不会被覆盖；核对后再发布。{busy&&<Spin size="small" aria-label="正在处理初稿"/>}</p>
+      {actionError&&<Alert type="error" message={actionError} action={actionError.startsWith('默认初稿建议暂不可读取')?<Button size="small" disabled={busy} onClick={reloadRecommendations}>重新读取初稿建议</Button>:undefined}/>}
       {recommendations&&<div className="weekly-plan-suggestions">
-        <p>{recommendations.rules.length?`已按可核对来源提出 ${recommendations.rules.length} 个阶段的默认规则；下方可继续修改，预览后才会保存。`:'没有可用的默认规则，请按实际工作阶段手动选择关键事件。'}</p>
-        {recommendations.warnings.map((warning,index)=><Alert key={index} type="warning" message={planWarningText(warning)}/>)}
+        {!recommendations.rules.length&&!missingAnchors&&<Alert type="info" message="没有可用的默认安排，请在下方为每个分组选择排在哪周。"/>}
+        {recommendations.warnings.length>0&&!missingAnchors&&<details className="weekly-plan-warnings"><summary>{recommendations.warnings.length} 条提醒</summary><ul>{recommendations.warnings.map((warning,index)=><li key={index}>{planWarningText(warning)}</li>)}</ul></details>}
         {missingAnchors&&allowed&&project&&<div className="weekly-plan-anchors">
           <strong>先填两个计划日期，系统就能按阶段排出初稿</strong>
           <Space wrap>
@@ -261,12 +262,13 @@ export default function SchedulePage({projectId,project,onProjectChange}: {proje
           </Space>
           <Typography.Text type="secondary">日期会写入项目关键事件，发车前资料的截止也按新日期重算。</Typography.Text>
         </div>}
-        {recommendations.suggestions.length>0&&<details><summary>查看初始建议的来源、窗口与理由</summary>{recommendations.suggestions.map(item=><div key={item.phase_id}><strong>{item.phase_name}</strong><div>{item.source_label}</div><div>参考窗口：{item.window_start&&item.window_end?`${item.window_start} — ${item.window_end}`:'待核对'} · 建议周：{item.week_start||'待核对'}</div><p>{item.reason}</p></div>)}</details>}
       </div>}
-      <DatePicker aria-label="初稿起始周" picker="week" placeholder="起始周（可选）" value={firstWeek?dayjs(firstWeek):null} disabled={busy} onChange={value=>{setFirstWeek(value?monday(value.format('YYYY-MM-DD')):undefined);setPreview(undefined)}}/>
-      <div className="weekly-plan-rule weekly-plan-rule-head" aria-hidden><strong>阶段</strong><span>按哪个关键事件</span><span>相隔</span><span>计划方式</span></div>
-      {data?.work_items.map(phase=>{const rule=rules.find(item=>item.phase_id===phase.id);return <div key={phase.id} className="weekly-plan-rule"><strong>{phase.name}</strong><Select aria-label={`${phase.name}关键事件`} value={rule?.anchor} allowClear placeholder="本阶段不生成" disabled={busy} onChange={anchor=>{setRules(current=>anchor?[...current.filter(item=>item.phase_id!==phase.id),{phase_id:phase.id,anchor,offset_weeks:rule?.offset_weeks??0,mode:rule?.mode??'finish'}]:current.filter(item=>item.phase_id!==phase.id));setPreview(undefined)}} options={[{value:'before_ship',label:'发车前倒推'},{value:'after_arrival',label:'到场后安排'}]}/>{rule&&<><InputNumber aria-label={`${phase.name}偏移周数`} addonAfter="周" min={0} precision={0} value={rule.offset_weeks} disabled={busy} onChange={value=>{setRules(current=>current.map(item=>item.phase_id===phase.id?{...item,offset_weeks:value??0}:item));setPreview(undefined)}}/><Select aria-label={`${phase.name}初稿方式`} value={rule.mode} disabled={busy} onChange={mode=>{setRules(current=>current.map(item=>item.phase_id===phase.id?{...item,mode}:item));setPreview(undefined)}} options={[{value:'finish',label:'计划完成'},{value:'in_progress',label:'进行中'}]}/></>}</div>})}
-      <Button disabled={!rules.length||busy} onClick={()=>void inspectDraft()}>预览初稿</Button>
+      <details className="weekly-plan-rules" open={!recommendations?.rules.length}><summary>调整每个分组排在哪周{rules.length?`（已安排 ${rules.length} 个分组）`:''}</summary>
+      <DatePicker aria-label="初稿起始周" picker="week" placeholder="最早从哪周开始（可选）" value={firstWeek?dayjs(firstWeek):null} disabled={busy} onChange={value=>{setFirstWeek(value?monday(value.format('YYYY-MM-DD')):undefined);setPreview(undefined)}}/>
+      <div className="weekly-plan-rule weekly-plan-rule-head" aria-hidden><strong>分组</strong><span>以哪个日期为准</span><span>相隔</span><span>计划方式</span></div>
+      {data?.work_items.map(phase=>{const rule=rules.find(item=>item.phase_id===phase.id);return <div key={phase.id} className="weekly-plan-rule"><strong>{phase.name}</strong><Select aria-label={`${phase.name}关键事件`} value={rule?.anchor} allowClear placeholder="本阶段不生成" disabled={busy} onChange={anchor=>{setRules(current=>anchor?[...current.filter(item=>item.phase_id!==phase.id),{phase_id:phase.id,anchor,offset_weeks:rule?.offset_weeks??0,mode:rule?.mode??'finish'}]:current.filter(item=>item.phase_id!==phase.id));setPreview(undefined)}} options={[{value:'before_ship',label:'发车前'},{value:'after_arrival',label:'全部到场后'}]}/>{rule&&<><InputNumber aria-label={`${phase.name}偏移周数`} addonAfter="周" min={0} precision={0} value={rule.offset_weeks} disabled={busy} onChange={value=>{setRules(current=>current.map(item=>item.phase_id===phase.id?{...item,offset_weeks:value??0}:item));setPreview(undefined)}}/><Select aria-label={`${phase.name}初稿方式`} value={rule.mode} disabled={busy} onChange={mode=>{setRules(current=>current.map(item=>item.phase_id===phase.id?{...item,mode}:item));setPreview(undefined)}} options={[{value:'finish',label:'计划完成'},{value:'in_progress',label:'进行中'}]}/></>}</div>})}
+      </details>
+      <Button type="primary" ghost disabled={!rules.length||busy} onClick={()=>void inspectDraft()}>预览初稿</Button>
       {preview&&<><ul>{preview.value.warnings.map((warning,index)=><li key={index}>{planWarningText(warning)}</li>)}</ul><Table rowKey={(_,index)=>String(index)} size="small" dataSource={preview.value.proposals} pagination={{pageSize:8}} columns={[{title:'阶段',dataIndex:'phase_name'},{title:'工作项',dataIndex:'task_name'},{title:'周',dataIndex:'week_start'},{title:'计划',render:(_,row)=>row.mode==='in_progress'?'进行中':row.kind==='other'?'完成工作项':`${row.target_count??'待核对'} 台`}]}/></>}
     </Modal>
   </section>

@@ -69,3 +69,7 @@ td.is-empty .weekly-plan-add { position:absolute; inset:4px; width:auto; min-hei
 .weekly-plan-rule-head span:nth-child(2) { width:145px; }
 .weekly-plan-rule-head span:nth-child(3) { width:120px; }
 .weekly-plan-rule .ant-input-number-group-wrapper { width:120px; }
+.weekly-plan-draft-intro { color: var(--agv-text-secondary); }
+.weekly-plan-rules { margin: 12px 0; }
+.weekly-plan-rules > summary { cursor: pointer; font-weight: 500; margin-bottom: 8px; }
+.weekly-plan-cell-body strong small { font-weight: 400; color: var(--agv-text-secondary); }

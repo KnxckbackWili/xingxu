@@ -53,9 +53,10 @@ it('filters server-defined current-week work separately from on-demand inspectio
   show(); await screen.findByText(/6.2 本周生命周期/)
   fireEvent.click(screen.getByText('本周待交', { selector: '.ant-segmented-item-label span' }))
   expect(screen.queryByText(/抽查变更单/)).toBeNull()
-  fireEvent.click(screen.getByText('抽查', { selector: '.ant-segmented-item-label' }))
+  // On-demand documents have no separate filter any more; they stay in 全部.
+  fireEvent.click(screen.getByText('全部', { selector: '.ant-segmented-item-label' }))
   expect(screen.getByText(/抽查变更单/)).toBeVisible()
-  expect(screen.queryByText(/6.2 本周生命周期/)).toBeNull()
+  expect(screen.queryByText('抽查', { selector: '.ant-segmented-item-label' })).toBeNull()
 })
 it('requires a real file and submits one actual upload to all selected requirements', async () => {
   h.list.mockResolvedValue(response([row(), row('d2')]))

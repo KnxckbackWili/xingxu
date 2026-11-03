@@ -391,57 +391,26 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
           <Form.Item name="title" label="问题标题" rules={[{ required: true, whitespace: true, message: '请输入问题标题' }, { max: 300, message: '标题最多 300 字' }]}>
             <Input placeholder="简述问题" />
           </Form.Item>
-          <Form.Item name="description" label="问题描述">
-            <Input.TextArea rows={3} placeholder="详细描述现象、影响等" />
-          </Form.Item>
-          <Form.Item name="issue_type" label="问题类型" initialValue="hardware" rules={[{ required: true }]}>
-            <Select options={ISSUE_TYPES} />
-          </Form.Item>
-          <Form.Item name="nature" label="问题性质" initialValue="normal" rules={[{required:true}]} extra="事故自动建立事故报告；质量问题建立反馈单和可选返厂申请。标准资料要求24小时内提交，问题处理时限按服务端配置。">
-            <Select options={ISSUE_NATURES} />
-          </Form.Item>
           <Form.Item noStyle shouldUpdate={(prev, cur) => prev.issue_type !== cur.issue_type}>
-            {({ getFieldValue }) => {
-              const t = getFieldValue('issue_type') || 'hardware'
-              const fields = ISSUE_TYPE_FIELDS[t] ?? []
-              return (
-                <>
-                  <Alert
-                    type="info"
-                    showIcon
-                    style={{ marginBottom: 12 }}
-                    message={ISSUE_TYPE_HINTS[t] ?? ISSUE_TYPE_HINTS.other}
-                  />
-                  {fields.map((f) => (
-                    <Form.Item key={f.key} name={['extra', f.key]} preserve={false} label={f.label} style={{ marginBottom: 12 }}>
-                      {f.type === 'select'
-                        ? <Select options={f.options} placeholder={f.placeholder} allowClear />
-                        : <Input placeholder={f.placeholder} />}
-                    </Form.Item>
-                  ))}
-                </>
-              )
-            }}
+            {({ getFieldValue }) => <Form.Item name="description" label="问题描述">
+              <Input.TextArea rows={3} placeholder={ISSUE_TYPE_HINTS[getFieldValue('issue_type') || 'hardware'] ?? '现象、影响、发生时间'} />
+            </Form.Item>}
           </Form.Item>
-          <Form.Item name="task_id" label="关联任务（可选）">
-            <Select
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              placeholder="选择任务，便于定位问题上下文"
-              options={tasks.map((t) => ({ label: `${t.phase} / ${t.label}`, value: t.id }))}
-            />
-          </Form.Item>
-          <Form.Item name="severity" label="严重程度" initialValue="medium">
-            <Select
-              options={[
-                { label: '严重（影响整体交付）', value: 'critical' },
-                { label: '高（影响主要功能）', value: 'high' },
-                { label: '中（影响局部功能）', value: 'medium' },
-                { label: '低（不影响使用）', value: 'low' },
-              ]}
-            />
-          </Form.Item>
+          <div className="issue-form-pair">
+            <Form.Item name="issue_type" label="问题类型" initialValue="hardware" rules={[{ required: true }]}>
+              <Select options={ISSUE_TYPES} />
+            </Form.Item>
+            <Form.Item name="severity" label="严重程度" initialValue="medium">
+              <Select
+                options={[
+                  { label: '严重（影响整体交付）', value: 'critical' },
+                  { label: '高（影响主要功能）', value: 'high' },
+                  { label: '中（影响局部功能）', value: 'medium' },
+                  { label: '低（不影响使用）', value: 'low' },
+                ]}
+              />
+            </Form.Item>
+          </div>
           <Form.Item label="附件（照片/截图/文件，支持续传）">
             <Upload
               multiple
@@ -452,6 +421,30 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
               <Button icon={<PaperClipOutlined />}>选择文件</Button>
             </Upload>
           </Form.Item>
+          <details className="issue-form-more">
+            <summary>更多信息（可选）</summary>
+            <Form.Item name="nature" label="问题性质" initialValue="normal" rules={[{required:true}]} extra="选“事故”或“质量问题”会自动建立需要提交的报告。">
+              <Select options={ISSUE_NATURES} />
+            </Form.Item>
+            <Form.Item noStyle shouldUpdate={(prev, cur) => prev.issue_type !== cur.issue_type}>
+              {({ getFieldValue }) => (ISSUE_TYPE_FIELDS[getFieldValue('issue_type') || 'hardware'] ?? []).map((f) => (
+                <Form.Item key={f.key} name={['extra', f.key]} preserve={false} label={f.label} style={{ marginBottom: 12 }}>
+                  {f.type === 'select'
+                    ? <Select options={f.options} placeholder={f.placeholder} allowClear />
+                    : <Input placeholder={f.placeholder} />}
+                </Form.Item>
+              ))}
+            </Form.Item>
+            <Form.Item name="task_id" label="关联任务">
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder="选择任务，便于定位问题上下文"
+                options={tasks.map((t) => ({ label: `${t.phase} / ${t.label}`, value: t.id }))}
+              />
+            </Form.Item>
+          </details>
         </Form>
         </fieldset>
       </Modal>

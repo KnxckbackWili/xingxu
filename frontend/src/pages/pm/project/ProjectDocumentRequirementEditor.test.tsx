@@ -16,7 +16,7 @@ it('preserves lifetime timing and directs existing confidentiality changes to th
 it('requires explicit current-stage classification for a legacy source', async () => {
   show(definition({ stage_key: 'legacy', code: 'legacy-r1', source_metadata: { original: { private: '历史记录' } } })); const modal = within(await screen.findByRole('dialog')); fireEvent.click(modal.getByRole('button', { name: '保存要求' }))
   expect(await modal.findByText('请将历史资料明确归类到第4–9阶段')).toBeInTheDocument(); expect(h.update).not.toHaveBeenCalled()
-  fireEvent.mouseDown(modal.getByLabelText('阶段')); fireEvent.click(await screen.findByText('4 · 内部启动会')); fireEvent.change(modal.getByLabelText('编号'), { target: { value: '4.8' } }); fireEvent.click(modal.getByRole('button', { name: '保存要求' }))
+  fireEvent.mouseDown(modal.getByLabelText('阶段')); fireEvent.click(await screen.findByText('内部启动会', { selector: '.ant-select-item-option-content' })); fireEvent.change(modal.getByLabelText('编号'), { target: { value: '4.8' } }); fireEvent.click(modal.getByRole('button', { name: '保存要求' }))
   await waitFor(() => expect(h.update).toHaveBeenCalledTimes(1)); expect(h.update.mock.calls[0][2]).toMatchObject({ stage_key: '4', code: '4.8' }); expect(h.update.mock.calls[0][2]).not.toHaveProperty('source_metadata')
 })
 it('requires a weekly weekday and keeps failed saves editable without duplicate requests', async () => {
