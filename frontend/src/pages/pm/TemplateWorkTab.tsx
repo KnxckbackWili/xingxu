@@ -40,6 +40,8 @@ export default function TemplateWorkTab({ templateId, phases, setPhases, steps, 
   const latest = useRef(phases); latest.current = phases
   const queues = useRef(new Map<string, Promise<unknown>>())
   const term = keyword.trim().toLowerCase()
+  // Optional modules: labels that differ from their group's own name (e.g. 电梯 under 联调工作).
+  const modules = [...new Set(phases.flatMap(phase => phase.work_items.map(item => item.group_label ?? '').filter(label => label && label !== phase.name)))]
   const matches = (item: WorkItem) => !term || `${item.name} ${item.group_label ?? ''} ${item.description ?? ''}`.toLowerCase().includes(term)
   const located = phases.flatMap(phase => phase.work_items.map((item, index) => ({ item, phase, index })))
   const selected = located.find(row => row.item.id === selectedId)
@@ -163,7 +165,7 @@ export default function TemplateWorkTab({ templateId, phases, setPhases, steps, 
       { key: 'rename', icon: <EditOutlined />, label: '重命名' },
       { key: 'up', label: '上移分组', disabled: index === 0 },
       { key: 'down', label: '下移分组', disabled: index === siblings.length - 1 },
-      { key: 'move', label: '移到其他阶段', children: STAGES.filter(s => s.key !== stageOf(phase)).map(s => ({ key: `move:${s.key}`, label: `移到 ${s.key} · ${s.name}` })) },
+      { key: 'move', label: '移到其他阶段', children: STAGES.filter(s => s.key !== stageOf(phase)).map(s => ({ key: `move:${s.key}`, label: `移到「${s.name}」` })) },
       { type: 'divider' as const },
       { key: 'delete', icon: <DeleteOutlined />, danger: true, disabled: phase.work_items.length > 0, label: phase.work_items.length ? '删除分组（先移走工作项）' : '删除分组' },
     ],
@@ -210,14 +212,14 @@ export default function TemplateWorkTab({ templateId, phases, setPhases, steps, 
         {editable && <span className="tpl-toolbar-note">拖动 <HolderOutlined /> 调整顺序，或拖到别的分组、阶段</span>}
       </div>
       {term && !located.some(row => matches(row.item)) ? <Empty description="没有匹配的工作项" />
-        : <div className="tpl-outline-body">{STAGES.map(stage => {
+        : <div className="tpl-outline-body">{STAGES.map((stage, stageNumber) => {
           const groups = phases.filter(p => stageOf(p) === stage.key)
           const count = groups.reduce((n, p) => n + p.work_items.filter(matches).length, 0)
           if (term && !count) return null
           return <section key={stage.key} className={`tpl-stage-section${marker(`stage:${stage.key}`)}`} aria-label={stageLabel(stage.key)}
             onDragOver={over('group', { id: `stage:${stage.key}`, pos: 'end' })} onDrop={land(() => drag.current?.type === 'group' && moveGroup(drag.current.id, { stage: stage.key }))}>
             <header className="tpl-stage-head">
-              <h3><span className="tpl-stage-key">{stage.key}</span>{stage.name}</h3>
+              <h3><span className="tpl-stage-key">{stageNumber + 1}</span>{stage.name}</h3>
               <span className="tpl-stage-meta">{count ? `${count} 项` : '暂无工作'}</span>
               {canManage && <span className="tpl-stage-actions"><IconAction label={`在「${stage.name}」添加工作分组`} icon={<PlusOutlined />} disabled={loading} onClick={() => setAddingGroup(stage.key)} /></span>}
             </header>
@@ -226,7 +228,7 @@ export default function TemplateWorkTab({ templateId, phases, setPhases, steps, 
           </section>
         })}</div>}
     </div>
-    {panelRow ? <TemplateWorkPanel key={panelRow.item.id} item={panelRow.item} phases={phases} steps={steps} templateId={templateId} canManage={canManage} save={saves[panelRow.item.id]}
+    {panelRow ? <TemplateWorkPanel key={panelRow.item.id} item={panelRow.item} phases={phases} steps={steps} templateId={templateId} canManage={canManage} save={saves[panelRow.item.id]} modules={modules}
       canMove={{ up: panelRow.index > 0 && !term, down: panelRow.index < panelRow.phase.work_items.length - 1 && !term }}
       onPatch={patch => patchItem(panelRow.item.id, patch)} onDelete={() => void deleteItem(panelRow.item.id)} onMove={delta => nudge(panelRow.item.id, delta)}
       onCreateStep={onCreateStep} onClose={() => setSelectedId(undefined)}

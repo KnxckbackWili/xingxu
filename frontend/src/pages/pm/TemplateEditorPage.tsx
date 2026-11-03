@@ -2,7 +2,7 @@ import { ensureVerifiedAccount } from '../../utils/verifiedAccount'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Alert, Button, Dropdown, Input, Modal, Tabs, Tag, message } from 'antd'
-import { ArrowLeftOutlined, CopyOutlined, DeleteOutlined, DownloadOutlined, MoreOutlined, PlusOutlined, SaveOutlined, UploadOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, CopyOutlined, DeleteOutlined, DownloadOutlined, MoreOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons'
 import { api, errMsg } from '../../api/client'
 import { workItemsApi, type WorkPhase } from '../../api/workItems'
 import { useAuth } from '../../stores/auth'
@@ -12,7 +12,7 @@ import TemplateProcurementsTab from './TemplateProcurementsTab'
 import TemplateStepsTab from './TemplateStepsTab'
 import TemplateWorkTab from './TemplateWorkTab'
 import { IconAction, RefreshAction } from '../../components/IconAction'
-import { templateStatus, type TemplateRow } from './templateMeta'
+import type { TemplateRow } from './templateMeta'
 import './TemplateEditorPage.css'
 
 const TABS = ['work', 'documents', 'steps', 'procurement'] as const
@@ -90,7 +90,6 @@ export default function TemplateEditorPage() {
   const selected = templates.find(t => t.id === tid)
   const workCount = phases.reduce((n, p) => n + p.work_items.length, 0)
   const moreItems = [
-    ...(canManage && tid !== 'default' ? [{ key: 'publish', icon: <SaveOutlined />, label: `存为新版本 v${(selected?.version || 1) + 1}`, disabled: busy }] : []),
     ...(canManage ? [{ key: 'copy', icon: <CopyOutlined />, label: '复制为新模板' }] : []),
     { key: 'export', icon: <DownloadOutlined />, label: '导出 JSON' },
     ...(canImport ? [{ key: 'import', icon: <UploadOutlined />, label: '导入 JSON（覆盖当前内容）', disabled: busy }] : []),
@@ -120,8 +119,8 @@ export default function TemplateEditorPage() {
           <Input className="tpl-editor-name" aria-label="模板名称" variant="borderless" value={title.name} maxLength={200} onChange={e => setTitle({ ...title, name: e.target.value })} onBlur={saveTitle} onPressEnter={e => (e.target as HTMLInputElement).blur()} />
           <Input className="tpl-editor-desc-input" aria-label="模板说明" variant="borderless" placeholder="添加说明：适合什么样的项目" value={title.description} maxLength={2000} onChange={e => setTitle({ ...title, description: e.target.value })} onBlur={saveTitle} onPressEnter={e => (e.target as HTMLInputElement).blur()} />
         </> : <><h1>{selected?.name ?? (loading ? '' : '项目模板')}</h1>{selected?.description && <p className="tpl-editor-desc">{selected.description}</p>}</>}
-        <div className="tpl-editor-meta"><Tag color={selected?.is_system ? 'blue' : selected?.status === 'published' ? 'green' : undefined}>{templateStatus(selected)}</Tag>
-          <span>v{selected?.version || 1}</span>{!!selected?.usage_count && <span>已用于 {selected.usage_count} 个项目</span>}<span>修改自动保存，之后新建的项目按最新内容生成</span></div>
+        <div className="tpl-editor-meta">{selected?.is_system && <Tag color="blue">默认</Tag>}
+          {!!selected?.usage_count && <span>已用于 {selected.usage_count} 个项目</span>}<span>改动自动保存，之后新建的项目按最新内容带入</span></div>
       </div>
       <div className="tpl-editor-actions">
         {canCreateProject && <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate(`/pm/projects?create=1&template=${encodeURIComponent(tid)}`)}>用此模板新建项目</Button>}
@@ -130,7 +129,6 @@ export default function TemplateEditorPage() {
           if (key === 'copy') setCopyName(`${selected?.name ?? '模板'} 副本`)
           if (key === 'export') void exportJson()
           if (key === 'import') importInput.current?.click()
-          if (key === 'publish') void mutate(async () => { await api.post(`/templates/${tid}/publish`); message.success('已存为新版本') })
           if (key === 'delete') removeTemplate()
         } }}><IconAction bordered label="更多模板操作" icon={<MoreOutlined />} /></Dropdown>
         <input ref={importInput} type="file" accept=".json" hidden aria-hidden="true" onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; if (file) importJson(file) }} />

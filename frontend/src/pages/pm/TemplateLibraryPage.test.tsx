@@ -23,16 +23,17 @@ const show = () => render(<ConfigProvider theme={{ token: { motion: false } }}><
   <Route path="*" element={<Where />} />
 </Routes></MemoryRouter></ConfigProvider>)
 
-it('shows every template as a card with its totals and stage shape', async () => {
+it('shows every template as a simple card with its totals, without versions or publish states', async () => {
   show()
   const card = (await screen.findByRole('button', { name: '打开模板「系统默认模板」' })).closest('li')!
-  expect(card).toHaveTextContent('49 工作')
-  expect(card).toHaveTextContent('37 资料')
-  expect(card).toHaveTextContent('5 车辆环节')
-  expect(within(card).getByLabelText(/实施 41 项工作 32 份资料/)).toBeInTheDocument()
+  expect(card).toHaveTextContent('49 项工作')
+  expect(card).toHaveTextContent('37 份资料')
+  expect(card).toHaveTextContent('5 个车辆环节')
+  expect(card).toHaveTextContent('默认')
   const other = screen.getByRole('button', { name: '打开模板「叉车模板」' }).closest('li')!
-  expect(other).toHaveTextContent('草稿')
-  expect(other).toHaveTextContent('v2 · 已用于 3 个项目')
+  expect(other).not.toHaveTextContent('草稿')
+  expect(other).not.toHaveTextContent('v2')
+  expect(other).toHaveTextContent('已用于 3 个项目')
 })
 
 it('a card opens its template; the footer starts a project from it', async () => {

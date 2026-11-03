@@ -85,3 +85,17 @@ it('a double click creates one project with one idempotency key', async () => {
   finish({ id: 'once', initial_generation: { tasks: 3 } })
   await waitFor(() => expect(navigate).toHaveBeenCalledWith('/pm/projects/once/overview'))
 })
+
+it('lets the site leave out optional modules; their work is not brought in', async () => {
+  vi.mocked(api.get).mockImplementation(async (url: string) => url === '/templates' ? { data: templates } : { data: { phases: [{ id: 'g', name: '联调工作', work_items: [
+    { id: 'core', name: '多车联调', group_label: '联调工作' }, { id: 'lift', name: '电梯联调', group_label: '电梯' }, { id: 'door', name: '自动门联调', group_label: '自动门' }] }] } })
+  show()
+  expect(await screen.findByText('将带入 3 项工作，进项目后可增删')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('checkbox', { name: '电梯' }))
+  expect(screen.getByText('将带入 2 项工作，进项目后可增删')).toBeInTheDocument()
+  expect(screen.queryByRole('checkbox', { name: '联调工作' })).not.toBeInTheDocument()
+  fireEvent.change(screen.getByLabelText('项目名称'), { target: { value: '无电梯项目' } })
+  fireEvent.click(screen.getByRole('button', { name: '创建并进入项目' }))
+  await waitFor(() => expect(projectApi.create).toHaveBeenCalledTimes(1))
+  expect((vi.mocked(projectApi.create).mock.calls[0][0] as any).work_item_ids).toEqual(['core', 'door'])
+})

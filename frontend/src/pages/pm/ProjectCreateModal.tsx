@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Alert, Button, DatePicker, Form, Input, Modal, Select, Typography, message } from 'antd'
+import { Alert, Button, Checkbox, DatePicker, Form, Input, Modal, Select, Typography, message } from 'antd'
 import dayjs, { type Dayjs } from 'dayjs'
 import { flatWorkItems, selectedWorkItems } from '../../components/TemplateScope'
 import { projectApi } from '../../api'
@@ -9,6 +9,9 @@ import { DEFAULT_TIMEZONE } from '../../constants/timezones'
 import { useSubmitLock } from '../../hooks/useSubmitLock'
 
 type TemplateRow = { id: string; name: string; is_system?: boolean }
+type Work = { id: string; group_label?: string; phase_name?: string }
+// A work item belongs to an optional module when its label differs from its group (e.g. 电梯 under 联调工作).
+const moduleOf = (item: Work) => item.group_label && item.group_label !== item.phase_name ? item.group_label : ''
 type Values = { name: string; range: [Dayjs, Dayjs]; template: string }
 
 /** One screen: name, period and template. Customer, vehicles, people and documents are filled in the project's preparation checklist. */
@@ -19,19 +22,22 @@ export default function ProjectCreateModal({ open, initialTemplate, onClose }: {
   const creationKey = useRef<string | null>(null)
   const request = useRef(0)
   const [templates, setTemplates] = useState<TemplateRow[]>([])
-  const [workIds, setWorkIds] = useState<string[] | null>(null)
+  const [work, setWork] = useState<Work[] | null>(null)
+  const [skipped, setSkipped] = useState<string[]>([])
   const [loadError, setLoadError] = useState('')
   const [saving, setSaving] = useState(false)
   const template = Form.useWatch('template', form)
 
   const loadWork = async (tid: string) => {
     const ticket = ++request.current
-    setWorkIds(null); setLoadError('')
+    setWork(null); setSkipped([]); setLoadError('')
     try {
       const response = await api.get(`/templates/${tid}/work-items`)
       if (!Array.isArray(response.data?.phases)) throw new Error('模板工作内容返回格式无效')
       const phases = response.data.phases
-      if (ticket === request.current) setWorkIds(selectedWorkItems(phases, flatWorkItems(phases).map((task: { id: string }) => task.id), []))
+      const all: Work[] = flatWorkItems(phases)
+      const chosen = new Set(selectedWorkItems(phases, all.map(task => task.id), []))
+      if (ticket === request.current) setWork(all.filter(task => chosen.has(task.id)))
     } catch (error) {
       if (ticket === request.current) setLoadError(errMsg(error))
     }
@@ -55,6 +61,8 @@ export default function ProjectCreateModal({ open, initialTemplate, onClose }: {
   }, [open])
 
   useEffect(() => { if (open && template) void loadWork(template) }, [open, template])
+  const modules = [...new Set((work ?? []).map(moduleOf).filter(Boolean))]
+  const workIds = work ? work.filter(item => !skipped.includes(moduleOf(item))).map(item => item.id) : null
 
   const submit = async (values: Values) => {
     if (!workIds || !lock.tryAcquire()) return
@@ -96,6 +104,10 @@ export default function ProjectCreateModal({ open, initialTemplate, onClose }: {
       <Form.Item name="template" label="工作模板" extra={workIds ? `将带入 ${workIds.length} 项工作，进项目后可增删` : loadError ? undefined : '正在读取模板…'}>
         <Select aria-label="工作模板" loading={!templates.length && !loadError} options={templates.map(row => ({ value: row.id, label: row.name }))} />
       </Form.Item>
+      {modules.length > 0 && <Form.Item label="这个现场需要的模块" extra="不勾选的模块，其工作不会带入。">
+        <Checkbox.Group className="project-create-modules" aria-label="这个现场需要的模块" value={modules.filter(name => !skipped.includes(name))}
+          onChange={value => setSkipped(modules.filter(name => !value.includes(name)))} options={modules} />
+      </Form.Item>}
       {loadError && <Alert type="error" showIcon message="模板读取失败，暂不能创建" description={loadError}
         action={<Button size="small" onClick={() => void loadWork(form.getFieldValue('template'))}>重试</Button>} />}
       <Typography.Paragraph type="secondary" className="project-quick-create-note">

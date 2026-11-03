@@ -175,3 +175,7 @@
   .tpl-node .tpl-row-meta { margin-left: 0; flex-basis: 100%; }
   .tpl-form-pair { grid-template-columns: minmax(0, 1fr); }
 }
+.tpl-field-note { margin: -4px 0 0 74px; color: var(--agv-text-secondary); font-size: 12px; }
+.tpl-more { margin-top: 4px; border-top: 1px solid var(--agv-border-soft); padding-top: 10px; }
+.tpl-more > summary { cursor: pointer; color: var(--agv-text-secondary); font-size: 13px; margin-bottom: 10px; }
+.tpl-form-switches .ant-form-item { margin-bottom: 12px; }

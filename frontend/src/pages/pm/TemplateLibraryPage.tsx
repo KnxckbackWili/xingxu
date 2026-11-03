@@ -1,15 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Alert, Button, Empty, Input, Modal, Select, Skeleton, Tag, Tooltip } from 'antd'
+import { Alert, Button, Empty, Input, Modal, Select, Skeleton, Tag } from 'antd'
 import { FileTextOutlined, PlusOutlined, StarFilled } from '@ant-design/icons'
 import { api, errMsg } from '../../api/client'
 import { useAuth } from '../../stores/auth'
 import { hasSystemPermission } from '../../constants/systemPermissions'
-import { STAGES } from '../../constants/stages'
 import { ensureVerifiedAccount } from '../../utils/verifiedAccount'
 import { WorkPageHeader } from '../../components/WorkPage'
 import { RefreshAction } from '../../components/IconAction'
-import { templateStatus, type TemplateRow } from './templateMeta'
+import type { TemplateRow } from './templateMeta'
 import './TemplateEditorPage.css'
 
 const total = (counts?: Record<string, number>) => Object.values(counts ?? {}).reduce((a, b) => a + b, 0)
@@ -40,7 +39,6 @@ export default function TemplateLibraryPage() {
     catch (e) { setError(errMsg(e)) } finally { setBusy(false) }
   }
 
-  const peak = Math.max(1, ...templates.flatMap(t => STAGES.map(s => (t.summary?.work[s.key] ?? 0) + (t.summary?.documents[s.key] ?? 0))))
   const card = (t: TemplateRow) => {
     const work = total(t.summary?.work); const docs = total(t.summary?.documents)
     return <li key={t.id} className="tpl-card">
@@ -48,28 +46,20 @@ export default function TemplateLibraryPage() {
         <span className="tpl-card-top">
           <span className="tpl-card-icon" aria-hidden="true">{t.is_system ? <StarFilled /> : <FileTextOutlined />}</span>
           <span className="tpl-card-name">{t.name}</span>
-          <Tag color={t.is_system ? 'blue' : t.status === 'published' ? 'green' : undefined}>{templateStatus(t)}</Tag>
+          {t.is_system && <Tag color="blue">默认</Tag>}
         </span>
         <span className="tpl-card-desc">{t.description || '没有说明'}</span>
-        <span className="tpl-card-shape" aria-label={`各阶段：${STAGES.map(s => `${s.name} ${t.summary?.work[s.key] ?? 0} 项工作 ${t.summary?.documents[s.key] ?? 0} 份资料`).join('；')}`}>
-          {STAGES.map(s => {
-            const w = t.summary?.work[s.key] ?? 0; const d = t.summary?.documents[s.key] ?? 0
-            return <Tooltip key={s.key} title={`${s.key} · ${s.name}：${w} 项工作 · ${d} 份资料`}>
-              <span className="tpl-shape-col"><span className="tpl-shape-bar"><span style={{ height: `${Math.max(w + d ? 12 : 0, ((w + d) / peak) * 100)}%` }} /></span><span className="tpl-shape-key">{s.key}</span></span>
-            </Tooltip>
-          })}
-        </span>
-        <span className="tpl-card-stats"><span><strong>{work}</strong> 工作</span><span><strong>{docs}</strong> 资料</span><span><strong>{t.summary?.vehicle_steps ?? 0}</strong> 车辆环节</span></span>
+        <span className="tpl-card-stats"><span><strong>{work}</strong> 项工作</span><span><strong>{docs}</strong> 份资料</span><span><strong>{t.summary?.vehicle_steps ?? 0}</strong> 个车辆环节</span></span>
       </button>
       <footer className="tpl-card-foot">
-        <span>v{t.version || 1}{t.usage_count ? ` · 已用于 ${t.usage_count} 个项目` : ''}</span>
+        <span>{t.usage_count ? `已用于 ${t.usage_count} 个项目` : ''}</span>
         {canCreateProject && <Button type="link" size="small" onClick={() => navigate(`/pm/projects?create=1&template=${encodeURIComponent(t.id)}`)}>用它新建项目</Button>}
       </footer>
     </li>
   }
 
   return <div className="tpl-library-page">
-    <WorkPageHeader title="项目模板" description="新项目从模板带入工作、资料要求、车辆环节和采购物料。修改模板不影响已创建的项目。"
+    <WorkPageHeader title="项目模板" description="新建项目时从模板带入工作、资料、车辆环节和采购物料。改模板不影响已建的项目。"
       primary={canManage && <Button type="primary" icon={<PlusOutlined />} onClick={() => setDraft({ name: '', from: 'default' })}>新建模板</Button>}
       tools={<RefreshAction label="刷新模板库" loading={loading} onClick={load} />} />
     {error && <Alert type="error" showIcon message={error} className="tpl-alert" action={<Button size="small" onClick={() => void load()}>重试</Button>} />}

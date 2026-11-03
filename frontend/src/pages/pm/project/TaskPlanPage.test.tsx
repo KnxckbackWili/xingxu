@@ -57,5 +57,5 @@ it('groups work groups under the stage backbone in stage order', async () => {
   post.mockResolvedValue({ data: {} })
   show({ canManage: true, projectStatus: 'preparing' })
   const sections = await screen.findAllByRole('region', { name: /^阶段：/ })
-  expect(sections.map(section => section.getAttribute('aria-label'))).toEqual(['阶段：5 · 发车前', '阶段：7 · 验收'])
+  expect(sections.map(section => section.getAttribute('aria-label'))).toEqual(['阶段：发车前', '阶段：验收'])
 })

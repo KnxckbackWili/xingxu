@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { Alert, Button, Empty, Form, Input, InputNumber, Popconfirm, Select, Skeleton, Space, Switch, Tag, Typography, Upload, message } from 'antd'
+import { Alert, Button, Empty, Form, Input, InputNumber, Popconfirm, Select, Skeleton, Space, Switch, Tag, Upload, message } from 'antd'
 import { CloseOutlined, DeleteOutlined, DisconnectOutlined, DownloadOutlined, PaperClipOutlined, PlusOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons'
 import { SaveBadge, type SaveState } from './TemplateWorkPanel'
 import { api, errMsg } from '../../api/client'
 
-const STAGES = [{ value: '4', label: '4 · 内部启动会' }, { value: '5', label: '5 · 发车前' }, { value: '6', label: '6 · 实施' }, { value: '7', label: '7 · 验收' }, { value: '8', label: '8 · 交付' }, { value: '9', label: '9 · 全项目周期更新' }]
-const TIMINGS: Record<string, string> = { before_event: '事件发生前', after_event: '事件发生后', weekly: '每周', on_trigger: '事件触发', after_milestone: '里程碑完成后', on_demand: '按需抽查', lifetime: '全项目周期更新' }
+const STAGES = [{ value: '4', label: '内部启动会' }, { value: '5', label: '发车前' }, { value: '6', label: '实施' }, { value: '7', label: '验收' }, { value: '8', label: '交付' }, { value: '9', label: '全项目周期' }]
+const TIMINGS: Record<string, string> = { on_demand: '需要时交（无固定截止）', weekly: '每周交', before_event: '某个事件之前', after_event: '某个事件之后', after_milestone: '某个节点完成后', on_trigger: '发生某种情况后', lifetime: '整个项目期间更新，归档前交' }
+// Offsets are stored in hours; people think in days.
+const days = (hours: number | null | undefined) => hours == null ? null : Math.round(hours / 24 * 100) / 100
+const offsetText = (hours: number | null | undefined) => !hours ? '' : hours % 24 === 0 ? ` ${hours / 24} 天` : ` ${hours} 小时`
 const EVENTS: Record<string, string> = { internal_kickoff: '内部启动会', ship: '发车', arrival_all: '全部到场', vehicle_arrival: '该车到场', delivery_signed: '到货签收', commissioning_done: '调试完工', go_live: '上线运行', training_done: '培训完成', acceptance: '项目验收', handover: '交付售后' }
 const MILESTONES = ['delivery_signed', 'commissioning_done', 'go_live', 'training_done', 'acceptance', 'handover']
 const TRIGGERS: Record<string, string> = { accident: '事故', quality: '质量问题', member_leave: '人员离开项目' }
@@ -20,10 +23,11 @@ export function timingLabel(row: Requirement) {
   if (row.stage_key === 'legacy') return '历史待分类，输出规则待确认'
   if (row.is_group) return '分组'
   if (row.timing_type === 'weekly') return `每周${WEEKDAYS[(row.timing_weekday ?? 1) - 1].slice(1)}`
-  if (row.timing_type === 'on_demand') return '按需抽查'
-  if (row.timing_type === 'lifetime') return '内部启动会建档，归档前提交'
-  if (row.timing_type === 'on_trigger') return `${TRIGGERS[row.trigger_type ?? '']}后 ${row.timing_offset_hours} 小时`
-  return `${EVENTS[row.timing_event ?? ''] ?? ''}${row.timing_type === 'before_event' ? '前' : '后'} ${row.timing_offset_hours} 小时`
+  if (row.timing_type === 'on_demand') return '需要时交'
+  if (row.timing_type === 'lifetime') return '项目期间更新，归档前交'
+  const event = row.timing_type === 'on_trigger' ? TRIGGERS[row.trigger_type ?? ''] ?? '' : EVENTS[row.timing_event ?? ''] ?? ''
+  if (!row.timing_offset_hours) return `${event}时`
+  return `${event}${row.timing_type === 'before_event' ? '前' : '后'}${offsetText(row.timing_offset_hours)}`
 }
 
 /** Document requirements along the stage backbone, edited beside the list: changes to an existing requirement save themselves. */
@@ -128,7 +132,7 @@ export default function TemplateDocumentsTab({ templateId, editMode, refreshToke
   const hit = (row: Requirement) => !term || `${row.code} ${row.name} ${row.template_no}`.toLowerCase().includes(term)
   const parentsOfHits = new Set(rows.filter(row => !row.is_group && hit(row)).map(row => row.parent_id))
   const shown = rows.filter(row => row.is_group ? hit(row) || parentsOfHits.has(row.id) : hit(row))
-  const sections = [...STAGES.map(s => ({ key: s.value, title: s.label.replace('全项目周期更新', '全项目周期') })), ...(rows.some(row => row.stage_key === 'legacy') ? [{ key: 'legacy', title: '历史待分类' }] : [])]
+  const sections = [...STAGES.map(s => ({ key: s.value, title: s.label })), ...(rows.some(row => row.stage_key === 'legacy') ? [{ key: 'legacy', title: '历史待分类' }] : [])]
 
   const flags = (row: Requirement) => <>
     {row.stage_key === 'legacy' && <Tag color="orange">历史待分类</Tag>}
@@ -158,26 +162,47 @@ export default function TemplateDocumentsTab({ templateId, editMode, refreshToke
     </header>
     <div className="tpl-panel-body">
       <Form form={form} layout="vertical" preserve disabled={!editMode} onValuesChange={() => { if (selected !== 'new') schedule() }}>
-          {current?.stage_key === 'legacy' && <Alert type="info" showIcon message="请明确选择第4–9阶段并填写对应编号；历史来源只读保留，不会改写。" style={{ marginBottom: 12 }} />}
-          <Form.Item name="stage_key" label="阶段" rules={[{ required: true }]}><Select options={STAGES} onChange={() => form.setFieldValue('parent_id', null)} /></Form.Item>
-          <div className="tpl-form-pair"><Form.Item name="code" label="编号" rules={[{ required: true, message: '填写所属阶段的编号，如6.11.1a' }]}><Input maxLength={40} placeholder="如6.11.1a" /></Form.Item><Form.Item name="name" label="资料名称" rules={[{ required: true, whitespace: true }]}><Input maxLength={300} /></Form.Item></div>
-          <Form.Item name="is_group" label="作为分组标题" valuePropName="checked"><Switch onChange={value => form.setFieldsValue(value ? { ...RULE_EMPTY, scope: null, required: false } : { scope: 'project', required: true, timing_type: 'on_demand' })} /></Form.Item>
-          <Form.Item name="parent_id" label="父分组"><Select allowClear options={rows.filter(row => row.is_group && row.stage_key === stage && row.id !== current?.id).map(row => ({ value: row.id, label: `${row.code} ${row.name}` }))} /></Form.Item>
+          {current?.stage_key === 'legacy' && <Alert type="info" showIcon message="请选择阶段并填写对应编号；历史来源只读保留，不会改写。" style={{ marginBottom: 12 }} />}
+          <Form.Item name="name" label="资料名称" rules={[{ required: true, whitespace: true }]}><Input maxLength={300} /></Form.Item>
+          <div className="tpl-form-pair">
+            <Form.Item name="code" label="编号" rules={[{ required: true, message: '填写编号，如6.11.1a' }]}><Input maxLength={40} placeholder="如6.11.1a" /></Form.Item>
+            <Form.Item name="stage_key" label="阶段" rules={[{ required: true }]}><Select options={STAGES} onChange={() => form.setFieldValue('parent_id', null)} /></Form.Item>
+          </div>
           {!group && <>
-            <Form.Item name="template_no" label="模板编号或示例标识"><Input maxLength={100} placeholder="如模板16" /></Form.Item>
-            <Space wrap align="start"><Form.Item name="scope" label="资料范围" rules={[{ required: true }]}><Select style={{ width: 180 }} options={[{ value: 'project', label: '项目一份' }, { value: 'vehicle', label: '每台车一份' }]} onChange={value => { if (value !== 'vehicle' && form.getFieldValue('timing_event') === 'vehicle_arrival') form.setFieldValue('timing_event', null) }} /></Form.Item><Form.Item name="platform" label="适用平台"><Select allowClear placeholder="全部平台" style={{ width: 180 }} options={[{ value: 'NDC', label: 'NDC' }, { value: 'GRACE', label: 'GRACE' }, { value: 'integrated', label: '集成' }]} /></Form.Item><Form.Item name="required" label="必须提交" valuePropName="checked"><Switch /></Form.Item></Space>
-            <Form.Item name="timing_type" label="输出时机" rules={[{ required: true }]}><Select options={Object.entries(TIMINGS).map(([value, label]) => ({ value, label }))} onChange={value => form.setFieldsValue({ ...RULE_EMPTY, timing_type: value, ...(value === 'lifetime' ? { timing_event: 'internal_kickoff' } : ['before_event', 'after_event', 'after_milestone', 'on_trigger'].includes(value) ? { timing_offset_hours: 0 } : {}) })} /></Form.Item>
-            {['before_event', 'after_event', 'after_milestone'].includes(kind) && <Form.Item name="timing_event" label="关键事件" rules={[{ required: true }]}><Select options={eventOptions} /></Form.Item>}
-            {['before_event', 'after_event', 'after_milestone', 'on_trigger'].includes(kind) && <Form.Item name="timing_offset_hours" label="偏移小时" rules={[{ required: true }]}><InputNumber min={0} max={876000} precision={0} /></Form.Item>}
-            {kind === 'weekly' && <Form.Item name="timing_weekday" label="每周截止星期" rules={[{ required: true, message: '每周规则必须选择星期' }]}><Select options={WEEKDAYS.map((label, index) => ({ value: index + 1, label }))} /></Form.Item>}
-            {kind === 'on_trigger' && <Form.Item name="trigger_type" label="触发类型" rules={[{ required: true }]}><Select options={Object.entries(TRIGGERS).map(([value, label]) => ({ value, label }))} /></Form.Item>}
-            {kind === 'lifetime' && <Typography.Paragraph type="secondary">内部启动会建档，之后按需更新；归档前必须提交。</Typography.Paragraph>}
-            <Form.Item name="confidential_default" label="默认保密" valuePropName="checked"><Switch onChange={value => value && form.setFieldValue('external_visible_default', false)} /></Form.Item>
-            <Form.Item name="external_never_visible" label="禁止外部查看" valuePropName="checked"><Switch onChange={value => value && form.setFieldValue('external_visible_default', false)} disabled={['6.11.6b', '6.11.6c'].includes(code)} /></Form.Item>
-            <Form.Item name="external_visible_default" label="默认对外可见" valuePropName="checked"><Switch disabled={confidential || neverVisible} /></Form.Item>
+            <Space wrap size={24} className="tpl-form-switches">
+              <Form.Item name="required" label="必须提交" valuePropName="checked"><Switch /></Form.Item>
+              <Form.Item name="scope" label="每台车一份" getValueProps={value => ({ checked: value === 'vehicle' })} getValueFromEvent={checked => checked ? 'vehicle' : 'project'}>
+                <Switch onChange={checked => { if (!checked && form.getFieldValue('timing_event') === 'vehicle_arrival') form.setFieldValue('timing_event', null) }} />
+              </Form.Item>
+            </Space>
+            <Form.Item name="timing_type" label="什么时候交" rules={[{ required: true }]}><Select options={Object.entries(TIMINGS).map(([value, label]) => ({ value, label }))} onChange={value => form.setFieldsValue({ ...RULE_EMPTY, timing_type: value, ...(value === 'lifetime' ? { timing_event: 'internal_kickoff' } : ['before_event', 'after_event', 'after_milestone', 'on_trigger'].includes(value) ? { timing_offset_hours: 0 } : {}) })} /></Form.Item>
+            {['before_event', 'after_event', 'after_milestone', 'on_trigger'].includes(kind) && <div className="tpl-form-pair">
+              {kind === 'on_trigger'
+                ? <Form.Item name="trigger_type" label="发生什么" rules={[{ required: true }]}><Select options={Object.entries(TRIGGERS).map(([value, label]) => ({ value, label }))} /></Form.Item>
+                : <Form.Item name="timing_event" label={kind === 'after_milestone' ? '哪个节点' : '哪个事件'} rules={[{ required: true }]}><Select options={eventOptions} /></Form.Item>}
+              <Form.Item name="timing_offset_hours" label={kind === 'before_event' ? '提前' : '之后'} rules={[{ required: true }]}
+                getValueProps={value => ({ value: days(value) })} getValueFromEvent={value => value == null ? null : Math.round(Number(value) * 24)}>
+                <InputNumber min={0} max={36500} step={1} addonAfter="天" aria-label="相隔天数" />
+              </Form.Item>
+            </div>}
+            {kind === 'weekly' && <Form.Item name="timing_weekday" label="每周几截止" rules={[{ required: true, message: '每周规则必须选择星期' }]}><Select options={WEEKDAYS.map((label, index) => ({ value: index + 1, label }))} /></Form.Item>}
           </>}
-          <Form.Item name="sort_order" label="排序" rules={[{ required: true }]}><InputNumber min={0} max={100000} precision={0} /></Form.Item>
-          <Form.Item name="note" label="说明"><Input.TextArea autoSize={{ minRows: 2, maxRows: 8 }} maxLength={5000} /></Form.Item>
+          <Form.Item name="note" label="说明"><Input.TextArea autoSize={{ minRows: 2, maxRows: 8 }} maxLength={5000} placeholder="可选：写给提交人的说明" /></Form.Item>
+          <details className="tpl-more" open={!!current?.is_group}>
+            <summary>更多设置</summary>
+            <Form.Item name="is_group" label="作为分组标题" valuePropName="checked"><Switch onChange={value => form.setFieldsValue(value ? { ...RULE_EMPTY, scope: null, required: false } : { scope: 'project', required: true, timing_type: 'on_demand' })} /></Form.Item>
+            <Form.Item name="parent_id" label="放在哪个分组下"><Select allowClear placeholder="不放在分组下" options={rows.filter(row => row.is_group && row.stage_key === stage && row.id !== current?.id).map(row => ({ value: row.id, label: `${row.code} ${row.name}` }))} /></Form.Item>
+            {!group && <>
+              <Form.Item name="template_no" label="模板编号"><Input maxLength={100} placeholder="可选，如模板16" /></Form.Item>
+              <Form.Item name="platform" label="只用于某个调度平台"><Select allowClear placeholder="所有平台都用" options={[{ value: 'NDC', label: 'NDC' }, { value: 'GRACE', label: 'GRACE' }, { value: 'integrated', label: '集成' }]} /></Form.Item>
+              <Space wrap size={24} className="tpl-form-switches">
+                <Form.Item name="confidential_default" label="默认保密" valuePropName="checked"><Switch onChange={value => value && form.setFieldValue('external_visible_default', false)} /></Form.Item>
+                <Form.Item name="external_never_visible" label="禁止外部查看" valuePropName="checked"><Switch onChange={value => value && form.setFieldValue('external_visible_default', false)} disabled={['6.11.6b', '6.11.6c'].includes(code)} /></Form.Item>
+                <Form.Item name="external_visible_default" label="默认对外可见" valuePropName="checked"><Switch disabled={confidential || neverVisible} /></Form.Item>
+              </Space>
+            </>}
+            <Form.Item name="sort_order" label="排序" rules={[{ required: true }]}><InputNumber min={0} max={100000} precision={0} /></Form.Item>
+          </details>
         </Form>
       {current && !current.is_group && <div className="tpl-blank">
         <span className="tpl-blank-label">空白模板</span>
@@ -212,12 +237,12 @@ export default function TemplateDocumentsTab({ templateId, editMode, refreshToke
         : loading && !rows.length ? <Skeleton active paragraph={{ rows: 6 }} />
         : !rows.length ? <Empty description="此模板尚未配置资料要求" />
         : term && !shown.length ? <Empty description="没有匹配的资料要求" />
-        : <div className="tpl-outline-body">{sections.map(section => {
+        : <div className="tpl-outline-body">{sections.map((section, sectionNumber) => {
           const list = shown.filter(item => item.stage_key === section.key)
           if (term && !list.length) return null
           const count = list.filter(item => !item.is_group).length
           return <section key={section.key} className="tpl-stage-section" aria-label={section.title}>
-            <header className="tpl-stage-head"><h3><span className="tpl-stage-key">{section.key === 'legacy' ? '?' : section.key}</span>{section.title.replace(/^\d · /, '')}</h3><span className="tpl-stage-meta">{count ? `${count} 份` : '暂无资料'}</span></header>
+            <header className="tpl-stage-head"><h3><span className="tpl-stage-key">{section.key === 'legacy' ? '?' : sectionNumber + 1}</span>{section.title}</h3><span className="tpl-stage-meta">{count ? `${count} 份` : '暂无资料'}</span></header>
             {!!list.length && <ul className="tpl-nodes">{list.map(row)}</ul>}
           </section>
         })}</div>}

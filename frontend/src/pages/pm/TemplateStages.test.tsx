@@ -46,8 +46,8 @@ it('lays work out by stage and group with counts on the tabs', async () => {
   expect(screen.getByText('已用于 3 个项目')).toBeInTheDocument()
   expect(screen.getByRole('tab', { name: /工作\s*3/ })).toHaveAttribute('aria-selected', 'true')
   expect(screen.getByRole('tab', { name: /资料\s*2/ })).toBeInTheDocument()
-  expect(region('6 · 实施')).toHaveTextContent('导航调试')
-  expect(region('4 · 内部启动会')).toHaveTextContent('暂无工作')
+  expect(region('实施')).toHaveTextContent('导航调试')
+  expect(region('内部启动会')).toHaveTextContent('暂无工作')
   expect(within(region('工作分组：进场准备')).getAllByText('进场准备')).toHaveLength(1)
   expect(region('工作分组：空分组')).toHaveTextContent('还没有工作项')
   expect(screen.getByRole('complementary', { name: '编辑说明' })).toHaveTextContent('改动会自动保存')
@@ -78,7 +78,7 @@ it('adds work items one after another with Enter, and groups in a chosen stage',
 it('edits check requirements in the panel and deletes the item', async () => {
   show(); fireEvent.click(await screen.findByRole('button', { name: /场地勘测/ }))
   const side = await screen.findByRole('complementary', { name: '编辑工作项：场地勘测' })
-  expect(side.querySelector('.tpl-panel-kicker')).toHaveTextContent('5 · 发车前 / 进场准备')
+  expect(side.querySelector('.tpl-panel-kicker')).toHaveTextContent('发车前 / 进场准备')
   fireEvent.click(within(side).getByRole('button', { name: /添加检查/ }))
   const check = within(side).getByLabelText('检查要求2')
   fireEvent.change(check, { target: { value: '地面平整度' } }); fireEvent.blur(check)
@@ -136,9 +136,9 @@ it('groups are renamed, moved to another stage or deleted from one menu', async 
 
   fireEvent.click(screen.getByRole('button', { name: '分组「进场勘测」操作' }))
   fireEvent.mouseEnter(await screen.findByText('移到其他阶段'))
-  fireEvent.click(await screen.findByText('移到 4 · 内部启动会'))
+  fireEvent.click(await screen.findByText('移到「内部启动会」'))
   await waitFor(() => expect(put).toHaveBeenCalledWith('/templates/t1/work-phases/prep', { stage_key: '4' }))
-  await waitFor(() => expect(region('4 · 内部启动会')).toHaveTextContent('进场勘测'))
+  await waitFor(() => expect(region('内部启动会')).toHaveTextContent('进场勘测'))
 
   fireEvent.click(screen.getByRole('button', { name: '分组「空分组」操作' }))
   fireEvent.click(await screen.findByText('删除分组'))

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button, Checkbox, Divider, Input, Popconfirm, Segmented, Select, Typography, Upload } from 'antd'
+import { AutoComplete, Button, Checkbox, Divider, Input, Popconfirm, Segmented, Select, Typography, Upload } from 'antd'
 import { ArrowDownOutlined, ArrowUpOutlined, CheckOutlined, CloseOutlined, DeleteOutlined, LoadingOutlined, PaperClipOutlined, PlusOutlined, UploadOutlined, WarningOutlined } from '@ant-design/icons'
 import type { WorkItem, WorkPhase } from '../../api/workItems'
 import { stageLabel } from '../../constants/stages'
@@ -13,9 +13,10 @@ type Props = {
   item: WorkItem; phases: WorkPhase[]; steps: { key: string; name: string }[]; templateId: string; canManage: boolean; save?: SaveState
   onPatch: (patch: Record<string, unknown>) => Promise<void>; onDelete: () => void; onMove: (delta: -1 | 1) => void; canMove: { up: boolean; down: boolean }
   onCreateStep: (name: string) => Promise<string>; onUpload: (file: File) => void; onRemoveRef: (id: string, filename: string) => void; onClose: () => void
+  /** Modules already used in this template, offered as suggestions. */
+  modules?: string[]
 }
 
-const SCOPES = [{ value: 'need_wms', label: 'WMS 对接' }, { value: 'need_charging', label: '自动充电' }]
 const checksOf = (item: WorkItem): Check[] => (item.check_definitions ?? []).map((c, index) => ({ key: `${item.id}-${index}`, name: c.name, description: c.description ?? '', is_required: c.is_required, is_safety_critical: c.is_safety_critical }))
 const payload = (checks: Check[]) => checks.filter(c => c.name.trim()).map(c => ({ name: c.name.trim(), description: c.description.trim(), is_required: c.is_required, is_safety_critical: c.is_safety_critical }))
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
@@ -28,7 +29,7 @@ export function SaveBadge({ save }: { save?: SaveState }) {
 }
 
 /** Everything about one template work item, edited in place: text saves when you leave the field, choices save at once. */
-export default function TemplateWorkPanel({ item, phases, steps, templateId, canManage, save, onPatch, onDelete, onMove, canMove, onCreateStep, onUpload, onRemoveRef, onClose }: Props) {
+export default function TemplateWorkPanel({ item, phases, steps, templateId, canManage, save, onPatch, onDelete, onMove, canMove, onCreateStep, onUpload, onRemoveRef, onClose, modules = [] }: Props) {
   const { options: vehicleTypes } = useVehicleTypes()
   const [name, setName] = useState(item.name)
   const [description, setDescription] = useState(item.description ?? '')
@@ -94,14 +95,12 @@ export default function TemplateWorkPanel({ item, phases, steps, templateId, can
           <Select aria-label="适用车型" mode="multiple" allowClear placeholder="全部车型" value={item.applicable_vehicle_types} disabled={disabled} options={vehicleTypes}
             onChange={value => void onPatch({ applicable_vehicle_types: value })} />
         </label>}
-        <label className="tpl-field-row"><span>业务范围</span>
-          <Select aria-label="业务范围" mode="multiple" allowClear placeholder="所有项目都带入" value={item.scope_conditions} disabled={disabled} options={SCOPES}
-            onChange={value => void onPatch({ scope_conditions: value })} />
+        <label className="tpl-field-row"><span>可选模块</span>
+          <AutoComplete aria-label="可选模块" placeholder="留空表示每个项目都带入；如 电梯、自动门" value={label === phase?.name ? '' : label} disabled={disabled}
+            options={modules.filter(m => m !== label).map(value => ({ value }))} filterOption={(input, option) => String(option?.value ?? '').includes(input)}
+            onChange={value => setLabel(value)} onBlur={() => saveText('group_label', label)} onSelect={value => { setLabel(value); saveText('group_label', value) }} />
         </label>
-        <label className="tpl-field-row"><span>标签</span>
-          <Input aria-label="标签" placeholder="可选，如 WMS/MES 对接" value={label} disabled={disabled} maxLength={200}
-            onChange={e => setLabel(e.target.value)} onBlur={() => saveText('group_label', label)} onPressEnter={e => (e.target as HTMLInputElement).blur()} />
-        </label>
+        <Typography.Text type="secondary" className="tpl-field-note">新建项目时按模块勾选；不需要的模块，其工作不会带入。</Typography.Text>
       </div>
 
       <Divider orientation="left" plain>检查要求 {checks.filter(c => c.name.trim()).length}</Divider>

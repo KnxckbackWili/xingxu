@@ -163,7 +163,7 @@ export default function TaskPlanPage({ projectId, focusTaskId, onWorkChanged, de
     <WorkItemEditor canEdit={canPlan} open={!!editor} projectId={projectId} item={editor?.item} phases={data?.phases || []} steps={steps} onClose={() => setEditor(undefined)} onSaved={changed} />
     <Modal title="添加工作分组" open={phaseName !== undefined} onCancel={() => { if (!busy) setPhaseName(undefined) }} onOk={() => void addPhase()} okText="保存分组" confirmLoading={busy} okButtonProps={{ disabled: !phaseName?.trim() || !canPlan }}>
       <Space direction="vertical" style={{ width: '100%' }}>
-        <Select aria-label="所属阶段" value={phaseStage} onChange={setPhaseStage} options={STAGES.map(stage => ({ value: stage.key, label: `${stage.key} · ${stage.name}` }))} style={{ width: '100%' }} />
+        <Select aria-label="所属阶段" value={phaseStage} onChange={setPhaseStage} options={STAGES.map(stage => ({ value: stage.key, label: stage.name }))} style={{ width: '100%' }} />
         <Input aria-label="工作分组名称" value={phaseName} maxLength={100} onChange={e => setPhaseName(e.target.value)} placeholder="例如：现场补充工作" />
       </Space>
     </Modal>
