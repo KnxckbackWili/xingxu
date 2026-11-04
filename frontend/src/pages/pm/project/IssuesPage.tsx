@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import {
-  Table, Tag, Button, Modal, Form, Input, Select, Upload, message, Space, Typography, Alert, Drawer, Divider, Empty, Segmented, Popover,
+  Tag, Button, Modal, Form, Input, Select, Upload, message, Space, Typography, Alert, Drawer, Divider, Empty, Segmented, Popover,
 } from 'antd'
 import {
   CheckCircleOutlined, DeleteOutlined, DownloadOutlined, FileExcelOutlined, FileTextOutlined, PaperClipOutlined,
-  EyeOutlined, ImportOutlined, PlayCircleOutlined, PlusOutlined, StopOutlined, UploadOutlined, UserSwitchOutlined,
+  ImportOutlined, PlusOutlined, StopOutlined, UploadOutlined, UserSwitchOutlined,
 } from '@ant-design/icons'
 import { parseDateTime,formatDateTime } from '../../../utils/date'
 import { api, errMsg } from '../../../api/client'
@@ -18,8 +18,7 @@ import { useProjectWriteBlocked } from '../../../hooks/useProjectCapability'
 import { MEDIA_QUERY } from '../../../constants/breakpoints'
 import { ISSUE_TYPES, ISSUE_TYPE_HINTS, ISSUE_TYPE_FIELDS, ISSUE_STATUS_MAP, ISSUE_NATURES, extraSummary } from '../../../constants/issues'
 import InlineSelect from '../../../components/InlineSelect'
-import ContextTip from '../../../components/ContextTip'
-import { WorkPageHeader, WorkSection } from '../../../components/WorkPage'
+import { WorkPageHeader } from '../../../components/WorkPage'
 import './FieldWorkPages.css'
 import { IconAction, RefreshAction } from '../../../components/IconAction'
 
@@ -84,7 +83,6 @@ const TYPE_LABEL: Record<string, string> = {
 export default function IssuesPage({ projectId, canManage = false, archived = false }: { projectId: string; canManage?: boolean; archived?: boolean }) {
   const [issues, setIssues] = useState<Issue[]>([])
   const [vehicleIssues, setVehicleIssues] = useState<VehicleIssue[]>([])
-  const [sourceFilter, setSourceFilter] = useState<'all' | 'project' | 'vehicle'>('all')
   const [vehicleDetail, setVehicleDetail] = useState<VehicleIssue | null>(null)
   const [users, setUsers] = useState<any[]>([])
   const [usersLoading, setUsersLoading] = useState(false)
@@ -97,7 +95,6 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
   const [tasks, setTasks] = useState<{ id: string; label: string; phase: string }[]>([])
   const [issueAtts, setIssueAtts] = useState<Record<string, any[]>>({})
   const [fileList, setFileList] = useState<any[]>([])
-  const [typeFilter, setTypeFilter] = useState<string>('')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState(archived ? 'all' : 'active')
   const [loadError, setLoadError] = useState(false)
@@ -236,8 +233,7 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
     return (!term || `${title} ${description} ${context}`.toLocaleLowerCase().includes(term))
       && (statusFilter === 'all' || (statusFilter === 'active' ? ['open', 'processing'].includes(status) : status === statusFilter))
   }
-  const filtered = issues.filter((i) => (!typeFilter || i.issue_type === typeFilter)
-    && matches(i.title, i.description, i.status, i.assignee_name))
+  const filtered = issues.filter((i) => matches(i.title, i.description, i.status, `${i.assignee_name} ${i.reporter_name}`))
   const filteredVehicles = vehicleIssues.filter((i) => (statusFilter !== 'resolved') && matches(i.title, i.description, i.status, i.asset_code))
   const openProjectCount = issues.filter((i) => i.status === 'open' || i.status === 'processing').length
   const openVehicleCount = vehicleIssues.filter((i) => i.status === 'open').length
@@ -295,91 +291,71 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
     }
   }
 
-  const quickAssign = async (issue: Issue, assigneeId: string | undefined) => {
-    if (!canEdit || usersLoading || usersError || !statusLock.tryAcquire()) throw new Error('当前暂不能保存，请稍后重试')
-    setStatusSaving(true)
-    try {
-      const response = await api.put(`/issues/${issue.id}`, { assignee_id: assigneeId || null, version: issue.version })
-      if (currentProject.current !== projectId) return
-      const selected = users.find((person) => person.id === assigneeId)
-      setIssues((current) => current.map((item) => item.id === issue.id ? { ...item, assignee_id: assigneeId || null,
-        assignee_name: selected?.display_name || '', ...response.data } : item))
-      message.success(assigneeId ? '已指派处理人' : '已取消指派')
-      await load()
-    } catch (error: any) {
-      if (currentProject.current === projectId && error.response?.status === 409) await load()
-      throw error
-    } finally { statusLock.release(); setStatusSaving(false) }
-  }
-
   const openResolution = (issue: Issue) => {
     setResolutionAction('resolved'); setEditing(issue)
     resolveForm.setFieldsValue({ resolution: issue.resolution }); setDetailIssue(null)
   }
-  const quickActions = (issue: Issue) => {
+  // One next step per row: start → resolve → confirm close. Everything else is in the detail drawer.
+  const nextAction = (issue: Issue) => {
     if (detailIssue || assigning || editing) return null
-    return <span className="row-icon-actions" onClick={(event) => event.stopPropagation()}>
-    {canHandle(issue) && issue.status === 'open' && <IconAction label="开始处理" icon={<PlayCircleOutlined />} loading={statusSaving}
-      onClick={() => updateStatus(issue, 'processing')} />}
-    {canHandle(issue) && ['open', 'processing'].includes(issue.status) && <IconAction label="解决" icon={<CheckCircleOutlined />} disabled={statusSaving}
-      onClick={() => openResolution(issue)} />}
-    {canClose(issue) && issue.status === 'resolved' && <IconAction label="关闭" icon={<StopOutlined />} loading={statusSaving}
-      onClick={() => updateStatus(issue, 'closed')} />}
-    </span>
+    if (canHandle(issue) && issue.status === 'open') return <Button size="small" loading={statusSaving} onClick={() => updateStatus(issue, 'processing')}>开始处理</Button>
+    if (canHandle(issue) && issue.status === 'processing') return <Button size="small" type="primary" disabled={statusSaving} onClick={() => openResolution(issue)}>解决</Button>
+    if (canClose(issue) && issue.status === 'resolved') return <Button size="small" type="primary" loading={statusSaving} onClick={() => updateStatus(issue, 'closed')}>确认关闭</Button>
+    return null
   }
 
   const queue: Array<{id:string;source:'project';item:Issue} | {id:string;source:'vehicle';item:VehicleIssue}> = [
-    ...(sourceFilter==='vehicle' ? [] : filtered.map(item=>({id:`project:${item.id}`,source:'project' as const,item}))),
-    ...(sourceFilter==='project' ? [] : filteredVehicles.map(item=>({id:`vehicle:${item.id}`,source:'vehicle' as const,item}))),
+    ...filtered.map(item=>({id:`project:${item.id}`,source:'project' as const,item})),
+    ...filteredVehicles.map(item=>({id:`vehicle:${item.id}`,source:'vehicle' as const,item})),
   ]
-  const issueTags = (row: typeof queue[number]) => {
-    if(row.source==='vehicle') return <Space wrap><Tag>车辆</Tag><Tag color={row.item.status==='resolved'?'green':'red'}>{row.item.status==='resolved'?'已关闭':'未解决'}</Tag></Space>
-    const issue=row.item
-    const overdue=issue.sla_due_at && !['closed','cancelled'].includes(issue.status) && parseDateTime(issue.sla_due_at).isBefore(new Date())
-    return <Space wrap>{TYPE_LABEL[issue.issue_type] && issue.issue_type !== 'other' && <Tag>{TYPE_LABEL[issue.issue_type]}</Tag>}{issue.nature && issue.nature !== 'normal' && <Tag color={issue.nature==='accident'?'red':issue.nature==='quality'?'orange':undefined}>{ISSUE_NATURES.find(item=>item.value===issue.nature)?.label}</Tag>}<Tag color={SEVERITY_MAP[issue.severity]?.color}>{SEVERITY_MAP[issue.severity]?.label}</Tag><Tag color={ISSUE_STATUS_MAP[issue.status]?.color}>{ISSUE_STATUS_MAP[issue.status]?.label}</Tag>{overdue && <Tag color="red">超过 {issue.sla_hours} 小时处理时限</Tag>}</Space>
+  const overdue = (issue: Issue) => !!issue.sla_due_at && !['closed', 'cancelled', 'resolved'].includes(issue.status) && parseDateTime(issue.sla_due_at).isBefore(new Date())
+  const shortTime = (value?: string | null) => value ? parseDateTime(value).format('MM-DD HH:mm') : ''
+  const issueRow = (row: typeof queue[number]) => {
+    if (row.source === 'vehicle') {
+      const item = row.item
+      return <li key={row.id} className={`issue-row${item.status === 'resolved' ? ' is-closed' : ''}`}>
+        <span className="issue-row-severity is-vehicle" aria-hidden />
+        <div className="issue-row-main">
+          <button type="button" className="issue-row-title" onClick={() => setVehicleDetail(item)}>{item.title}</button>
+          <span className="issue-row-meta"><span>{item.asset_code} · {item.fault_part || item.description || '未填写故障部位'}</span><span>{item.event_date}{item.handler ? ` · 处理人 ${item.handler}` : ''}</span></span>
+        </div>
+        <span className="issue-row-tags"><Tag>车辆</Tag><Tag color={item.status === 'resolved' ? 'green' : 'red'}>{item.status === 'resolved' ? '已关闭' : '未解决'}</Tag></span>
+        <span className="issue-row-action"><Button size="small" onClick={() => setVehicleDetail(item)}>查看</Button></span>
+      </li>
+    }
+    const issue = row.item
+    const type = TYPE_LABEL[issue.issue_type] && issue.issue_type !== 'other' ? TYPE_LABEL[issue.issue_type] : ''
+    const summary = extraSummary(issue.extra) || issue.task_name || issue.description
+    return <li key={row.id} className={`issue-row sev-${issue.severity}${['closed', 'cancelled'].includes(issue.status) ? ' is-closed' : ''}`}>
+      <span className="issue-row-severity" title={`严重程度：${SEVERITY_MAP[issue.severity]?.label}`} aria-hidden />
+      <div className="issue-row-main">
+        <button type="button" className="issue-row-title" onClick={() => setDetailIssue(issue)}>{issue.title}</button>
+        <span className="issue-row-meta">{type && <span>{type}</span>}{summary && <span className="issue-row-summary">{summary}</span>}<span>{issue.reporter_name} 上报 {shortTime(issue.created_at)} · {issue.assignee_name ? `处理人 ${issue.assignee_name}` : '未指派'}</span></span>
+      </div>
+      <span className="issue-row-tags">
+        {issue.nature && issue.nature !== 'normal' && <Tag color={issue.nature === 'accident' ? 'red' : issue.nature === 'quality' ? 'orange' : undefined}>{ISSUE_NATURES.find(item => item.value === issue.nature)?.label}</Tag>}
+        {['critical', 'high'].includes(issue.severity) && <Tag color={SEVERITY_MAP[issue.severity]?.color}>{SEVERITY_MAP[issue.severity]?.label}</Tag>}
+        <Tag color={ISSUE_STATUS_MAP[issue.status]?.color}>{ISSUE_STATUS_MAP[issue.status]?.label}</Tag>
+        {overdue(issue) && <Tag color="red">超过 {issue.sla_hours} 小时</Tag>}
+      </span>
+      <span className="issue-row-action">{nextAction(issue)}</span>
+    </li>
   }
-
-  const issueOwner = (row:typeof queue[number]) => row.source==='vehicle' ? row.item.handler || row.item.reporter_name || '未填写'
-    : canEdit ? <InlineSelect label={`${row.item.title}处理人`} value={row.item.assignee_id} placeholder="未指派"
-        options={users.map(person=>({value:person.id,label:person.display_name || person.username}))}
-        disabled={statusSaving || usersLoading || usersError} allowClear onSave={value=>quickAssign(row.item,value)} /> : row.item.assignee_name || '未指派'
-  const issueActions = (row:typeof queue[number]) => row.source==='vehicle'
-    ? <IconAction label="查看车辆问题" icon={<EyeOutlined />} onClick={()=>setVehicleDetail(row.item)} />
-    : <span className="row-icon-actions">{quickActions(row.item)}<IconAction label="详情" icon={<EyeOutlined />} onClick={()=>setDetailIssue(row.item)} /></span>
-  const issueDescription = (row:typeof queue[number]) => row.source==='vehicle'
-    ? `${row.item.asset_code} · ${row.item.fault_part || row.item.description || '未填写故障部位'}`
-    : extraSummary(row.item.extra) || row.item.task_name || row.item.description
+  const activeCount = openProjectCount + openVehicleCount
+  const closingCount = issues.filter(i => i.status === 'resolved').length
   return (
     <div className="field-work-page">
-      <WorkPageHeader title="现场问题" description="先处理未解决的问题，填写结果后再确认关闭。车辆问题在车辆记录中处理。"
+      <WorkPageHeader title="现场问题" description="上报 → 开始处理 → 解决 → 确认关闭。每行右侧是下一步；点标题看详情、指派、导出或作废。车辆问题在车辆记录里处理。"
         primary={!writeBlocked && <Button type="primary" aria-label="上报问题" icon={<PlusOutlined />} onClick={()=>setModalOpen(true)}>上报问题</Button>}
-        tools={<Space wrap><RefreshAction onClick={load} loading={loading} /><ContextTip id="issue-quick-actions" title="问题快捷处理">有处理权限时，可直接指派和开始处理；解决时填写方案，再由项目经理或报告人确认关闭。</ContextTip>{!writeBlocked && <Popover trigger="click" content={<Upload disabled={importing} showUploadList={false} accept=".xlsx" beforeUpload={file=>importQualityForm(file as File)}><Button loading={importing} icon={<UploadOutlined />}>导入质量问题反馈单</Button></Upload>}><IconAction bordered label="导入问题" icon={<ImportOutlined />} /></Popover>}</Space>}
-        meta={`${openProjectCount + openVehicleCount} 项未解决 · ${issues.filter(i=>i.status==='resolved').length} 项待关闭`} />
+        meta={`${activeCount} 项待解决 · ${closingCount} 项待关闭`}
+        tools={<Space wrap><RefreshAction onClick={load} loading={loading} />{!writeBlocked && <Popover trigger="click" content={<Upload disabled={importing} showUploadList={false} accept=".xlsx" beforeUpload={file=>importQualityForm(file as File)}><Button loading={importing} icon={<UploadOutlined />}>导入质量问题反馈单</Button></Upload>}><IconAction bordered label="导入问题" icon={<ImportOutlined />} /></Popover>}</Space>} />
       {loadError && <Alert type="error" showIcon message="问题数据未能完整加载，请重试。" action={<Button onClick={load} loading={loading}>重新加载</Button>} />}
-      <WorkSection filters={<>
+      <div className="issue-toolbar">
         <Segmented aria-label="问题查看范围" value={statusFilter} onChange={value=>setStatusFilter(String(value))} options={[{value:'active',label:'待解决'},{value:'resolved',label:'待关闭'},{value:'all',label:'全部'}]} />
-        <Input.Search aria-label="搜索问题" placeholder="搜索问题、处理人或车辆" allowClear value={search} onChange={event=>setSearch(event.target.value)} />
-        <Popover trigger="click" placement="bottomRight" content={<div className="field-secondary-actions">
-          <Select aria-label="筛选问题来源" value={sourceFilter} onChange={setSourceFilter} options={[{value:'all',label:'所有来源'},{value:'project',label:'项目问题'},{value:'vehicle',label:'车辆问题'}]} />
-          <Select aria-label="筛选问题类型" value={typeFilter || undefined} allowClear placeholder="所有类型" disabled={sourceFilter==='vehicle'} onChange={value=>setTypeFilter(value || '')} options={ISSUE_TYPES} />
-          <Select aria-label="筛选问题状态" value={statusFilter} onChange={setStatusFilter} options={[{value:'all',label:'全部状态'},{value:'active',label:'待解决'},...Object.entries(ISSUE_STATUS_MAP).map(([value,entry])=>({value,label:entry.label}))]} />
-          <Button onClick={()=>{setSourceFilter('all');setTypeFilter('');setStatusFilter('active');setSearch('')}}>重置筛选</Button>
-        </div>}><Button>更多筛选{sourceFilter!=='all' || typeFilter ? '（已设置）' : ''}</Button></Popover>
-        <span className="field-result-count">{queue.length} 项</span>
-      </>}>
-        {isMobile ? <div className="field-card-list">{queue.map(row=><article className="field-record-card" key={row.id}>
-          <h3><button className="task-name-link" onClick={()=>row.source==='vehicle'?setVehicleDetail(row.item):setDetailIssue(row.item)}>{row.item.title}</button></h3>
-          {issueTags(row)}<p className="field-wrap">{issueDescription(row)}</p>
-          <div className="field-record-meta"><span>处理人：</span>{issueOwner(row)}</div><div className="field-record-actions">{issueActions(row)}</div>
-        </article>)}</div> : <Table rowKey="id" size="small" dataSource={queue} scroll={{ x: 780 }} loading={loading} pagination={{pageSize:20}} columns={[
-          {title:'问题',render:(_:any,row:typeof queue[number])=><div><button className="task-name-link" onClick={()=>row.source==='vehicle'?setVehicleDetail(row.item):setDetailIssue(row.item)}>{row.item.title}</button><span className="field-subline field-wrap">{issueDescription(row)}</span></div>},
-          {title:'状态与类型',render:(_:any,row:typeof queue[number])=>issueTags(row)},
-          {title:'处理人',render:(_:any,row:typeof queue[number])=>issueOwner(row)},
-          {title:'操作',render:(_:any,row:typeof queue[number])=>issueActions(row)},
-        ]} locale={{emptyText:'没有符合条件的问题'}} />}
-        {!queue.length && isMobile && <Empty description="没有符合条件的问题" />}
-        {!queue.length && statusFilter!=='all' && <Button onClick={()=>setStatusFilter('all')}>查看全部问题</Button>}
-      </WorkSection>
+        <Input.Search aria-label="搜索问题" placeholder="搜索问题、处理人或车辆" allowClear value={search} onChange={event=>setSearch(event.target.value)} className="issue-search" />
+      </div>
+      {loading && !queue.length ? <Empty description="正在读取问题…" /> : queue.length ? <ul className="issue-list" aria-label="问题列表">{queue.map(issueRow)}</ul>
+        : <Empty description={statusFilter === 'active' ? '没有待解决的问题' : '没有符合条件的问题'}>{statusFilter!=='all' && <Button onClick={()=>setStatusFilter('all')}>查看全部问题</Button>}</Empty>}
 
       <Modal className="field-work-modal" title="上报问题" open={modalOpen} confirmLoading={submitting}
         okText={createdIssueId ? '重试剩余附件' : '提交问题'}

@@ -75,7 +75,7 @@ describe('InventoryPage 物品申请表单确认', () => {
     })
 
     renderPage()
-    fireEvent.click(screen.getByRole('tab', { name: /^物资申请/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^物资申请/ }))
     await waitFor(() => expect(screen.getByRole('button', { name: /新建申请/ })).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: /新建申请/ }))
 
@@ -96,7 +96,7 @@ describe('InventoryPage 物品申请表单确认', () => {
     apiPost.mockResolvedValue({ data: { id: 'app1' } })
 
     renderPage()
-    fireEvent.click(screen.getByRole('tab', { name: /^物资申请/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^物资申请/ }))
     await waitFor(() => expect(screen.getByRole('button', { name: /新建申请/ })).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: /新建申请/ }))
 
@@ -141,7 +141,7 @@ it('流水丢失响应后冻结原内容并用同一UUID重试，不把重复回
   apiGet.mockImplementation(async (url: string) => ({ data: url.endsWith('/movements') || url.endsWith('/item-applications') ? [] : { items: [item], summary: {}, total: 1 } }))
   apiPost.mockRejectedValueOnce(new Error('timeout')).mockResolvedValueOnce({ data: { accepted: false, item: { ...item, quantity: 18 } } })
   renderPage()
-  fireEvent.click(await screen.findByTitle('查看流水'))
+  fireEvent.click(await screen.findByRole('button', { name: '收发记录' }))
   await screen.findByLabelText('本次数量')
   expect(screen.getByLabelText('本次数量')).toHaveValue('20')
   expect(screen.getByLabelText('本次数量')).toHaveAttribute('readonly')
@@ -172,7 +172,7 @@ it('流水已保存后刷新失败不误报写入失败，也不保留待重试�
   apiPost.mockResolvedValueOnce({ data: { accepted: true, item } })
   const warn = vi.spyOn(message, 'warning')
   renderPage()
-  fireEvent.click(await screen.findByTitle('查看流水'))
+  fireEvent.click(await screen.findByRole('button', { name: '收发记录' }))
   fireEvent.click(await screen.findByRole('button', { name: /保存记录/ }))
   await waitFor(() => expect(successSpy).toHaveBeenCalledOnce())
   await waitFor(() => expect(warn).toHaveBeenCalledWith('流水已保存，但最新记录读取失败，请刷新查看，无需重复提交'))
@@ -184,7 +184,7 @@ it('从整批转移切到收发动作时默认单次1件，不继承整批库存
   const item = { id: 'item1', name: '螺栓', quantity: 20, unit: '个' }
   apiGet.mockImplementation(async (url: string) => ({ data: url.endsWith('/movements') || url.endsWith('/item-applications') ? [] : { items: [item], summary: {}, total: 1 } }))
   renderPage()
-  fireEvent.click(await screen.findByTitle('查看流水'))
+  fireEvent.click(await screen.findByRole('button', { name: '收发记录' }))
   expect(screen.getByLabelText('本次数量')).toHaveValue('20')
   fireEvent.mouseDown(screen.getByLabelText('本次操作'))
   fireEvent.click(await screen.findByText('消耗', { selector: '.ant-select-item-option-content' }))
@@ -206,7 +206,7 @@ it('旧手工墙钟与新UTC流水按显示时间排序并明确来源，初始�
   ]
   apiGet.mockImplementation(async (url: string) => ({ data: url.endsWith('/movements') ? history : url.endsWith('/item-applications') ? [] : { items: [item], summary: {}, total: 1 } }))
   renderPage()
-  fireEvent.click(await screen.findByTitle('查看流水'))
+  fireEvent.click(await screen.findByRole('button', { name: '收发记录' }))
   await screen.findByText('旧手工墙钟')
   expect(screen.getByText(/旧记录未注明时区/)).toHaveTextContent('2026-10-05 03:10')
   expect(screen.getByText(/2026-10-05 04:24/)).not.toHaveTextContent('旧记录未注明时区')
@@ -218,7 +218,7 @@ it('旧手工墙钟与新UTC流水按显示时间排序并明确来源，初始�
 it('shows full application information to a reader without a save or status mutation control', async () => {
   apiGet.mockImplementation(async (url:string)=>({data:url.endsWith('/item-applications')?[{id:'app-read',title:'现场吊车申请',item_name:'吊车',requirement:'停机窗口吊装',reason:'更换重件',status:'pending'}]:{items:[],summary:{},total:0}}))
   render(<InventoryPage projectId="p1" canManage={false} />)
-  fireEvent.click(await screen.findByRole('tab',{name:/^物资申请/}))
+  fireEvent.click(await screen.findByRole('button',{name:/^物资申请/}))
   fireEvent.click(await screen.findByRole('button',{name:'查看申请'}))
   expect(screen.getByLabelText('原因')).toHaveValue('更换重件')
   expect(screen.getByLabelText('原因')).toBeDisabled()

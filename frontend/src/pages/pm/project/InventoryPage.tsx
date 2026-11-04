@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   Alert, Button, Col, DatePicker, Descriptions, Drawer, Empty, Form, Input, InputNumber, Modal,
-  Popconfirm, Row, Select, Space, Table, Tag, Timeline, Typography, message, Upload, Tabs, Segmented, Pagination, Popover,
+  Popconfirm, Row, Select, Space, Table, Tag, Timeline, Typography, message, Upload, Segmented, Pagination, Popover,
 } from 'antd'
 import {
   FileWordOutlined, InboxOutlined, PlusOutlined, UploadOutlined,
@@ -14,7 +14,6 @@ import { useSubmitLock } from '../../../hooks/useSubmitLock'
 import { formatDateTime } from '../../../utils/date'
 import { useProjectWriteBlocked } from '../../../hooks/useProjectCapability'
 import InlineSelect from '../../../components/InlineSelect'
-import ContextTip from '../../../components/ContextTip'
 import { WorkPageHeader, WorkSection } from '../../../components/WorkPage'
 import { useMediaQuery } from '../../../hooks/useMediaQuery'
 import './FieldWorkPages.css'
@@ -57,7 +56,7 @@ export default function InventoryPage({ projectId, canManage: managePermission }
   const canManage = managePermission && !writeBlocked
   const canQuickEdit = canManage
   const isMobile = useMediaQuery('(max-width: 767px)')
-  const [activeTab, setActiveTab] = useState('items')
+  const [appsOpen, setAppsOpen] = useState(false)
   const [appStatusFilter, setAppStatusFilter] = useState('pending')
   const currentProject = useRef(projectId)
   currentProject.current = projectId
@@ -297,8 +296,8 @@ export default function InventoryPage({ projectId, canManage: managePermission }
   ]
   const hasFilters = Object.values(filters).some(Boolean)
   const clearFilters = () => setFilters({ search: '', ownership: '', status: '', category: '' })
-  const itemActions = (item: any) => <Space wrap>
-    <Button title="查看流水" onClick={() => openMovements(item)}>收发记录</Button>
+  const itemActions = (item: any) => <Space size={6}>
+    <Button title="领用、归还、转移、盘点" onClick={() => openMovements(item)}>收发记录</Button>
     {canManage && <Popover trigger="click" content={<Space direction="vertical">
       <Button aria-label={`编辑物品${item.name}`} onClick={() => openItem(item)}>编辑信息</Button>
       <Popconfirm title="删除物品及全部流水？" onConfirm={async () => {await api.delete(`/projects/${projectId}/inventory/${item.id}`);message.success('物品已删除');await load()}}><Button danger>删除物品</Button></Popconfirm>
@@ -315,27 +314,26 @@ export default function InventoryPage({ projectId, canManage: managePermission }
     <Input.Search allowClear aria-label="搜索现场物品" placeholder="搜索名称、编号或位置" value={filters.search} onChange={event=>setFilters(old=>({...old,search:event.target.value}))} onSearch={search=>setFilters(old=>({...old,search}))} />
     <Select aria-label="筛选物品归属" allowClear value={filters.ownership || undefined} placeholder="所有归属" onChange={(ownership='')=>setFilters(old=>({...old,ownership}))} options={Object.entries(OWNERSHIP).map(([value,meta])=>({value,label:meta.label}))} />
     <Select aria-label="筛选物品状态" allowClear value={filters.status || undefined} placeholder="所有状态" onChange={(status='')=>setFilters(old=>({...old,status}))} options={Object.entries(STATUS).map(([value,meta])=>({value,label:meta.label}))} />
-    <Popover trigger="click" content={<Select style={{width:200}} aria-label="筛选物品分类" allowClear value={filters.category || undefined} placeholder="所有分类" onChange={(category='')=>setFilters(old=>({...old,category}))} options={Object.entries(CATEGORY).map(([value,label])=>({value,label}))} />}><Button>分类筛选</Button></Popover>
     {hasFilters && <Button onClick={clearFilters}>清空筛选</Button>}
-    <span className="field-result-count">{total} 条物品记录</span>
+    <span className="field-result-count">{total} 件</span>
   </>}>
     {isMobile ? <><div className="field-card-list">{rows.map(item=><article className="field-record-card" key={item.id}>
-      <h3>{item.name}</h3><div className="field-record-meta"><Tag color={OWNERSHIP[item.ownership]?.color}>{OWNERSHIP[item.ownership]?.label ?? item.ownership}</Tag><strong className={item.low_stock?'inventory-low':''}>{item.quantity} {item.unit}</strong>{itemStatus(item)}</div>
+      <h3>{item.name}{item.ownership !== 'company' && <Tag className="inventory-owner" color={OWNERSHIP[item.ownership]?.color}>{OWNERSHIP[item.ownership]?.label ?? item.ownership}</Tag>}</h3><div className="field-record-meta"><strong className={item.low_stock?'inventory-low':''}>{item.quantity} {item.unit}</strong>{itemStatus(item)}</div>
       <span className="field-subline">{[item.item_code,item.specification,item.serial_number].filter(Boolean).join(' · ')}</span>
       <p>{item.location || '未填写位置'} · {item.custodian || '未指定保管人'}</p><div className="field-record-actions">{itemActions(item)}</div>
-    </article>)}</div>{total > 0 && <Pagination simple current={page} pageSize={50} total={total} onChange={next=>{setPage(next);void load(next)}} />}</> : <Table rowKey="id" loading={loading} dataSource={rows} scroll={{ x: 900 }} pagination={{current:page,pageSize:50,total,showSizeChanger:false,onChange:next=>{setPage(next);void load(next)}}} columns={[
-      {title:'物品',render:(_:any,item:any)=><div><strong>{item.name}</strong><span className="field-subline">{[item.item_code,item.specification,item.serial_number].filter(Boolean).join(' · ') || '未填写编号和规格'}</span></div>},
-      {title:'归属',dataIndex:'ownership',render:(value:string)=><Tag color={OWNERSHIP[value]?.color}>{OWNERSHIP[value]?.label ?? value}</Tag>},
-      {title:'数量',render:(_:any,item:any)=><span className={item.low_stock?'inventory-low':''}>{item.quantity} {item.unit}</span>},
-      {title:'状态',render:(_:any,item:any)=>itemStatus(item)},
-      {title:'位置与保管人',render:(_:any,item:any)=><div>{item.location || '-'}<span className="field-subline">{item.custodian || '未指定保管人'}</span></div>},
-      {title:'操作',render:(_:any,item:any)=>itemActions(item)},
+    </article>)}</div>{total > 50 && <Pagination simple current={page} pageSize={50} total={total} onChange={next=>{setPage(next);void load(next)}} />}</> : <Table rowKey="id" loading={loading} dataSource={rows} scroll={{ x: 900 }} pagination={total > 50 ? {current:page,pageSize:50,total,showSizeChanger:false,onChange:next=>{setPage(next);void load(next)}} : false} columns={[
+      {title:'物品',render:(_:any,item:any)=><div><strong>{item.name}</strong>{item.ownership !== 'company' && <Tag className="inventory-owner" color={OWNERSHIP[item.ownership]?.color}>{OWNERSHIP[item.ownership]?.label ?? item.ownership}</Tag>}{[item.item_code,item.specification,item.serial_number].some(Boolean) && <span className="field-subline">{[item.item_code,item.specification,item.serial_number].filter(Boolean).join(' · ')}</span>}</div>},
+      {title:'数量',width:110,render:(_:any,item:any)=><span className={item.low_stock?'inventory-low':''}>{item.quantity} {item.unit}</span>},
+      {title:'状态',width:130,render:(_:any,item:any)=>itemStatus(item)},
+      {title:'在哪 · 谁保管',render:(_:any,item:any)=><div>{item.location || '未填写位置'}<span className="field-subline">{item.custodian || '未指定保管人'}</span></div>},
+      {title:'',width:190,render:(_:any,item:any)=>itemActions(item)},
     ]} locale={{emptyText:hasFilters?'当前筛选范围没有物品':'还没有现场物品，点击录入物品添加第一条记录。'}} />}
     {isMobile && !rows.length && <Empty description={loading?'正在加载物品':'没有符合条件的物品'} />}
   </WorkSection>
-  const applicationsContent = <WorkSection description="申请物品或服务，在列表查看审批状态。Word 联系单可导入或导出。"
+  const pendingApps = apps.filter(app => app.status === 'pending').length
+  const applicationsContent = <WorkSection description="申请物品或服务（内部联系单），在这里看审批状态；Word 联系单可导入或导出。"
     filters={<Segmented aria-label="物品申请查看范围" value={appStatusFilter} onChange={value=>setAppStatusFilter(String(value))} options={[{value:'pending',label:'待审批'},{value:'approved',label:'已批准'},{value:'rejected',label:'已驳回'},{value:'all',label:'全部'}]} />}
-    extra={canManage && <Upload showUploadList={false} accept=".docx" beforeUpload={file=>importApplication(file as File)}><Button icon={<UploadOutlined />}>导入联系单</Button></Upload>}>
+    extra={canManage && <Space wrap><Button type="primary" icon={<PlusOutlined />} onClick={()=>openApplication()}>新建申请</Button><Upload showUploadList={false} accept=".docx" beforeUpload={file=>importApplication(file as File)}><Button icon={<UploadOutlined />}>导入联系单</Button></Upload></Space>}>
     {isMobile ? <div className="field-card-list">{filteredApps.map(app=><article className="field-record-card" key={app.id}><h3>{app.title || app.item_name}</h3><div className="field-record-meta">{appStatus(app)}<span>{app.amount || '未填写金额'}</span></div><span className="field-subline">{app.item_name}</span><p className="field-wrap">{app.requirement || '未填写需求'}</p><span className="field-subline">{[app.applicant,app.department,app.apply_date].filter(Boolean).join(' · ')}</span><div className="field-record-actions">{appActions(app)}</div></article>)}{!filteredApps.length && <Empty description="没有符合条件的申请" />}</div> : <Table rowKey="id" size="small" loading={appsLoading} dataSource={filteredApps} scroll={{ x: 820 }} pagination={false} locale={{emptyText:'没有符合条件的申请'}} columns={[
       {title:'申请事项',render:(_:any,app:any)=><div><strong>{app.title || app.item_name || '-'}</strong>{app.item_name && <span className="field-subline">{app.item_name}</span>}<span className="field-subline field-wrap">{app.requirement || '-'}</span></div>},
       {title:'申请人',render:(_:any,app:any)=><div>{app.applicant || '-'}<span className="field-subline">{app.department}</span></div>},
@@ -346,12 +344,13 @@ export default function InventoryPage({ projectId, canManage: managePermission }
     ]} />}
   </WorkSection>
   return <div className="inventory-page field-work-page">
-    <WorkPageHeader title="现场物品" description="记录物品放在哪里、由谁保管，以及每次收货、领用和归还。"
-      primary={canManage && <Button type="primary" icon={<PlusOutlined />} onClick={()=>activeTab==='items'?openItem():openApplication()}>{activeTab==='items'?'录入物品':'新建申请'}</Button>}
-      tools={<Space wrap><RefreshAction onClick={()=>activeTab==='items'?load():loadApplications()} /><ContextTip id="inventory-quick-status" title="物品快捷调整">有管理权限时，可直接改状态；收货、领用和数量变动请记录在收发记录中。</ContextTip></Space>}
+    <WorkPageHeader title="现场物品" description="每件物品在哪、谁保管；领用、归还、转移、盘点都记在“收发记录”里。要买或要租的东西走“物资申请”。"
+      primary={canManage && <Button type="primary" icon={<PlusOutlined />} onClick={()=>openItem()}>录入物品</Button>}
+      tools={<Space wrap><Button onClick={()=>setAppsOpen(true)}>物资申请{pendingApps ? ` · ${pendingApps} 待审批` : ''}</Button><RefreshAction onClick={()=>{void load();void loadApplications()}} /></Space>}
       meta={<Space wrap>{statItems.filter(([label])=>['全部物品','需要关注'].includes(String(label))).map(([label,value])=><span key={label}>{label} {value}</span>)}</Space>} />
     {loadError && <Alert type="error" showIcon message="物品列表加载失败" action={<Button onClick={()=>load()}>重试</Button>} />}
-    <Tabs activeKey={activeTab} onChange={setActiveTab} items={[{key:'items',label:'物品清单',children:itemsContent},{key:'applications',label:`物资申请${apps.filter(app=>app.status==='pending').length ? ` (${apps.filter(app=>app.status==='pending').length})` : ''}`,children:applicationsContent}]} />
+    {itemsContent}
+    <Drawer className="field-work-modal" title="物资申请" open={appsOpen} onClose={()=>setAppsOpen(false)} width={isMobile ? '100%' : 860}>{applicationsContent}</Drawer>
 
     <Modal className="field-work-modal" title={editingApp ? canManage ? '编辑物品申请' : '查看物品申请' : '新建物品申请'} open={appModalOpen} onCancel={() => { if (!appSaving) setAppModalOpen(false) }} onOk={saveApplication} footer={canManage ? undefined : null} confirmLoading={appSaving} width={640} destroyOnClose>
       <Form form={appForm} layout="vertical" requiredMark={false} disabled={!canManage}>
@@ -411,7 +410,8 @@ export default function InventoryPage({ projectId, canManage: managePermission }
         <Row gutter={12}><Col xs={24} sm={12}><Form.Item name="movement_type" label="本次操作" rules={[{ required: true }]}><Select onChange={value => movementForm.setFieldValue('quantity', value === 'transfer' ? movementItem?.quantity : 1)} options={Object.entries(MOVEMENT).map(([value, label]) => ({ value, label }))} /></Form.Item></Col><Col xs={24} sm={12}>{['adjust', 'inventory'].includes(movementType) ? <Form.Item name="quantity_after" label="调整后数量" rules={[{ required: true }]}><InputNumber min={0} style={{ width: '100%' }} /></Form.Item> : <Form.Item name="quantity" label="本次数量" rules={[{ required: movementType !== 'transfer' }]}><InputNumber readOnly={movementType === 'transfer'} min={0} style={{ width: '100%' }} /></Form.Item>}</Col></Row>
         {movementType === 'transfer' && <Alert type="info" showIcon message="位置转移按整条台账数量移动" description="部分物品转移请先拆分台账，再对该条记录整批移动；此处不会自动拆分。" />}
         {['issue', 'consume', 'return_owner'].includes(movementType) && <Typography.Paragraph type="secondary">本次经手人和去向只记录在流水中，剩余库存的位置与保管人保持不变。</Typography.Paragraph>}
-        <Row gutter={12}><Col xs={24} sm={12}><Form.Item name="from_location" label="原位置"><Input /></Form.Item></Col><Col xs={24} sm={12}><Form.Item name="to_location" label="新位置"><Input /></Form.Item></Col></Row>
+        <Form.Item name="from_location" hidden><Input /></Form.Item>
+        {['transfer', 'return_site', 'receive', 'issue', 'return_owner'].includes(movementType) && <Form.Item name="to_location" label={movementType === 'issue' ? '领到哪里（可选）' : movementType === 'return_owner' ? '还给谁 / 哪里（可选）' : '放到哪里'}><Input placeholder={movementItem?.location ? `现在在：${movementItem.location}` : undefined} /></Form.Item>}
         <Row gutter={12}><Col xs={24} sm={12}><Form.Item name="handler" label="经手人"><Input /></Form.Item></Col><Col xs={24} sm={12}><Form.Item name="occurred_at" label="发生时间" rules={[{ required: true }]}><DatePicker showTime style={{ width: '100%' }} /></Form.Item></Col></Row>
         <Form.Item name="note" label="说明"><Input.TextArea rows={2} /></Form.Item>
         <Button type="primary" disabled={false} icon={<InboxOutlined />} loading={saving} onClick={saveMovement}>{movementPending ? '重试本次记录' : '保存记录'}</Button>

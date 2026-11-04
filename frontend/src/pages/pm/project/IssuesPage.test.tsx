@@ -121,13 +121,15 @@ it('starts handling from the list without opening the issue drawer', async () =>
   expect(screen.queryByText('处理时间线')).not.toBeInTheDocument()
 })
 
-it('offers a named inline handler control while leaving read-only issues unchanged', async () => {
+it('each row shows who handles it and only the next step; read-only projects show no step', async () => {
   useMediaQueryMock.mockReturnValue(false)
   const view = render(<IssuesPage projectId="p1" canManage />)
-  expect(await screen.findByRole('combobox', { name: `${PROJECT_ISSUES[0].title}处理人` })).toBeInTheDocument()
+  const row = (await screen.findByRole('button', { name: PROJECT_ISSUES[0].title })).closest('li')!
+  expect(row).toHaveTextContent(PROJECT_ISSUES[0].assignee_name ? `处理人 ${PROJECT_ISSUES[0].assignee_name}` : '未指派')
+  expect(within(row).getByRole('button', { name: /开始处理/ })).toBeInTheDocument()
+  expect(within(row).queryByRole('button', { name: /解.*决/ })).not.toBeInTheDocument()
   view.rerender(<IssuesPage projectId="p1" canManage={false} archived />)
-  expect(screen.queryByRole('combobox', { name: `${PROJECT_ISSUES[0].title}处理人` })).not.toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: '开始处理' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /开始处理/ })).not.toBeInTheDocument()
 })
 
 beforeEach(() => {
@@ -357,7 +359,7 @@ it('keeps resolved vehicle events out of the project close queue and exposes his
   expect(screen.queryByText(VEHICLE_ISSUES[0].title)).toBeNull()
   fireEvent.click(screen.getByText('全部',{selector:'.ant-segmented-item-label'}))
   expect(screen.getByText(VEHICLE_ISSUES[0].title)).toBeInTheDocument()
-  expect(screen.getAllByRole('table')).toHaveLength(1)
+  expect(screen.getAllByRole('list', { name: '问题列表' })).toHaveLength(1)
 })
 
 it('reports accident nature independently from hardware type and preserves the true server SLA',async()=>{
