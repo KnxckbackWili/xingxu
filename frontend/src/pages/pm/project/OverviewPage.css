@@ -188,3 +188,8 @@ html[data-theme='dark'] .overview-check-mark { background: var(--agv-bg-subtle);
 }
 .overview-checklist + .overview-work-cards { grid-template-columns: minmax(0, 1fr); border-block: 0; }
 .overview-failure-actions { margin-top: 10px; }
+.overview-evidence-title { margin: 18px 0 8px; font-size: 14px; font-weight: 600; }
+.overview-phase-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.overview-phase-list li { display: grid; grid-template-columns: minmax(120px, 200px) minmax(0, 1fr) 48px; align-items: center; gap: 10px; }
+.overview-phase-list .ant-progress { margin: 0; }
+.overview-phase-percent { text-align: right; color: var(--agv-text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }

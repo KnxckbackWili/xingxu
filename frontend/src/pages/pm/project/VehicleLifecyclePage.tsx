@@ -3,12 +3,12 @@ import VehicleProgressMatrix from '../../../components/VehicleProgressMatrix'
 import VehicleArrivalEditor from '../../../components/VehicleArrivalEditor'
 import { hasProjectCapability, useProjectWriteBlocked } from '../../../hooks/useProjectCapability'
 import { openWorkDetail } from '../../../stores/workDetail'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Alert, Button, Checkbox, DatePicker, Drawer, Empty, Form, Input, InputNumber, Modal, Select,
-  Space, Table, Tag, Typography, message, Popconfirm, Popover, Upload, Segmented,
+  Space, Table, Tag, Typography, message, Popconfirm, Popover, Upload,
 } from 'antd'
-import { CarOutlined, CheckCircleOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, PlusOutlined, SwapOutlined, UploadOutlined } from '@ant-design/icons'
+import { CheckCircleOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, PlusOutlined, SwapOutlined, UploadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useSubmitLock } from '../../../hooks/useSubmitLock'
 import { api, errMsg } from '../../../api/client'
@@ -21,7 +21,7 @@ import './VehicleLifecyclePage.css'
 import { WorkPageHeader, WorkSection } from '../../../components/WorkPage'
 import { useMediaQuery } from '../../../hooks/useMediaQuery'
 import './FieldWorkPages.css'
-import { IconAction, RefreshAction } from '../../../components/IconAction'
+import { IconAction } from '../../../components/IconAction'
 
 /** 根据起始编号生成连续编号：AGV-001 -> AGV-001, AGV-002... */
 function nextAssetCode(startCode: string, index: number) {
@@ -113,8 +113,6 @@ export default function VehicleLifecyclePage({ project, onReload, configurationO
   const [eventSaving, setEventSaving] = useState(false)
   const [eventOpen, setEventOpen] = useState(false)
   const [editingEvent, setEditingEvent] = useState<any | null>(null)
-  const [search, setSearch] = useState('')
-  const [status, setStatus] = useState('')
   const isMobile = useMediaQuery('(max-width: 767px)')
   const [unitForm] = Form.useForm()
   const [eventForm] = Form.useForm()
@@ -219,15 +217,6 @@ export default function VehicleLifecyclePage({ project, onReload, configurationO
       message.success('车型配置已保存'); onDirtyChange?.(false); setTypeConfigOpen(false); setTypeConfig(null); await load(); await onReload?.()
     } catch (error) { message.error(error instanceof SyntaxError ? '配置必须是 JSON 对象' : errMsg(error)) }
   }
-
-  const filtered = useMemo(() => units.filter((unit) => {
-    const query = search.trim().toLowerCase()
-    if (status === 'attention_all' && !(unit.open_issue_count || ['fault', 'stopped', 'attention'].includes(unit.current_status))) return false
-    if (status === 'open' && !unit.open_issue_count) return false
-    if (status && !['open', 'attention_all'].includes(status) && unit.current_status !== status) return false
-    return !query || [unit.asset_code, unit.serial_number, unit.model_name, unit.location]
-      .some((value) => (value ?? '').toLowerCase().includes(query))
-  }), [units, search, status])
 
   const openHistory = async (unit: any) => {
     try { setSelected((await api.get(`/projects/${projectId}/vehicle-units/${unit.id}`)).data) }
@@ -345,9 +334,9 @@ export default function VehicleLifecyclePage({ project, onReload, configurationO
   if (configurationOnly) return <div>{configuration}{configurationModal}</div>
   const openIssues = units.reduce((sum, unit) => sum + (unit.open_issue_count ?? 0), 0)
   return <div className="field-work-page">
-    <WorkPageHeader title="车辆" description="按车号登记环节，查看车辆位置与问题履历。"
+    <WorkPageHeader title="车辆" description="每台车一行：点环节登记完成，点位置修改，点右侧图标看这台车的问题和资料。"
       primary={canManage && <Button type="primary" icon={<PlusOutlined />} onClick={() => setUnitOpen(true)}>添加车辆</Button>}
-      tools={<Space wrap>{canManage && units.length > 0 && <VehicleArrivalEditor key={projectId} project={project} units={units} onSaved={async () => { await load(); await onReload?.() }} />}<RefreshAction onClick={load} />{(canManage || canExport) && <Popover trigger="click" placement="bottomRight" content={<div className="field-secondary-actions">
+      tools={<Space wrap>{canManage && units.length > 0 && <VehicleArrivalEditor key={projectId} project={project} units={units} onSaved={async () => { await load(); await onReload?.() }} />}{(canManage || canExport) && <Popover trigger="click" placement="bottomRight" content={<div className="field-secondary-actions">
         {canManage && <Upload showUploadList={false} accept=".xlsx" beforeUpload={(f) => importLifecycle(f as File)}><Button icon={<UploadOutlined />}>导入车辆表</Button></Upload>}
         {canExport && <Button icon={<DownloadOutlined />} onClick={downloadLifecycle}>导出车辆表</Button>}
         <Typography.Text type="secondary">Excel 按车辆编号匹配，重复导入不重复建档；保留原生命周期表格式。</Typography.Text>
@@ -356,36 +345,15 @@ export default function VehicleLifecyclePage({ project, onReload, configurationO
     {loaded && !units.length ? <Empty className="vehicles-empty" image={Empty.PRESENTED_IMAGE_SIMPLE} description={<><strong>还没有车辆档案</strong><span>按车号建档后，就能逐车登记到场、调试等环节，并跟踪每台车的问题。{(project.vehicle_total ?? 0) > 0 ? `计划共 ${project.vehicle_total} 台。` : ''}</span></>}>
       {canManage && <Button type="primary" icon={<PlusOutlined />} onClick={() => setUnitOpen(true)}>添加车辆</Button>}
     </Empty> : <>
-    <VehicleProgressMatrix projectId={projectId} status={project.status} onChanged={() => { void load(); void onReload?.() }} />
-    <Typography.Title level={4}>车辆档案与问题履历</Typography.Title>
     {batchFailure && <Alert type="warning" showIcon closable onClose={() => setBatchFailure(null)}
       message="车辆批量建档已停止，请核对台账后补录"
       description={<div><div>已确认建档 {batchFailure.created.length} 台：{batchFailure.created.join('、') || '无'}</div>
         <div>未确认建档：{batchFailure.failed}（{batchFailure.reason}）；后续 {batchFailure.remaining} 台未提交</div>
         <div>列表已重新加载。请先核对未确认编号是否存在，再用「添加车辆」补录缺少的编号。</div></div>} />}
-    <WorkSection filters={<>
-      <Segmented aria-label="车辆查看范围" value={status === 'attention_all' ? 'attention_all' : ''} options={[{value:'',label:'全部车辆'},{value:'attention_all',label:'需关注'}]} onChange={value => setStatus(String(value))} />
-      <Input allowClear aria-label="搜索现场车辆" placeholder="搜索编号、型号或位置" value={search} onChange={event => setSearch(event.target.value)} />
-      <Select allowClear aria-label="筛选车辆状态" placeholder="所有状态" value={['', 'attention_all'].includes(status) ? undefined : status} onChange={value => setStatus(value ?? '')} options={[{value:'open',label:'有未关闭问题'},...Object.entries(STATUS).map(([value,item]) => ({value,label:item.label}))]} />
-      <span className="field-result-count">{filtered.length} 台</span>
-    </>}>
-      {isMobile ? <div className="field-card-list">{filtered.map(unit => <article className="field-record-card" key={unit.id}>
-        <h3><CarOutlined /> {unit.asset_code}</h3><div className="field-record-meta"><Tag color={STATUS[unit.current_status]?.color}>{STATUS[unit.current_status]?.label ?? unit.current_status}</Tag>{unit.open_issue_count ? <Tag color="red">{unit.open_issue_count} 个未关闭问题</Tag> : <span>无遗留问题</span>}</div>
-        <p>{unit.vehicle_type || '-'} / {unit.model_name || '-'}</p>
-        <div>到场日期：{unit.arrived_at || '未登记'}</div>
-        <div>位置：{canManage ? <VehicleLocationEditor key={`${projectId}:${unit.id}`} code={unit.asset_code} location={unit.location || ''} onSave={next => saveLocation(unit,next)} /> : unit.location || '-'}</div>
-        <div className="field-record-actions"><Button onClick={() => openHistory(unit)}>车辆记录</Button></div>
-      </article>)}{!filtered.length && <Empty description="没有符合条件的车辆" />}</div>
-      : <Table rowKey="id" size="small" dataSource={filtered} scroll={{ x: 780 }} pagination={{defaultPageSize:20,pageSizeOptions:[20,50,100],showSizeChanger:true,showTotal:total=>`共 ${total} 台`}} columns={[
-        {title:'车辆',render:(_:any,unit:any)=><div><Typography.Text strong>{unit.asset_code}</Typography.Text><span className="field-subline">{unit.vehicle_type || '-'} / {unit.model_name || '-'}</span></div>},
-        {title:'当前位置',dataIndex:'location',render:(value:string,unit:any)=>canManage ? <VehicleLocationEditor key={`${projectId}:${unit.id}`} code={unit.asset_code} location={value || ''} onSave={next=>saveLocation(unit,next)} /> : value || '-'},
-        {title:'到场日期',dataIndex:'arrived_at',render:(value:string)=>value || '未登记'},
-        {title:'状态',dataIndex:'current_status',render:(value:string)=><Tag color={STATUS[value]?.color}>{STATUS[value]?.label ?? value}</Tag>},
-        {title:'未关闭问题',render:(_:any,unit:any)=>unit.open_issue_count ? <Tag color="red">{unit.open_issue_count} 个</Tag> : '无'},
-        {title:'最近问题',dataIndex:'last_issue_date',render:(value:string)=>value || '-'},
-        {title:'操作',render:(_:any,unit:any)=><Button onClick={()=>openHistory(unit)}>车辆记录</Button>},
-      ]} />}
-    </WorkSection>
+    {/* One list: every vehicle with its location, status and steps; the record drawer holds issues and documents. */}
+    <VehicleProgressMatrix projectId={projectId} status={project.status} onChanged={() => { void load(); void onReload?.() }} info={units}
+      renderLocation={id => { const unit = units.find(row => row.id === id); return !unit ? '-' : canManage ? <VehicleLocationEditor key={`${projectId}:${unit.id}`} code={unit.asset_code} location={unit.location || ''} onSave={next => saveLocation(unit, next)} /> : unit.location || '-' }}
+      onOpenRecord={id => { const unit = units.find(row => row.id === id); if (unit) void openHistory(unit) }} />
     </>}
 
 

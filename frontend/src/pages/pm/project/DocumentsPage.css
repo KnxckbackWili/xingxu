@@ -20,3 +20,12 @@
 .documents-due-pending { cursor: help; border-bottom: 1px dotted var(--agv-border); }
 .project-documents-page .documents-due { white-space: nowrap; }
 .project-documents-page .documents-due-tag { margin-inline-end: 6px; }
+/* Phone document cards: two lines and the actions. */
+.documents-cards { gap: 8px; }
+.documents-card.field-record-card { padding: 12px; }
+.documents-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.documents-card-head strong { font-size: 14px; line-height: 1.4; }
+.documents-card-head .ant-tag { margin: 0 0 0 4px; }
+.documents-card-meta { margin: 4px 0 8px; color: var(--agv-text-secondary); font-size: 12px; }
+.documents-card-file { margin-bottom: 6px; font-size: 12px; }
+.documents-card .field-record-actions { margin-top: 0; }

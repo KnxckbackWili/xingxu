@@ -47,7 +47,7 @@ it('读页面不静默认领，明确点击才写入', async () => {
 
 it('未知计划保持未知状态', async () => {
   mocks.get.mockResolvedValue({ data: { ...base, state: 'unavailable', plans: [], warnings: [{ project_id: 'project-1', message: '周计划尚未读取' }] } }); draw()
-  expect(await screen.findByText('周计划尚未读取')).toBeInTheDocument(); expect(screen.queryByText('本周没有已发布给我的工作')).not.toBeInTheDocument()
+  expect((await screen.findAllByText('周计划尚未读取')).length).toBeGreaterThan(0); expect(screen.queryByText('本周没有已发布给我的工作')).not.toBeInTheDocument()
 })
 
 it('资料上传携带精确期次ID到断点队列', async () => {
@@ -84,7 +84,7 @@ it('shows repeated warnings and the shared not-on-site notice once, naming the p
   expect(screen.getByText('必需或安全检查仍需核对（2 处）')).toBeInTheDocument()
   expect(screen.getAllByText(/项目进入「现场实施」后才能登记完成和检查/)).toHaveLength(1)
   expect(screen.getByText(/项目甲、项目乙：项目进入「现场实施」后/)).toBeInTheDocument()
-  expect(screen.getAllByRole('link', { name: '查看项目' })[0]).toHaveAttribute('href', '/pm/projects/project-1/overview')
+  expect(screen.getAllByRole('link', { name: '项目甲' })[0]).toHaveAttribute('href', '/pm/projects/project-1/overview')
 })
 
 it('本周资料先列本人负责的，其他人负责的折叠并标明车号', async () => {

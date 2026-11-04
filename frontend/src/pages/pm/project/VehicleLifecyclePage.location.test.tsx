@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ConfigProvider } from 'antd'
 import { beforeEach, expect, it, vi } from 'vitest'
-vi.mock('../../../components/VehicleProgressMatrix',()=>({default:()=>null}))
+vi.mock('../../../components/VehicleProgressMatrix', () => ({ default: (props: any) => <div>{(props.info ?? []).map((unit: any) => <div key={unit.id}><span>{unit.asset_code}</span>{props.renderLocation?.(unit.id)}<button type="button" aria-label={`${unit.asset_code} 车辆记录`} onClick={() => props.onOpenRecord?.(unit.id)}>记录</button></div>)}</div> }))
 import VehicleLifecyclePage from './VehicleLifecyclePage'
 import { api } from '../../../api/client'
 

@@ -1,5 +1,5 @@
 vi.mock('../../../components/VehicleDocumentsPanel', () => ({ default: ({ unitId }: { unitId: string }) => <div>资料面板 {unitId}</div> }))
-vi.mock('../../../components/VehicleProgressMatrix', () => ({ default: () => <div>车辆进度表由专门测试覆盖</div> }))
+vi.mock('../../../components/VehicleProgressMatrix', () => ({ default: (props: any) => <div>{(props.info ?? []).map((unit: any) => <div key={unit.id}><span>{unit.asset_code}</span>{props.renderLocation?.(unit.id)}<button type="button" aria-label={`${unit.asset_code} 车辆记录`} onClick={() => props.onOpenRecord?.(unit.id)}>记录</button></div>)}</div> }))
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 

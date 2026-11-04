@@ -44,7 +44,8 @@ it('keeps migration identities unknown and displays source quantities without in
 })
 it('pre-entry remains read-only even if an old response says recording is allowed', async () => {
   render(<VehicleProgressMatrix projectId="p1" status="preparing" />)
-  expect(await screen.findByRole('button', { name: 'AGV-001 到场点检 勾选完成' })).toBeDisabled()
+  expect(await screen.findByRole('button', { name: 'AGV-001 到场点检 检查要求' })).toBeEnabled()
+  expect(screen.queryByRole('button', { name: /勾选完成/ })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: '批量勾选' })).not.toBeInTheDocument()
 })
 it('does not let a late previous project response overwrite the current project', async () => {
@@ -85,4 +86,22 @@ it('shows the exact car and check blocker after an atomic batch refusal', async 
   fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /确.*认/ }))
   expect(await screen.findByText(/现场01 · 急停检查：安全关键检查须真实通过/)).toBeVisible()
   await waitFor(() => expect(screen.getByRole('dialog')).toBeVisible())
+})
+
+it('one list: register details sit on the vehicle row, and a step dialog leads to its checks', async () => {
+  const record = vi.fn()
+  get.mockImplementation((url: string) => Promise.resolve({ data: url.endsWith('/checks') ? { items: [], can_record: true } : fixture() }))
+  render(<ConfigProvider theme={{ token: { motion: false } }}><VehicleProgressMatrix projectId="p1" status="executing" info={[{ id: 'real-u1', location: '2号库', current_status: 'fault', open_issue_count: 2 }]}
+    renderLocation={id => <span>位置：{id}</span>} onOpenRecord={record} /></ConfigProvider>)
+  expect(await screen.findByText('故障')).toBeVisible()
+  expect(screen.getByText('2 个问题')).toBeVisible()
+  expect(screen.getByText('位置：real-u1')).toBeVisible()
+  fireEvent.click(screen.getByRole('button', { name: 'AGV-001 车辆记录' }))
+  expect(record).toHaveBeenCalledWith('real-u1')
+  fireEvent.change(screen.getByLabelText('搜索现场车辆'), { target: { value: '3号库' } })
+  expect(screen.getByText('没有符合条件的车辆')).toBeVisible()
+  fireEvent.change(screen.getByLabelText('搜索现场车辆'), { target: { value: '2号库' } })
+  fireEvent.click(screen.getByRole('button', { name: 'AGV-001 到场点检 勾选完成' }))
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '查看这一步的检查要求' }))
+  expect(await screen.findByText('此车本环节没有检查要求')).toBeInTheDocument()
 })

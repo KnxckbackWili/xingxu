@@ -232,6 +232,8 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
       <Dropdown trigger={['click']} menu={{ items: more }}><Button size="small" icon={<EllipsisOutlined />} aria-label={`${row.code} ${row.name}的更多操作`} /></Dropdown>
     </Space>
   }
+  // Midnight deadlines read as a date; others keep their time.
+  const shortDeadline = (label: string) => label.endsWith(' 00:00') ? label.slice(0, -6) : label
   // One tag per row: overdue and "estimated deadline passed" replace the plain pending state.
   const renderState = (row: ProjectDocument) => <><Tag color={row.status === 'submitted' ? 'green' : late(row) ? 'red' : row.status === 'pending' && row.due_state === 'estimated_past_due' ? 'gold' : 'default'}>{late(row) ? '已逾期' : row.status === 'pending' && row.due_state === 'estimated_past_due' ? '预计截止已过' : statusName[row.status]}</Tag>
     {!row.required && <Tag>可选</Tag>}{row.confidential && <Tag color="orange">保密</Tag>}{row.applicable === false && <Tag>原平台资料，保留历史</Tag>}
@@ -245,11 +247,15 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
   }
   const renderGroup = (group: { key: string; rows: ProjectDocument[] }) => <>
         {group.key === 'legacy' && <Alert type="info" showIcon message="旧资料与原审核信息保留，尚未猜配到新阶段" description="负责人可在下方资料要求中明确分类；未分类资料不冒充已满足新阶段门禁。" style={{ marginBottom: 12 }} />}
-        {mobile ? <div className="field-card-list">{group.rows.map(row => <article className="field-record-card" key={row.id}>
-          <h3>{row.code} {row.name}</h3>{row.vehicle_label && <p>{row.vehicle_label}</p>}{row.period_key && <Tag>{row.period_key}</Tag>}
-            {row.trigger_event && <p className="documents-note">{row.trigger_event.source_type==='issue'?`问题：${row.trigger_event.source_metadata.title || '原问题'}`:`人员离开：${row.trigger_event.source_metadata.member_name || '原成员'}`} · {row.trigger_event.source_metadata.note}</p>}
-          <div>{renderState(row)}</div><p>{row.due_is_estimated && '预计截止 '}{deadlineLabel(row.due_at, row.due_basis?.timezone || data?.timezone || 'Asia/Shanghai')}</p>
-          <p className="documents-note">{basisLabel(row)}</p><p>负责人：{row.effective_owner_name || '待指派'}{row.owner_warning && <Typography.Text type="warning"> · {row.owner_warning}</Typography.Text>}</p>{renderFile(row)}<div className="field-record-actions">{renderActions(row)}</div>
+        {mobile ? <div className="field-card-list documents-cards">{group.rows.map(row => <article className="field-record-card documents-card" key={row.id}>
+          {/* Two lines: what and its state; when, for which vehicle, who. The deadline basis is one tap away. */}
+          <div className="documents-card-head"><strong>{row.code} {row.name}</strong><span>{renderState(row)}</span></div>
+          <p className="documents-card-meta">{[row.vehicle_label, row.period_key].filter(Boolean).join(' · ')}{(row.vehicle_label || row.period_key) && ' · '}
+            <span title={basisLabel(row) || undefined}>{row.due_at ? `截止 ${shortDeadline(deadlineLabel(row.due_at, row.due_basis?.timezone || data?.timezone || 'Asia/Shanghai'))}${row.due_is_estimated ? '（预计）' : ''}` : '截止待定'}</span>
+            {' · '}{row.effective_owner_name || '待指派'}{row.owner_warning && <Typography.Text type="warning"> · {row.owner_warning}</Typography.Text>}</p>
+          {row.trigger_event && <p className="documents-note">{row.trigger_event.source_type==='issue'?`问题：${row.trigger_event.source_metadata.title || '原问题'}`:`人员离开：${row.trigger_event.source_metadata.member_name || '原成员'}`} · {row.trigger_event.source_metadata.note}</p>}
+          {row.latest_version && <div className="documents-card-file">{renderFile(row)}</div>}
+          <div className="field-record-actions">{renderActions(row)}</div>
         </article>)}</div> : <Table<ProjectDocument> rowKey="id" dataSource={group.rows} pagination={{ pageSize: 15 }} size="small" scroll={{ x: 880 }} loading={loading}
           rowSelection={canSubmit || canExport ? { selectedRowKeys: selected, preserveSelectedRowKeys: true, onChange: keys => setSelected(keys.map(String)), getCheckboxProps: row => ({ disabled: (!canExport && row.applicable === false) || busy }) } : undefined}
           columns={[

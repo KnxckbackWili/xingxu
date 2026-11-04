@@ -51,14 +51,14 @@ export default function WeekPage({ projectId = '' }: { projectId?: string }) {
     const completion = plan.completion
     const completionTag = completion && (completion.quantity_unknown ? <Tag>完成范围待核对</Tag> : completion.is_complete ? <Tag color="green">已完成</Tag> : completion.overdue ? <Tag color="red">已逾期</Tag> : null)
     const hideRecord = !!recordBlocked && sharedBlocked.has(recordBlocked)
-    return <Card key={plan.id} size="small" title={work.name} extra={<>{plan.mode === 'in_progress' && <Tag>进行中</Tag>}{completionTag}</>} className="week-plan-card">
-      <p className="week-plan-meta">{plan.project_name} · {work.phase_name}{assist ? ` · 协助 ${plan.assignees.map(p => p.name).join('、')}` : ''}{plan.scope?.label ? ` · ${plan.scope.label}` : ''}{completion && work.kind === 'vehicle' ? ` · 已完成 ${completion.completed_count ?? '未知'} / ${completion.required_count ?? (plan.mode === 'in_progress' ? '进行中' : '待核对')}` : ''}</p>
+    return <article key={plan.id} className="week-item">
+      <header className="week-item-head"><strong>{work.name}</strong>{plan.mode === 'in_progress' && <Tag>进行中</Tag>}{completionTag}</header>
+      <p className="week-plan-meta"><Link to={`/pm/projects/${plan.project_id}/overview`}>{plan.project_name}</Link> · {work.phase_name}{assist ? ` · 协助 ${plan.assignees.map(p => p.name).join('、')}` : ''}{plan.scope?.label ? ` · ${plan.scope.label}` : ''}{completion && work.kind === 'vehicle' ? ` · 已完成 ${completion.completed_count ?? '未知'} / ${completion.required_count ?? (plan.mode === 'in_progress' ? '进行中' : '待核对')}` : ''}</p>
       {recordBlocked && !sharedBlocked.has(recordBlocked) && <Alert type="info" showIcon message={recordBlocked} style={{ marginBottom: 8 }} />}
-      {hideRecord ? null : work.kind === 'vehicle' ? step ? units.map(unit => { const cell = unit.cells[step.key]; return <p key={unit.id}><Button disabled={!recordAllowed || loading || !!cell?.is_done} onClick={() => open(plan, 'vehicle', unit.id, cell?.version || 0, true, `${unit.fleet_no || unit.asset_code} · ${step.name}`, step.key, assist)}>{cell?.is_done ? `已完成 ${cell.done_on || ''}` : '勾选完成'} · {unit.fleet_no || unit.asset_code}</Button></p> }) : <Alert type="warning" message="真实车辆环节尚未读取，不能按计划量填报" /> : <Button disabled={!recordAllowed || loading || work.is_completed} onClick={() => open(plan, 'work', work.id, work.version, true, work.name, '', assist)}>{work.is_completed ? '已完成' : '登记实际完成'}</Button>}
+      {hideRecord ? null : work.kind === 'vehicle' ? step ? <div className="week-vehicles">{units.map(unit => { const cell = unit.cells[step.key]; return <Button key={unit.id} className={cell?.is_done ? 'is-done' : ''} disabled={!recordAllowed || loading || !!cell?.is_done} onClick={() => open(plan, 'vehicle', unit.id, cell?.version || 0, true, `${unit.fleet_no || unit.asset_code} · ${step.name}`, step.key, assist)}>{cell?.is_done ? `已完成 ${cell.done_on || ''}` : '勾选完成'} · {unit.fleet_no || unit.asset_code}</Button> })}</div> : <Alert type="warning" message="真实车辆环节尚未读取，不能按计划量填报" /> : <Button type={work.is_completed ? 'default' : 'primary'} disabled={!recordAllowed || loading || work.is_completed} onClick={() => open(plan, 'work', work.id, work.version, true, work.name, '', assist)}>{work.is_completed ? '已完成' : '登记实际完成'}</Button>}
       {!!checks.length && <Collapse ghost size="small" className="week-plan-checks" items={[{ key: 'checks', label: `待完成检查 ${checks.length} 项${checks.some(check => check.failed) ? '（含不通过）' : ''}`,
         children: checks.map(check => <p key={check.id}><span>{check.vehicle_label ? `${check.vehicle_label} · ` : ''}{check.name} </span>{check.failed && <Tag color="red">不通过</Tag>}<Button size="small" disabled={!recordAllowed || loading} onClick={() => open(plan, 'check', check.id, check.version, true, check.name, '', assist)}>登记检查通过</Button></p>) }]} />}
-      <Link to={`/pm/projects/${plan.project_id}/overview`}>查看项目</Link>
-    </Card>
+    </article>
   }
   // Same notice for several cards → shown once above the list, naming the projects.
   const blockedGroups = new Map<string, Set<string>>()
@@ -85,22 +85,35 @@ export default function WeekPage({ projectId = '' }: { projectId?: string }) {
   const otherDocuments = documents.filter(doc => !myDocuments.includes(doc))
   const documentLine = (doc: Week['this_week_documents'][number]) => <p key={doc.document_id}><Link to={`/pm/projects/${doc.project_id}/documents?document=${doc.document_id}`}>{doc.project_name} · {doc.code} {doc.name}{doc.vehicle_label ? ` · ${doc.vehicle_label}` : ''}</Link><br /><Typography.Text type="secondary">{deadlineLabel(doc.due_at, doc.timezone || 'Asia/Shanghai')} · {doc.effective_owner_name || '负责人待核对'}</Typography.Text> {data?.permissions.upload && hasSystemPermission(user, 'worker.deliver') && <Button onClick={() => { setUploading(doc); setFile(undefined); setEventDate(''); setUploadError('') }}>上传当期资料</Button>}</p>
   return <div className="worker-work-page">
-    <WorkPageHeader title={canAccessNav('/pm/dashboard', user) ? '我的本周' : '工作台'} description="本周分配给你的工作；登记实际完成日期，协助登记会同时保留操作人和被协助人。" tools={<Space wrap><DatePicker picker="week" aria-label="计划周" value={week ? dayjs(week) : dayjs()} allowClear={false} onChange={value => setWeek(value?.subtract((value.day() + 6) % 7, 'day').format('YYYY-MM-DD'))} /><RefreshAction onClick={load} loading={loading} /></Space>} />
+    <WorkPageHeader title={canAccessNav('/pm/dashboard', user) ? '我的本周' : '工作台'} description="这周要做的、可以认领的、要交的资料和自己的问题，都在这一页。" tools={<Space wrap><DatePicker picker="week" aria-label="计划周" value={week ? dayjs(week) : dayjs()} allowClear={false} onChange={value => setWeek(value?.subtract((value.day() + 6) % 7, 'day').format('YYYY-MM-DD'))} /><RefreshAction onClick={load} loading={loading} /></Space>} />
     {error && <Alert type="error" message="本周信息未能读取" description={error} />}
     {warningGroups.size > 0 && <details className="week-notice week-notice-fold"><summary>{data!.warnings.length} 条计划提醒</summary>
       <ul className="week-notice-list">{[...warningGroups].map(([message, count]) => <li key={message}>{message}{count > 1 ? `（${count} 处）` : ''}</li>)}</ul></details>}
     {[...sharedBlocked].map(reason => <Alert key={reason} type="info" showIcon className="week-notice" message={`${[...blockedGroups.get(reason)!].join('、')}：${reason}`} />)}
     {!!pendingCount && <Alert type="info" message={`${pendingCount} 条操作仍在本机队列，未计作服务器完成`} action={<Button disabled={!online} onClick={() => void flush().then(load)}>同步原操作</Button>} />}
     {!!rejected.length && <Card size="small" title="需核对的离线操作">{rejected.map(row => <p key={row.client_uuid}>{row.reason} <Button onClick={() => retry(row.client_uuid)}>重试原操作</Button><Button onClick={() => remove(row.client_uuid)}>移除本机待核对项</Button></p>)}</Card>}
-    <div className="week-layout"><div className="week-layout-main">
-    <Card title="本周我负责的工作" loading={loading}>{data?.plans.length ? data.plans.map(plan => planCard(plan)) : !error && <Empty description={data?.permissions.plan_read === false ? '本人周计划查看权限已关闭' : data?.state === 'unavailable' ? '周计划尚未读取' : '本周没有已发布给我的工作'} />}</Card>
-    {!!data?.unassigned.length && <Card title="待认领工作">{data.unassigned.map(plan => <p key={plan.id}>{plan.project_name} · {plan.work_item.name} <Button disabled={!canRecord || plan.permissions?.claim === false || !!claiming || !online} loading={claiming === plan.id} onClick={() => void claim(plan)}>认领</Button></p>)}</Card>}
-    {!!data?.assistable.length && <Card title="协助同项目人员" extra={<Button onClick={() => setShowAssist(value => !value)}>{showAssist ? '收起' : '选择协助工作'}</Button>}>{showAssist ? data.assistable.map(plan => planCard(plan, true)) : <Typography.Text type="secondary">同项目有 {data.assistable.length} 项工作可协助登记。</Typography.Text>}</Card>}
-    </div><div className="week-layout-side">
-    <Card title="本周待交资料">{myDocuments.length ? myDocuments.map(documentLine) : <Empty description={error ? '资料状态未知' : otherDocuments.length ? '本周没有我负责的待交资料' : '本周没有可见待交资料'} />}
-      {otherDocuments.length > 0 && <details className="week-other-documents"><summary>项目里其他人负责 {otherDocuments.length} 项</summary>{otherDocuments.map(documentLine)}</details>}</Card>
-    <Card title="我的问题" extra={data?.permissions.issues && <Link to="/worker/issues">上报与处理问题</Link>}>{data?.my_issues.length ? data.my_issues.map(issue => <p key={issue.id}><Link to={`/worker/issues?issue=${issue.id}`}>{issue.project_name} · {issue.title}</Link> <Tag color={ISSUE_STATUS_MAP[issue.status]?.color}>{ISSUE_STATUS_MAP[issue.status]?.label ?? issue.status}</Tag></p>) : <Empty description="暂无本人未闭环问题" />}</Card>
-    </div></div>
+    {/* One column, most important first: my work, work nobody has taken, my documents, my issues. */}
+    <section className="week-section" aria-label="我这周要做的">
+      <h2>要做的工作{!!data?.plans.length && <span>{data.plans.length}</span>}</h2>
+      {loading && !data ? <Card loading bordered={false} /> : data?.plans.length ? data.plans.map(plan => planCard(plan)) : !error && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={data?.permissions.plan_read === false ? '本人周计划查看权限已关闭' : data?.state === 'unavailable' ? '周计划尚未读取' : '本周没有已发布给我的工作'} />}
+    </section>
+    {!!data?.unassigned.length && <section className="week-section" aria-label="没人负责的工作">
+      <h2>没人负责，可以认领<span>{data.unassigned.length}</span></h2>
+      <ul className="week-rows">{data.unassigned.map(plan => <li key={plan.id}><span><strong>{plan.work_item.name}</strong><small>{plan.project_name}</small></span><Button disabled={!canRecord || plan.permissions?.claim === false || !!claiming || !online} loading={claiming === plan.id} onClick={() => void claim(plan)}>认领</Button></li>)}</ul>
+    </section>}
+    <section className="week-section" aria-label="要交的资料">
+      <h2>要交的资料{!!myDocuments.length && <span>{myDocuments.length}</span>}</h2>
+      {myDocuments.length ? myDocuments.map(documentLine) : <Typography.Paragraph type="secondary">{error ? '资料状态未知' : otherDocuments.length ? '本周没有我负责的待交资料' : '本周没有可见待交资料'}</Typography.Paragraph>}
+      {otherDocuments.length > 0 && <details className="week-other-documents"><summary>项目里其他人负责 {otherDocuments.length} 项</summary>{otherDocuments.map(documentLine)}</details>}
+    </section>
+    <section className="week-section" aria-label="我的问题">
+      <h2>我的问题{!!data?.my_issues.length && <span>{data.my_issues.length}</span>}{data?.permissions.issues && <Link to="/worker/issues">上报与处理问题</Link>}</h2>
+      {data?.my_issues.length ? <ul className="week-rows">{data.my_issues.map(issue => <li key={issue.id}><Link to={`/worker/issues?issue=${issue.id}`}>{issue.project_name} · {issue.title}</Link><Tag color={ISSUE_STATUS_MAP[issue.status]?.color}>{ISSUE_STATUS_MAP[issue.status]?.label ?? issue.status}</Tag></li>)}</ul> : <Typography.Paragraph type="secondary">暂无本人未闭环问题</Typography.Paragraph>}
+    </section>
+    {!!data?.assistable.length && <section className="week-section" aria-label="协助同项目人员">
+      <h2>协助同事<Button size="small" type="link" onClick={() => setShowAssist(value => !value)}>{showAssist ? '收起' : `同项目有 ${data.assistable.length} 项可协助登记`}</Button></h2>
+      {showAssist && data.assistable.map(plan => planCard(plan, true))}
+    </section>}
     {target && <FieldOperationModal key={`${identity}:${target.kind}:${target.target_id}`} target={target} onClose={() => setTarget(undefined)} onSaved={load} />}
     <Modal open={!!uploading} title={`上传资料 · ${uploading?.name || ''}`} onCancel={() => !uploadBusy && setUploading(undefined)} onOk={() => void submitFile()} confirmLoading={uploadBusy} okButtonProps={{ disabled: !file || uploadBusy }} maskClosable={false} okText="保存上传任务">
       <Typography.Paragraph>使用原有断点上传队列。离线时文件及原期次保存在本机，联网后仍须通过当前权限和哈希核验。</Typography.Paragraph>{uploadError && <Alert type="error" message={uploadError} />}<Upload beforeUpload={value => { setFile(value); return false }} maxCount={1} fileList={file ? [{ uid: 'file', name: file.name, status: 'done' }] : []} onRemove={() => { setFile(undefined); return true }}><Button>选择文件</Button></Upload>

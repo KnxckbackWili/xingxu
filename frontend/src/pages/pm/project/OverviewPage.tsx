@@ -5,7 +5,7 @@ import { ProjectCapabilitiesContext, useProjectWriteBlocked } from '../../../hoo
 import { useContext, useEffect, useRef, useState } from 'react'
 import {
   Card, Progress, Typography, Skeleton, Dropdown, message, Alert,
-  Modal, Button, Input, Collapse, Space,
+  Modal, Button, Input, Space,
 } from 'antd'
 import {
   DownOutlined, PlayCircleOutlined, RightOutlined,
@@ -241,10 +241,6 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
     onClick={event => { if (event.button !== 0 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return; event.preventDefault(); go(path) }}>
     <span><strong>{title}</strong>{detail && <small>{detail}</small>}</span><RightOutlined aria-hidden="true" />
   </a>
-  const count = (title: string, value: number | null, path: string, urgent = false) => <a className={`overview-side-count${urgent ? ' is-urgent' : ''}`} href={`/pm/projects/${projectId}${path}`}
-    onClick={event => { if (event.button !== 0 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return; event.preventDefault(); go(path) }}>
-    <span>{title}</span><strong>{value ?? '未读取'}</strong>
-  </a>
   const checklist = projectStatus === 'preparing' && !fieldStaff ? workflow.checklist : null
   const pendingSteps = checklist ? checklist.filter(item => !item.done).length : 0
   const groups: UnitQuantity[] = data?.quantities_by_unit ?? []
@@ -320,13 +316,6 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
             {currentPhase && <p className="overview-side-note">下一个未完成分组：{currentPhase.name}</p>}
             <button type="button" className="overview-side-toggle" aria-expanded={dataOpen} aria-controls={`overview-evidence-${projectId}`} onClick={() => setDataOpen(value => !value)}>进度与记录 <RightOutlined aria-hidden="true" rotate={dataOpen ? 90 : 0} /></button>
           </section>
-          <section className="overview-card overview-side-counts">
-            <h2>待处理</h2>
-            {count('未解决问题', openIssues.length, '/issues', severeIssueCount > 0)}
-            {count('待提交资料', documentProgress?.pending ?? null, '/documents')}
-            {count('逾期资料', overdue.length, '/documents', overdue.length > 0)}
-            {!fieldStaff && count('项目成员', memberCount, '/team')}
-          </section>
           {!fieldStaff && recentLogs.length > 0 && <section className="overview-card overview-side-logs">
             <h2>最近记录</h2>
             {recentLogs.slice(0, 3).map((log: any) => <div key={log.id}><span>{formatAuditDetail(log.detail)}</span><small>{log.operator_name || '系统'} · {log.created_at ? formatDateTime(log.created_at) : ''}</small></div>)}
@@ -349,30 +338,19 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
                   : <p>暂无分单位数量</p>}
               </div>
             </div>
-            <Collapse className="overview-tree-details" expandIcon={({ isActive }) => <RightOutlined aria-hidden="true" rotate={isActive ? 90 : 0} />} items={[
-              { key: 'more', label: fieldStaff ? '阶段与趋势' : '阶段进度与记录', children: <Collapse className="overview-tree-details-inner" expandIcon={({ isActive }) => <RightOutlined aria-hidden="true" rotate={isActive ? 90 : 0} />} items={[
-                { key: 'phases', label: '任务阶段进度', children: phases.length ? <Collapse className="overview-tree-phases" expandIcon={({ isActive }) => <RightOutlined aria-hidden="true" rotate={isActive ? 90 : 0} />} items={phases.map((phase, index) => ({
-                  key: phase.id || `${index}`, label: phase.name, extra: <span>{phase.percent}%</span>,
-                  children: <div className="overview-tree-phase-content"><Progress percent={phase.percent} size="small" aria-label={`${phase.name}数量进度`} />
-                    <Collapse className="overview-tree-modules" expandIcon={({ isActive }) => <RightOutlined aria-hidden="true" rotate={isActive ? 90 : 0} />} items={(phase.modules ?? []).map((module: any, moduleIndex: number) => ({
-                      key: module.id || `${moduleIndex}`, label: module.name, extra: <span>{module.percent}%</span>,
-                      children: <div><Progress percent={module.percent} size="small" aria-label={`${module.name}数量进度`} />
-                        <ul className="overview-tree-tasks">{(module.tasks ?? []).map((task: any) => <li key={task.id || task.name}>
-                          {fieldStaff ? <div className="overview-tree-task-text"><strong>{task.name}</strong><small>数量进度 {task.percent}%</small></div>
-                            : link(task.name, `/plan?task=${encodeURIComponent(task.id)}`, `数量进度 ${task.percent}%`)}
-                        </li>)}</ul>
-                      </div>,
-                    }))} />
-                    {!fieldStaff && link('查看任务', '/plan')}
-                  </div>,
-                }))} /> : <Typography.Text type="secondary">尚未配置实施任务。</Typography.Text> },
-                { key: 'trend', label: '进度趋势', children: <>{timeline.length > 0 && timeline.every(t => t.plan_available === false) && <Alert type="info" message="尚未配置车辆环节周计划，计划曲线暂显示未知" />}<LazyChart option={chartOption} style={{ height: 260 }} /></> },
-                ...(!fieldStaff ? [{ key: 'activity', label: '最近动态', children: <div className="overview-tree-logs">
-                  {recentLogs.length ? recentLogs.map((log: any) => <div key={log.id}><span>{formatAuditDetail(log.detail)}</span><small>{log.operator_name || '系统'} · {log.created_at ? formatDateTime(log.created_at) : ''}</small></div>) : <Typography.Text type="secondary">还没有项目动态。</Typography.Text>}
-                  {link('查看操作记录', '/activity')}
-                </div> }] : []),
-              ]} /> },
-            ]} />
+            {/* Flat, no nested folding: group progress, trend, then recent activity. */}
+            <h3 className="overview-evidence-title">各分组进度</h3>
+            {phases.length ? <ul className="overview-phase-list" aria-label="各分组进度">{phases.map((phase, index) => <li key={phase.id || index}>
+              {fieldStaff ? <span>{phase.name}</span> : <button type="button" className="task-name-link" onClick={() => go('/plan')}>{phase.name}</button>}
+              <Progress percent={phase.percent} size="small" showInfo={false} aria-label={`${phase.name}数量进度`} /><span className="overview-phase-percent">{phase.percent}%</span>
+            </li>)}</ul> : <Typography.Text type="secondary">尚未配置实施任务。</Typography.Text>}
+            <h3 className="overview-evidence-title">进度趋势</h3>
+            {timeline.length > 0 && timeline.every(t => t.plan_available === false) && <Alert type="info" message="尚未配置车辆环节周计划，计划曲线暂显示未知" />}
+            <LazyChart option={chartOption} style={{ height: 240 }} />
+            {!fieldStaff && <><h3 className="overview-evidence-title">最近动态</h3><div className="overview-tree-logs">
+              {recentLogs.length ? recentLogs.map((log: any) => <div key={log.id}><span>{formatAuditDetail(log.detail)}</span><small>{log.operator_name || '系统'} · {log.created_at ? formatDateTime(log.created_at) : ''}</small></div>) : <Typography.Text type="secondary">还没有项目动态。</Typography.Text>}
+              {link('查看操作记录', '/activity')}
+            </div></>}
       </div>}
 
       {/* C8-3：归档前填写项目复盘 */}
