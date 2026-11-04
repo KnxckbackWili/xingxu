@@ -61,8 +61,6 @@ export default function InventoryOverviewPage() {
     <div className="inventory-filters inventory-global-filters">
       <Input.Search value={searchInput} onChange={(event) => setSearchInput(event.target.value)} allowClear placeholder="搜索物品、编号、规格、位置或保管人" onSearch={(search) => setFilters((old) => ({ ...old, search }))} />
       <Select allowClear showSearch optionFilterProp="label" placeholder="选择项目" aria-label="按项目筛选" value={filters.project_id || undefined} onChange={(project_id = '') => setFilters((old) => ({ ...old, project_id }))} options={projects.map((project) => ({ value: project.id, label: project.name }))} />
-      <Select allowClear placeholder="归属" aria-label="按归属筛选" value={filters.ownership || undefined} onChange={(ownership = '') => setFilters((old) => ({ ...old, ownership }))} options={Object.entries(OWNER).map(([value, meta]) => ({ value, label: meta.label }))} />
-      <Select allowClear placeholder="分类" aria-label="按分类筛选" value={filters.category || undefined} onChange={(category = '') => setFilters((old) => ({ ...old, category }))} options={Object.entries(CATEGORY).map(([value, label]) => ({ value, label }))} />
       <Select allowClear placeholder="状态" aria-label="按状态筛选" value={filters.status || undefined} onChange={(status = '') => setFilters((old) => ({ ...old, status }))} options={Object.entries(STATUS).map(([value, label]) => ({ value, label }))} />
       {(hasFilters || searchInput) && <Button onClick={clearFilters}>重置筛选</Button>}
     </div>}>

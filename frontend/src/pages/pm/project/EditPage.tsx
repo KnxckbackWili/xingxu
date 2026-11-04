@@ -68,7 +68,8 @@ export default function EditPage({ project, onReload }: { project: Project; onRe
   // Fewer tabs: permissions live with members; co-managers and the owner hand-over share one tab.
   const [settingsTab, setSettingsTab] = useState(() => {
     const section = new URLSearchParams(location.search).get('section') || 'info'
-    return ({ 'member-permissions': 'members', 'co-managers': 'owner' } as Record<string, string>)[section] ?? section
+    // 成员与负责人在同一个“人员”页签；旧链接照常落到这里。
+    return ({ 'member-permissions': 'people', 'co-managers': 'people', members: 'people', owner: 'people' } as Record<string, string>)[section] ?? section
   })
   const [coDraftEpoch, setCoDraftEpoch] = useState(0)
   const tabDialog = useRef<ReturnType<typeof Modal.confirm> | null>(null)
@@ -235,15 +236,14 @@ export default function EditPage({ project, onReload }: { project: Project; onRe
           ),
         },
         { key:'vehicles',label:'车型',disabled:saving,children:<VehicleLifecyclePage key={`${project.id}:${coDraftEpoch}`} project={project} onReload={onReload} configurationOnly onDirtyChange={vehiclesDirty} /> },
-        { key:'members',label:'成员',disabled:saving,children:<div className="project-settings-stack">
-          <TeamPage key={`${project.id}:${coDraftEpoch}`} project={project} onReload={onReload} canEdit={canEdit && project.capabilities?.includes('project.manage_members') !== false} inlineSetup onDirtyChange={membersDirty} onSchedule={()=>navigate(`/pm/projects/${project.id}/plan?view=weeks`)} />
-          <details className="project-settings-more"><summary>成员权限（默认按角色，一般不用改）</summary>
-            <MemberPermissions key={project.id} project={project} members={(project.members ?? []).map(id => users.find(person => person.id === id) ?? { id, display_name: id })} onReload={onReload} />
-          </details>
-        </div> },
-        { key:'owner',label:'负责人',disabled:saving,children:<div className="project-settings-stack">
+        // One “人员” tab: who leads, who helps lead, who works here and what extra they may do.
+        { key:'people',label:'人员',disabled:saving,children:<div className="project-settings-stack">
           <ProjectOwnerPanel key={`${project.id}:${coDraftEpoch}`} project={project} onReload={onReload} onDirtyChange={ownerDirty} />
-          <ProjectCoManagers key={`co:${project.id}:${coDraftEpoch}`} project={project} users={users} canEdit={isOwner && canEdit} onReload={onReload} onDirtyChange={coManagersDirty} />
+          <TeamPage key={`${project.id}:${coDraftEpoch}`} project={project} onReload={onReload} canEdit={canEdit && project.capabilities?.includes('project.manage_members') !== false} inlineSetup onDirtyChange={membersDirty} onSchedule={()=>navigate(`/pm/projects/${project.id}/plan?view=weeks`)} />
+          <MemberPermissions key={project.id} project={project} members={(project.members ?? []).map(id => users.find(person => person.id === id) ?? { id, display_name: id })} onReload={onReload} />
+          <details className="project-settings-more"><summary>项目协管（可代负责人管理整个项目）</summary>
+            <ProjectCoManagers key={`co:${project.id}:${coDraftEpoch}`} project={project} users={users} canEdit={isOwner && canEdit} onReload={onReload} onDirtyChange={coManagersDirty} />
+          </details>
         </div> },
         { key:'schedule',label:'工作日',disabled:saving,children:<WeeklyPlanSettings key={`${project.id}:${coDraftEpoch}`} project={project} onReload={onReload} onDirtyChange={scheduleDirty}/> },
         {

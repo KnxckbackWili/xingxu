@@ -113,3 +113,16 @@
 .week-rows > li > span { display: flex; flex-direction: column; min-width: 0; }
 .week-rows small { color: var(--agv-text-secondary); font-size: 12px; }
 .week-section > p { margin: 0 0 8px; }
+/* 我的记录 */
+.records-section { max-width: 860px; }
+.records-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 8px; }
+.records-summary { color: var(--agv-text-secondary); font-size: 13px; }
+.records-note { font-size: 12px; }
+.records-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--agv-border-soft); border-radius: 12px; background: var(--agv-bg-container); }
+.records-list > li { display: flex; align-items: flex-start; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--agv-border-soft); }
+.records-list > li:last-child { border-bottom: 0; }
+.records-main { flex: 1; min-width: 0; }
+.records-main strong { margin-right: 6px; }
+.records-main small { display: flex; flex-wrap: wrap; gap: 0 10px; margin-top: 2px; color: var(--agv-text-secondary); font-size: 12px; }
+.records-main p { margin: 4px 0 0; white-space: pre-wrap; font-size: 13px; }
+.records-actions { display: inline-flex; gap: 6px; flex: none; }

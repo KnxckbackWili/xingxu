@@ -17,7 +17,6 @@ import { formatDateTime, parseDateTime } from '../../../utils/date'
 import { deadlineLabel, basisLabel } from '../../../utils/documentDeadlines'
 import { useUnsavedNavigation } from '../../../hooks/useUnsavedNavigation'
 import { WorkPageHeader, WorkSection } from '../../../components/WorkPage'
-import { InfoHint } from '../../../components/IconAction'
 import FilePickField from '../../../components/FilePickField'
 import ProjectDocumentRequirementEditor from './ProjectDocumentRequirementEditor'
 import ProjectStoragePanel from '../../../components/ProjectStoragePanel'
@@ -268,9 +267,10 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
           ]} />}
 </>
   const [panel, setPanel] = useState<'requirements' | 'storage' | null>(null)
+  const STATUS_OPTIONS = [{ value: 'all', label: '全部' }, { value: 'pending', label: '待提交' }, { value: 'week', label: `本周待交${data?.document_actions?.this_week_count ? ` ${data.document_actions.this_week_count}` : ''}` }, { value: 'overdue', label: `逾期${data?.document_actions?.overdue_count ? ` ${data.document_actions.overdue_count}` : ''}` }, { value: 'submitted', label: '已提交' }]
   const onDefinitionSaved = useCallback(() => { void load() }, [load])
   return <div className="field-work-page project-documents-page">
-    <WorkPageHeader title="资料" description="按阶段提交文件，保留每次版本；同一文件可以同时满足多项要求。"
+    <WorkPageHeader title="资料" description={`按阶段提交文件，保留每次版本；同一文件可以同时满足多项要求。${data ? `截止按现场时区 ${data.timezone} 显示；“预计”截止由计划日期推算。` : ''}账号密码类信息请放在密码管理工具中，这里只写位置说明；保密资料不会向外部人员展示。`}
       meta={data ? `${current.length} 项资料 · 待交 ${current.filter(row => row.status === 'pending').length} · 已提交 ${current.filter(row => row.status === 'submitted').length} · 不适用 ${current.filter(row => row.status === 'waived').length}` : loadError ? '资料状态尚未读取' : '正在读取资料状态'}
       primary={canSubmit && <Button type="primary" icon={<UploadOutlined />} disabled={busy || loading} onClick={() => openUpload()}>上传资料或文件</Button>}
       tools={<Dropdown trigger={['click']} menu={{ items: [
@@ -288,12 +288,13 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
     {triggerFilter && <Alert type="info" message="正在查看单个事件生成的资料" action={<Button href={`/pm/projects/${projectId}/documents`}>查看全部资料</Button>} style={{marginBottom:12}} />}
     {data?.trigger_events?.filter(event=>event.source_metadata.warning).map(event=><Alert key={event.id} type="warning" showIcon message={`${event.source_metadata.title || event.source_metadata.member_name || '真实事件'}：${event.source_metadata.warning}`} style={{marginBottom:12}} />)}
     {data?.document_actions?.owner_warnings?.length ? <Typography.Text type="warning" className="documents-owner-warning">{data.document_actions.owner_warnings.length} 项资料的负责人需核对，可在资料行指派</Typography.Text> : null}
-    <WorkSection className="documents-list" filters={<Space wrap>
-      <Input.Search aria-label="搜索项目资料" placeholder="搜索编号、资料、车号或周期" allowClear value={search} onChange={event => setSearch(event.target.value)} style={{ width: 260 }} />
-      {vehicleOptions.length > 0 && <Select aria-label="筛选车辆资料" allowClear showSearch optionFilterProp="label" placeholder="全部车辆" value={vehicle} onChange={setVehicle} options={vehicleOptions} style={{ minWidth: 150 }} />}
-      <Segmented aria-label="资料状态" value={status} onChange={value => setStatus(String(value))} options={[{ value: 'all', label: '全部' }, { value: 'pending', label: '待提交' }, { value: 'week', label: <span>本周待交{!!data?.document_actions?.this_week_count && <span className="documents-filter-count">{data.document_actions.this_week_count}</span>}</span> }, { value: 'overdue', label: <span>逾期{!!data?.document_actions?.overdue_count && <span className="documents-filter-count is-danger">{data.document_actions.overdue_count}</span>}</span> }, { value: 'submitted', label: '已提交' }]} />
-      {data && <InfoHint text={`现场时区 ${data.timezone}；截止时间按资料规则的时区显示，已提交资料保留原截止依据；“预计”截止以计划日期推算。账号密码类信息请放在密码管理工具中，这里只写位置说明；保密资料不会向外部人员展示。`} />}
-    </Space>} extra={(canSubmit || canExport) && selected.length > 0 && <Space><Typography.Text>已选 {selected.length} 项</Typography.Text>{canSubmit && selected.every(id => documents.find(row => row.id === id)?.applicable !== false) && <Button disabled={busy || loading} onClick={() => openUpload(selected)}>同一文件提交所选资料</Button>}{canExport && <Button disabled={busy || loading} onClick={async () => { if (mutation.current) return; const ticket = generation.current; mutation.current = true; setBusy(true); setActionError(''); try { await downloadSelectedDocuments(projectId, selected) } catch (failure) { if (ticket === generation.current) setActionError(errMsg(failure)) } finally { if (ticket === generation.current) { mutation.current = false; setBusy(false) } } }}>打包所选资料（最新版本）</Button>}<Button onClick={() => setSelected([])}>取消选择</Button></Space>}>
+    {/* One filter row: search, status (a dropdown on phones), and vehicle only when the project has vehicle documents. */}
+    <WorkSection className="documents-list" filters={<div className="documents-filters">
+      <Input.Search aria-label="搜索项目资料" placeholder="搜索编号、资料、车号或周期" allowClear value={search} onChange={event => setSearch(event.target.value)} className="documents-search" />
+      {mobile ? <Select aria-label="资料状态" value={status} onChange={value => setStatus(String(value))} options={STATUS_OPTIONS} className="documents-status-select" />
+        : <Segmented aria-label="资料状态" value={status} onChange={value => setStatus(String(value))} options={[{ value: 'all', label: '全部' }, { value: 'pending', label: '待提交' }, { value: 'week', label: <span>本周待交{!!data?.document_actions?.this_week_count && <span className="documents-filter-count">{data.document_actions.this_week_count}</span>}</span> }, { value: 'overdue', label: <span>逾期{!!data?.document_actions?.overdue_count && <span className="documents-filter-count is-danger">{data.document_actions.overdue_count}</span>}</span> }, { value: 'submitted', label: '已提交' }]} />}
+      {vehicleOptions.length > 0 && <Select aria-label="筛选车辆资料" allowClear showSearch optionFilterProp="label" placeholder="全部车辆" value={vehicle} onChange={setVehicle} options={vehicleOptions} className="documents-vehicle-select" />}
+    </div>} extra={(canSubmit || canExport) && selected.length > 0 && <Space><Typography.Text>已选 {selected.length} 项</Typography.Text>{canSubmit && selected.every(id => documents.find(row => row.id === id)?.applicable !== false) && <Button disabled={busy || loading} onClick={() => openUpload(selected)}>同一文件提交所选资料</Button>}{canExport && <Button disabled={busy || loading} onClick={async () => { if (mutation.current) return; const ticket = generation.current; mutation.current = true; setBusy(true); setActionError(''); try { await downloadSelectedDocuments(projectId, selected) } catch (failure) { if (ticket === generation.current) setActionError(errMsg(failure)) } finally { if (ticket === generation.current) { mutation.current = false; setBusy(false) } } }}>打包所选资料（最新版本）</Button>}<Button onClick={() => setSelected([])}>取消选择</Button></Space>}>
       {!loading && !loadError && !visible.length && <Empty description={documents.length ? '当前筛选没有资料' : '还没有已生成的资料实例；等待条件和资料要求见下方'} />}
       {stageGroups.length > 0 && <Tabs className="documents-stage-tabs" activeKey={activeStage} onChange={key => { setStage(key); setSelected([]) }} items={[
         ...stageGroups.map(group => { const pending = group.rows.filter(row => row.status === 'pending' && row.applicable !== false).length

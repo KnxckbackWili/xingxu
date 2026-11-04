@@ -106,3 +106,20 @@
   .settings-work-page .message-select-area .ant-checkbox { top: 0; }
   .feedback-detail-drawer .ant-select { min-height: 44px; }
 }
+/* Accounts: one list for every screen size. */
+.user-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-bottom: 12px; }
+.user-search { width: 260px; max-width: 100%; }
+.user-count { margin-left: auto; color: var(--agv-text-secondary); font-size: 13px; }
+.user-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--agv-border-soft); border-radius: 12px; background: var(--agv-bg-container); }
+.user-list > li { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 14px; border-bottom: 1px solid var(--agv-border-soft); }
+.user-list > li:last-child { border-bottom: 0; }
+.user-list > li.is-inactive { opacity: .6; }
+.user-avatar { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: 50%; background: var(--agv-primary-soft); color: var(--agv-primary); font-weight: 600; }
+.user-main { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; }
+.user-main small { flex-basis: 100%; color: var(--agv-text-secondary); font-size: 12px; }
+.user-main .ant-tag { margin: 0; }
+.user-role.ant-tag { margin: 0; }
+@media (max-width: 767px) { .user-search { width: 100%; } .user-count { margin-left: 0; } }
+.ai-usage-line { margin: 0 0 12px; font-size: 13px; }
+.people-cell-mode { display: block; color: var(--agv-text-secondary); font-size: 12px; }
+.people-manage-link.ant-btn { padding-inline: 0; margin-bottom: 8px; }

@@ -177,14 +177,14 @@ export default function AiTokensPage() {
         meta={`${rows.filter(row => row.is_active).length} 个启用令牌 · ${rows.length} 个总计`} />
 
 
-      <Alert type="info" showIcon message={<>只读接入，用于整理文字<InfoHint text="外部工具可读取获授权的资料清单、车辆进度表和本周待交资料；保密范围与当前账号一致。工具不修改状态、检查、资料、权限或分享，也不生成数量计划和按天排程。" /></>} style={{ marginBottom: 16 }} />
-      <Card size="small" title="AI 用量预算" style={{ marginBottom: 16 }}>
-        {budget ? <Space direction="vertical">
+      {/* Usage is one line; the budget box only appears when a limit is actually set or reached. */}
+      {budget && (budget.blocked || budget.limits.requests || budget.limits.tokens) ? <Card size="small" title="AI 用量预算" style={{ marginBottom: 16 }}>
+        <Space direction="vertical">
           <Typography.Text>{budget.usage.month} · 系统模型调用 {budget.usage.requests} 次 / {budget.limits.requests || '不限'} · 估算用量 {budget.usage.tokens} / {budget.limits.tokens || '不限'} tokens</Typography.Text>
           {budget.blocked && <Alert type="warning" showIcon message={budget.reason} />}
-          <Typography.Paragraph type="secondary" style={{ margin: 0 }}>限额由部署配置维护，达到上限后停止系统模型调用。此处保留已有用量记录；外部 Agent 的模型费用由其提供方计量，读取项目数据不会触发系统模型调用。</Typography.Paragraph>
-        </Space> : <Typography.Text type="secondary">预算信息尚未读取，请刷新后核对。</Typography.Text>}
-      </Card>
+          <Typography.Paragraph type="secondary" style={{ margin: 0 }}>限额由部署配置维护，达到上限后停止系统模型调用；外部工具读取项目数据不会触发系统模型调用。</Typography.Paragraph>
+        </Space>
+      </Card> : budget && <Typography.Paragraph type="secondary" className="ai-usage-line">{budget.usage.month} 系统模型调用 {budget.usage.requests} 次，不限量。外部工具只读：能看到的项目、资料和保密范围与绑定账号一致，不会修改任何数据。</Typography.Paragraph>}
       <WorkSection title="访问令牌" description="令牌绑定账号，只能访问该账号可见的项目；停用后立即失效。">
         {isMobile ? (
           rows.length === 0 ? emptyNode : (

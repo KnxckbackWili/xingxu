@@ -235,7 +235,7 @@ it('keeps Agent and existing budget together in settings and exposes current rea
   expect(await screen.findByText('AI 用量预算')).toBeVisible()
   expect(await screen.findByText('月度请求次数已达上限')).toBeVisible()
   expect(screen.getByText(/系统模型调用 20 次/)).toHaveTextContent('3000 / 20000 tokens')
-  expect(screen.getByText(/只读接入，用于整理文字/)).toBeVisible()
+  expect(screen.queryByText(/只读接入，用于整理文字/)).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: /创建令牌/ }))
   expect(await screen.findByRole('checkbox', { name: '资料清单与本周待交' })).toBeChecked()
   expect(screen.getByRole('checkbox', { name: '车辆进度表' })).toBeChecked()

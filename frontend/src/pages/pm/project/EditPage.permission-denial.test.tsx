@@ -26,6 +26,6 @@ it.each(['project.update', 'project.read'])('honors fresh %s denial while projec
   expect(screen.queryByRole('button', { name: /保\s*存/ })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: '撤回修改' })).not.toBeInTheDocument()
   expect(historyGet).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByRole('tab', { name: '负责人' }))
+  fireEvent.click(screen.getByRole('tab', { name: '人员' }))
   expect(screen.queryByRole('button', { name: /授权协管/ })).not.toBeInTheDocument()
 })

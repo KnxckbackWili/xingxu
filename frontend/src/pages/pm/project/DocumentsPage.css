@@ -29,3 +29,11 @@
 .documents-card-meta { margin: 4px 0 8px; color: var(--agv-text-secondary); font-size: 12px; }
 .documents-card-file { margin-bottom: 6px; font-size: 12px; }
 .documents-card .field-record-actions { margin-top: 0; }
+.documents-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; width: 100%; }
+.documents-search { width: 260px; max-width: 100%; }
+.documents-vehicle-select { min-width: 150px; }
+@media (max-width: 767px) {
+  .documents-filters { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .documents-search { width: 100%; grid-column: 1 / -1; }
+  .documents-status-select, .documents-vehicle-select { width: 100%; min-width: 0; }
+}

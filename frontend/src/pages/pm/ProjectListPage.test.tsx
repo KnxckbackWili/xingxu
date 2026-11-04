@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { ConfigProvider } from 'antd'
 import ProjectListPage from './ProjectListPage'
 import { api } from '../../api/client'
@@ -48,10 +48,9 @@ it('filters overdue documents from the project DTO without workspace permission'
   try {
     render(<ConfigProvider theme={{token:{motion:false}}}><ProjectListPage/></ConfigProvider>)
     await screen.findByText('资料齐备项目')
-    fireEvent.mouseDown(screen.getByRole('combobox',{name:'按进度筛选'}))
-    fireEvent.click(await screen.findByText('已逾期'))
-    expect(screen.getByText('资料逾期项目')).toBeVisible()
-    expect(screen.queryByText('资料齐备项目')).toBeNull()
+    // No progress filter: the overdue project carries its own tag in the list.
+    expect(screen.queryByRole('combobox',{name:'按进度筛选'})).toBeNull()
+    expect(screen.getByText('资料逾期项目').closest('tr')).toHaveTextContent('2')
     expect(vi.mocked(api.get).mock.calls.some(([url])=>url==='/dashboard/overview')).toBe(false)
     expect(screen.queryByRole('button',{name:'更多操作'})).toBeNull()
   } finally {auth.user={role:'pm'}}

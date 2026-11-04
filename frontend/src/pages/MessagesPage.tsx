@@ -6,7 +6,7 @@ import { MEDIA_QUERY } from '../constants/breakpoints'
 import './pm/SettingsPages.css'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  Alert, Card, Drawer, List, Segmented, Select, Checkbox, Button, Spin, Space, Row, Col,
+  Alert, Card, Drawer, List, Segmented, Select, Button, Spin, Space, Row, Col,
   Typography, Tag, message,
 } from 'antd'
 import { CheckOutlined } from '@ant-design/icons'
@@ -47,7 +47,6 @@ export default function MessagesPage() {
   const loadPending = useRef(false)
   const [unreadOnly, setUnreadOnly] = useState(false)
   const [typeFilter, setTypeFilter] = useState<string>('all')
-  const [selected, setSelected] = useState<Set<string>>(new Set())
   // 左右分栏：右侧详情
   const [detail, setDetail] = useState<any | null>(null)
   const navigate = useNavigate()
@@ -68,7 +67,7 @@ export default function MessagesPage() {
     loadPending.current = true
     setLoading(true)
     setLoadError(false)
-    if (!append) { itemsRef.current = 0; setItems([]); setHasMore(false); setSelected(new Set()) }
+    if (!append) { itemsRef.current = 0; setItems([]); setHasMore(false) }
     try {
       const offset = append ? itemsRef.current : 0
       const r = await api.get('/notifications', { params: { limit: PAGE_SIZE, offset, unread_only: unreadOnly, ...(typeFilter !== 'all' ? { ntype: typeFilter } : {}) } })
@@ -103,36 +102,12 @@ export default function MessagesPage() {
 
   const visible = items
 
-  const toggleSelect = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  const markSelectedRead = async () => {
-    if (selected.size === 0) return
-    try {
-      const r = await api.post('/notifications/read-batch', { ids: Array.from(selected) })
-      notifyReadStateChanged('messages')
-      setItems((prev) => prev.map((n) => (selected.has(n.id) ? { ...n, is_read: true } : n)))
-      message.success(`已将 ${r.data.updated} 条通知标记为已读`)
-      setSelected(new Set())
-      if (latestUnreadOnly.current || loadPending.current) await latestLoad.current(false)
-    } catch (e: any) {
-      message.error(e.response?.data?.detail ?? '标记失败')
-    }
-  }
-
   const markAllRead = async () => {
     try {
       await api.post('/notifications/read-all')
       notifyReadStateChanged('messages')
       setItems((prev) => prev.map((n) => ({ ...n, is_read: true })))
       message.success('全部已读')
-      setSelected(new Set())
       // A read started before this write may still carry unread rows; replace it with a fresh request.
       if (latestUnreadOnly.current || loadPending.current) await latestLoad.current(false)
     } catch (e: any) {
@@ -192,11 +167,6 @@ export default function MessagesPage() {
             ...Object.entries(TYPE_TAG).map(([value, label]) => ({ value, label })),
           ]}
         />
-        {selected.size > 0 && (
-          <Button type="primary" icon={<CheckOutlined />} onClick={markSelectedRead}>
-            标记已读（{selected.size}）
-          </Button>
-        )}
       </Space>}>
 
       {loadError && <Alert type="error" showIcon message="通知加载失败" description="请重试，未加载成功不代表没有通知。" action={<Button onClick={() => load(items.length > 0)}>重试</Button>} style={{ marginBottom: 16 }} />}
@@ -218,18 +188,7 @@ export default function MessagesPage() {
                     className={`message-list-item${detail?.id === n.id ? ' is-selected' : ''}${!n.is_read ? ' is-unread' : ''}`}
                     onClick={(event) => { detailTrigger.current = event.currentTarget.querySelector<HTMLElement>('.message-title-button') ?? event.currentTarget; void openOne(n) }}
                   >
-                    <Space align="start" size={4} className="message-select-area">
-                      {!n.is_read && <span className="message-unread-dot" aria-label="未读" />}
-                      <Checkbox
-                        aria-label="选择该消息"
-                        checked={selected.has(n.id)}
-                        onChange={(e) => {
-                          e.stopPropagation()
-                          toggleSelect(n.id)
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    </Space>
+                    <span className="message-select-area">{!n.is_read && <span className="message-unread-dot" aria-label="未读" />}</span>
                     <List.Item.Meta
                       style={{ flex: 1, minWidth: 0, paddingLeft: 4 }}
                       title={

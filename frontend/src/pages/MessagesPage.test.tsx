@@ -123,7 +123,7 @@ it('a successful mark-all read survives an older inbox response', async () => {
   expect(screen.getByRole('button', { name: NOTIFICATIONS[0].title }).closest('.message-list-item')).not.toHaveClass('is-unread')
 })
 
-it.each(['single', 'selected'])('a successful %s read survives a refresh started while the write was pending', async mode => {
+it.each(['single'])('a successful %s read survives a refresh started while the write was pending', async mode => {
   let resolveOld!: (value: { data: typeof NOTIFICATIONS }) => void
   let resolveRead!: (value: { data: { updated: number } }) => void
   vi.mocked(api.get).mockResolvedValueOnce({ data: [NOTIFICATIONS[0]] })
@@ -135,10 +135,6 @@ it.each(['single', 'selected'])('a successful %s read survives a refresh started
   if (mode === 'single') {
     fireEvent.click(notification)
     expect(api.post).toHaveBeenCalledWith('/notifications/n1/read')
-  } else {
-    fireEvent.click(screen.getByRole('checkbox', { name: '选择该消息' }))
-    fireEvent.click(screen.getByRole('button', { name: /标记已读（1）/ }))
-    expect(api.post).toHaveBeenCalledWith('/notifications/read-batch', { ids: ['n1'] })
   }
   fireEvent.click(screen.getByRole('button', { name: /刷\s*新/ }))
   await act(async () => { resolveRead({ data: { updated: 1 } }) })
@@ -179,4 +175,12 @@ it('opens phone message detail in a drawer and restores focus when closed', asyn
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '消息详情' })).not.toBeInTheDocument())
     await waitFor(() => expect(screen.getByRole('button', { name: '问题指派：车辆故障' })).toHaveFocus())
   } finally { media.mockRestore() }
+})
+
+it('has no per-message checkboxes: opening a message reads it, and 全部已读 covers the rest', async () => {
+  vi.mocked(api.get).mockResolvedValue({ data: NOTIFICATIONS })
+  render(<MessagesPage />)
+  await screen.findByRole('button', { name: NOTIFICATIONS[0].title })
+  expect(screen.queryByRole('checkbox', { name: '选择该消息' })).toBeNull()
+  expect(screen.getByRole('button', { name: /全部已读/ })).toBeInTheDocument()
 })

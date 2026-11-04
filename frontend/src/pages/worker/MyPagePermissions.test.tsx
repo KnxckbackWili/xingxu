@@ -10,6 +10,6 @@ beforeEach(()=>{vi.clearAllMocks();actor.user.system_permissions=[];get.mockReso
 it('记录权限关闭时不读取本人记录和周报',()=>{
  render(<MemoryRouter><MyPage/></MemoryRouter>);expect(screen.getByText('本人记录查看权限已关闭')).toBeVisible();expect(records).not.toHaveBeenCalled();expect(get).not.toHaveBeenCalled()
 })
-it('本人记录权限不要求全局统计',async()=>{
- actor.user.system_permissions=['personal.records.read'];render(<MemoryRouter><MyPage/></MemoryRouter>);expect(screen.getByText('actual record data')).toBeVisible();expect(await screen.findByText('当周没有实际记录')).toBeVisible();expect(get).toHaveBeenCalledWith('/worker/week-report',{params:undefined,headers:{'X-AGV-Expected-Account':'u1'}})
+it('本人记录权限不要求全局统计，只显示一份按周记录',async()=>{
+ actor.user.system_permissions=['personal.records.read'];render(<MemoryRouter><MyPage/></MemoryRouter>);expect(screen.getByText('actual record data')).toBeVisible();expect(records).toHaveBeenCalled();expect(get).not.toHaveBeenCalled()
 })

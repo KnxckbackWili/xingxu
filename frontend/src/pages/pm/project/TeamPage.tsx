@@ -80,7 +80,8 @@ export default function TeamPage({ project, onReload, canEdit: canManageMembers,
           {onSchedule && memberIds.length > 0 && <Button onClick={onSchedule}>下一步：分配日程</Button>}</Space>
         </div>}
         {onSchedule && !inlineSetup && memberIds.length > 0 && <Button onClick={onSchedule} style={{ marginBottom: 12 }}>下一步：分配日程</Button>}
-        {usersLoading ? <Skeleton active paragraph={{ rows: 3 }} /> : members.length === 0 ? (
+        {/* With the picker shown, its tags already list everyone; the cards are only for people who cannot edit. */}
+        {inlineSetup && canEdit && !['completed', 'archived', 'suspended'].includes(project.status) ? null : usersLoading ? <Skeleton active paragraph={{ rows: 3 }} /> : members.length === 0 ? (
           <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未安排执行成员" />
         ) : (
           <div className="project-member-grid" aria-busy={usersLoading}>

@@ -92,20 +92,20 @@ it('delegates ordinary account editing without transmitting roles or enabling ad
   expect(screen.queryByRole('button', { name: '管理成员权限' })).toBeNull()
   fireEvent.click(edits[0])
   const dialog = await screen.findByRole('dialog')
-  expect(within(dialog).getByLabelText('角色（职级）')).toBeDisabled()
+  expect(within(dialog).getByRole('combobox', { name: '角色' })).toBeDisabled()
   fireEvent.click(within(dialog).getByRole('button', { name: /保\s*存/ }))
   await waitFor(() => expect(userApi.update).toHaveBeenCalledWith('u1', expect.objectContaining({ display_name: '甲' })))
   expect(vi.mocked(userApi.update).mock.calls[0][1]).not.toHaveProperty('role')
 })
 
 
-it('creates an account from a preset while keeping individual role controls in advanced settings', async () => {
+it('creates an account with one role field; per-person permissions stay on the permissions page', async () => {
   vi.mocked(userApi.create).mockResolvedValue({} as any)
   render(<MemoryRouter><UsersPage /></MemoryRouter>)
   fireEvent.click(await screen.findByRole('button', { name: /新建用户/ }))
   const dialog = await screen.findByRole('dialog')
-  expect(within(dialog).getByRole('combobox', { name: '预设角色' })).toBeInTheDocument()
-  expect(within(dialog).getByText('高级：账号角色与逐项权限').closest('details')).not.toHaveAttribute('open')
+  expect(within(dialog).getByRole('combobox', { name: '角色' })).toBeInTheDocument()
+  expect(within(dialog).queryByText(/预设角色|高级：账号角色/)).toBeNull()
   fireEvent.change(within(dialog).getByLabelText('姓名'), { target: { value: '新工程师' } })
   fireEvent.change(within(dialog).getByPlaceholderText('至少 6 位'), { target: { value: 'example-test-password' } })
   fireEvent.click(within(dialog).getByRole('button', { name: /保\s*存/ }))

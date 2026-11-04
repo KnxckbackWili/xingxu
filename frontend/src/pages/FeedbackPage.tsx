@@ -1,11 +1,10 @@
 import { hasSystemPermission } from '../constants/systemPermissions'
-import Tabs from '../components/VisibleTabs'
 import { WorkPageHeader, WorkSection } from '../components/WorkPage'
 import { NAV_LABEL, NAV_DESCRIPTION } from '../constants/nav'
 import './pm/SettingsPages.css'
 import { useEffect, useRef, useState } from 'react'
 import {
-  Alert, Button, Drawer, Empty, Form, Input, Pagination, Select, Space, Spin, Table, Tag, Typography, message,
+  Alert, Button, Drawer, Empty, Form, Input, Modal, Pagination, Select, Space, Spin, Table, Tag, Typography, message,
 } from 'antd'
 import { useAuth } from '../stores/auth'
 import { errMsg } from '../api/client'
@@ -202,11 +201,10 @@ export default function FeedbackPage() {
   return (
     <div className="settings-work-page feedback-page">
       <WorkPageHeader title={NAV_LABEL['/pm/feedback']} description={NAV_DESCRIPTION['/pm/feedback']}
-        primary={canSubmit && manage && view !== 'create' ? <Button type="primary" onClick={() => setView('create')}>填写反馈</Button> : undefined} />
-      {manage ? <Tabs activeKey={view} onChange={setView} items={[
-        { key: 'list', label: '处理反馈', children: feedbackList },
-        { key: 'create', label: '填写反馈', children: submission },
-      ]} /> : submission}
+        primary={canSubmit && manage ? <Button type="primary" onClick={() => setView('create')}>填写反馈</Button> : undefined} />
+      {/* Managers see the list; writing feedback is a dialog from the header button, not a second tab. */}
+      {manage ? feedbackList : submission}
+      {manage && <Modal title="填写反馈" open={view === 'create'} onCancel={() => setView('list')} footer={null} width={640} destroyOnHidden>{submission}</Modal>}
 
       <Drawer title="反馈详情" rootClassName="feedback-detail-drawer" width="min(480px, 100vw)" open={detailOpen} onClose={() => setDetailOpen(false)}>
         {detail && (

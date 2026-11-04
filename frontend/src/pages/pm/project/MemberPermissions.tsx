@@ -73,7 +73,7 @@ export default function MemberPermissions({ project, members, onReload }: {
   // One switch per member: on grants every operation this project can delegate, off takes the extra grants back.
   const toggleAll = (userId: string, on: boolean) => void writeGrant(userId, on ? [...grantable] : [], { id: project.id, version: project.version, grants: grants.map(grant => ({ ...grant, capabilities: [...grant.capabilities] })) })
   return <Card title="成员操作授权" size="small" style={{ marginTop: 16 }}>
-    <Typography.Paragraph type="secondary">成员默认可以查看项目、填报自己的工作。打开“协助管理”即一键开通本项目的全部管理操作；只想开部分时点“细项”。</Typography.Paragraph>
+    <Typography.Paragraph type="secondary">成员默认可以查看项目、填报自己的工作。打开“全部开通”即开通本项目的全部管理操作；只想开部分时点“细项”。</Typography.Paragraph>
     {error && !editing && <Alert type="error" showIcon message={error} style={{ marginBottom: 12 }} action={<Button size="small" onClick={() => { setError(''); onReload?.() }}>刷新</Button>} />}
     {members.map(member => {
       const own = grants.find(grant => grant.user_id === member.id)?.capabilities ?? []
@@ -88,7 +88,7 @@ export default function MemberPermissions({ project, members, onReload }: {
             : <Typography.Text type="secondary">{member.role === 'readonly' ? '只读账号' : '查看和填报'}</Typography.Text>}
         </span>
         <Space size={8}>
-          {editable && <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Switch size="small" aria-label={`${member.display_name || member.id}协助管理`} checked={all} loading={saving} disabled={saving} onChange={on => toggleAll(member.id, on)} />协助管理</label>}
+          {editable && <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Switch size="small" aria-label={`${member.display_name || member.id}全部开通`} checked={all} loading={saving} disabled={saving} onChange={on => toggleAll(member.id, on)} />全部开通</label>}
           {editable && <Button size="small" type="link" onClick={() => {
             snapshot.current = { id: project.id, version: project.version, grants: grants.map(grant => ({ ...grant, capabilities: [...grant.capabilities] })) };
             setEditing(member.id); setSelected(own); setError('')

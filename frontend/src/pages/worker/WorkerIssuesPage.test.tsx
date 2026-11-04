@@ -227,7 +227,7 @@ it('refreshes a conflicting issue without losing the resolution draft', async ()
 it('starts with unresolved issues and exposes reported history without changing scope permissions',async()=>{
  vi.mocked(api.get).mockImplementation(async url=>({data:url==='/projects'?[]:{items:[{id:'mine',title:'我报的已解决',reporter_id:'worker',status:'resolved',project_name:'现场',severity:'low'},{id:'assigned',title:'分给我处理',reporter_id:'other',assignee_id:'worker',status:'open',project_status:'executing',project_name:'现场',severity:'medium'}]}}) as any)
  render(<WorkerIssuesPage />)
- expect(await screen.findByRole('button',{name:'处理问题'})).toBeVisible()
+ expect(await screen.findByRole('button',{name:'开始处理'})).toBeVisible()
  expect(screen.queryByText('我报的已解决')).toBeNull()
  fireEvent.click(screen.getByText('我上报的',{selector:'.ant-segmented-item-label'}))
  expect(screen.getByText('我报的已解决')).toBeInTheDocument()

@@ -93,11 +93,11 @@ it('does not display another project late explanation after the project changes'
 
 it('one switch grants every delegable operation, and turning it off takes them back', async () => {
   render(<MemberPermissions project={project} members={members} />)
-  fireEvent.click(screen.getByRole('switch', { name: '实施成员协助管理' }))
+  fireEvent.click(screen.getByRole('switch', { name: '实施成员全部开通' }))
   await waitFor(() => expect(update).toHaveBeenCalledWith('p1', { version: 4, member_permissions: [{ user_id: 'intern', capabilities: ['project.manage_schedule'] }, { user_id: 'worker', capabilities: ['project.manage_plan', 'project.manage_schedule'] }] }))
   update.mockClear()
   render(<MemberPermissions project={{ ...project, member_permissions: [{ user_id: 'worker', capabilities: ['project.manage_plan', 'project.manage_schedule'] }] }} members={[members[0]]} />)
   expect(screen.getByText('已开通全部管理操作')).toBeInTheDocument()
-  fireEvent.click(screen.getAllByRole('switch', { name: '实施成员协助管理' }).at(-1)!)
+  fireEvent.click(screen.getAllByRole('switch', { name: '实施成员全部开通' }).at(-1)!)
   await waitFor(() => expect(update).toHaveBeenCalledWith('p1', { version: 4, member_permissions: [] }))
 })

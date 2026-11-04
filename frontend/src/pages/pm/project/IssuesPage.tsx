@@ -20,6 +20,7 @@ import { ISSUE_TYPES, ISSUE_TYPE_HINTS, ISSUE_TYPE_FIELDS, ISSUE_STATUS_MAP, ISS
 import InlineSelect from '../../../components/InlineSelect'
 import { WorkPageHeader } from '../../../components/WorkPage'
 import './FieldWorkPages.css'
+import '../../../components/IssueList.css'
 import { IconAction, RefreshAction } from '../../../components/IconAction'
 
 interface Issue {

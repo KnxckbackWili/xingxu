@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button, Card, Typography, Tag, Space, Empty, Skeleton, Drawer, Divider, Modal, Form, Input, Select, Alert, message, Segmented, Upload, AutoComplete } from 'antd'
+import { Button, Typography, Tag, Space, Empty, Skeleton, Drawer, Divider, Modal, Form, Input, Select, Alert, message, Segmented, Upload, AutoComplete } from 'antd'
 import type { UploadFile } from 'antd'
 import { PlusOutlined, UploadOutlined } from '@ant-design/icons'
 import { useSearchParams } from 'react-router-dom'
@@ -13,6 +13,7 @@ import { uploadProjectFile } from '../../api/projectDocuments'
 import { isUploadQueued } from '../../uploads/types'
 import { WorkPageHeader, WorkSection } from '../../components/WorkPage'
 import './WorkerWorkPages.css'
+import '../../components/IssueList.css'
 import { isProjectStatus, isProjectWriteBlocked } from '../../constants/status'
 import { RefreshAction } from '../../components/IconAction'
 
@@ -134,11 +135,12 @@ export default function WorkerIssuesPage() {
     return () => { active = false }
   }, [user?.id, retry])
 
-  const handleIssue = async (status: 'processing' | 'resolved', resolution?: string) => {
-    if (!permissions.current.handle || !detail || conflict || detail.assignee_id !== user?.id || isProjectWriteBlocked(detail.project_status) || !['open', 'processing'].includes(detail.status) || !handlingLock.tryAcquire()) return
+  const canWork = (issue: MyIssue) => canHandleIssue && issue.source !== 'vehicle' && issue.assignee_id === user?.id && ['open', 'processing'].includes(issue.status) && !isProjectWriteBlocked(issue.project_status)
+  const handleIssue = async (status: 'processing' | 'resolved', resolution?: string, target: MyIssue | null = detail) => {
+    if (!permissions.current.handle || !target || conflict || target.assignee_id !== user?.id || isProjectWriteBlocked(target.project_status) || !['open', 'processing'].includes(target.status) || !handlingLock.tryAcquire()) return
     setHandling(true)
     try {
-      await api.put(`/issues/${detail.id}`, { status, ...(resolution ? { resolution } : {}), version: detail.version })
+      await api.put(`/issues/${target.id}`, { status, ...(resolution ? { resolution } : {}), version: target.version })
       message.success(status === 'resolved' ? '处理结果已提交，请报告人复核' : '已开始处理')
       setResolutionOpen(false); setDetail(null); setRetry(value => value + 1)
     } catch (error: any) { if (error.response?.status === 409) setConflict(true); message.error(error.response?.data?.detail ?? '保存失败，填写内容已保留，请重试') }
@@ -201,7 +203,7 @@ export default function WorkerIssuesPage() {
   const openIssue=(issue:MyIssue)=>{setDetail(issue);setConflict(false);setSearchParams({issue_id:issue.id},{replace:true})}
   return (
     <div className="worker-work-page">
-      <WorkPageHeader title="我的问题" description="查看分给你的问题和你上报的进展；协管项目的问题也会在这里显示。"
+      <WorkPageHeader title="我的问题" description="分给我处理的、我上报的，协管项目的问题也在这里。点标题看详情和处理。"
         primary={<Button type="primary" aria-label="上报问题" icon={<PlusOutlined />} disabled={!canRaiseIssue || loadError || writableProjects.length===0} onClick={()=>{if(!permissions.current.raise)return;if(writableProjects.length===1)reportForm.setFieldValue('project_id',writableProjects[0].id);setReportOpen(true)}}>上报问题</Button>}
         tools={<RefreshAction onClick={()=>setRetry(value=>value+1)} />} meta={loadError?'数据暂不可用':`${issues.filter(issue=>['open','processing'].includes(issue.status)).length} 项待处理`} />
       <WorkSection filters={<><Segmented aria-label="问题查看范围" value={scope} onChange={value=>setScope(String(value))} options={[{value:'active',label:'待处理'},{value:'reported',label:'我上报的'},{value:'all',label:'全部'}]} /><Input.Search aria-label="搜索我的问题" placeholder="搜索问题或项目" allowClear value={search} onChange={event=>setSearch(event.target.value)} /></>}>
@@ -214,32 +216,15 @@ export default function WorkerIssuesPage() {
       ) : issues.length === 0 ? (
         <Empty description={projects.length === 0 ? "你还没有可见项目，请联系项目经理将你加入项目后再上报问题。" : writableProjects.length === 0 ? "当前可见项目只读，可查阅问题历史；需要上报时请联系项目负责人确认项目状态。" : "当前没有需要关注的问题；遇到现场异常时，可点击上报问题。"} image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ padding: 60 }} />
       ) : (
-        <Space direction="vertical" style={{ width: '100%' }} size={8}>
-          {visible.map((i) => (
-            <Card
-              key={i.id}
-              size="small"
-              hoverable
-              onClick={()=>openIssue(i)}
-            >
-              <Space style={{ width: '100%', justifyContent: 'space-between', flexWrap: 'wrap', overflowWrap: 'anywhere' }} align="center">
-                <Space direction="vertical" size={0}>
-                  <button className="worker-title-link" onClick={event=>{event.stopPropagation();openIssue(i)}}>{i.title}</button>
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                    {i.project_name} · {i.source === 'vehicle' ? `${i.asset_code || '车辆'}故障` : `${formatDateTime(i.created_at).split(' ')[0]} 上报`}
-                  </Typography.Text>
-                </Space>
-                <Space wrap size={4}>
-                  <Tag color={SEV[i.severity]?.color} style={{ fontSize: 11 }}>{SEV[i.severity]?.label}</Tag>
-                  <Tag color={ISSUE_STATUS_MAP[i.status]?.color} style={{ fontSize: 11 }}>
-                    {ISSUE_STATUS_MAP[i.status]?.label}
-                  </Tag>
-                </Space>
-              </Space>
-              <div className="worker-record-actions"><Button onClick={event=>{event.stopPropagation();openIssue(i)}}>{canHandleIssue && i.source!=='vehicle' && i.assignee_id===user?.id && ['open','processing'].includes(i.status) && !isProjectWriteBlocked(i.project_status) ? '处理问题' : '查看问题'}</Button></div>
-            </Card>
-          ))}
-        </Space>
+        <ul className="issue-list" aria-label="我的问题列表">{visible.map(i => <li key={i.id} className={`issue-row sev-${i.severity}${['closed', 'cancelled'].includes(i.status) ? ' is-closed' : ''}`}>
+          <span className={`issue-row-severity${i.source === 'vehicle' ? ' is-vehicle' : ''}`} title={`严重程度：${SEV[i.severity]?.label ?? ''}`} aria-hidden />
+          <div className="issue-row-main">
+            <button type="button" className="issue-row-title" onClick={() => openIssue(i)}>{i.title}</button>
+            <span className="issue-row-meta"><span>{i.project_name}</span><span>{i.source === 'vehicle' ? `${i.asset_code || '车辆'}故障` : `${formatDateTime(i.created_at).split(' ')[0]} 上报`}</span><span>{i.assignee_name ? (i.assignee_id === user?.id ? '我处理' : `处理人 ${i.assignee_name}`) : '未指派'}</span></span>
+          </div>
+          <span className="issue-row-tags">{['critical', 'high'].includes(i.severity) && <Tag color={SEV[i.severity]?.color}>{SEV[i.severity]?.label}</Tag>}<Tag color={ISSUE_STATUS_MAP[i.status]?.color}>{ISSUE_STATUS_MAP[i.status]?.label}</Tag></span>
+          <span className="issue-row-action">{!detail && canWork(i) && i.status === 'open' && <Button size="small" loading={handling} onClick={() => void handleIssue('processing', undefined, i)}>开始处理</Button>}</span>
+        </li>)}</ul>
       )}
 
       {!loadError && issues.length>0 && visible.length===0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="这个范围没有问题"><Button onClick={()=>{setScope('all');setSearch('')}}>查看全部问题</Button></Empty>}

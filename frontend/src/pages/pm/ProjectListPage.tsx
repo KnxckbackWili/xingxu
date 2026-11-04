@@ -4,10 +4,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Alert, Card, Col, Row, Button, Tag, Typography, Space, Empty, Skeleton, Input,
-  Select, message, Progress, Segmented, Table, Pagination,
+  Select, message, Progress, Table, Pagination,
 } from 'antd'
 import {
-  AppstoreOutlined, DeleteOutlined, PlusOutlined, StarOutlined, StarFilled, HistoryOutlined, UnorderedListOutlined, RightOutlined,
+  AppstoreOutlined, DeleteOutlined, PlusOutlined, StarOutlined, StarFilled, HistoryOutlined, RightOutlined,
 } from '@ant-design/icons'
 import ProjectDeleteButton from '../../components/ProjectDeleteButton'
 import { projectApi, type Project } from '../../api'
@@ -19,6 +19,7 @@ import { formatMonthDayRange } from '../../utils/date'
 import { PROJECT_SHORTCUT_LIMIT, shortcutSectionLabel, useProjectShortcuts } from '../../hooks/useProjectShortcuts'
 
 import { WorkPageHeader } from '../../components/WorkPage'
+import { useMediaQuery } from '../../hooks/useMediaQuery'
 import ProjectCreateModal from './ProjectCreateModal'
 import './ProjectListPage.css'
 import { RefreshAction } from '../../components/IconAction'
@@ -33,19 +34,11 @@ export default function ProjectListPage() {
   const [loadError, setLoadError] = useState(false)
   const [keyword, setKeyword] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('')
-  const [progressFilter, setProgressFilter] = useState<string>('')
   const [favoritesOnly, setFavoritesOnly] = useState(false)
   const [cardPage, setCardPage] = useState(1)
   const [cardPageSize, setCardPageSize] = useState(12)
-  // 卡片/表格视图切换（记住上次选择）
-  const [viewMode, setViewMode] = useState<'card' | 'table'>(() => {
-    try {
-      const stored = localStorage.getItem('agvpm_proj_view')
-      if (stored === 'card' || stored === 'table') return stored
-    } catch { /* Browser storage may be unavailable. */ }
-    return window.matchMedia('(max-width: 767px)').matches ? 'card' : 'table'
-  })
-  const switchView = (v: any) => { setViewMode(v); try { localStorage.setItem('agvpm_proj_view', v) } catch { /* The current view still works. */ } }
+  // No view switch: a table on wide screens, cards on phones.
+  const viewMode: 'card' | 'table' = useMediaQuery('(max-width: 767px)') ? 'card' : 'table'
   const [progressMap, setProgressMap] = useState<Record<string, { percent: number; overdue: boolean; critical: number }>>({})
   const [progressFailed, setProgressFailed] = useState(false)
   const navigate = useNavigate()
@@ -130,24 +123,12 @@ export default function ProjectListPage() {
       )
     }
     if (statusFilter) list = list.filter((p) => p.status === statusFilter)
-    if (progressFilter) {
-      list = list.filter((p) => {
-        const prog = progressMap[p.id]
-        if (progressFilter === 'overdue') return p.document_attention ? p.document_attention.overdue_count > 0 : !!prog?.overdue
-        if (!prog) return false
-        const pct = prog.percent
-        if (progressFilter === 'not_started') return pct <= 0
-        if (progressFilter === 'running') return pct > 0 && pct < 100
-        if (progressFilter === 'completed') return pct >= 100
-        return true
-      })
-    }
     return list
-  }, [projects, keyword, statusFilter, progressFilter, progressMap, favoritesOnly, shortcuts.favorites])
+  }, [projects, keyword, statusFilter, favoritesOnly, shortcuts.favorites])
 
   useEffect(() => {
     setCardPage(1)
-  }, [keyword, statusFilter, progressFilter, favoritesOnly])
+  }, [keyword, statusFilter, favoritesOnly])
 
   const cardPageCount = Math.max(1, Math.ceil(filtered.length / cardPageSize))
   const currentCardPage = Math.min(cardPage, cardPageCount)
@@ -193,33 +174,8 @@ export default function ProjectListPage() {
             style={{ width: 120 }}
             options={Object.entries(STATUS_MAP).map(([k, v]) => ({ label: v.label, value: k }))}
           />
-          <Select
-            placeholder="进度筛选"
-            aria-label="按进度筛选"
-            allowClear
-            value={progressFilter || undefined}
-            onChange={(v) => setProgressFilter(v ?? '')}
-            style={{ width: 120 }}
-            options={[
-              { label: '未启动', value: 'not_started' },
-              { label: '进行中', value: 'running' },
-              { label: '已完成', value: 'completed' },
-              { label: '已逾期', value: 'overdue' },
-            ]}
-          />
           <Button className="project-favorites-filter" aria-label="我的收藏" icon={favoritesOnly ? <StarFilled /> : <StarOutlined />} type={favoritesOnly ? 'primary' : 'default'} aria-pressed={favoritesOnly} onClick={() => setFavoritesOnly(value => !value)}>我的收藏</Button>
-          {(keyword || statusFilter || progressFilter || favoritesOnly) && <Button className="project-clear-filters" type="link" onClick={() => { setKeyword(''); setStatusFilter(''); setProgressFilter(''); setFavoritesOnly(false) }}>清除筛选</Button>}
-        </div>
-        <div className="project-library-view-tools">
-          <Segmented
-            aria-label="项目展示方式"
-            value={viewMode}
-            onChange={switchView}
-            options={[
-              { label: <span title="卡片视图"><AppstoreOutlined /> 卡片</span>, value: 'card' },
-              { label: <span title="表格视图"><UnorderedListOutlined /> 表格</span>, value: 'table' },
-            ]}
-          />
+          {(keyword || statusFilter || favoritesOnly) && <Button className="project-clear-filters" type="link" onClick={() => { setKeyword(''); setStatusFilter(''); setFavoritesOnly(false) }}>清除筛选</Button>}
         </div>
       </div>
 
@@ -239,7 +195,7 @@ export default function ProjectListPage() {
             </Button>
           )}
           {projects.length > 0 && (
-            <Button size="small" onClick={() => { setKeyword(''); setStatusFilter(''); setProgressFilter(''); setFavoritesOnly(false) }}>清空筛选</Button>
+            <Button size="small" onClick={() => { setKeyword(''); setStatusFilter(''); setFavoritesOnly(false) }}>清空筛选</Button>
           )}
         </Empty>
       ) : viewMode === 'table' ? (
