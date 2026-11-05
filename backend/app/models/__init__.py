@@ -102,6 +102,7 @@ class Project(Base):
     id = Column(String(36), primary_key=True, default=gen_uuid)
     name = Column(String(200), nullable=False)
     abbreviation = Column(String(50), default="")
+    contract_no = Column(String(100), default="")  # 项目合同号（生命周期表等公司表单使用）
     manager = Column(String(100), default="")  # PM user_id
     technical_manager = Column(String(36), nullable=True)  # 技术负责人（技术经理或技术工程师）
     co_managers = Column(JSON, default=list)  # 项目协管 [{user_id, expires_at}]，仅项目内临时生效
@@ -201,6 +202,8 @@ class VehicleUnit(Base):
     asset_code = Column(String(100), nullable=False)
     serial_number = Column(String(100), default="")
     fleet_no = Column(String(30), default="")  # 车号（生命周期表口径，现场车队编号）
+    frame_no = Column(String(100), default="")  # 门架号（门架钢印），质量问题反馈单使用
+    factory_date = Column(Date, nullable=True)  # 出厂日期（铭牌），质量问题反馈单使用
     model_name = Column(String(100), default="")  # 生命周期表导入的车辆型号（未匹配车型档案时保留展示）
     legacy_current_stage = Column(String(80), nullable=True)  # read-only original nine-stage fact
     current_stage = Column(String(80), default="planned")

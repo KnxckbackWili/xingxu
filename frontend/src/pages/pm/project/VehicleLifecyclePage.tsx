@@ -22,6 +22,7 @@ import { WorkPageHeader, WorkSection } from '../../../components/WorkPage'
 import { useMediaQuery } from '../../../hooks/useMediaQuery'
 import './FieldWorkPages.css'
 import { IconAction } from '../../../components/IconAction'
+import { saveBlob } from '../../../utils/download'
 
 /** 根据起始编号生成连续编号：AGV-001 -> AGV-001, AGV-002... */
 function nextAssetCode(startCode: string, index: number) {
@@ -173,9 +174,7 @@ export default function VehicleLifecyclePage({ project, onReload, configurationO
   const downloadLifecycle = async () => {
     try {
       const r = await api.get(`/projects/${projectId}/export/lifecycle`, { responseType: 'blob' })
-      const url = URL.createObjectURL(r.data)
-      const a = document.createElement('a'); a.href = url; a.download = 'AGV生命周期表.xlsx'; a.click()
-      URL.revokeObjectURL(url)
+      saveBlob(r.data, 'AGV生命周期表.xlsx')
     } catch (error) { message.error(errMsg(error)) }
   }
 
@@ -205,7 +204,8 @@ export default function VehicleLifecyclePage({ project, onReload, configurationO
   }
   const openTypeConfig = (v: any) => {
     setTypeConfig(v)
-    typeForm.setFieldsValue({ configuration: JSON.stringify(v.configuration ?? {}, null, 2), notes: v.notes ?? '' })
+    const { config_no: configNo, ...rest } = v.configuration ?? {}
+    typeForm.setFieldsValue({ config_no: configNo ?? '', configuration: JSON.stringify(rest, null, 2), notes: v.notes ?? '' })
     setTypeConfigOpen(true)
   }
   const saveTypeConfig = async (values: any) => {
@@ -213,7 +213,8 @@ export default function VehicleLifecyclePage({ project, onReload, configurationO
     try {
       const configuration = JSON.parse(values.configuration || '{}')
       if (!configuration || Array.isArray(configuration) || typeof configuration !== 'object') throw new SyntaxError()
-      await projectApi.updateVehicle(projectId, typeConfig.id, { configuration, notes: values.notes ?? '' })
+      const configNo = String(values.config_no ?? '').trim()
+      await projectApi.updateVehicle(projectId, typeConfig.id, { configuration: configNo ? { ...configuration, config_no: configNo } : configuration, notes: values.notes ?? '' })
       message.success('车型配置已保存'); onDirtyChange?.(false); setTypeConfigOpen(false); setTypeConfig(null); await load(); await onReload?.()
     } catch (error) { message.error(error instanceof SyntaxError ? '配置必须是 JSON 对象' : errMsg(error)) }
   }
@@ -325,6 +326,7 @@ export default function VehicleLifecyclePage({ project, onReload, configurationO
   const configurationModal = <Modal className="field-work-modal" title={`${typeConfig?.vehicle_type ?? ''} ${typeConfig?.model_name ?? ''} · 车型配置`} open={typeConfigOpen}
       onCancel={() => { onDirtyChange?.(false); setTypeConfigOpen(false); setTypeConfig(null) }} onOk={() => typeForm.submit()} okText="保存" okButtonProps={{ disabled: !canConfigure }} width={640}>
       <Form form={typeForm} layout="vertical" onFinish={saveTypeConfig} onValuesChange={()=>onDirtyChange?.(true)}>
+        <Form.Item name="config_no" label="配置号" tooltip="生命周期表使用，如 MN1"><Input maxLength={100} disabled={!canConfigure} /></Form.Item>
         <Form.Item name="configuration" label="扩展配置 JSON" extra="记录导航方式、载重、电池、尺寸、安全扫描仪、通信方式等。">
           <Input.TextArea rows={9} disabled={!canConfigure} spellCheck={false} style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }} />
         </Form.Item>
@@ -388,6 +390,10 @@ export default function VehicleLifecyclePage({ project, onReload, configurationO
           <span><b>{selected.arrived_at || '未登记'}</b>到场日期</span>
           <span><b>{selected.location || '-'}</b>现场位置</span>
         </div>
+        <VehicleFacts key={`facts:${selected.id}`} unit={selected} editable={canManage && !writeBlocked} onSave={async values => {
+          try { await api.put(`/projects/${projectId}/vehicle-units/${selected.id}`, values); message.success('车辆信息已保存'); await openHistory(selected); await load() }
+          catch (error) { message.error(errMsg(error)) }
+        }} />
         <VehicleDocumentsPanel key={`${projectId}:${selected.id}`} projectId={projectId} unitId={selected.id} unitLabel={selected.fleet_no || selected.asset_code} projectStatus={project.status} onChanged={() => { void onReload?.() }} />
         {selected.events?.length ? <div style={{ marginTop: 16 }}>
           {selected.events.map((event: any) => <div key={event.id} className="vehicle-history-entry">
@@ -411,6 +417,7 @@ export default function VehicleLifecyclePage({ project, onReload, configurationO
               <Button size="small" type="link" icon={<EditOutlined />} onClick={() => editEvent(event)}>补充 / 编辑</Button>
               {!event.is_closed && <Button size="small" type="link" icon={<CheckCircleOutlined />} onClick={() => closeEvent(event)}>标记已解决</Button>}
             </Space>}
+            {canExport && ['fault', 'repair', 'maintenance', 'inspection', 'other'].includes(event.event_type) && <Button size="small" type="link" icon={<DownloadOutlined />} onClick={() => void exportQualityForm(projectId, event)}>质量问题反馈单</Button>}
           </div>)}
         </div> : <Empty description="暂无现场问题记录" style={{ marginTop: 32 }} />}
       </>}
@@ -454,3 +461,25 @@ export default function VehicleLifecyclePage({ project, onReload, configurationO
 
   </div>
 }
+
+/** Export one vehicle problem as the company quality feedback form (vehicle facts come from the vehicle record). */
+async function exportQualityForm(projectId: string, event: { id: string; title?: string }) {
+  try {
+    const result = await api.get(`/projects/${projectId}/vehicle-events/${event.id}/export/quality-form`, { responseType: 'blob' })
+    saveBlob(result.data, `质量问题反馈单-${(event.title ?? '').slice(0, 20)}.xlsx`)
+  } catch (error) { message.error(errMsg(error)) }
+}
+
+/** 车号、门架号（门架钢印）、出厂日期（铭牌）: facts of the physical vehicle the company forms print. */
+function VehicleFacts({ unit, editable, onSave }: { unit: any; editable: boolean; onSave: (values: { fleet_no: string; frame_no: string; factory_date: string | null }) => Promise<void> }) {
+  const [values, setValues] = useState({ fleet_no: unit.fleet_no ?? '', frame_no: unit.frame_no ?? '', factory_date: unit.factory_date ?? null as string | null })
+  const [saving, setSaving] = useState(false)
+  const changed = values.fleet_no !== (unit.fleet_no ?? '') || values.frame_no !== (unit.frame_no ?? '') || values.factory_date !== (unit.factory_date ?? null)
+  return <div className="vehicle-facts" aria-label="车辆信息">
+    <label><span>车号</span><Input size="small" aria-label="车号" value={values.fleet_no} maxLength={30} disabled={!editable} onChange={e => setValues({ ...values, fleet_no: e.target.value })} /></label>
+    <label><span>门架号</span><Input size="small" aria-label="门架号" placeholder="门架钢印" value={values.frame_no} maxLength={100} disabled={!editable} onChange={e => setValues({ ...values, frame_no: e.target.value })} /></label>
+    <label><span>出厂日期</span><DatePicker size="small" aria-label="出厂日期" placeholder="看铭牌" value={values.factory_date ? dayjs(values.factory_date) : null} disabled={!editable} onChange={date => setValues({ ...values, factory_date: date ? date.format('YYYY-MM-DD') : null })} /></label>
+    {editable && changed && <Button size="small" type="primary" loading={saving} onClick={async () => { setSaving(true); try { await onSave(values) } finally { setSaving(false) } }}>保存</Button>}
+  </div>
+}
+

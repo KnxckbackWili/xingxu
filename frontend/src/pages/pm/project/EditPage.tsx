@@ -20,7 +20,7 @@ import { useUnsavedNavigation } from '../../../hooks/useUnsavedNavigation'
 import { WorkPageHeader } from '../../../components/WorkPage'
 
 const infoSnapshot = (values: any) => JSON.stringify({
-  name: values.name ?? '', abbreviation: values.abbreviation ?? '', client: values.client ?? '',
+  name: values.name ?? '', abbreviation: values.abbreviation ?? '', contract_no: values.contract_no ?? '', client: values.client ?? '',
   location: values.location ?? '', timezone: values.timezone || DEFAULT_TIMEZONE,
   range: (values.range ?? []).map((date: any) => date?.format('YYYY-MM-DD') ?? ''),
   event_plans: planPayload(values.event_plans), dispatch_platform: values.dispatch_platform ?? null,
@@ -28,7 +28,7 @@ const infoSnapshot = (values: any) => JSON.stringify({
   technical_manager_id: values.technical_manager_id ?? '',
 })
 const projectInfoFields = (project: Project) => ({
-  name: project.name, abbreviation: project.abbreviation, client: project.client,
+  name: project.name, abbreviation: project.abbreviation, contract_no: project.contract_no ?? '', client: project.client,
   location: project.location, timezone: project.timezone || DEFAULT_TIMEZONE,
   range: [dayjs(project.start_date), dayjs(project.end_date)],
   event_plans: planFormValues(project), dispatch_platform: project.dispatch_platform ?? null,
@@ -142,7 +142,7 @@ export default function EditPage({ project, onReload }: { project: Project; onRe
       const saved = await projectApi.update(project.id, {
         version: infoBaselineVersion.current,
         event_plans: planPayload(values.event_plans), dispatch_platform: values.dispatch_platform ?? null,
-        name: values.name, abbreviation: values.abbreviation, client: values.client, location: values.location,
+        name: values.name, abbreviation: values.abbreviation, contract_no: values.contract_no ?? '', client: values.client, location: values.location,
         timezone: values.timezone || DEFAULT_TIMEZONE,
         start_date: values.range[0].format('YYYY-MM-DD'), end_date: values.range[1].format('YYYY-MM-DD'),
         description: values.description,
@@ -219,8 +219,10 @@ export default function EditPage({ project, onReload }: { project: Project; onRe
                     options={users.filter((u) => ['lead', 'technician', 'pm', 'worker'].includes(u.role)).map((u) => ({ label: `${u.display_name}（${ROLE_NAME[u.role] ?? u.role}）`, value: u.id }))} />
                 </Form.Item>
                 <Form.Item name="description" label="说明"><Input.TextArea rows={2} /></Form.Item>
-                <details className="work-detail-summary project-info-extra"><summary>其他资料：简称、时区与人员备注</summary>
+                <details className="work-detail-summary project-info-extra"><summary>其他资料：简称、合同号、时区与人员备注</summary>
                   <Row gutter={12}><Col xs={24} md={12}><Form.Item name="abbreviation" label="项目简称"><Input /></Form.Item></Col>
+                  <Col xs={24} md={12}><Form.Item name="contract_no" label="项目合同号" tooltip="生命周期表等公司表单使用"><Input maxLength={100} placeholder="如 XX-2026-001" /></Form.Item></Col></Row>
+                  <Row gutter={12}>
                   <Col xs={24} md={12}><Form.Item name="timezone" label="现场时区" tooltip="今日任务与撤回期限按现场时区判定。"><Select aria-label="现场时区" options={TIMEZONE_OPTIONS} /></Form.Item></Col></Row>
                   <Form.Item name="staffing_notes" label="人员安排参考" extra="记录姓名、能力或驻场建议；实际参与人员请在本页「成员」维护。"><Input.TextArea rows={3} /></Form.Item>
                 </details>

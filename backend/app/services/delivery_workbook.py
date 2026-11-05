@@ -13,7 +13,7 @@ from app import models
 from app.services.permissions import authorize_project, C_EXPORT
 from app.services.scope import ensure_project_visible
 from app.services.project_documents import can_read_document, can_read_file
-from app.services.report_forms import LIFECYCLE_HEADERS, LIFECYCLE_WIDTHS
+from app.services.report_forms import LIFECYCLE_HEADERS, LIFECYCLE_WIDTHS, lifecycle_columns
 from app.services.inventory_time import inventory_time_basis
 
 SHEET_NAMES = ('交付概览', '生命周期表', '问题清单', '物资清单', '收发流水', '交付资料')
@@ -154,7 +154,7 @@ def _lifecycle(db, book, project, users, assets):
         '事件后阶段', '事件后状态', '事件后位置', '操作人', '关联附件', '附件ID', '事件ID', '扩展信息',
         '出厂序列号', '当前阶段', '当前状态', '当前位置', '到场日期', '投运日期', '质保到期', '车辆备注', '车辆ID', '升级前九阶段（只读）']
     sheet, header = _sheet(book, SHEET_NAMES[1], headers, title='AGV生命周期表')
-    sheet.freeze_panes = 'F3'
+    sheet.freeze_panes = 'G3'
     for column, width in LIFECYCLE_WIDTHS.items():
         sheet.column_dimensions[column].width = width
     units = db.query(models.VehicleUnit).filter_by(project_id=project.id).order_by(models.VehicleUnit.asset_code, models.VehicleUnit.id).all()
@@ -172,15 +172,16 @@ def _lifecycle(db, book, project, users, assets):
         seq += 1
         extra = (event.extra or {}) if event else {}
         asset = assets.get(event.attachment_id) if event else None
-        identity = [seq, project.name, (vehicle.model_name if vehicle else unit.model_name if unit else '') or extra.get('model_name', ''), unit.asset_code if unit else '',
-                    (unit.fleet_no if unit else '') or extra.get('fleet_no', ''), event.title if event else '', event.description if event else '',
-                    event.action_taken if event else '', event.handler if event else '', _iso(event.event_date) if event else '', extra.get('category', '')]
+        identity = lifecycle_columns(project, vehicle, unit, event, users)
+        identity[0] = seq
+        if not event:
+            identity[5] = unit.asset_code if unit else ''
         fault = [event.fault_part, event.cause, event.replaced_parts, event.downtime_hours, event.verification, '是' if event.is_closed else '否',
                  event.event_type, event.stage_after, event.status_after, event.location_after, users.get(event.operator_id, event.operator_id or ''),
                  asset.filename if asset else '', asset.id if asset else '', event.id, extra] if event else [''] * 15
         archive = [unit.serial_number, unit.current_stage, unit.current_status, unit.location, _iso(unit.arrived_at), _iso(unit.commissioned_at),
                    _iso(unit.warranty_end), unit.note, unit.id, unit.legacy_current_stage] if unit else [''] * 8 + [event.vehicle_unit_id, '']
-        _append(sheet, identity + fault + archive, identities=(3, 24, 34))
+        _append(sheet, identity + fault + archive, identities=(5, 25, 35))
     return sheet, header
 
 

@@ -9,3 +9,12 @@ export function parseDispositionFilename(disposition?: string): string {
   return plain?.[1] ? plain[1].replace(/^"|"$/g, '') : ''
 }
 
+
+/** 把接口返回的文件存到本地：链接挂进页面再点击，稍后再释放，浏览器才会用给定文件名。 */
+export function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url; link.download = filename; link.style.display = 'none'
+  document.body.appendChild(link); link.click(); link.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 30_000)
+}

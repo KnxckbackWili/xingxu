@@ -40,11 +40,11 @@ def test_single_forward_head_preserves_business_rows_and_has_no_raw_token_column
             with engine.begin() as c:
                 c.execute(meta.tables['users'].insert().values(id=uid,username='retained-owner',display_name='原负责人',password_hash='test-only',role='pm'))
                 c.execute(meta.tables['projects'].insert().values(id=pid,name='原有项目',manager=uid,status='preparing',start_date=date(2026,1,1),end_date=date(2026,12,31)))
-                users=c.execute(sa.text('SELECT * FROM users')).all();projects=c.execute(sa.text('SELECT * FROM projects')).all()
+                users=c.execute(sa.text('SELECT * FROM users')).all();projects=c.execute(sa.select(meta.tables['projects'])).all()
             command.upgrade(cfg,'head');command.upgrade(cfg,'head')
             with engine.connect() as c:
                 assert c.execute(sa.text('SELECT * FROM users')).all()==users
-                assert c.execute(sa.text('SELECT * FROM projects')).all()==projects
+                assert c.execute(sa.select(meta.tables['projects'])).all()==projects  # columns that existed before; later revisions may add more
                 assert c.execute(sa.text('SELECT count(*) FROM external_shares')).scalar()==0
                 assert c.execute(sa.text('SELECT count(*) FROM external_access_logs')).scalar()==0
                 assert compare_metadata(MigrationContext.configure(c,opts={'compare_server_default':True}),Base.metadata)==[]

@@ -30,6 +30,8 @@ class UnitCreate(BaseModel):
     asset_code: str = Field(..., min_length=1, max_length=100)
     serial_number: str = Field(default="", max_length=100)
     fleet_no: str = Field(default="", max_length=30)  # 车号
+    frame_no: str = Field(default="", max_length=100)  # 门架号（门架钢印）
+    factory_date: Optional[date] = None  # 出厂日期（铭牌）
     current_stage: str = Field(default="planned", pattern="^(planned|production|factory_test|shipping|on_site|commissioning|running|maintenance|retired)$")
     location: str = Field(default="", max_length=200)
     warranty_end: Optional[date] = None
@@ -40,6 +42,8 @@ class UnitCreate(BaseModel):
 class UnitUpdate(BaseModel):
     serial_number: Optional[str] = None
     fleet_no: Optional[str] = Field(default=None, max_length=30)
+    frame_no: Optional[str] = Field(default=None, max_length=100)
+    factory_date: Optional[date] = None
     current_stage: Optional[str] = Field(default=None, pattern="^(planned|production|factory_test|shipping|on_site|commissioning|running|maintenance|retired)$")
     current_status: Optional[str] = Field(default=None, pattern="^(normal|attention|fault|stopped|retired)$")
     location: Optional[str] = None
@@ -165,6 +169,8 @@ def _unit_dict(
         "asset_code": unit.asset_code,
         "serial_number": unit.serial_number,
         "fleet_no": unit.fleet_no or "",
+        "frame_no": unit.frame_no or "",
+        "factory_date": unit.factory_date.isoformat() if unit.factory_date else None,
         "current_stage": unit.current_stage,
         "legacy_current_stage": unit.legacy_current_stage,
         "current_status": unit.current_status,

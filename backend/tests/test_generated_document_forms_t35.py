@@ -57,8 +57,8 @@ def test_current_week_excel_uses_site_iso_year_exact_original_dates_and_headers(
     result=result.json();ws=workbook(client,pm_headers,result).active
     assert '2026-W01' in ws['A1'].value
     assert [c.value for c in ws[2]]==report_forms.LIFECYCLE_HEADERS
-    assert [ws.cell(row,6).value for row in (3,4)]==['=真实周一记录','周日原记录'] and ws['F3'].data_type=='s'
-    assert [ws.cell(row,10).value for row in (3,4)]==['2025-12-29','2026-01-04'] and ws.max_row==4
+    assert [ws.cell(row,10).value for row in (3,4)]==['=真实周一记录：原解决方法','周日原记录：原解决方法'] and ws['J3'].data_type=='s'
+    assert [ws.cell(row,7).value for row in (3,4)]==['2025.12.29','2026.1.4'] and ws.max_row==4
     metadata=result['latest_version']['review_metadata']['generated']
     assert metadata['period_key']=='2026-W01' and metadata['source_event_ids']==[first,last]
     reviewed=client.post(f'/api/projects/{pid}/documents/{doc["id"]}/versions/{result["latest_version"]["id"]}/review',headers=admin_headers,json={'decision':'approved','note':'核对系统生成来源'})

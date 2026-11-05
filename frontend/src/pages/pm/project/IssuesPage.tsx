@@ -8,6 +8,7 @@ import {
   ImportOutlined, PlusOutlined, StopOutlined, UploadOutlined, UserSwitchOutlined,
 } from '@ant-design/icons'
 import { parseDateTime,formatDateTime } from '../../../utils/date'
+import { saveBlob } from '../../../utils/download'
 import { api, errMsg } from '../../../api/client'
 import { projectDocumentsApi, uploadProjectFile, downloadProjectFile } from '../../../api/projectDocuments'
 import { isUploadQueued } from '../../../uploads/types'
@@ -147,12 +148,12 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
     try { await downloadProjectFile(id, name) } catch (failure) { message.error(errMsg(failure)) }
   }
 
-  const downloadQualityForm = async (issue: Issue) => {
+  /** 质量问题反馈单 (company form A02) for a project issue or a vehicle problem. */
+  const downloadQualityForm = async (issue: { id: string; title: string; source?: string }) => {
+    const path = issue.source === 'vehicle' ? 'vehicle-events' : 'issues'
     try {
-      const r = await api.get(`/projects/${projectId}/issues/${issue.id}/export/quality-form`, { responseType: 'blob' })
-      const url = URL.createObjectURL(r.data)
-      const a = document.createElement('a'); a.href = url; a.download = `质量问题反馈单-${issue.title.slice(0, 20)}.xlsx`; a.click()
-      URL.revokeObjectURL(url)
+      const r = await api.get(`/projects/${projectId}/${path}/${issue.id}/export/quality-form`, { responseType: 'blob' })
+      saveBlob(r.data, `质量问题反馈单-${issue.title.slice(0, 20)}.xlsx`)
     } catch (e: any) { message.error(e.response?.data?.detail ?? '导出失败') }
   }
 
@@ -400,7 +401,10 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
           {vehicleDetail.action_taken && <div><b>处理过程：</b>{vehicleDetail.action_taken}</div>}
           {!!vehicleDetail.replaced_parts?.length && <div><b>更换配件：</b>{vehicleDetail.replaced_parts.map((part) => `${part.name || '配件'}${part.model ? `(${part.model})` : ''} x${part.quantity || 1}`).join('；')}</div>}
           {vehicleDetail.verification && <div><b>处理验证：</b>{vehicleDetail.verification}</div>}
-          <Button type="primary" onClick={() => window.location.assign(`/pm/projects/${projectId}/vehicles?unit=${vehicleDetail.vehicle_unit_id}`)}>进入单车履历处理</Button>
+          <Space wrap>
+            <Button type="primary" onClick={() => window.location.assign(`/pm/projects/${projectId}/vehicles?unit=${vehicleDetail.vehicle_unit_id}`)}>进入单车履历处理</Button>
+            <Button icon={<FileExcelOutlined />} onClick={() => void downloadQualityForm(vehicleDetail)}>导出质量问题反馈单</Button>
+          </Space>
         </Space>}
       </Drawer>
 

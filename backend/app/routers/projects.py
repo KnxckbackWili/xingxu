@@ -151,6 +151,7 @@ class ProjectUpdate(EventPlanInput):
 
     name: Optional[str] = None
     abbreviation: Optional[str] = None
+    contract_no: Optional[str] = Field(default=None, max_length=100)
     client: Optional[str] = None
     location: Optional[str] = None
     timezone: Optional[str] = Field(default=None, max_length=64)
@@ -211,7 +212,7 @@ def _valid_timezone(tz: str) -> str:
 
 # Field names a reader recognises in the project log; anything else shows as "项目信息".
 PROJECT_FIELD_LABELS = {
-    'name': '名称', 'abbreviation': '简称', 'client': '客户', 'location': '地点', 'timezone': '时区', 'description': '说明',
+    'name': '名称', 'abbreviation': '简称', 'contract_no': '合同号', 'client': '客户', 'location': '地点', 'timezone': '时区', 'description': '说明',
     'start_date': '开始日期', 'end_date': '计划结束日期', 'manager': '负责人', 'technical_manager': '技术负责人',
     'co_managers': '协管', 'members': '成员', 'member_permissions': '成员权限', 'client_contacts': '联系人',
     'entry_plan': '入场信息', 'planned_entry_date': '计划进场日期', 'rest_days': '休息日', 'rest_mode': '休息日规则',
@@ -251,6 +252,7 @@ def _project_dict(db: Session, p: Project, event_rows=None) -> dict:
         "id": p.id,
         "name": p.name,
         "abbreviation": p.abbreviation,
+        "contract_no": p.contract_no or "",
         "manager": p.manager,
         "manager_name": _mgr.display_name if _mgr else "",
         "technical_manager": p.technical_manager,
@@ -881,6 +883,7 @@ def update_project(
     fields = [
         "name",
         "abbreviation",
+        "contract_no",
         "client",
         "location",
         "timezone",

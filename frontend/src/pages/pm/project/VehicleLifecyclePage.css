@@ -18,3 +18,8 @@
   .field-work-modal .vehicle-state-strip > span:nth-child(2) { border-right: 0; }
   .field-work-modal .vehicle-state-strip > span:last-child { grid-column: 1 / -1; border-top: 1px solid var(--agv-border-soft); }
 }
+/* Facts of the physical vehicle printed on the company forms (车号、门架号、出厂日期). */
+.vehicle-facts { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 12px; margin: 12px 0; }
+.vehicle-facts label { display: grid; gap: 2px; min-width: 120px; flex: 1 1 120px; }
+.vehicle-facts label > span { color: var(--agv-text-secondary); font-size: 12px; }
+.vehicle-facts .ant-picker { width: 100%; }

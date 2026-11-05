@@ -147,14 +147,35 @@ def export_quality_form(
     __: User = Depends(rate_limit_export()),
 ):
     try:
-        data = report_forms.quality_form_to_excel(db, project_id, issue_id)
+        data = report_forms.quality_form_to_excel(db, project_id, issue_id, __)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    return _quality_response(data)
+
+
+def _quality_response(data):
     return StreamingResponse(
         _stream_bytes(data),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename*=UTF-8''%E8%B4%A8%E9%87%8F%E9%97%AE%E9%A2%98%E5%8F%8D%E9%A6%88%E5%8D%95.xlsx"},
+        headers={"Content-Disposition": "attachment; filename*=UTF-8''%E8%B4%A8%E9%87%8F%E9%97%AE%E9%A2%98%E5%8F%8D%E9%A6%88%E5%8D%95.xlsx",
+                 "Cache-Control": "private, no-store"},
     )
+
+
+@router.get("/projects/{project_id}/vehicle-events/{event_id}/export/quality-form")
+@route_permission('project.export')
+def export_vehicle_quality_form(
+    project_id: str, event_id: str,
+    _: Project = Depends(require_project_capability("project.export")),
+    db: Session = Depends(get_db),
+    __: User = Depends(rate_limit_export()),
+):
+    """A vehicle problem as the company quality feedback form; vehicle facts come from the vehicle record."""
+    try:
+        data = report_forms.vehicle_quality_form_to_excel(db, project_id, event_id, __)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return _quality_response(data)
 
 
 @router.post("/projects/{project_id}/import/quality-form")

@@ -49,12 +49,12 @@ def test_forward_migration_retains_facts_and_defaults_private_codes_without_impl
                     c.execute(meta.tables['attachments'].insert().values(id=identity,project_id=pid,filename='original.txt',stored_name=identity,
                         file_size=123,sha256='a'*64,confidential=True,uploaded_by=uid))
                 c.execute(meta.tables['document_versions'].insert().values(id=version,project_document_id=doc,attachment_id=derived,uploaded_by=uid,note='原版本说明'))
-                users_before=c.execute(sa.text('SELECT * FROM users')).all();project_before=c.execute(sa.text('SELECT * FROM projects')).all()
+                users_before=c.execute(sa.text('SELECT * FROM users')).all();project_before=c.execute(sa.select(meta.tables['projects'])).all()
             command.upgrade(cfg,'head')
             command.upgrade(cfg,'head')
             with engine.connect() as c:
                 assert c.execute(sa.text('SELECT * FROM users')).all()==users_before
-                assert c.execute(sa.text('SELECT * FROM projects')).all()==project_before
+                assert c.execute(sa.select(meta.tables['projects'])).all()==project_before  # columns that existed before; later revisions may add more
                 result=c.execute(sa.text('SELECT confidential,status,version,confidential_user_ids FROM project_documents WHERE id=:id'),{'id':doc}).one()
                 assert result[0] and result[1:3]==('submitted',4)
                 assert result[3] in ([], '[]')

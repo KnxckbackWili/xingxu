@@ -137,7 +137,7 @@ it('persists the technical manager clear as null and keeps it clear after reload
   await waitFor(() => expect(onReload).toHaveBeenCalledOnce())
   expect(update).toHaveBeenCalledWith('p1', expect.objectContaining({ technical_manager_id: null, version: 3 }))
   expect(select.querySelector('.ant-select-selection-item')).toBeNull()
-  fireEvent.click(screen.getByText('其他资料：简称、时区与人员备注'))
+  fireEvent.click(screen.getByText('其他资料：简称、合同号、时区与人员备注'))
   expect(screen.getByRole('combobox', { name: '现场时区' })).toHaveAttribute('aria-label', '现场时区')
   fireEvent.click(screen.getByText('项目首页'))
   await waitFor(() => expect(router.state.location.pathname).toBe('/overview'))

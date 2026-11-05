@@ -40,7 +40,7 @@ def test_exact_six_sheet_contract_headers_styles_and_empty_project_are_real_xlsx
     pid = create_project(client,admin_headers)
     book = workbook(client,admin_headers,pid)
     assert tuple(book.sheetnames) == SHEET_NAMES
-    assert [cell.value for cell in book['生命周期表'][2]][:11] == LIFECYCLE_HEADERS
+    assert [cell.value for cell in book['生命周期表'][2]][:12] == LIFECYCLE_HEADERS
     assert [cell.value for cell in book['物资清单'][1]][:10] == INVENTORY_HEADERS
     assert [cell.value for cell in book['收发流水'][1]][:10] == MOVEMENT_HEADERS
     for sheet in book:
@@ -64,12 +64,13 @@ def test_lifecycle_keeps_template_prefix_all_fault_fields_and_no_issue_vehicle(c
     rows=records(workbook(client,admin_headers,pid)['生命周期表'])
     row=next(row for row in rows if row['事件ID']==eid)
     assert row['车号']=='007' and row['出厂序列号']=='SERIAL-A'
-    assert row['故障部位']=='传感器' and row['原因判断']=='接触不良' and row['解决方法']=='重新压接'
+    assert row['故障部位']=='传感器' and row['原因判断']=='接触不良' and row['变更内容']=='接插件间歇异常：重新压接'
+    assert row['分类']=='硬件' and row['调车时间记录']=='2026.2.3'
     assert row['停机小时']==0 and row['验证结果']=='连续运行通过' and row['是否关闭']=='是'
     assert row['事件后阶段']=='running' and row['事件后状态']=='normal' and row['事件后位置']=='现场B'
     assert json.loads(row['更换配件'])[0]['original_extra']=='不能丢'
     assert json.loads(row['扩展信息'])['custom']=='扩展故障事实'
-    assert any(row['车辆编号']=='AGV-002' and not row['出现过的问题'] for row in rows)
+    assert any(row['车辆编号']=='AGV-002' and not row['变更内容'] for row in rows)
 
 
 def test_issue_states_quality_terms_and_extra_are_not_collapsed_or_truncated(client,admin_headers):

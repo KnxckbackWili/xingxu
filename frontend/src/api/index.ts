@@ -136,6 +136,7 @@ export interface Project {
   id: string
   name: string
   abbreviation: string
+  contract_no?: string
   manager: string
   manager_name?: string
   technical_manager?: string
