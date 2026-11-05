@@ -27,14 +27,11 @@ export const STATUS_COLOR: Record<string, string> = Object.fromEntries(
 
 export const isProjectStatus = (status: string) => Object.prototype.hasOwnProperty.call(STATUS_MAP, status)
 
-/** 未知历史状态只读，保留原值以便按备份与审计记录核对。 */
-export const isProjectWriteBlocked = (status?: string) => status !== undefined && (status === 'archived' || !isProjectStatus(status))
+export const isProjectWriteBlocked = (status?: string) => status === 'archived'
 
 /** 派生状态：项目已延期时用红标覆盖，原始状态保留在 baseLabel/baseColor 中。 */
 export function projectStatusMeta(status: string, overdue = false): { label: string; color: string; baseLabel: string; baseColor: string } {
-  const known = isProjectStatus(status)
-  const base = known ? STATUS_MAP[status] : { label: `未知历史状态（${status || '空值'}）`, color: 'warning' }
-  if (!known) return { label: base.label, color: base.color, baseLabel: base.label, baseColor: base.color }
+  const base = STATUS_MAP[status] ?? { label: status, color: 'default' }
   if (overdue) return { label: '已延期', color: 'red', baseLabel: base.label, baseColor: base.color }
   return { label: base.label, color: base.color, baseLabel: base.label, baseColor: base.color }
 }

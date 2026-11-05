@@ -83,8 +83,8 @@ it('explicitly clears the current location without touching fault or historical 
   expect(api.post).not.toHaveBeenCalled()
 })
 
-it.each(['capabilities', 'archived', 'unknown'])('%s vehicles show location as read-only text', async mode => {
-  render(page(mode === 'capabilities' ? { capabilities: [] } : { status: mode === 'unknown' ? 'legacy_unknown' : 'archived' }))
+it.each(['capabilities', 'archived'])('%s vehicles show location as read-only text', async mode => {
+  render(page(mode === 'capabilities' ? { capabilities: [] } : { status: 'archived' }))
   expect(await screen.findByText('原仓库')).toBeVisible()
   expect(screen.queryByRole('button', { name: '修改AGV-001当前位置' })).not.toBeInTheDocument()
   expect(api.put).not.toHaveBeenCalled()

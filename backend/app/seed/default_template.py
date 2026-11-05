@@ -1,9 +1,10 @@
-"""The built-in general template of a new installation: about twenty rows that carry every company document.
+"""The built-in general template: about twenty rows that carry every company document.
 
-Existing installations get the same content from migration g3a93b000001 when their old built-in work is
-converted. Document rules (timing, scope, confidentiality, blank forms) come from the built-in document
-definitions already present, matched by code; codes that are missing are skipped.
+Document rules (timing, scope, confidentiality) come from the company document list in
+company_documents.json, matched by code.
 """
+import json
+from pathlib import Path
 from uuid import uuid4
 
 # (section, stage, rows); rows are (kind, name, spec). Checks are (name, safety critical).
@@ -72,29 +73,28 @@ FILE_KEYS = ('code', 'name', 'template_no', 'required', 'scope', 'platform', 'ti
              'timing_weekday', 'trigger_type', 'confidential_default', 'external_visible_default', 'external_never_visible', 'note')
 
 
+def company_documents() -> dict:
+    """The company's document list by code (groups left out)."""
+    rows = json.loads((Path(__file__).with_name('company_documents.json')).read_text(encoding='utf-8'))
+    return {row['code']: row for row in rows if not row.get('is_group')}
+
+
 def seed_default_template(db):
-    """Give an installation without built-in rows the merged general template (idempotent)."""
-    from app.models import DocumentRequirement, Task, TemplateItem, TemplateSection
+    """Give an installation without the built-in template its merged general template (idempotent)."""
+    from app.models import TemplateItem, TemplateSection
     from app.services.template_items import compile_template
     if db.query(TemplateSection.id).filter(TemplateSection.template_id.is_(None)).first() is not None:
         return False
-    if db.query(Task.id).filter(Task.template_id.is_(None), Task.project_id.is_(None)).first() is not None:
-        return False  # old built-in work is converted by the migration, never overwritten here
-    rules = {row.code: row for row in db.query(DocumentRequirement).filter(
-        DocumentRequirement.template_id.is_(None), DocumentRequirement.is_group.is_(False))}
+    rules = company_documents()
     for section_index, (title, stage, rows) in enumerate(DEFAULT_CONTENT):
         section = TemplateSection(id=str(uuid4()), template_id=None, title=title, stage_key=stage, sort_order=section_index)
         db.add(section)
         db.flush()
         for position, (kind, name, spec) in enumerate(rows):
-            files = []
-            for code in spec.get('files', []):
-                rule = rules.get(code)
-                if rule is not None:
-                    # Same id as the existing rule, so anything already pointing at it keeps its link.
-                    files.append({**{key: getattr(rule, key) for key in FILE_KEYS}, 'id': rule.id, 'scope': rule.scope or 'project',
-                                  'template_no': rule.template_no or '', 'note': rule.note or '', 'blank_file_id': rule.blank_file_id,
-                                  'source_metadata': None})
+            files = [{**{key: rules[code].get(key) for key in FILE_KEYS}, 'id': str(uuid4()),
+                      'scope': rules[code].get('scope') or 'project', 'template_no': rules[code].get('template_no') or '',
+                      'note': rules[code].get('note') or '', 'blank_file_id': None, 'source_metadata': None}
+                     for code in spec.get('files', []) if code in rules]
             db.add(TemplateItem(
                 id=str(uuid4()), template_id=None, section_id=section.id, kind=kind, name=name, note=spec.get('note', ''),
                 optional=spec.get('optional', False), per_vehicle=spec.get('per_vehicle', False), step_key=spec.get('step'),

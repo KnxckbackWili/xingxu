@@ -218,33 +218,6 @@ def test_lifecycle_import_unmatched_model_name_displayed(client, pm_headers):
     assert unit2["model_name"] == "AGVLSYP"        # 另一台未匹配档案同样持久化展示
 
 
-def test_import_key_index_migration(client, upgrade_legacy_schema):
-    """存量库缺 import_key 索引时，Alembic 版本迁移补齐（SQLite）。"""
-    from sqlalchemy import text
-    from app.db import SessionLocal, engine
-    from sqlalchemy import inspect
-    db = SessionLocal()
-    try:
-        db.execute(text("DROP INDEX IF EXISTS ix_vehicle_lifecycle_events_import_key"))
-        db.commit()
-        upgrade_legacy_schema()
-        from app.db import _alembic_sync_schema
-        _alembic_sync_schema()
-        # A pooled sqlite3 handle can retain its old schema cache after another
-        # handle performs DDL. Read the table catalog, then reflect the index
-        # on that same physical connection (also valid for PostgreSQL).
-        with engine.connect() as connection:
-            reflection = inspect(connection)
-            assert 'vehicle_lifecycle_events' in reflection.get_table_names()
-            assert 'ix_vehicle_lifecycle_events_import_key' in {
-                index['name'] for index in reflection.get_indexes('vehicle_lifecycle_events')
-            }
-    finally:
-        db.close()
-
-
-# ===== 质量问题反馈单 =====
-
 def _quality_form_xlsx() -> bytes:
     wb = Workbook()
     ws = wb.active
@@ -635,27 +608,6 @@ def test_item_application_docx_roundtrip(client, pm_headers):
     assert app["department"] == "项目技术部"
     assert app["apply_date"] == "2026-01-07"            # 申请日期
 
-
-def test_legacy_repair_keeps_already_applied_event_schema_and_dates(client, pm_headers, upgrade_legacy_schema):
-    from app.db import engine
-    from sqlalchemy import text
-    pid = _project(client, pm_headers)
-    changed = client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'dispatch_platform': 'NDC'}))
-    assert changed.status_code == 200, changed.text
-    dated = client.put(f'/api/projects/{pid}/events/ship', headers=pm_headers,
-                       json=versioned(pid, {'planned_date': '2026-10-27'}))
-    assert dated.status_code == 200, dated.text
-    def state():
-        with engine.connect() as connection:
-            return (connection.execute(text('SELECT version_num FROM alembic_version')).scalar_one(),
-                    connection.execute(text('SELECT dispatch_platform FROM projects WHERE id=:id'), {'id': pid}).scalar_one(),
-                    connection.execute(text('SELECT event_key, planned_date FROM project_events WHERE project_id=:id'), {'id': pid}).all())
-    before = state()
-    upgrade_legacy_schema()
-    assert state() == before
-
-
-# ===== 公司表单融合：车辆记录出反馈单、A02 导入补车辆档案、新版生命周期表 =====
 
 def _png(width=4, height=3) -> bytes:
     import struct

@@ -43,7 +43,7 @@ it('keeps the original form version when another update arrives during an unsave
   expect(update).toHaveBeenCalledWith('p1', expect.objectContaining({ version: 3, description: '本人的未保存编辑' }))
 })
 
-it.each(['legacy_unknown', 'archived'])('%s renders original project fields read-only for its owner', async (status) => {
+it.each(['archived'])('%s renders original project fields read-only for its owner', async (status) => {
   listActive.mockResolvedValue([])
   const confirm = watchConfirm()
   const router = show({ id: 'p1', name: '历史项目', status, manager: 'pm', members: [], start_date: '2026-09-01', end_date: '2026-10-31' } as any)

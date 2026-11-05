@@ -1,12 +1,5 @@
 """Default-template vehicle work carries explicit H-2 steps into new projects."""
-import os
-import sqlalchemy as sa
-from alembic import command
-from alembic.script import ScriptDirectory
-from tests.test_vehicle_progress_migration import config
 from tests.template_work import default_work
-
-REVISION = 'g3a30b000002'
 
 
 def test_new_project_vehicle_work_is_bound_to_default_steps(client, pm_headers):
@@ -25,25 +18,3 @@ def test_new_project_vehicle_work_is_bound_to_default_steps(client, pm_headers):
     assert all(rows.values()), rows
 
 
-def test_upgrade_binds_only_untouched_default_template_rows(monkeypatch, tmp_path):
-    url = 'sqlite:///' + str(tmp_path / 'steps.db')
-    monkeypatch.setattr('app.config.DATABASE_URL', url)
-    cfg = config()
-    parent = ScriptDirectory.from_config(cfg).get_revision(REVISION).down_revision
-    command.upgrade(cfg, parent)
-    engine = sa.create_engine(url)
-    with engine.begin() as c:
-        c.execute(sa.text("INSERT INTO phases (id,project_id,name) VALUES ('ph',NULL,'到货检查'),('pp','p','到货检查')"))
-        c.execute(sa.text("INSERT INTO projects (id,name,start_date,end_date,status) VALUES ('p','既有项目','2026-01-01','2026-03-01','executing')"))
-        c.execute(sa.text(
-            "INSERT INTO tasks (id,project_id,template_id,phase_id,name,quantity_type,manually_completed) VALUES "
-            "('task-005',NULL,NULL,'ph','开箱检查','per_vehicle',false),"
-            "('task-006',NULL,NULL,'ph','配件清点（客户改名）','per_vehicle',false),"
-            "('task-022',NULL,NULL,'ph','多车联调','fixed',false),"
-            "('proj-005','p',NULL,'pp','开箱检查','per_vehicle',false)"))
-    command.upgrade(cfg, 'g3a92b000001')
-    with engine.connect() as c:
-        keys = dict(c.execute(sa.text('SELECT id, vehicle_step_key FROM tasks')).all())
-        audit = c.execute(sa.text("SELECT new_value FROM change_logs WHERE entity_type='migration' AND entity_id=:r"), {'r': REVISION}).scalars().all()
-    assert keys == {'task-005': 'arrival_inspection', 'task-006': None, 'task-022': None, 'proj-005': None}
-    assert len(audit) == 1

@@ -97,7 +97,7 @@ it('ignores an older project response after navigation', async () => {
   await act(async () => old(response([row('old', { name: '旧项目资料' })])))
   expect(screen.queryByText(/旧项目资料/)).toBeNull()
 })
-it.each(['archived', 'legacy_unknown'])('%s keeps files readable and hides all write controls', async status => {
+it.each(['archived'])('%s keeps files readable and hides all write controls', async status => {
   h.state.status = status; h.list.mockResolvedValue({ ...response(), unclassified_files: [{ id: 'f1', filename: '历史文件.pdf', file_size: 2, content_type: 'application/pdf', sha256: null, uploaded_by: null, uploaded_by_name: '', uploaded_at: null, confidential: false, entity_type: 'project', entity_id: 'p1', category: '', download_url: '/files/f1/download' }] })
   show(); fireEvent.click(await screen.findByRole('button', { name: /历史文件.pdf/ }))
   await waitFor(() => expect(h.download).toHaveBeenCalledWith('/files/f1/download', '历史文件.pdf'))

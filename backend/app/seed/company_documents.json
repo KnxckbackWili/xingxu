@@ -919,7 +919,7 @@
     "trigger_type": null,
     "confidential_default": true,
     "external_visible_default": false,
-    "external_never_visible": false,
+    "external_never_visible": true,
     "sort_order": 43,
     "note": ""
   },

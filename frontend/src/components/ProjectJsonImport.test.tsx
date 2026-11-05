@@ -56,17 +56,6 @@ describe('quick-import draft preflight', () => {
     expect(navigate).toHaveBeenCalledOnce()
     expect(navigate).toHaveBeenCalledWith('/pm/projects/copy')
   })
-  it('allows an unknown historical state to be copied as draft without guessing its original meaning', async () => {
-    const historical = { ...original, project: { ...original.project, status: 'legacy-live' } }
-    vi.mocked(api.post).mockResolvedValueOnce({ data: invalid }).mockResolvedValueOnce({ data: valid })
-    const { container } = setup()
-    await choose(container, historical)
-    expect(await screen.findByText('源项目状态：未知历史状态（legacy-live）')).toBeVisible()
-    fireEvent.click(screen.getByRole('button', { name: '按准备重新预检' }))
-    await screen.findByText('新项目将从准备开始')
-    expect(api.post).toHaveBeenLastCalledWith('/projects/import/preview', { ...historical, project: { ...historical.project, status: 'preparing' } })
-    expect(historical.project.status).toBe('legacy-live')
-  })
   it('retains the original preflight after a failed request and permits retry', async () => {
     vi.mocked(api.post).mockResolvedValueOnce({ data: invalid }).mockRejectedValueOnce(new Error('offline'))
       .mockResolvedValueOnce({ data: valid })

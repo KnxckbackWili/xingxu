@@ -2,12 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { projectStageGuidance, projectWorkflow, type WorkflowInput } from './projectWorkflow'
 const ready: WorkflowInput = { status: 'preparing', vehicles: 2, tasks: 12, members: 2, plans: 12, drafts: 0, unassigned: 0, kickoffReady: true, prepReady: true, severeIssues: 0, progress: 0 }
 describe('人工推进和概况准备清单', () => {
-  it('unknown original state remains visible and never creates a status decision', () => {
-    const result=projectWorkflow({...ready,status:'legacy_unknown',progress:100,severeIssues:2})
-    expect(result.action).toMatchObject({title:'查阅历史记录',path:'/activity'})
-    expect(result.action.description).toContain('legacy_unknown')
-    expect(result.action.status).toBeUndefined()
-  })
   it('uses the ordered setup areas and moves only to the adjacent execution state', () => {
     expect(projectWorkflow(ready).checklist.map(row=>row.title)).toEqual(['车型','资料清单','周计划','发车前资料确认'])
     expect(projectWorkflow({...ready,infoComplete:false}).checklist.map(row=>row.title)).toEqual(['基本资料','车型','资料清单','周计划','发车前资料确认'])

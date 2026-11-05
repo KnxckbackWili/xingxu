@@ -202,39 +202,6 @@ def test_clone_preserves_vehicle_types(client, pm_headers):
 
 # ===== 旧数据迁移归一化 =====
 
-def test_migrate_normalizes_legacy_vehicle_strings(client):
-    from datetime import date
-    from sqlalchemy.orm import Session
-    from app.db import engine
-    from app.models import Project, Module, Task, Vehicle
-    from app.db import _normalize_legacy_vehicle_types
-
-    db = Session(engine)
-    try:
-        pid = "proj-legacy"
-        db.add(Project(id=pid, name="旧数据项目", start_date=date(2026, 8, 10), end_date=date(2026, 9, 30)))
-        mod = Module(id="mod-legacy", project_id=pid, name="调试")
-        db.add(mod)
-        db.flush()
-        db.add(Vehicle(project_id=pid, vehicle_type="custom", model_name="L1", quantity=1))
-        db.add(Vehicle(project_id=pid, vehicle_type="自定义", model_name="L2", quantity=1))
-        db.add(Vehicle(project_id=pid, vehicle_type="老式叉车", model_name="L3", quantity=1))
-        db.add(Task(project_id=pid, module_id=mod.id, name="联调",
-                    applicable_vehicle_types=["custom", "潜伏式", "自定义"]))
-        db.commit()
-
-        _normalize_legacy_vehicle_types(db)
-        db.commit()
-
-        types = sorted(v.vehicle_type for v in db.query(Vehicle).filter(Vehicle.project_id == pid).all())
-        assert types == ["其他/定制", "其他/定制", "老式叉车"]
-        task = db.query(Task).filter(Task.project_id == pid).first()
-        assert sorted(task.applicable_vehicle_types) == ["其他/定制", "其他/定制", "潜伏式"]
-    finally:
-        db.close()
-
-
-# ===== 排序：重复 ID 显式拒绝，不产生部分写入 =====
 
 def test_reorder_rejects_duplicate_ids(client, admin_headers):
     """重复 ID 必须 400：旧实现只比长度和存在性，[a,a,b] 会被接受并漏写 c。"""

@@ -37,7 +37,7 @@ def clean_export(bundle):
 def test_default_carries_every_frozen_company_document_and_copies_keep_codes(client, admin_headers):
     """The merged built-in template still hands in all 53 company documents, with their frozen rules."""
     rows = list_rows(client, admin_headers)
-    seeds = [seed for seed in json.loads((Path(__file__).parents[1] / 'migrations/v3_document_requirements_seed.json').read_text())
+    seeds = [seed for seed in json.loads((Path(__file__).parents[1] / 'app/seed/company_documents.json').read_text())
              if not seed.get('is_group')]
     assert len(rows) == len(seeds) == 53 and not any(row['is_group'] for row in rows)
     by_code = {row['code']: row for row in rows}

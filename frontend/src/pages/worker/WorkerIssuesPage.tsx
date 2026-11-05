@@ -14,7 +14,7 @@ import { isUploadQueued } from '../../uploads/types'
 import { WorkPageHeader, WorkSection } from '../../components/WorkPage'
 import './WorkerWorkPages.css'
 import '../../components/IssueList.css'
-import { isProjectStatus, isProjectWriteBlocked } from '../../constants/status'
+import { isProjectWriteBlocked } from '../../constants/status'
 import { RefreshAction } from '../../components/IconAction'
 
 interface MyIssue {
@@ -309,7 +309,6 @@ export default function WorkerIssuesPage() {
               {(detail.status === 'closed' || detail.status === 'cancelled') && (detail.status === 'cancelled' ? '问题已作废。' : '问题已关闭。')}
             </Typography.Paragraph>
             {detail.project_status === 'completed' && <Alert type="warning" showIcon message="项目已完成" description="重开问题后，请项目经理确认返工；需要安排或报工时，先将项目恢复到验收中。" />}
-            {detail.project_status !== undefined && !isProjectStatus(detail.project_status) && <Alert type="warning" showIcon message="项目存在未知历史状态，当前只读" description={`原始状态：${detail.project_status || '空值'}。问题历史仍可查阅，请管理员核对后修复。`} />}
             {canWork(detail) && <Space>
               {detail.status === 'open' && <Button loading={handling} onClick={() => handleIssue('processing')}>开始处理</Button>}
               <Button loading={handling} onClick={() => { resolutionForm.setFieldsValue({ resolution: detail.resolution || '' }); setResolutionOpen(true) }}>提交处理结果</Button>

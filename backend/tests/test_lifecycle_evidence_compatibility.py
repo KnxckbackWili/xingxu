@@ -172,47 +172,6 @@ def test_progress_evaluators_never_move_human_milestones(client, pm_headers, mon
         db.commit()
 
 
-def test_incremental_migration_preserves_unknown_legacy_acceptance_scope(client, pm_headers, upgrade_legacy_schema):
-    from sqlalchemy import text, inspect
-    from app.db import engine
-    from app.models import AcceptanceRecord
-    pid, _, _ = completeable_project(client, pm_headers, legacy_acceptance=True)
-    with engine.begin() as connection:
-        connection.execute(text('ALTER TABLE acceptance_records DROP COLUMN scope_fingerprint'))
-    upgrade_legacy_schema()
-    from app.db import _alembic_sync_schema
-    _alembic_sync_schema()
-    with SessionLocal() as db:
-        row = db.query(AcceptanceRecord).filter_by(project_id=pid).one()
-        assert row.scope_fingerprint is None
-        assert row.accepted_by_name == '客户代表' and row.conclusion == 'accepted'
-        assert db.get(Project, pid).status == 'acceptance'
-    column = next(c for c in inspect(engine).get_columns('acceptance_records') if c['name'] == 'scope_fingerprint')
-    assert column['nullable'] and column['default'] is None
-
-
-def test_alembic_upgrade_preserves_legacy_evidence_without_backfill(monkeypatch, tmp_path):
-    import sqlalchemy as sa
-    from alembic import command
-    from alembic.config import Config
-    from app.config import BASE_DIR
-    cfg = Config(str(BASE_DIR / 'alembic.ini'))
-    cfg.set_main_option('script_location', str(BASE_DIR / 'migrations'))
-    path = tmp_path / 'legacy-acceptance.db'
-    monkeypatch.setattr('app.config.DATABASE_URL', f'sqlite:///{path}')
-    command.upgrade(cfg, 'f7b3c8d2a901')
-    engine = sa.create_engine(f'sqlite:///{path}')
-    with engine.begin() as connection:
-        connection.execute(sa.text("INSERT INTO projects (id,name,start_date,end_date,status) VALUES ('legacy','legacy','2026-01-01','2026-02-01','archived')"))
-        connection.execute(sa.text("INSERT INTO acceptance_records (id,project_id,accepted_by_name,accepted_at,conclusion,notes) VALUES ('signature','legacy','Original customer','2026-02-01','accepted','Original evidence')"))
-    command.upgrade(cfg, 'head')
-    with engine.connect() as connection:
-        row = connection.execute(sa.text('SELECT accepted_by_name,notes,scope_fingerprint FROM acceptance_records')).one()
-        assert tuple(row) == ('Original customer', 'Original evidence', None)
-        assert connection.execute(sa.text('SELECT status FROM projects')).scalar() == 'archived'
-    engine.dispose()
-
-
 def test_repeated_startup_migration_never_rewrites_valid_lifecycle_positions(client, pm_headers):
     from app.db import _alembic_sync_schema
     from app.services.project_lifecycle import PROJECT_STATUSES

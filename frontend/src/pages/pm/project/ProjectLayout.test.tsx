@@ -184,17 +184,6 @@ describe('project direct URL capability boundary', () => {
     expect(screen.getByText('导出项目占位')).toBeInTheDocument()
     expect(screen.queryByText('项目不存在或无权访问', { selector: '.ant-result-title' })).not.toBeInTheDocument()
   })
-  it.each(['overview', 'export'])('keeps unknown history readable at %s without disguising its state', async tab => {
-    route.pathname = `/pm/projects/p1/${tab}`
-    useAuthMock.mockReturnValue({ user: { role: 'admin', id: 'admin' } })
-    apiGet.mockResolvedValue({ data: { ...PROJECT, status: 'legacy_unknown', capabilities: ['project.update', 'project.export'] } })
-    render(<ProjectLayout />)
-    expect(await screen.findByText('项目存在未知历史状态，当前只读')).toBeInTheDocument()
-    expect(screen.getByText('未知历史状态（legacy_unknown）')).toBeInTheDocument()
-    expect(screen.getByText(/原始状态：legacy_unknown/)).toBeInTheDocument()
-    expect(screen.queryByText('草稿')).not.toBeInTheDocument()
-    expect(await screen.findByText(tab === 'export' ? '导出项目占位' : '概览占位')).toBeInTheDocument()
-  })
 })
 
 vi.mock('./StartupPage', () => ({ default: () => <div>开工占位</div> }))

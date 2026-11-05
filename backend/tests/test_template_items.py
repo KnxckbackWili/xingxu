@@ -8,7 +8,6 @@ from openpyxl import load_workbook
 from app.db import SessionLocal
 from app.models import (ChangeLog, CheckItem, DocumentRequirement, Phase, ProjectDocumentDefinition, ProjectPreparationItem,
                         Task, TemplateItem, VehicleStep)
-from tests.test_vehicle_progress_migration import config
 
 
 def tree(client, headers, tid='default'):
@@ -214,33 +213,3 @@ def test_template_name_and_description_are_editable_with_a_trail(client, admin_h
     assert client.put('/api/templates/default', headers=admin_headers, json={'name': '改系统模板'}).status_code == 400
 
 
-def test_upgrade_converts_templates_keeps_project_document_links_and_the_old_default(monkeypatch, tmp_path):
-    url = 'sqlite:///' + str(tmp_path / 'items.db')
-    monkeypatch.setattr('app.config.DATABASE_URL', url)
-    cfg = config()
-    command.upgrade(cfg, 'g3a92b000001')
-    engine = sa.create_engine(url)
-    with engine.begin() as c:
-        c.execute(sa.text("INSERT INTO projects (id,name,start_date,end_date,status,members) VALUES ('p','既有项目','2026-01-01','2026-03-01','executing','[]')"))
-        c.execute(sa.text("INSERT INTO phases (id,project_id,template_id,name,sort_order,stage_key) VALUES ('ph',NULL,NULL,'进场准备',1,'5')"))
-        c.execute(sa.text("INSERT INTO modules (id,project_id,template_id,phase_id,name,sort_order) VALUES ('m',NULL,NULL,'ph','进场准备',1)"))
-        c.execute(sa.text("INSERT INTO tasks (id,project_id,template_id,module_id,name,quantity_type,manually_completed,sort_order) VALUES ('old-task',NULL,NULL,'m','原勘测','fixed',false,1)"))
-        c.execute(sa.text("INSERT INTO check_items (id,task_id,template_id,project_id,name,is_required,is_safety_critical,sort_order) VALUES ('old-check','old-task',NULL,NULL,'原检查',true,false,0)"))
-        rule = c.execute(sa.text("SELECT id FROM document_requirements WHERE template_id IS NULL AND code='6.1'")).scalar()
-        c.execute(sa.text("INSERT INTO project_document_definitions (id,project_id,requirement_id,source_key,stage_key,code,name,required,scope,timing_type,confidential_default,external_visible_default,external_never_visible,sort_order) "
-                          "VALUES ('pd','p',:rule,'template:'||:rule,'6','6.1','车辆到场点检表',true,'vehicle','on_demand',false,false,false,0)"), {'rule': rule})
-    command.upgrade(cfg, 'head')
-    with engine.connect() as c:
-        backup = c.execute(sa.text("SELECT id FROM templates WHERE name='通用模板（升级前内容）'")).scalar()
-        assert backup
-        assert c.execute(sa.text("SELECT template_id FROM tasks WHERE id='old-task'")).scalar() == backup
-        assert c.execute(sa.text("SELECT name FROM template_items WHERE id='old-task'")).scalar() == '原勘测'
-        assert c.execute(sa.text("SELECT requirement_id FROM project_document_definitions WHERE id='pd'")).scalar() == rule
-        assert c.execute(sa.text("SELECT template_id FROM document_requirements WHERE id=:rule"), {'rule': rule}).scalar() == backup
-        assert c.execute(sa.text("SELECT count(*) FROM template_items WHERE template_id IS NULL")).scalar() >= 18
-        assert c.execute(sa.text("SELECT count(*) FROM document_requirements WHERE template_id IS NULL")).scalar() == 53
-        assert c.execute(sa.text("SELECT count(*) FROM tasks WHERE template_id IS NULL AND project_id IS NULL AND module_id IS NOT NULL")).scalar() == 0
-    command.downgrade(cfg, 'g3a92b000001')
-    with engine.connect() as c:
-        assert c.execute(sa.text("SELECT count(*) FROM tasks WHERE project_id IS NULL AND module_id IS NULL")).scalar() == 0
-    engine.dispose()

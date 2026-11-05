@@ -1,11 +1,8 @@
 import { expect, it } from 'vitest'
 import { isProjectStatus, isProjectWriteBlocked, projectStatusMeta } from './status'
 
-it('unknown historical values stay visible instead of looking like draft or overdue', () => {
-  expect(projectStatusMeta('legacy_unknown', true)).toMatchObject({ label: '未知历史状态（legacy_unknown）', color: 'warning' })
+it('only real states are states', () => {
   expect(isProjectStatus('constructor')).toBe(false)
-  expect(isProjectWriteBlocked('legacy_unknown')).toBe(true)
-  expect(isProjectWriteBlocked('')).toBe(true)
 })
 it('known lifecycle labels and existing write policies are preserved', () => {
   expect(projectStatusMeta('preparing')).toMatchObject({ label: '准备', color: 'gold' })

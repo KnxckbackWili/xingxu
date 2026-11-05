@@ -108,8 +108,6 @@ def test_protected_manage_only_true_active_role_admin():
     assert not effective_permissions(user)
 
 
-
-
 @pytest.mark.parametrize("path,method,capability", [
     ("/api/projects/{project_id}/acceptance", "POST", "project.update"),
     ("/api/projects/{project_id}/vehicle-units", "POST", "project.manage_plan"),
@@ -245,69 +243,6 @@ def _migration_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
-
-
-def test_old_schema_alembic_adds_only_policy_columns_and_is_idempotent(monkeypatch):
-    from alembic.migration import MigrationContext
-    from alembic.operations import Operations
-    module = _migration_module()
-    engine = create_engine("sqlite://")
-    with engine.begin() as connection:
-        connection.execute(text("CREATE TABLE users(id TEXT PRIMARY KEY, username TEXT, role TEXT, password_hash TEXT, token_version INTEGER)"))
-        connection.execute(text("INSERT INTO users VALUES ('a','old-admin','admin','old-hash',9)"))
-        old = tuple(connection.execute(text("SELECT * FROM users")).one())
-        monkeypatch.setattr(module, "op", Operations(MigrationContext.configure(connection)))
-        module.upgrade()
-        module.upgrade()
-        row = connection.execute(text("SELECT * FROM users")).one()
-        assert tuple(row[:5]) == old
-        assert row.permission_overrides is None and row.permission_version == 0
-        connection.execute(text("UPDATE users SET permission_overrides='{}',permission_version=7"))
-        module.upgrade()
-        assert connection.execute(text("SELECT permission_version FROM users")).scalar() == 7
-        assert module.down_revision == "a1c7e9b204d6"
-    engine.dispose()
-
-
-def test_actual_alembic_graph_has_one_head_after_latest_acceptance_migration():
-    from alembic.config import Config
-    from alembic.script import ScriptDirectory
-    backend = Path(__file__).parents[1]
-    config = Config(str(backend / "alembic.ini"))
-    config.set_main_option("script_location", str(backend / "migrations"))
-    scripts = ScriptDirectory.from_config(config)
-    assert len(scripts.get_heads()) == 1
-    assert "d2e7f9a103b4" in {revision.revision for revision in scripts.walk_revisions()}
-    assert scripts.get_revision("d2e7f9a103b4").down_revision == "b6d4e8f103a2"
-    assert scripts.get_revision("b6d4e8f103a2").down_revision == "a1c7e9b204d6"
-
-
-def test_postgresql_migration_columns_use_json_and_not_null_default_zero(monkeypatch):
-    from sqlalchemy.dialects import postgresql
-    from sqlalchemy.schema import CreateColumn
-    module = _migration_module()
-    added = []
-    monkeypatch.setattr(module.sa, "inspect", lambda _: SimpleNamespace(get_columns=lambda _: []))
-    monkeypatch.setattr(module, "op", SimpleNamespace(
-        get_context=lambda: SimpleNamespace(as_sql=False),
-        get_bind=lambda: object(),
-        add_column=lambda table, column: added.append((table, column)),
-    ))
-    module.upgrade()
-    assert [table for table, _ in added] == ["users", "users"]
-    statements = [str(CreateColumn(column).compile(dialect=postgresql.dialect())) for _, column in added]
-    assert statements[0] == "permission_overrides JSON"
-    assert "permission_version INTEGER" in statements[1]
-    assert "DEFAULT '0'" in statements[1] and "NOT NULL" in statements[1]
-
-
-def test_frozen_legacy_postgres_policy_columns_keep_inheritance_defaults():
-    from migrations.v243_schema import metadata
-    users = metadata.tables['users']
-    assert users.c.permission_overrides.nullable
-    assert users.c.permission_overrides.server_default is None
-    assert not users.c.permission_version.nullable
-    assert str(users.c.permission_version.server_default.arg) == '0'
 
 
 @pytest.mark.parametrize("path,method,expected", [

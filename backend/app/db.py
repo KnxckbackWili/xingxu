@@ -56,26 +56,6 @@ def get_db():
         db.close()
 
 
-def _normalize_legacy_vehicle_types(db):
-    """HYPE-63：历史遗留车型字符串归一化（SQLite 与 PG 都走这条）。
-
-    custom / 自定义 曾分别代表「其他/定制」，迁移为字典规范名「其他/定制」；
-    其余字典外历史值原样保留（现场仍可显示与编辑），不丢数据。
-    """
-    from sqlalchemy import text
-    db.execute(text(
-        "UPDATE vehicles SET vehicle_type = '其他/定制' "
-        "WHERE vehicle_type IN ('custom', '自定义')"
-    ))
-    from app.models import Task as _VehicleTask
-    _legacy_map = {"custom": "其他/定制", "自定义": "其他/定制"}
-    for _vtask in db.query(_VehicleTask).filter(_VehicleTask.applicable_vehicle_types.isnot(None)).all():
-        _vtypes = _vtask.applicable_vehicle_types or []
-        _new = [_legacy_map.get(v, v) for v in _vtypes]
-        if _new != _vtypes:
-            _vtask.applicable_vehicle_types = _new
-
-
 def _backup_before_migrate():
     """Best-effort encrypted DB snapshot; failures remain explicit on stderr.
 
@@ -151,17 +131,108 @@ def _backup_before_migrate():
         print(f"[db] 迁移前备份跳过（{type(error).__name__}: {error}）", file=sys.stderr, flush=True)
 
 
-def _alembic_sync_schema():
-    """Apply the complete Alembic chain; adoption of unversioned databases is versioned."""
-    from alembic import command
+def _alembic_config():
     from alembic.config import Config
     from app.config import BASE_DIR
 
     cfg = Config(str(BASE_DIR / "alembic.ini"))
     cfg.set_main_option("script_location", str(BASE_DIR / "migrations"))
+    return cfg
+
+
+def _alembic_sync_schema():
+    """Create or upgrade the schema from the baseline revision."""
+    from alembic import command
+
+    cfg = _alembic_config()
     with engine.connect() as connection:
         cfg.attributes["connection"] = connection
         command.upgrade(cfg, "head")
+
+
+def old_database_revision():
+    """The revision of a database from before the current baseline, or None when it can be upgraded.
+
+    An empty database, or one already on a known revision, is not old. Tables without a
+    version, or a version the scripts do not know, are old.
+    """
+    from alembic.script import ScriptDirectory
+    from sqlalchemy import inspect
+
+    with engine.connect() as connection:
+        tables = set(inspect(connection).get_table_names()) - {"sqlite_sequence"}
+        if not tables - {"alembic_version"}:
+            return None
+        if "alembic_version" not in tables:
+            return "无版本"
+        versions = {row[0] for row in connection.exec_driver_sql("SELECT version_num FROM alembic_version")}
+    known = {script.revision for script in ScriptDirectory.from_config(_alembic_config()).walk_revisions()}
+    if versions and versions <= known:
+        return None
+    return "、".join(sorted(versions)) or "无版本"
+
+
+# Data that belongs to the database rows; it moves aside with an old database.
+_ROW_DATA_DIRS = ("uploads", "migration-exports", "project-deletion-backups")
+
+
+def _set_aside_old_database():
+    """Move a database from before the baseline (and its files) aside, untouched, so the app starts empty.
+
+    SQLite: the file goes to DATA_DIR/old-<time>/. PostgreSQL: every object of the schema
+    moves to a schema old_<time>. Uploaded files of those rows go to DATA_DIR/old-<time>/.
+    Nothing is deleted; backups, keys and update records stay where they are.
+    """
+    import shutil
+    import sys
+    import time
+    from pathlib import Path
+    from app.config import DATA_DIR
+
+    revision = old_database_revision()
+    if revision is None:
+        return None
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    folder = DATA_DIR / f"old-{stamp}"
+    folder.mkdir(parents=True, exist_ok=False)
+    if _is_sqlite:
+        engine.dispose()
+        database = Path(engine.url.database)
+        for suffix in ("", "-wal", "-shm", "-journal"):
+            source = Path(str(database) + suffix)
+            if source.exists():
+                shutil.move(str(source), str(folder / source.name))
+        place = str(folder / database.name)
+    else:
+        schema = "old_" + stamp.replace("-", "_")
+        with engine.begin() as connection:
+            connection.exec_driver_sql(f'CREATE SCHEMA "{schema}"')
+            here = "c.relnamespace = current_schema()::regnamespace"
+            kinds = {"r": "TABLE", "p": "TABLE", "f": "FOREIGN TABLE", "v": "VIEW", "m": "MATERIALIZED VIEW"}
+            for name, kind in connection.exec_driver_sql(
+                    f"SELECT c.relname, c.relkind FROM pg_class c WHERE {here} AND c.relkind IN ('r','p','f','v','m') "
+                    "AND NOT c.relispartition").all():
+                connection.exec_driver_sql(f'ALTER {kinds[kind]} "{name}" SET SCHEMA "{schema}"')
+            for (name,) in connection.exec_driver_sql(f"SELECT c.relname FROM pg_class c WHERE {here} AND c.relkind = 'S'").all():
+                connection.exec_driver_sql(f'ALTER SEQUENCE "{name}" SET SCHEMA "{schema}"')
+            for name, kind in connection.exec_driver_sql(
+                    "SELECT t.typname, t.typtype FROM pg_type t WHERE t.typnamespace = current_schema()::regnamespace "
+                    "AND t.typtype IN ('e','d') ").all():
+                connection.exec_driver_sql(f'ALTER {"DOMAIN" if kind == "d" else "TYPE"} "{name}" SET SCHEMA "{schema}"')
+            for name, arguments in connection.exec_driver_sql(
+                    "SELECT p.proname, pg_get_function_identity_arguments(p.oid) FROM pg_proc p "
+                    "WHERE p.pronamespace = current_schema()::regnamespace").all():
+                connection.exec_driver_sql(f'ALTER ROUTINE "{name}"({arguments}) SET SCHEMA "{schema}"')
+        place = f"PostgreSQL 架构 {schema}"
+    for name in _ROW_DATA_DIRS:
+        source = DATA_DIR / name
+        if source.exists() and not source.is_symlink():
+            shutil.move(str(source), str(folder / name))
+    from app.config import UPLOAD_DIR
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    print(f"[db] 发现旧版本数据库（{revision}），已原样移到 {place}，相关文件在 {folder}；系统从空库开始",
+          file=sys.stderr, flush=True)
+    return place
 
 
 # PG 多 worker（uvicorn --workers 每个 worker 各跑一次 lifespan/init_db）首启时，
@@ -194,10 +265,8 @@ def _init_db():
     """
     _backup_before_migrate()
     import app.models  # noqa: F401 - ensure models are registered
+    _set_aside_old_database()
     _alembic_sync_schema()
-    from migrations.v3_retirement import finalize_files
-    with engine.begin() as connection:
-        finalize_files(connection)
 
     # Seed default roles, admin user, and template
     from app.seed.seed_data import (seed_all, seed_template_procurements, seed_task_documents,

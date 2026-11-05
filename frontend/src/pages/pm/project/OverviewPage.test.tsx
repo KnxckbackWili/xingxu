@@ -132,14 +132,6 @@ describe('项目总览按需展开', () => {
     expect(screen.getAllByText('备注：closed/low 保留').length).toBeGreaterThan(0)
     expect(logs[0].detail).toBe('更新问题：processing 信号 → 状态 closed')
   })
-  it('unknown state keeps original value visible and offers read-only audit navigation', async () => {
-    render(<OverviewPage projectId="p1" projectStatus="legacy_unknown" canManageStatus />)
-    expect(await screen.findByText('未知历史状态（legacy_unknown）')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /查阅历史记录/ }))
-    expect(navigate).toHaveBeenCalledWith('/pm/projects/p1/activity')
-    expect(screen.queryByRole('button', { name: /调整项目状态/ })).toBeNull()
-    expect(apiPost).not.toHaveBeenCalled()
-  })
   it('uses document instance counts without making optional review a pending requirement', async () => {
     apiGet.mockResolvedValue({ data: { ...overview, document_progress: { pending: 1, submitted: 3, waived: 1, required_pending: 1, total: 5 }, tree: [{ modules: [{ tasks: [{ deliverables: [{ required: true, status: 'submitted' }] }] }] }] } })
     render(<OverviewPage projectId="p1" projectStatus="executing" />)
@@ -325,11 +317,3 @@ describe('项目总览按需展开', () => {
   })
 })
 
-it('keeps milestone controls read-only for unknown historical project states even with update authority', async () => {
-  apiGet.mockResolvedValue({ data: { ...overview, project_events: { events: [
-    { event_key: 'ship', label: '发车', actual_at: '2026-10-20T06:30:00Z', derived: false, actual_precision: 'datetime' },
-  ] } } })
-  render(<ProjectCapabilitiesContext.Provider value={['project.update']}><OverviewPage projectId="p1" projectStatus="legacy_unknown" canManageStatus /></ProjectCapabilitiesContext.Provider>)
-  expect(await screen.findByText('发车')).toBeVisible()
-  expect(screen.queryByRole('button', { name: /更正发车|清除发车/ })).not.toBeInTheDocument()
-})

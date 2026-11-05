@@ -49,13 +49,13 @@ beforeEach(() => {
   useAuth.setState({ user: { id: 'u-worker', role: 'worker', username: 'worker1', display_name: '现场1' } as any })
 })
 
-it('unknown legacy project allows historical vehicle reading and export while admin writes remain hidden', async () => {
+it('an archived project allows vehicle reading and export while writes stay hidden', async () => {
   useAuth.setState({ user: { id: 'u-pm', role: 'admin', username: 'admin', display_name: '管理员' } as any })
   const unit = { id: 'unit-1', asset_code: 'AGV-001', current_status: 'attention', events: [
     { id: 'event-1', title: '历史故障原始记录', event_type: 'fault', event_date: '2026-09-30', operator_id: 'u-pm', is_closed: false },
   ] }
   apiGet.mockImplementation((url: string) => Promise.resolve({ data: url.endsWith('/vehicle-units/unit-1') ? unit : url.endsWith('/vehicle-units') ? [unit] : [] }))
-  render(<VehicleLifecyclePage project={{ ...PROJECT, status: 'legacy_unknown', capabilities: ['project.update', 'project.manage_plan', 'project.manage_issues', 'project.manage_schedule', 'project.export'] } as any} />)
+  render(<VehicleLifecyclePage project={{ ...PROJECT, status: 'archived', capabilities: ['project.update', 'project.manage_plan', 'project.manage_issues', 'project.manage_schedule', 'project.export'] } as any} />)
   fireEvent.click(await screen.findByRole('button', { name: /车辆记录/ }))
   expect(await screen.findByText('历史故障原始记录')).toBeInTheDocument()
   expect(screen.getByText('资料面板 unit-1')).toBeInTheDocument()

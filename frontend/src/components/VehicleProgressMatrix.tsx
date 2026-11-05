@@ -1,6 +1,6 @@
 import VehicleChecksPanel from './VehicleChecksPanel'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Alert, Button, Checkbox, DatePicker, Empty, Input, InputNumber, Modal, Segmented, Select, Space, Table, Tag } from 'antd'
+import { Alert, Button, Checkbox, DatePicker, Empty, Input, Modal, Segmented, Select, Space, Table, Tag } from 'antd'
 import { CheckOutlined, FileSearchOutlined, SearchOutlined } from '@ant-design/icons'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { IconAction } from './IconAction'
@@ -9,9 +9,9 @@ import dayjs from 'dayjs'
 import { api, errMsg } from '../api/client'
 import { RefreshAction } from './IconAction'
 
-type Cell = { version: number; is_done: boolean; done_on: string | null; migrated: boolean; recorded_at: string; done_by: string; note: string }
+type Cell = { version: number; is_done: boolean; done_on: string | null; recorded_at: string; done_by: string; note: string }
 type Unit = { id: string; asset_code: string; fleet_no: string; vehicle_type: string; model_name: string; cells: Record<string, Cell> }
-type Matrix = { source_snapshot_available?: boolean; today?: string; steps: { key: string; name: string; source_task_id: string | null; expected_quantity: number | null }[]; units: Unit[]; can_record?: boolean; can_manage?: boolean; legacy: { step_key: string; unassigned_count: number; source_metadata: Record<string, unknown> }[]; summary: { completed: number; target: number; percent: number | null; quantity_unknown: boolean; unregistered_quantity: number }; migration_warnings: string[] }
+type Matrix = { source_snapshot_available?: boolean; today?: string; steps: { key: string; name: string }[]; units: Unit[]; can_record?: boolean; can_manage?: boolean; summary: { completed: number; target: number; percent: number | null; quantity_unknown: boolean; unregistered_quantity: number }; migration_warnings: string[] }
 
 function matrixError(error: unknown) {
   const detail = (error as { response?: { data?: { detail?: { message?: string; blockers?: { name: string; reason: string; vehicle_unit_id: string; vehicle_label?: string }[] } } } }).response?.data?.detail
@@ -47,8 +47,7 @@ export default function VehicleProgressMatrix({ projectId, status, onChanged, in
   const [vehicleType, setVehicleType] = useState<string>()
   const [selected, setSelected] = useState<React.Key[]>([])
   const [step, setStep] = useState<string>()
-  const [editing, setEditing] = useState<{ cells: { vehicle_unit_id: string; step_key: string; version: number }[]; is_done: boolean; claim_migrated: boolean } | null>(null)
-  const [targetEdit, setTargetEdit] = useState<{ key: string; previous: number | null; quantity: number | null } | null>(null)
+  const [editing, setEditing] = useState<{ cells: { vehicle_unit_id: string; step_key: string; version: number }[]; is_done: boolean } | null>(null)
   const [date, setDate] = useState(dayjs())
   const [reason, setReason] = useState('')
   const [saving, setSaving] = useState(false)
@@ -66,7 +65,7 @@ export default function VehicleProgressMatrix({ projectId, status, onChanged, in
     } catch (e) { if (generation.current === id) { setError(matrixError(e)); setData(null) } }
     finally { if (generation.current === id) setLoading(false) }
   }
-  useEffect(() => { setData(null); setChecking(null); setSelected([]); setVehicleType(undefined); setEditing(null); setTargetEdit(null); setSource(undefined); setReadingSource(false); void load(); return () => { generation.current++ } }, [projectId])
+  useEffect(() => { setData(null); setChecking(null); setSelected([]); setVehicleType(undefined); setEditing(null); setSource(undefined); setReadingSource(false); void load(); return () => { generation.current++ } }, [projectId])
   const seenReload = useRef(reloadKey)
   useEffect(() => { if (seenReload.current === reloadKey) return; seenReload.current = reloadKey; void load() }, [reloadKey])
   const readSource = async () => {
@@ -83,28 +82,17 @@ export default function VehicleProgressMatrix({ projectId, status, onChanged, in
   const rows = (data?.units ?? []).filter(u => (!vehicleType || u.vehicle_type === vehicleType) && (!attention || needsAttention(u.id))
     && (!term || [u.asset_code, u.fleet_no, u.model_name, infoOf(u.id)?.location, infoOf(u.id)?.serial_number].some(value => (value ?? '').toLowerCase().includes(term))))
   const stepDone = (key: string) => (data?.units ?? []).filter(u => u.cells[key]?.is_done).length
-  const open = (units: Unit[], key: string, isDone: boolean, claim = false) => {
+  const open = (units: Unit[], key: string, isDone: boolean) => {
     if (!canRecord || lock.current) return
     setReason(''); setDate(dayjs(data?.today)); setError('')
-    setEditing({ cells: units.map(u => ({ vehicle_unit_id: u.id, step_key: key, version: u.cells[key]?.version ?? 0 })), is_done: isDone, claim_migrated: claim })
-  }
-  const saveTarget = async () => {
-    if (!targetEdit || targetEdit.quantity == null || !reason.trim() || lock.current) return
-    const id = projectId; const gen = generation.current
-    lock.current = true; setSaving(true)
-    try {
-      await api.put(`/projects/${id}/vehicle-progress/steps/${encodeURIComponent(targetEdit.key)}`, { expected_quantity: targetEdit.quantity, previous_quantity: targetEdit.previous, reason })
-      if (active.current !== id || generation.current !== gen) return
-      setTargetEdit(null); await load(); onChanged?.()
-    } catch (e) { if (active.current === id && generation.current === gen) setError(matrixError(e)) }
-    finally { lock.current = false; setSaving(false) }
+    setEditing({ cells: units.map(u => ({ vehicle_unit_id: u.id, step_key: key, version: u.cells[key]?.version ?? 0 })), is_done: isDone })
   }
   const save = async () => {
     if (!editing || lock.current || (!editing.is_done && !reason.trim())) return
     const id = projectId; const gen = generation.current
     lock.current = true; setSaving(true)
     try {
-      await api.put(`/projects/${id}/vehicle-progress`, { ...editing, done_on: editing.claim_migrated || !editing.is_done ? null : date.format('YYYY-MM-DD'), reason })
+      await api.put(`/projects/${id}/vehicle-progress`, { ...editing, done_on: !editing.is_done ? null : date.format('YYYY-MM-DD'), reason })
       if (active.current !== id || generation.current !== gen) return
       setEditing(null); setSelected([]); await load(); onChanged?.()
     } catch (e) { if (active.current === id && generation.current === gen) setError(matrixError(e)) }
@@ -138,13 +126,11 @@ export default function VehicleProgressMatrix({ projectId, status, onChanged, in
       </div>
       {data.source_snapshot_available && <Alert type="info" message="便携导入来源仅供核对，不计入本项目完成资格" action={<Button loading={readingSource} onClick={() => void readSource()}>查阅原始来源</Button>} />}
       {notice}
-      {(data.migration_warnings ?? []).length > 0 && (!notice || data.legacy.length > 0) && <Alert type="warning" showIcon message={data.migration_warnings.join('；')} description={data.legacy.length > 0 ? '未知数量与未知车号分别保留；历史完成凭证计入数量，但不代表已逐台核验。' : undefined} />}
-      {data.legacy.filter(c => c.unassigned_count > 0 || data.steps.find(s => s.key === c.step_key)?.expected_quantity == null).map(c => <details key={c.step_key} style={{ margin: '8px 0' }}><summary><Tag color="orange">已完成（迁移，车号未知）</Tag>{data.steps.find(s => s.key === c.step_key)?.name} · {c.unassigned_count} 台待核对</summary><p>原目标：{String(c.source_metadata.target_quantity ?? '未知')} 台；原累计：{String(c.source_metadata.completed_quantity ?? '未知')} 台。迁移凭证：{c.unassigned_count} 台未核对；实际完成日期未知。</p>{data.can_manage && ['executing', 'acceptance'].includes(status) && <Button onClick={() => { const old = data.steps.find(s => s.key === c.step_key)?.expected_quantity ?? null; setReason(''); setTargetEdit({ key: c.step_key, previous: old, quantity: old }) }}>核对应完成台数</Button>}</details>)}
+      {(data.migration_warnings ?? []).length > 0 && !notice && <Alert type="warning" showIcon message={data.migration_warnings.join('；')} />}
       {/* Batch tools appear once vehicles are ticked; tapping a step is enough for one-by-one work. */}
       {canRecord && selected.length > 0 && <Space wrap className="vboard-batch"><span>已选 {selected.length} 台</span><Select aria-label="批量车辆环节" placeholder="选择环节" value={step} onChange={setStep} options={data.steps.map(s => ({ value: s.key, label: s.name }))} style={{ minWidth: 170 }} />
         <Button disabled={!selected.length || !step || saving} onClick={() => open(rows.filter(u => selected.includes(u.id)), step!, true)}>批量勾选</Button>
         <Button disabled={!selected.length || !step || saving} onClick={() => open(rows.filter(u => selected.includes(u.id)), step!, false)}>批量取消</Button>
-        {data.legacy.some(c => c.unassigned_count > 0) && <Button disabled={!selected.length || !step || saving || !data.legacy.some(c => c.step_key === step && c.unassigned_count > 0)} onClick={() => open(rows.filter(u => selected.includes(u.id)), step!, true, true)}>补录迁移车号</Button>}
         <Button type="link" onClick={() => setSelected([])}>取消选择</Button>
       </Space>}
       {!data.units.length ? <Empty description={emptyHint ?? '尚无真实车辆档案，请先添加车辆并填写实际编号'} />
@@ -169,16 +155,10 @@ export default function VehicleProgressMatrix({ projectId, status, onChanged, in
     <Modal title="原始来源记录（只读，未核验）" open={source !== undefined} onCancel={() => setSource(undefined)} footer={<Button onClick={() => setSource(undefined)}>关闭</Button>} width={800}>
       <p>原字段、日期、车号和操作者保留用于核对；本项目完成、检查和验收须重新登记。</p><pre style={{ whiteSpace: 'pre-wrap', maxHeight: '60vh', overflow: 'auto' }}>{JSON.stringify(source, null, 2)}</pre>
     </Modal>
-    <Modal title="核对历史环节应完成台数" open={!!targetEdit} okText="确认" cancelText="取消" confirmLoading={saving} okButtonProps={{ disabled: targetEdit?.quantity == null || !reason.trim() }} onCancel={() => { if (!lock.current) setTargetEdit(null) }} onOk={() => void saveTarget()}>
-      <p>保留原始目标和完成数量，仅补充本项目矩阵的应完成台数。不能少于已有完成凭证。</p>
-      <InputNumber aria-label="历史环节应完成台数" min={0} max={100000} precision={0} value={targetEdit?.quantity} disabled={saving} onChange={v => setTargetEdit(old => old ? { ...old, quantity: v } : old)} />
-      <Input.TextArea aria-label="核对台数理由" value={reason} disabled={saving} onChange={e => setReason(e.target.value)} placeholder="核对依据与理由（必填）" maxLength={1000} />
-    </Modal>
-    <Modal title={editing?.claim_migrated ? '核对迁移凭证并补录车号' : editing?.is_done ? '登记完成' : '取消完成'} open={!!editing} okText="确认" cancelText="取消" confirmLoading={saving} okButtonProps={{ disabled: !editing?.is_done && !reason.trim() }} cancelButtonProps={{ disabled: saving }} onCancel={() => { if (!lock.current) setEditing(null) }} onOk={() => void save()} destroyOnClose>
+    <Modal title={editing?.is_done ? '登记完成' : '取消完成'} open={!!editing} okText="确认" cancelText="取消" confirmLoading={saving} okButtonProps={{ disabled: !editing?.is_done && !reason.trim() }} cancelButtonProps={{ disabled: saving }} onCancel={() => { if (!lock.current) setEditing(null) }} onOk={() => void save()} destroyOnClose>
       <p>{editing && editing.cells.length > 1 ? `${editing.cells.length} 台车一起登记；全部成功或全部保持原状。` : editing ? `${data?.units.find(u => u.id === editing.cells[0].vehicle_unit_id)?.asset_code ?? ''} · ${data?.steps.find(s => s.key === editing.cells[0].step_key)?.name ?? ''}` : ''}</p>
       {editing?.cells.length === 1 && <Button type="link" size="small" style={{ paddingInline: 0 }} onClick={() => { const cell = editing.cells[0]; const unit = data?.units.find(u => u.id === cell.vehicle_unit_id); if (unit) { setEditing(null); setChecking({ unit, key: cell.step_key }) } }}>查看这一步的检查要求</Button>}
-      {editing?.is_done && !editing.claim_migrated && <DatePicker aria-label="实际完成日期" disabledDate={value => value.format('YYYY-MM-DD') > (data?.today ?? dayjs().format('YYYY-MM-DD'))} value={date} allowClear={false} onChange={v => { if (v) setDate(v) }} />}
-      {editing?.claim_migrated && <Alert type="info" message="仅转移已有完成凭证，完成总数不增加；历史实际日期未知，保留未知。" />}
+      {editing?.is_done && <DatePicker aria-label="实际完成日期" disabledDate={value => value.format('YYYY-MM-DD') > (data?.today ?? dayjs().format('YYYY-MM-DD'))} value={date} allowClear={false} onChange={v => { if (v) setDate(v) }} />}
       {!editing?.is_done && <Input.TextArea aria-label="取消完成理由" placeholder="取消理由（必填，保留审计）" value={reason} onChange={e => setReason(e.target.value)} maxLength={1000} />}
     </Modal>
   </section>

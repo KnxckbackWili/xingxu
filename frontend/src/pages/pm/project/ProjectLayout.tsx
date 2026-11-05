@@ -1,14 +1,13 @@
-import LegacyLifecycleRepair from './LegacyLifecycleRepair'
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
-import { Typography, Button, Tag, Space, message, Spin, Result, Descriptions, Drawer, Alert } from 'antd'
+import { Typography, Button, Tag, Space, message, Spin, Result, Descriptions, Drawer } from 'antd'
 import { ArrowLeftOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { projectApi, type Project } from '../../../api'
 import { errMsg } from '../../../api/client'
 import { useAuth } from '../../../stores/auth'
 import { hasSystemPermission } from '../../../constants/systemPermissions'
-import { STATUS_LABEL, isProjectStatus, projectStatusMeta } from '../../../constants/status'
+import { STATUS_LABEL, projectStatusMeta } from '../../../constants/status'
 import Tabs from '../../../components/VisibleTabs'
 import { childSegment, resolveProjectNav } from '../../../constants/projectNav'
 import { ProjectMenuContent } from './ProjectMenu'
@@ -190,7 +189,6 @@ export default function ProjectLayout() {
   }
 
   const st = projectStatusMeta(project.status)
-  const unknownStatus = !isProjectStatus(project.status) || !!project.legacy_lifecycle?.requires_repair
   const daysLeft = dayjs(project.end_date).diff(dayjs(), 'day')
   const legacyEditSettings = user?.role === 'admin' || (['pm', 'lead'].includes(user?.role ?? '') && project.manager === user?.id) || !!project.is_co_manager
   const legacyManageInventory = legacyEditSettings || (project.technical_manager === user?.id && ['lead', 'technician'].includes(user?.role ?? ''))
@@ -198,11 +196,11 @@ export default function ProjectLayout() {
     || (project.manager === user?.id && ['pm', 'lead'].includes(user?.role ?? ''))
     || (project.technical_manager === user?.id && ['lead', 'technician', 'pm', 'worker'].includes(user?.role ?? ''))
   const can = (capability: string, fallback = false) => user?.permission_overrides?.[capability] !== false && hasProjectCapability(effectiveCapabilities, capability, fallback)
-  const canEditSettings = !unknownStatus && can('project.update', legacyEditSettings)
-  const canManageInventory = !unknownStatus && project.status !== 'archived' && can('project.manage_inventory', legacyManageInventory)
-  const canManageIssues = !unknownStatus && can('project.manage_issues', legacyManageIssues)
+  const canEditSettings = can('project.update', legacyEditSettings)
+  const canManageInventory = project.status !== 'archived' && can('project.manage_inventory', legacyManageInventory)
+  const canManageIssues = can('project.manage_issues', legacyManageIssues)
   const canReadAudit = hasSystemPermission(user, 'system.audit.read')
-  const canManageStatus = !unknownStatus && ((user?.role === 'director' && can('project.archive', true)) || can('project.update', legacyEditSettings))
+  const canManageStatus = ((user?.role === 'director' && can('project.archive', true)) || can('project.update', legacyEditSettings))
   if (activeTab === 'activity' && (activeChild ?? 'history') === 'history' && !canReadAudit) return <ForbiddenPage />
   if (specialView === 'export' && !can('project.export', !['worker', 'intern'].includes(user?.role ?? ''))) return <ForbiddenPage />
 
@@ -219,7 +217,7 @@ export default function ProjectLayout() {
   }
 
   return (
-    <ProjectArchivedContext.Provider value={unknownStatus || project.status === 'archived'}>
+    <ProjectArchivedContext.Provider value={project.status === 'archived'}>
     <ProjectStatusContext.Provider value={project.status}>
     <ProjectCapabilitiesContext.Provider value={effectiveCapabilities}>
     <div className="project-workspace project-tree-workspace" ref={workspaceRef}>
@@ -233,14 +231,8 @@ export default function ProjectLayout() {
           <span className="project-context-summary" title={[project.client, project.location].filter(Boolean).join(' · ') || project.manager_name}>{[project.client, project.location].filter(Boolean).join(' · ') || '客户与地点待补充'}{project.manager_name ? ` · 负责人 ${project.manager_name}` : ''} · 计划至 {project.end_date}</span>
           <Button className="project-info-trigger" type="link" size="small" onClick={() => setInfoOpen(true)}>项目信息</Button>
         </div>
-        {!unknownStatus && <ProjectStageBar status={project.status} statusBefore={project.suspension?.status_before ?? null} />}
+        <ProjectStageBar status={project.status} statusBefore={project.suspension?.status_before ?? null} />
       </div>
-      {project.legacy_lifecycle?.requires_repair && (activeTab === 'overview'
-        ? <LegacyLifecycleRepair project={project} onChanged={load} />
-        : <Alert type="warning" showIcon message="历史状态需明确核对，当前只读" action={<Button onClick={() => navigateSafely(`/pm/projects/${project.id}/overview`)}>前往概况核对历史状态</Button>} />)}
-      {unknownStatus && !project.legacy_lifecycle?.requires_repair && <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="项目存在未知历史状态，当前只读"
-        description={`原始状态：${project.status || '空值'}。查阅与导出仍可使用；请管理员根据备份或审计记录核对后修复。`}
-        action={canReadAudit ? <Button onClick={() => navigateSafely(`/pm/projects/${project.id}/history`)}>查看操作记录</Button> : undefined} />}
       <Drawer title="项目信息" open={infoOpen} onClose={() => setInfoOpen(false)} width="min(400px, calc(100vw - 16px))">
         <Descriptions column={1} items={[
           { key: 'name', label: '项目名称', children: project.name },

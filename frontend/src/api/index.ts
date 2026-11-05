@@ -146,13 +146,11 @@ export interface Project {
   client: string
   location: string
   timezone?: string
-  planned_entry_date?: string | null // historical, read only for one version
   dispatch_platform?: 'NDC' | 'GRACE' | 'integrated' | null
   events?: ProjectEvent[]
   start_date: string
   end_date: string
   status: string
-  legacy_lifecycle?: { original_status?: string | null; requires_repair?: boolean; repair_reason?: string }
   suspension?: Record<string, any>
   retrospective?: { content?: string; success?: string; problems?: string; improvements?: string; written_at?: string; author?: string; author_name?: string }
   description: string

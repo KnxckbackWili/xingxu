@@ -169,24 +169,9 @@ it('explains PM restoration for a completed project without changing its state',
   expect(api.put).not.toHaveBeenCalled()
 })
 
-it.each(['open', 'resolved'])('keeps an unknown-state project issue readable without %s writes', async status => {
-  vi.mocked(api.get).mockImplementation(async url => ({ data: url === '/projects'
-    ? [{ id: 'p-unknown', name: '历史项目', status: 'legacy_unknown' }]
-    : { items: [{ id: 'i-unknown', title: '历史问题', status, severity: 'medium', reporter_id: 'worker', assignee_id: 'worker', project_status: 'legacy_unknown', project_name: '历史项目', resolution: '历史处理说明' }] } }) as any)
-  render(<WorkerIssuesPage />, '/worker/issues?issue_id=i-unknown')
-  expect(await screen.findByText('项目存在未知历史状态，当前只读')).toBeInTheDocument()
-  expect(screen.getByText(/原始状态：legacy_unknown/)).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: /上报问题/ })).toBeDisabled()
-  expect(screen.queryByRole('button', { name: '开始处理' })).not.toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: '提交处理结果' })).not.toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: '重新打开' })).not.toBeInTheDocument()
-  expect(api.post).not.toHaveBeenCalled()
-  expect(api.put).not.toHaveBeenCalled()
-})
-
 it('prefills the writable project rather than a read-only project when reporting', async () => {
   vi.mocked(api.get).mockImplementation(async url => ({ data: url === '/projects'
-    ? [{ id: 'p-unknown', name: '历史项目', status: 'legacy_unknown' }, { id: 'p1', name: '现场项目', status: 'executing' }]
+    ? [{ id: 'p-unknown', name: '历史项目', status: 'archived' }, { id: 'p1', name: '现场项目', status: 'executing' }]
     : { items: [] } }) as any)
   vi.mocked(api.post).mockResolvedValue({ data: { id: 'new' } })
   render(<WorkerIssuesPage />)
@@ -198,7 +183,7 @@ it('prefills the writable project rather than a read-only project when reporting
 
 it('explains why a read-only project cannot receive a new issue when its history is empty', async () => {
   vi.mocked(api.get).mockImplementation(async url => ({ data: url === '/projects'
-    ? [{ id: 'p-unknown', name: '历史项目', status: 'legacy_unknown' }]
+    ? [{ id: 'p-unknown', name: '历史项目', status: 'archived' }]
     : { items: [] } }) as any)
   render(<WorkerIssuesPage />)
   expect(await screen.findByText(/当前可见项目只读/)).toBeInTheDocument()

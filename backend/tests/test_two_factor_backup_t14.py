@@ -23,47 +23,6 @@ from app.models import User, MfaRecoveryCode
 from app.services import backup_crypto as codec, two_factor as mfa
 
 
-def test_migration_frozen_and_preserves_pre_enrollment_accounts(client, tmp_path, monkeypatch):
-    source = config.BASE_DIR / 'migrations/versions/g3a14b000001_two_factor_auth.py'
-    parsed = ast.parse(source.read_text())
-    assert not any(isinstance(node, ast.ImportFrom) and (node.module or '').startswith('app') for node in ast.walk(parsed))
-    url = make_url(config.DATABASE_URL)
-    pg = url.drivername.startswith('postgresql')
-    schema = 't14_schema_' + uuid4().hex
-    isolated = None
-    if pg:
-        with engine.begin() as connection: connection.execute(text(f'CREATE SCHEMA "{schema}"'))
-        isolated = create_engine(url, connect_args={'options': '-csearch_path=' + schema})
-    else:
-        url = make_url('sqlite:///' + str(tmp_path / 'pre-t14.db'))
-        isolated = create_engine(url)
-    cfg = Config(str(config.BASE_DIR / 'alembic.ini'))
-    cfg.set_main_option('script_location', str(config.BASE_DIR / 'migrations'))
-    monkeypatch.setattr(config, 'DATABASE_URL', str(url))
-    def upgrade(revision):
-        with isolated.connect() as connection:
-            cfg.attributes['connection'] = connection
-            command.upgrade(cfg, revision)
-    try:
-        upgrade('g3a21b000001')
-        with isolated.begin() as connection:
-            connection.execute(text('INSERT INTO users(id,username,password_hash,display_name,role,is_active,token_version) VALUES (:id,:name,:hash,:display,:role,:active,7)'), {'id': str(uuid4()), 'name': 'old-pm', 'hash': 'unchanged-password-hash', 'display': 'Existing PM', 'role': 'pm', 'active': True})
-            before = connection.execute(text('SELECT id,username,password_hash,display_name,role,is_active,token_version FROM users')).all()
-        upgrade('g3a14b000001')
-        upgrade('g3a14b000001')
-        # The MFA segment stays frozen; compare current metadata only after
-        # applying subsequent additive revisions as well.
-        upgrade('head')
-        with isolated.connect() as connection:
-            assert connection.execute(text('SELECT id,username,password_hash,display_name,role,is_active,token_version FROM users')).all() == before
-            assert connection.execute(text('SELECT mfa_enabled,mfa_secret_encrypted,mfa_last_step FROM users')).one() == (False, None, -1)
-            assert compare_metadata(MigrationContext.configure(connection, opts={'compare_server_default': True}), Base.metadata) == []
-    finally:
-        isolated.dispose()
-        if pg:
-            with engine.begin() as connection: connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
-
-
 @pytest.mark.parametrize('external_key', [False, True])
 def test_encrypted_full_backup_restores_totp_seed_and_one_use_code_state(client, tmp_path, monkeypatch, external_key):
     from app.db import _is_sqlite

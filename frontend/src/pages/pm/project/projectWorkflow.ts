@@ -1,4 +1,3 @@
-import { isProjectStatus } from '../../../constants/status'
 
 /** 启动清单只提供导航；状态流转仍由服务端检查准备、验收与权限。 */
 export interface WorkflowInput {
@@ -41,8 +40,7 @@ export function projectWorkflow(x: WorkflowInput) {
   const setup = x.status === 'preparing'
   const guidance = projectStageGuidance(x.status)
   let action: WorkflowAction
-  if (!isProjectStatus(x.status)) action = { title: '查阅历史记录', description: `原始状态为「${x.status || '空值'}」，请管理员根据备份和审计核对。`, path: '/activity' }
-  else if (x.status === 'preparing') {
+  if (x.status === 'preparing') {
     const next = checklist.find(item => !item.done)
     action = next ? { title: next.title, description: next.description, path: next.path }
       : { title: '确认开始现场实施', description: '系统会重新核对第4阶段必需资料和发车前资料。', path: '/documents?review=1', status: 'executing' }

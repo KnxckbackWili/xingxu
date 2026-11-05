@@ -281,7 +281,7 @@ it('归档项目不显示任何问题写入口，但保留详情与导出', asyn
 })
 it('unknown history hides issue writes, including reporter/assignee role fallbacks, without disabling export', async () => {
   useMediaQueryMock.mockReturnValue(true)
-  render(<ProjectStatusContext.Provider value="legacy_unknown"><IssuesPage projectId="p1" canManage /></ProjectStatusContext.Provider>)
+  render(<ProjectStatusContext.Provider value="archived"><IssuesPage projectId="p1" canManage /></ProjectStatusContext.Provider>)
   fireEvent.click(await screen.findByText(PROJECT_ISSUES[0].title))
   for (const name of ['上报问题', '导入质量问题反馈单', '指派', '开始处理', '重新打开', '作废']) {
     expect(screen.queryByRole('button', { name: new RegExp(name) })).toBeNull()
