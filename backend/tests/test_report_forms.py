@@ -48,12 +48,11 @@ def test_lifecycle_export(client, pm_headers):
 def _lifecycle_xlsx() -> bytes:
     wb = Workbook()
     ws = wb.active
-    ws.append(["序号", "项目名称", "车辆型号", "车辆编号", "车号", "出现过的问题", "问题描述", "解决方法", "记录人", "记录时间", "问题分类"])
-    ws.append(["1", "旧项目", "潜伏式", "77BC00180", "2",
-               "光通信接线接错\n安全激光损坏", "现象A\n现象B", "更换光通信\n更换激光",
-               "施泽辉", "2023/5/4\n2023-05-21 00:00:00", "硬件问题\n硬件问题"])
-    ws.append(["2", "旧项目", "AGVLSYP", "77BC00192", "3", "安全激光损坏",
-               "行驶中激光损坏", "更换激光", "裘辉", "2023-06-01", "硬件"])
+    ws.append(["AGV生命周期表"])
+    ws.append(["序号", "项目名称", "项目合同号", "型号", "配置号", "车辆编号", "调车时间记录", "车号", "分类", "变更内容", "记录人", "记录时间"])
+    ws.append([1, "测试项目", "", "潜伏式", "", "77BC00180", "2023.5.4", "2", "硬件问题", "光通信接线接错", "张测试", "2023.5.4"])
+    ws.append([2, "测试项目", "", "潜伏式", "", "77BC00180", "2023.5.21", "2", "硬件问题", "安全激光损坏", "张测试", "2023.5.21"])
+    ws.append([3, "测试项目", "", "AGVLSYP", "", "77BC00192", "2023.6.1", "3", "硬件", "安全激光损坏", "李测试", "2023.6.1"])
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
@@ -66,7 +65,7 @@ def test_lifecycle_import(client, pm_headers):
                     files={"file": ("生命周期表.xlsx", _lifecycle_xlsx(),
                                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")})
     assert r.status_code == 200, r.text
-    assert r.json()["events"] == 3  # 第一行两行拆分 + 第二行一条
+    assert r.json()["events"] == 3
 
     units = client.get(f"/api/projects/{pid}/vehicle-units", headers=pm_headers).json()
     assert len(units) == 2
@@ -74,10 +73,10 @@ def test_lifecycle_import(client, pm_headers):
     assert unit1["fleet_no"] == "2"
     detail = client.get(f"/api/projects/{pid}/vehicle-units/{unit1['id']}", headers=pm_headers).json()
     assert len(detail["events"]) == 2
-    # 按 event_date 倒序：2023-05-21（现象B）在前，2023-05-04（现象A）在后
+    # 按 event_date 倒序：2023-05-21 在前，2023-05-04 在后
     assert detail["events"][0]["extra"]["category"] == "硬件问题"
-    assert detail["events"][0]["description"] == "现象B"
-    assert detail["events"][1]["description"] == "现象A"
+    assert detail["events"][0]["title"] == "安全激光损坏"
+    assert detail["events"][1]["title"] == "光通信接线接错"
 
 
 def test_lifecycle_import_idempotent_matching_unit(client, pm_headers):
@@ -174,12 +173,12 @@ def test_lifecycle_browser_record_export_reimport_preserves_resolution(client, p
 
 
 def test_lifecycle_import_bad_date_400(client, pm_headers):
-    """无法解析的记录时间明确报错，不再静默用当天日期。"""
+    """无法解析的日期明确报错，不再静默用当天日期。"""
     pid = _project(client, pm_headers)
     wb = Workbook()
     ws = wb.active
-    ws.append(["序号", "项目名称", "车辆型号", "车辆编号", "车号", "出现过的问题", "问题描述", "解决方法", "记录人", "记录时间", "问题分类"])
-    ws.append(["1", "旧项目", "AGVLSYP", "77BC00180", "2", "光通信接线接错", "现象A", "更换光通信", "施泽辉", "？？？", "硬件"])
+    ws.append(["序号", "项目名称", "项目合同号", "型号", "配置号", "车辆编号", "调车时间记录", "车号", "分类", "变更内容", "记录人", "记录时间"])
+    ws.append([1, "测试项目", "", "AGVLSYP", "", "77BC00180", "？？？", "2", "硬件", "光通信接线接错", "张测试", "？？？"])
     buf = io.BytesIO()
     wb.save(buf)
     r = client.post(f"/api/projects/{pid}/import/lifecycle", headers=pm_headers,
@@ -190,8 +189,8 @@ def test_lifecycle_import_bad_date_400(client, pm_headers):
     # 记录时间留空同样报错
     wb2 = Workbook()
     ws2 = wb2.active
-    ws2.append(["序号", "项目名称", "车辆型号", "车辆编号", "车号", "出现过的问题", "问题描述", "解决方法", "记录人", "记录时间", "问题分类"])
-    ws2.append(["1", "旧项目", "AGVLSYP", "77BC00180", "2", "光通信接线接错", "现象A", "更换光通信", "施泽辉", "", "硬件"])
+    ws2.append(["序号", "项目名称", "项目合同号", "型号", "配置号", "车辆编号", "调车时间记录", "车号", "分类", "变更内容", "记录人", "记录时间"])
+    ws2.append([1, "测试项目", "", "AGVLSYP", "", "77BC00180", "", "2", "硬件", "光通信接线接错", "张测试", ""])
     buf2 = io.BytesIO()
     wb2.save(buf2)
     r2 = client.post(f"/api/projects/{pid}/import/lifecycle", headers=pm_headers,
@@ -218,23 +217,12 @@ def test_lifecycle_import_unmatched_model_name_displayed(client, pm_headers):
     assert unit2["model_name"] == "AGVLSYP"        # 另一台未匹配档案同样持久化展示
 
 
-def _quality_form_xlsx() -> bytes:
-    wb = Workbook()
-    ws = wb.active
-    ws.merge_cells("A1:H3")
-    ws["A1"] = "产品质量问题反馈单据"
-    ws["A4"] = "问题类型 Type"; ws["C4"] = "项目 Project"; ws["G4"] = "反馈人 Name"
-    ws["A5"] = "硬件"; ws["C5"] = "天津环晟"; ws["G5"] = "张测试"
-    ws["A8"] = "车型 Model"; ws["D8"] = "车辆编号 No."; ws["G8"] = "问题来源 From"
-    ws["A9"] = "AGVLSYP"; ws["D9"] = "77BC00255"; ws["G9"] = "项目现场"
-    ws["A12"] = "问题部件 Parts"; ws["G12"] = "提交日期 Date"
-    ws["A13"] = "伺服电机编码器"; ws["G13"] = "2024-05-08"
-    ws["A16"] = "问题简述（或现象）Description"
-    ws["A17"] = "行驶时一侧突然断连，另一侧轮子锁死，按急停无效"
-    buf = io.BytesIO()
-    wb.save(buf)
-    buf.seek(0)
-    return buf.getvalue()
+def _quality_form_xlsx(feedback_date="2024-05-08") -> bytes:
+    """A filled company A02 quality feedback form."""
+    from app.services.report_forms import build_quality_form
+    return build_quality_form({"issue_type": "硬件", "project": "测试客户项目", "feedback_date": feedback_date, "reporter": "张测试",
+                               "model": "AGVLSYP", "vehicle_no": "77BC00255", "source": "项目现场", "part": "伺服电机编码器",
+                               "description": "行驶时一侧突然断连，另一侧轮子锁死，按急停无效"})
 
 
 def test_quality_form_import(client, pm_headers):
@@ -361,55 +349,29 @@ def test_quality_form_import_invalid_layout_400(client, pm_headers):
                     files={"file": ("错版.xlsx", buf.getvalue(),
                                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")})
     assert r.status_code == 400, r.text
-    assert "版式" in r.json()["detail"]
+    assert "A02" in r.json()["detail"]
 
 
 def test_quality_form_import_bad_date_400(client, pm_headers):
     """质量问题反馈单提交日期无法解析时明确报错。"""
     pid = _project(client, pm_headers)
-    wb = Workbook()
-    ws = wb.active
-    ws.merge_cells("A1:H3")
-    ws["A1"] = "产品质量问题反馈单据"
-    ws["A4"] = "问题类型 Type"; ws["C4"] = "项目 Project"; ws["G4"] = "反馈人 Name"
-    ws["A5"] = "硬件"; ws["C5"] = "天津环晟"; ws["G5"] = "张测试"
-    ws["A8"] = "车型 Model"; ws["D8"] = "车辆编号 No."; ws["G8"] = "问题来源 From"
-    ws["A9"] = "AGVLSYP"; ws["D9"] = "77BC00255"; ws["G9"] = "项目现场"
-    ws["A12"] = "问题部件 Parts"; ws["G12"] = "提交日期 Date"
-    ws["A13"] = "伺服电机编码器"; ws["G13"] = "上周五"
-    ws["A16"] = "问题简述（或现象）Description"
-    ws["A17"] = "行驶时一侧突然断连"
-    buf = io.BytesIO()
-    wb.save(buf)
+    buf = io.BytesIO(_quality_form_xlsx('上周五'))
     r = client.post(f"/api/projects/{pid}/import/quality-form", headers=pm_headers,
                     files={"file": ("质量问题反馈单.xlsx", buf.getvalue(),
                                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")})
     assert r.status_code == 400, r.text
-    assert "提交日期" in r.json()["detail"]
+    assert "反馈日期" in r.json()["detail"]
 
 
 def test_quality_form_import_empty_date_400(client, pm_headers):
     """质量问题反馈单提交日期留空同样明确报错，不静默入库。"""
     pid = _project(client, pm_headers)
-    wb = Workbook()
-    ws = wb.active
-    ws.merge_cells("A1:H3")
-    ws["A1"] = "产品质量问题反馈单据"
-    ws["A4"] = "问题类型 Type"; ws["C4"] = "项目 Project"; ws["G4"] = "反馈人 Name"
-    ws["A5"] = "硬件"; ws["C5"] = "天津环晟"; ws["G5"] = "张测试"
-    ws["A8"] = "车型 Model"; ws["D8"] = "车辆编号 No."; ws["G8"] = "问题来源 From"
-    ws["A9"] = "AGVLSYP"; ws["D9"] = "77BC00255"; ws["G9"] = "项目现场"
-    ws["A12"] = "问题部件 Parts"; ws["G12"] = "提交日期 Date"
-    ws["A13"] = "伺服电机编码器"; ws["G13"] = ""          # 提交日期留空
-    ws["A16"] = "问题简述（或现象）Description"
-    ws["A17"] = "行驶时一侧突然断连"
-    buf = io.BytesIO()
-    wb.save(buf)
+    buf = io.BytesIO(_quality_form_xlsx(''))
     r = client.post(f"/api/projects/{pid}/import/quality-form", headers=pm_headers,
                     files={"file": ("质量问题反馈单.xlsx", buf.getvalue(),
                                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")})
     assert r.status_code == 400, r.text
-    assert "提交日期" in r.json()["detail"]
+    assert "反馈日期" in r.json()["detail"]
     # 未入库：问题数保持为 0
     assert client.get(f"/api/projects/{pid}/issues", headers=pm_headers).json() == []
 

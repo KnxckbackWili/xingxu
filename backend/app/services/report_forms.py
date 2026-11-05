@@ -214,7 +214,7 @@ def _unmerge_values(ws):
 
 
 def lifecycle_from_excel(db: Session, project_id: str, data: bytes, operator_id: str) -> dict:
-    """导入「AGV生命周期表」到项目车辆记录（公司新版 12 列；旧版 11 列仍可导入）。
+    """导入「AGV生命周期表」（公司 12 列）到项目车辆记录。
 
     新版每行可写多台车（车辆编号用、分隔，车号用 . 分隔），每台车各记一条已完成的变更记录；
     车辆按车辆编号匹配或建档，型号对应车型，空的配置号、项目合同号顺带补上。
@@ -229,21 +229,16 @@ def lifecycle_from_excel(db: Session, project_id: str, data: bytes, operator_id:
         raise ValueError(f"Excel 解析失败：{exc}") from exc
     ws = wb.active
     _unmerge_values(ws)
-    header_row, legacy = None, False
+    header_row = None
     for idx, row in enumerate(ws.iter_rows(values_only=True), start=1):
         vals = [str(c or "").strip() for c in row[:12]]
         if "车辆编号" in vals and "变更内容" in vals:
             header_row = idx
             break
-        if "车辆编号" in vals and "车号" in vals and "出现过的问题" in vals:
-            header_row, legacy = idx, True
-            break
         if idx > 20:
             break
     if header_row is None:
         raise ValueError("未找到生命周期表表头（车辆编号/变更内容），请使用公司 AGV生命周期表 或系统导出的表格")
-    if legacy:
-        return _legacy_lifecycle_from_excel(db, p, ws, header_row, operator_id)
 
     vehicle_by_model = {}
     for v in db.query(Vehicle).filter_by(project_id=project_id).all():
@@ -320,119 +315,6 @@ def lifecycle_from_excel(db: Session, project_id: str, data: bytes, operator_id:
     return {"message": f"生命周期表导入成功：新增车辆记录 {created_events} 条（{'、'.join(notes) or '车辆均已建档'}）",
             "units": created_units, "events": created_events, "skipped": skipped_events}
 
-
-def _legacy_lifecycle_from_excel(db: Session, p, ws, header_row: int, operator_id: str) -> dict:
-    """旧版 11 列生命周期表（出现过的问题/问题描述/解决方法）。"""
-    project_id = p.id
-    rows = list(ws.iter_rows(min_row=header_row + 1, values_only=True))
-
-    vehicle_by_model = {}
-    for v in db.query(Vehicle).filter_by(project_id=project_id).all():
-        model = (v.model_name or "").strip()
-        if model and model not in vehicle_by_model:
-            vehicle_by_model[model] = v
-    unit_by_code = {u.asset_code: u for u in db.query(VehicleUnit).filter_by(project_id=project_id).all()}
-    # Manual browser records have no import_key. Match their natural identity too,
-    # otherwise exporting and reimporting a resolved issue recreates it as open.
-    existing_keys = set()
-    for event in db.query(VehicleLifecycleEvent).filter(
-            VehicleLifecycleEvent.project_id == project_id,
-            VehicleLifecycleEvent.event_type.in_(_ISSUE_TYPES)).all():
-        if event.import_key:
-            existing_keys.add(event.import_key)
-        existing_keys.add(hashlib.sha1(
-            f"{project_id}|{event.vehicle_unit_id}|{event.event_date.isoformat()}|{event.title.strip()}".encode("utf-8")
-        ).hexdigest())
-    created_units = 0
-    created_events = 0
-    skipped_events = 0
-    notes = []
-
-    for row_idx, row in enumerate(rows, start=header_row + 1):
-        if not row or len(row) < 4 or not str(row[3] or "").strip():
-            continue
-        # 列序：序号/项目名称/车辆型号/车辆编号/车号/出现过的问题/问题描述/解决方法/记录人/记录时间/问题分类
-        model_name = str(row[2] or "").strip()
-        asset_code = str(row[3] or "").strip()
-        fleet_no = str(row[4] or "").strip()
-        if not asset_code:
-            continue
-
-        unit = unit_by_code.get(asset_code)
-        if unit is None:
-            vehicle = vehicle_by_model.get(model_name)
-            unit = VehicleUnit(
-                project_id=project_id, vehicle_id=vehicle.id if vehicle else None,
-                asset_code=asset_code, fleet_no=fleet_no, model_name=model_name,
-                current_stage="planned", current_status="normal",
-            )
-            db.add(unit)
-            db.flush()
-            unit_by_code[asset_code] = unit
-            created_units += 1
-        else:
-            # 导入的车辆型号持久化到档案：未匹配车型档案时供单车 API/列表展示；车号空时补录
-            if model_name and not unit.model_name:
-                unit.model_name = model_name
-            if fleet_no and not unit.fleet_no:
-                unit.fleet_no = fleet_no
-
-        titles = _split_multiline(row[5])
-        descriptions = _split_multiline(row[6])
-        actions = _split_multiline(row[7])
-        handlers = _split_multiline(row[8])
-        dates = _split_multiline(row[9])
-        categories = _split_multiline(row[10])
-        if not titles:
-            continue
-        # 以「出现过的问题」为准定条数：附件中部分行的分类/日期列存在多余空格段，
-        # 若按各列最大段数会造出伪事件，故统一按标题段数对齐。
-        count = len(titles)
-        for i in range(count):
-            title = titles[i] if i < len(titles) else titles[0]
-            if not title:
-                continue
-            date_text = dates[i] if i < len(dates) else None
-            event_date = _parse_loose_date(date_text)
-            if event_date is None:
-                raise ValueError(
-                    f"第 {row_idx} 行（车辆编号 {asset_code}，问题「{title}」）记录时间缺失或无法解析"
-                    f"：{str(date_text or '').strip() or '（空）'}，请填写为 2026-08-12 或 2026/8/12 格式"
-                )
-            import_key = hashlib.sha1(
-                f"{project_id}|{unit.id}|{event_date.isoformat()}|{title}".encode("utf-8")
-            ).hexdigest()
-            if import_key in existing_keys:
-                skipped_events += 1
-                continue
-            existing_keys.add(import_key)
-            db.add(VehicleLifecycleEvent(
-                vehicle_unit_id=unit.id, project_id=project_id, event_type="fault",
-                event_date=event_date,
-                title=title,
-                description=descriptions[i] if i < len(descriptions) else "",
-                action_taken=actions[i] if i < len(actions) else "",
-                handler=handlers[i] if i < len(handlers) else "",
-                extra={"category": categories[i] if i < len(categories) else "",
-                       "fleet_no": fleet_no, "model_name": model_name},
-                import_key=import_key,
-                operator_id=operator_id,
-            ))
-            created_events += 1
-
-    db.flush()
-    if created_units:
-        notes.append(f"新建车辆档案 {created_units} 台")
-    if skipped_events:
-        notes.append(f"跳过重复事件 {skipped_events} 条")
-    if not created_units and not skipped_events:
-        notes.append("按车辆编号匹配到现有档案")
-    return {
-        "message": f"生命周期表导入成功：新增现场车辆问题 {created_events} 条（{'、'.join(notes) or '无新增'}）",
-        "units": created_units,
-        "events": created_events,
-        "skipped": skipped_events,
-    }
 
 
 # ===== 质量问题反馈单 =====
@@ -683,7 +565,7 @@ def _form_cell(ws, row: int, col: int) -> str:
 
 
 def quality_form_from_excel(db: Session, project_id: str, data: bytes, operator_id: str) -> dict:
-    """导入「产品质量问题反馈单据」为一条项目问题（Issue）：公司 A02 版与系统旧版都能读。
+    """导入「产品质量问题反馈单据」（公司 A02 版）为一条项目问题（Issue）。
 
     车辆编号对应到本项目车辆时，表上的门架号、出厂日期补到这台车的档案（档案已有值时不覆盖）。
     """
@@ -697,26 +579,19 @@ def quality_form_from_excel(db: Session, project_id: str, data: bytes, operator_
     ws = wb.worksheets[0]
     cell = lambda row, col: _form_cell(ws, row, col)
     title_text = f"{cell(1, 1)} {cell(1, 3)}"
-    current = "反馈日期" in str(cell(4, 6)) and "门架" in str(cell(12, 3))
-    legacy = not current and all(label in str(cell(r, c)) for r, c, label in ((4, 1, "问题类型"), (8, 1, "车型"), (12, 1, "问题部件"), (16, 1, "问题简述")))
-    if "质量问题反馈" not in title_text or not (current or legacy):
-        raise ValueError("不是质量问题反馈单版式：首行标题/问题类型/车型/问题部件/问题简述 缺失，请使用公司反馈单或系统导出的反馈单")
-    if current:
-        fields = {"issue_type": cell(5, 1), "project_name": cell(5, 3), "feedback_date": cell(5, 6), "reporter_name": cell(5, 8),
-                  "vehicle_model": cell(9, 1), "vehicle_no": cell(9, 4), "source": cell(9, 8), "part": cell(13, 1),
-                  "frame_no": cell(13, 3), "quantity": cell(13, 6), "factory_date": cell(13, 8)}
-        number = re.search(r"No\.\s*([^\s_][^\s]*)", str(cell(1, 1)))
-        fields["form_no"] = number.group(1) if number else ""
-    else:
-        fields = {"issue_type": cell(5, 1), "project_name": cell(5, 3), "reporter_name": cell(5, 7), "vehicle_model": cell(9, 1),
-                  "vehicle_no": cell(9, 4), "source": cell(9, 7), "part": cell(13, 1), "feedback_date": cell(13, 7),
-                  "frame_no": "", "quantity": "", "factory_date": "", "form_no": ""}
+    if "质量问题反馈" not in title_text or "反馈日期" not in str(cell(4, 6)) or "门架" not in str(cell(12, 3)):
+        raise ValueError("不是公司质量问题反馈单（A02 版）：标题、反馈日期或门架号栏缺失")
+    fields = {"issue_type": cell(5, 1), "project_name": cell(5, 3), "feedback_date": cell(5, 6), "reporter_name": cell(5, 8),
+              "vehicle_model": cell(9, 1), "vehicle_no": cell(9, 4), "source": cell(9, 8), "part": cell(13, 1),
+              "frame_no": cell(13, 3), "quantity": cell(13, 6), "factory_date": cell(13, 8)}
+    number = re.search(r"No\.\s*([^\s_][^\s]*)", str(cell(1, 1)))
+    fields["form_no"] = number.group(1) if number else ""
     description = "\n".join(str(cell(row, 1)) for row in range(17, 21) if cell(row, 1) not in (None, "")).strip()
     vehicle_no, part = str(fields["vehicle_no"]), str(fields["part"])
     if not (description or part or vehicle_no):
         raise ValueError("质量问题反馈单内容为空：问题简述、问题部件与车辆编号均未填写")
     feedback = _parse_loose_date(fields["feedback_date"])
-    date_label = "反馈日期" if current else "提交日期"
+    date_label = "反馈日期"
     if not fields["feedback_date"]:
         raise ValueError(f"质量问题反馈单缺少{date_label}，请填写后再导入")
     if feedback is None:

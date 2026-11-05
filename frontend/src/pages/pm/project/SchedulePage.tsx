@@ -208,7 +208,6 @@ export default function SchedulePage({projectId,project,onProjectChange}: {proje
             {cell.permissions.edit&&allowed?<button type="button" className="weekly-plan-cell-body" disabled={busy} aria-label={`编辑${cell.task_name} ${cell.week_start} ${scopeText(cell)}`} onClick={()=>openCell(cell)}>{body}</button>
               :<div className="weekly-plan-cell-body">{body}</div>}
             {cell.kind==='vehicle'&&cell.completion.required_count!=null&&!!cell.completion.completed_count&&<small>已完成 {cell.completion.completed_count} / {cell.completion.required_count} 台</small>}
-            {cell.completion.unidentified_completed!>0&&<small>含迁移车号待核对数量 {cell.completion.unidentified_completed}</small>}
             {cell.notes&&!(draftSource(cell)&&cell.notes.startsWith('初稿：按'))&&<p>{cell.notes}</p>}
             {!draftSource(cell)&&cell.source_metadata&&<details><summary>历史计划来源（只读）</summary><pre>{JSON.stringify(cell.source_metadata,null,2)}</pre></details>}
           </article>})}{allowed&&<button type="button" className="weekly-plan-add" disabled={busy} aria-label={`安排${item.name} ${week.week_start}`} onClick={()=>openNew(item,week.week_start)}><PlusOutlined aria-hidden/></button>}</td>

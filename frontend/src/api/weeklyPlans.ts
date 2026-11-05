@@ -8,7 +8,7 @@ export type PlanCell = PlanInput & {
   id: string; project_id: string; scope_key?: string; task_name: string; kind: 'vehicle' | 'other'; phase_id: string; phase_name: string; group_label: string;
   week_end: string; intent_review_required: boolean; published: boolean; is_cancelled: boolean; version: number; source_metadata?: Record<string, unknown> | null;
   assignees: { id: string; name: string; active: boolean }[]; permissions: { edit: boolean; claim: boolean };
-  completion: { state: 'unknown' | 'completed' | 'overdue' | 'in_progress' | 'planned'; is_complete: boolean; overdue: boolean; completed_count: number | null; required_count: number | null; expected_count: number | null; quantity_unknown: boolean; target_review_required: boolean; warnings: string[]; unidentified_completed?: number; completion_date_unknown?: boolean }
+  completion: { state: 'unknown' | 'completed' | 'overdue' | 'in_progress' | 'planned'; is_complete: boolean; overdue: boolean; completed_count: number | null; required_count: number | null; expected_count: number | null; quantity_unknown: boolean; target_review_required: boolean; warnings: string[] }
 }
 export type PlanWork = { id: string; name: string; kind: 'vehicle' | 'other'; group_label: string; vehicle_step_key: string | null; applicable_vehicle_types: string[]; version: number }
 export type PlanPhase = { id: string; name: string; work_items: PlanWork[] }

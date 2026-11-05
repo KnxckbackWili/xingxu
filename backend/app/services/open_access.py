@@ -54,21 +54,3 @@ def join_all_projects(db: Session, user: User, actor_id: str | None) -> int:
     return joined
 
 
-def reconcile(db: Session) -> int:
-    """Startup check: projects missing some active accounts get them, with one audit row per project."""
-    if not enabled():
-        return 0
-    from app.routers.projects import _sync_project_members
-    from app.services.change_log import log_change
-    people = everyone(db)
-    names = {row.id: row.display_name for row in db.query(User).filter(User.id.in_(people)).all()}
-    changed = 0
-    for project in db.query(Project).filter(Project.deleted_at.is_(None)).all():
-        added = include_everyone(db, project, people)
-        if not added:
-            continue
-        _sync_project_members(db, project)
-        log_change(db, project.id, "project", project.id, "update", None,
-                   "所有账号可见所有项目：加入 " + "、".join(names.get(uid, uid) for uid in added))
-        changed += 1
-    return changed

@@ -38,7 +38,6 @@ def test_plans_and_platform_are_one_source_and_do_not_move_status(client, pm_hea
     p = project(client, pm_headers, dispatch_platform='NDC', event_plans={
         'internal_kickoff': '2026-01-02', 'ship': '2026-01-10', 'arrival_all': '2026-01-12'})
     assert p['dispatch_platform'] == 'NDC'
-    assert p['planned_entry_date'] is None
     e = events(client, pm_headers, p['id'])
     assert len(e) == 9 and e['ship']['planned_date'] == '2026-01-10'
     assert all(x['actual_at'] is None for x in e.values())
@@ -51,7 +50,7 @@ def test_plans_and_platform_are_one_source_and_do_not_move_status(client, pm_hea
 
 
 @pytest.mark.parametrize('body', [
-    {'planned_entry_date': '2026-01-10'}, {'dispatch_platform': 'invalid'},
+    {'dispatch_platform': 'invalid'},
     {'event_plans': {'unknown': '2026-01-10'}},
 ])
 def test_invalid_or_retired_dates_rejected_on_create(client, pm_headers, body):
@@ -127,7 +126,7 @@ def test_batch_does_not_write_foreign_vehicle_and_member_cannot_change_events(cl
                       json=versioned(pid, {'actual_at': '2026-10-01T10:30:00Z'})).status_code == 403
     assert client.put(f'/api/projects/{pid}/vehicle-arrivals', headers=worker_headers,
                       json=versioned(pid, {'unit_ids': [own], 'arrived_at': '2026-10-01'})).status_code == 403
-    for payload in ({'planned_entry_date': None}, {'entry_plan': {'entry_date': '2026-10-01'}}):
+    for payload in ({'entry_plan': {'entry_date': '2026-10-01'}},):
         assert client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, payload)).status_code == 422
 
 
@@ -153,17 +152,6 @@ def test_portable_json_and_excel_preserve_event_precision_and_vehicle_arrival(cl
     book = load_workbook(BytesIO(workbook.content))
     # T27: the delivery workbook is the simplified handover set; events travel in JSON.
     assert book.sheetnames == ['交付概览', '生命周期表', '问题清单', '物资清单', '收发流水', '交付资料']
-
-
-def test_old_portable_dates_map_to_ship_and_arrival_without_actual_times(client, pm_headers):
-    payload = {'type': 'agvpm-project', 'project': {'name': '旧格式', 'start_date': '2026-01-01', 'end_date': '2026-12-31',
-        'planned_entry_date': '2026-10-01', 'entry_plan': {'entry_date': '2026-10-03', 'meeting_point': '东门'}}}
-    r = client.post('/api/projects/import/json', headers=pm_headers, json=payload)
-    assert r.status_code == 200, r.text
-    value = events(client, pm_headers, r.json()['id'])
-    assert value['ship']['planned_date'] == '2026-10-01'
-    assert value['arrival_all']['planned_date'] == '2026-10-03'
-    assert all(x['actual_at'] is None for x in value.values())
 
 
 def test_plan_grant_can_record_arrival_without_receiving_event_update_authority(client, pm_headers, worker_headers):
@@ -195,24 +183,6 @@ def test_postgres_concurrent_batches_keep_both_dates_and_derive_last_arrival(cli
     units = client.get(f'/api/projects/{pid}/vehicle-units', headers=pm_headers).json()
     assert sorted(u['arrived_at'] for u in units) == ['2026-10-01', '2026-10-02']
     assert events(client, pm_headers, pid)['arrival_all']['actual_date'] == '2026-10-02'
-
-
-def test_readonly_legacy_date_survives_handover_clear_and_clone_keeps_only_plans(client, pm_headers):
-    r = client.post('/api/projects/import/json', headers=pm_headers, json={
-        'type': 'agvpm-project', 'project': {'name': '历史计划', 'start_date': '2026-01-01', 'end_date': '2026-12-31', 'dispatch_platform': 'NDC',
-                    'planned_entry_date': '2026-10-01', 'entry_plan': {'entry_date': '2026-10-03', 'meeting_point': '东门'}}})
-    assert r.status_code == 200, r.text
-    pid = r.json()['id']
-    cleared = client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'entry_plan': None}))
-    assert cleared.status_code == 200, cleared.text
-    assert cleared.json()['entry_plan'] == {'entry_date': '2026-10-03'}
-    client.put(f'/api/projects/{pid}/events/ship', headers=pm_headers, json=versioned(pid, {'actual_at': '2026-10-01T10:00:00Z'}))
-    cloned = client.post(f'/api/projects/{pid}/clone', headers=pm_headers, json={'name': '只复制计划'})
-    assert cloned.status_code == 200, cloned.text
-    detail = client.get(f"/api/projects/{cloned.json()['id']}", headers=pm_headers).json()
-    assert detail['dispatch_platform'] == 'NDC'
-    assert next(e for e in detail['events'] if e['event_key'] == 'ship')['planned_date'] == '2026-10-01'
-    assert all(e['actual_at'] is None for e in detail['events'])
 
 
 def test_zero_quantity_legacy_fleet_never_claims_all_arrived(client, pm_headers):

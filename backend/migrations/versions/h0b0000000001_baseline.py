@@ -397,7 +397,6 @@ def upgrade():
     sa.Column('start_date', sa.Date(), nullable=False),
     sa.Column('end_date', sa.Date(), nullable=False),
     sa.Column('status', sa.String(length=20), nullable=False),
-    sa.Column('legacy_lifecycle', sa.JSON(), nullable=True),
     sa.Column('description', sa.Text(), nullable=True),
     sa.Column('staffing_notes', sa.Text(), nullable=True),
     sa.Column('members', sa.JSON(), nullable=True),
@@ -410,7 +409,6 @@ def upgrade():
     sa.Column('template_id', sa.String(length=36), nullable=True),
     sa.Column('template_version', sa.Integer(), nullable=True),
     sa.Column('portable_unverified_snapshot', sa.JSON(), nullable=True),
-    sa.Column('planned_entry_date', sa.Date(), nullable=True),
     sa.Column('dispatch_platform', sa.String(length=20), nullable=True),
     sa.Column('readiness_state', sa.String(length=20), nullable=True),
     sa.Column('prep_conditions', sa.JSON(), nullable=True),
@@ -871,19 +869,6 @@ def upgrade():
     )
     op.create_index(op.f('ix_template_items_section_id'), 'template_items', ['section_id'], unique=False)
     op.create_index(op.f('ix_template_items_template_id'), 'template_items', ['template_id'], unique=False)
-    op.create_table('vehicle_progress_migrations',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('project_id', sa.String(length=36), nullable=False),
-    sa.Column('step_key', sa.String(length=80), nullable=False),
-    sa.Column('total_count', sa.Integer(), nullable=False),
-    sa.Column('unassigned_count', sa.Integer(), nullable=False),
-    sa.Column('source_metadata', sa.JSON(), nullable=False),
-    sa.CheckConstraint('unassigned_count >= 0 AND unassigned_count <= total_count', name='ck_vehicle_progress_migration_count'),
-    sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('project_id', 'step_key', name='uq_vehicle_progress_migration_step')
-    )
-    op.create_index(op.f('ix_vehicle_progress_migrations_project_id'), 'vehicle_progress_migrations', ['project_id'], unique=False)
     op.create_table('vehicles',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('project_id', sa.String(length=36), nullable=False),
@@ -1053,7 +1038,6 @@ def upgrade():
     sa.Column('frame_no', sa.String(length=100), nullable=True),
     sa.Column('factory_date', sa.Date(), nullable=True),
     sa.Column('model_name', sa.String(length=100), nullable=True),
-    sa.Column('legacy_current_stage', sa.String(length=80), nullable=True),
     sa.Column('current_stage', sa.String(length=80), nullable=True),
     sa.Column('current_status', sa.String(length=30), nullable=True),
     sa.Column('location', sa.String(length=200), nullable=True),
@@ -1181,7 +1165,6 @@ def upgrade():
     sa.Column('recorded_at', sa.DateTime(), nullable=False),
     sa.Column('done_by', sa.String(length=36), nullable=True),
     sa.Column('note', sa.Text(), nullable=True),
-    sa.Column('migrated', sa.Boolean(), nullable=False),
     sa.Column('source_metadata', sa.JSON(), nullable=True),
     sa.Column('version', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['done_by'], ['users.id'], ondelete='SET NULL'),
@@ -1545,8 +1528,6 @@ def downgrade():
     op.drop_table('external_access_logs')
     op.drop_index(op.f('ix_vehicles_project_id'), table_name='vehicles')
     op.drop_table('vehicles')
-    op.drop_index(op.f('ix_vehicle_progress_migrations_project_id'), table_name='vehicle_progress_migrations')
-    op.drop_table('vehicle_progress_migrations')
     op.drop_index(op.f('ix_template_items_template_id'), table_name='template_items')
     op.drop_index(op.f('ix_template_items_section_id'), table_name='template_items')
     op.drop_table('template_items')

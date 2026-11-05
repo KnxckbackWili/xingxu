@@ -36,7 +36,7 @@ export default function WorkspaceStatistics() {
       <Card size="small" title="车辆进度" style={{marginTop:12}}>
         已完成 {data.vehicle_progress.completed} / {data.vehicle_progress.target} 个车辆环节
         {data.vehicle_progress.quantity_unknown||data.vehicle_progress.percent===null ? <Tag>车辆范围待核对</Tag> : <Tag>{data.vehicle_progress.percent}%</Tag>}
-        {!!data.vehicle_progress.unidentified_completed&&<Tag>含迁移记录，待补车号</Tag>}
+        
       </Card>
       <Table rowKey="status" size="small" pagination={false} dataSource={data.status_distribution} style={{marginTop:12}} columns={[
         {title:'项目状态',render:(_,row)=>projectStatusMeta(row.status).label},{title:'项目数',dataIndex:'count'},

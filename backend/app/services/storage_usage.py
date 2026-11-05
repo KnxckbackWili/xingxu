@@ -51,7 +51,7 @@ def project_usage(db,project,user):
         if session.owner_id==user.id or manageable:temporary+=directory_usage(config.DATA_DIR/'.upload-sessions'/session.id)[0]
     return {'project_id':project.id,'project_name':project.name,'state':project.status,'bytes':total,'file_count':count,
         'removed_bytes':removed_bytes,'removed_file_count':removed_count,'temporary_bytes':temporary,'missing_file_count':missing,
-        'can_cleanup':manageable and project.status!='archived' and not (project.legacy_lifecycle or {}).get('requires_repair'),
+        'can_cleanup':manageable and project.status!='archived',
         'storage_warnings':storage_warnings(db,project,user)}
 
 

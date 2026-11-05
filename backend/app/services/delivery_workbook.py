@@ -138,9 +138,6 @@ def _overview(db, book, project, documents, visible_assets, users):
         for key,fact in unit['cells'].items():
             _append(sheet,['车辆环节事实',unit['fleet_no'] or unit['asset_code'],names.get(key,key),
                 {'车辆ID':unit['id'],'车辆编号':unit['asset_code'],'环节key':key,**fact}])
-    for credit in progress['legacy']:
-        _append(sheet,['历史完成凭证',names.get(credit['step_key'],credit['step_key']),credit['unassigned_count'],
-            {'状态':'已完成（迁移，车号未知）','总凭证':credit['total_count'],'来源':credit['source_metadata']}])
     if project.portable_unverified_snapshot is not None:
         _append(sheet,['只读导入来源','未核验，不计入本项目完成资格',project.portable_unverified_snapshot,
             '保留来源原字段、日期和操作者；原始事实不会自动应用到新项目。'])
@@ -152,7 +149,7 @@ def _overview(db, book, project, documents, visible_assets, users):
 def _lifecycle(db, book, project, users, assets):
     headers = LIFECYCLE_HEADERS + ['故障部位', '原因判断', '更换配件', '停机小时', '验证结果', '是否关闭', '事件类型',
         '事件后阶段', '事件后状态', '事件后位置', '操作人', '关联附件', '附件ID', '事件ID', '扩展信息',
-        '出厂序列号', '当前阶段', '当前状态', '当前位置', '到场日期', '投运日期', '质保到期', '车辆备注', '车辆ID', '升级前九阶段（只读）']
+        '出厂序列号', '当前阶段', '当前状态', '当前位置', '到场日期', '投运日期', '质保到期', '车辆备注', '车辆ID']
     sheet, header = _sheet(book, SHEET_NAMES[1], headers, title='AGV生命周期表')
     sheet.freeze_panes = 'G3'
     for column, width in LIFECYCLE_WIDTHS.items():
@@ -180,7 +177,7 @@ def _lifecycle(db, book, project, users, assets):
                  event.event_type, event.stage_after, event.status_after, event.location_after, users.get(event.operator_id, event.operator_id or ''),
                  asset.filename if asset else '', asset.id if asset else '', event.id, extra] if event else [''] * 15
         archive = [unit.serial_number, unit.current_stage, unit.current_status, unit.location, _iso(unit.arrived_at), _iso(unit.commissioned_at),
-                   _iso(unit.warranty_end), unit.note, unit.id, unit.legacy_current_stage] if unit else [''] * 8 + [event.vehicle_unit_id, '']
+                   _iso(unit.warranty_end), unit.note, unit.id] if unit else [''] * 8 + [event.vehicle_unit_id]
         _append(sheet, identity + fault + archive, identities=(5, 25, 35))
     return sheet, header
 

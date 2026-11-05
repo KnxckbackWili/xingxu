@@ -17,7 +17,7 @@ from app.config import UPLOAD_DIR
 # table from silently being copied into administrator-visible audit archives.
 RETAINED_MODELS = (
     models.ProjectMember, models.ProjectEvent, models.Vehicle, models.VehicleUnit, models.VehicleLifecycleEvent,
-    models.ProjectVehicleStep, models.VehicleProgress, models.VehicleProgressMigration,
+    models.ProjectVehicleStep, models.VehicleProgress,
     models.ProjectInventoryItem, models.ProjectInventoryMovement, models.ItemApplication,
     models.Phase, models.Module, models.Task, models.VehicleCheckDefinition, models.CheckItem, models.ScheduleEntry,
     models.DailyProgress, models.WeeklyPlanCell, models.Issue,

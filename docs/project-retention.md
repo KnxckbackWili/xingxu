@@ -32,8 +32,6 @@ python docker/scripts/backup_runtime.py decrypt-file \
 
 ## 旧数据与兼容接口
 
-增量 `g3a85b000001` 创建不随项目级联删除的 `project_permanent_backups`。已有无当前回收凭据的软删除项目按原删除时间补入回收站，不改业务行、不在启动时生成备份或要求口令。旧项目没有备份时，只要原记录和引用文件完整即可还原；缺文件会拒绝，不能假装证据完整。
-
 本 v3 版本继续保留升级前的 `project_archives`、只读查询及文件引用保护，接口增加 `legacy_read_only` 提示，不创建新的归档快照，不自动删除旧归档。移除旧归档属于后续版本的数据交接工作。本轮迁移不会清空或去重旧快照。
 
 接口：`POST /api/project-recycle-bin/projects/{id}/permanent-backup` 准备，`DELETE .../projects/{id}/permanent` 明确删除，`GET .../permanent-backups` 列表，`GET .../backups/{backup_id}` 鉴权下载。准备需要版本和删除周期；删除还需备份凭据 ID 和完整名称。全系统备份同时保全该表、旧 ZIP 与新 `.zip.agvenc`，恢复不丢失永久备份下载凭据。
@@ -41,7 +39,5 @@ python docker/scripts/backup_runtime.py decrypt-file \
 ## 验证与容量
 
 项目备份计数字段在 PostgreSQL 使用 BIGINT、SQLite 使用其原生 64 位 INTEGER，迁移保留旧值并验证 5 GiB 数值往返。ZIP64 与流式加密支持大包，相关删除、恢复、准备及下载请求使用较长等待窗口，不因默认 15 秒请求超时轻易放弃备份。
-
-本轮 Python 3.12、PostgreSQL 17 隔离验证覆盖：普通删除/还原/多次删除周期、原文件恢复冲突、旧明文仅加密下载、永久备份在项目级联删除后仍可鉴权获取、版本/周期/历史快照/文件及密文篡改拒绝、审计失败回滚、并发永久删除仅一方成功、迟到 FK 插入不能提交未备份证据、未知归属后代拒绝删除。旧归档只读权限、文件哈希、个人日程所有权及 SQLite FK 恢复保护继续验证。新旧库结构含服务端默认值核对无差异，SQLite/PostgreSQL 离线 SQL 均已生成。
 
 本机 Node 24.9 完整前端 124 个文件、1105 项通过，类型检查与生产构建通过。与 T22 集成后的迁移单 head 和正式 Node 22 双库 CI、真实部署验收由交付集成执行；本轮未触碰真实业务数据或运行容器。

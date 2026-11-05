@@ -95,24 +95,6 @@ def task_progress_maps(db: Session, tasks: list[Task]) -> tuple[dict, dict, dict
         percent_map[task.id] = percent
         completed_map.setdefault(task.id, 0)
 
-    # Historical per-vehicle work now reads its frozen matrix source. Quantity
-    # reports stay intact for audit, but cannot independently change this matrix.
-    from app.models import ProjectVehicleStep, VehicleProgress, VehicleProgressMigration
-    project_ids={t.project_id for t in tasks if t.project_id}
-    snapshots=db.query(ProjectVehicleStep).filter(ProjectVehicleStep.project_id.in_(project_ids)).all() if project_ids else []
-    by_source={r.source_task_id:r for r in snapshots if r.source_task_id}
-    progress_counts={(pid,key):count for pid,key,count in db.query(VehicleProgress.project_id,VehicleProgress.step_key,func.count(VehicleProgress.id)).filter(VehicleProgress.project_id.in_(project_ids),VehicleProgress.is_done.is_(True)).group_by(VehicleProgress.project_id,VehicleProgress.step_key)} if project_ids else {}
-    credit_map={(r.project_id,r.step_key):r for r in db.query(VehicleProgressMigration).filter(VehicleProgressMigration.project_id.in_(project_ids))} if project_ids else {}
-    for task in tasks:
-        step=by_source.get(task.id)
-        if task.quantity_type!='per_vehicle' or step is None:
-            continue
-        identified=progress_counts.get((step.project_id,step.key),0)
-        credit=credit_map.get((step.project_id,step.key))
-        completed_map[task.id]=identified+(credit.unassigned_count if credit else 0)
-        target_map[task.id]=step.expected_quantity or 0
-        percent_map[task.id]=min(100,round(completed_map[task.id]/target_map[task.id]*100,1)) if target_map[task.id] else 0
-        if check_counts.get(task.id,(0,0,0,0,0))[4]: percent_map[task.id]=min(percent_map[task.id],99)
     # T34 work has no editable quantity target. Preserve old raw report functions
     # for source readers, while active status uses booleans or the real matrix.
     from app.services.work_items import step_states
@@ -245,7 +227,7 @@ def project_progress_tree(db: Session, project_id: str) -> dict:
 def plan_vs_actual_timeline(db: Session, project_id: str, from_date, to_date) -> list:
     """Published weekly finish intent and currently valid matrix completion dates."""
     from datetime import timedelta
-    from app.models import Project, WeeklyPlanCell, VehicleProgress,VehicleProgressMigration
+    from app.models import Project, WeeklyPlanCell, VehicleProgress
     from app.services.weekly_plans import monday
     project=db.get(Project,project_id)
     if project is None:return []
@@ -258,15 +240,14 @@ def plan_vs_actual_timeline(db: Session, project_id: str, from_date, to_date) ->
     for cell,task in rows:
         if cell.target_count is None:unknown.add(cell.week_start)
         else:planned[cell.week_start]=planned.get(cell.week_start,0)+cell.target_count
-    actual={};unknown_dates=0
+    actual={}
     for cell in db.query(VehicleProgress).filter_by(project_id=project_id,is_done=True):
-        if cell.done_on is None:unknown_dates+=1;continue
-        week=monday(cell.done_on);actual[week]=actual.get(week,0)+1
-    unknown_dates+=sum(row.unassigned_count for row in db.query(VehicleProgressMigration).filter_by(project_id=project_id))
+        if cell.done_on is not None:
+            week=monday(cell.done_on);actual[week]=actual.get(week,0)+1
     result=[]
     while start<=end:
         result.append({'date':start.isoformat(),'planned':None if start in unknown else planned.get(start,0),
             'actual':actual.get(start,0),'planned_pct':None,'actual_pct':None,'period':'week','unit':'车辆环节',
-            'plan_available':bool(rows),'actual_date_unknown_count':unknown_dates,'meaning':'已发布完成目标与已知实际日期；迁移未知日期不分配到任意周'})
+            'plan_available':bool(rows),'meaning':'已发布完成目标与实际完成日期'})
         start+=timedelta(days=7)
     return result

@@ -127,9 +127,8 @@ def test_document_review_requires_manage_plan_and_real_submitted_version(client,
 def _lifecycle_xlsx() -> bytes:
     wb = Workbook()
     ws = wb.active
-    ws.append(["序号", "项目名称", "车辆型号", "车辆编号", "车号", "出现过的问题", "问题描述", "解决方法", "记录人", "记录时间", "问题分类"])
-    ws.append(["1", "旧项目", "潜伏式", "77BC00180", "2",
-               "光通信接线接错", "现象A", "更换光通信", "施泽辉", "2023/5/4", "硬件问题"])
+    ws.append(["序号", "项目名称", "项目合同号", "型号", "配置号", "车辆编号", "调车时间记录", "车号", "分类", "变更内容", "记录人", "记录时间"])
+    ws.append([1, "测试项目", "", "潜伏式", "", "77BC00180", "2023.5.4", "2", "硬件问题", "光通信接线接错", "张测试", "2023.5.4"])
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)

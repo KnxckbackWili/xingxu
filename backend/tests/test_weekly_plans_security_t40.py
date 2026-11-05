@@ -6,7 +6,7 @@ import pytest
 from fastapi import HTTPException
 from app.db import SessionLocal, engine
 from app.models import (Project, User, Task, WeeklyPlanCell, VehicleUnit, Vehicle,
-    CheckItem, VehicleProgress, VehicleProgressMigration, ProjectVehicleStep,
+    CheckItem, VehicleProgress, ProjectVehicleStep,
     UserUnavailability, VehicleLifecycleEvent, Notification)
 from tests.test_weekly_plans import setup, create_cell, publish
 
@@ -65,20 +65,6 @@ def test_plan_completion_rechecks_exact_required_and_safety_checks(client,pm_hea
     facts=client.get(path,headers=pm_headers).json()['cells'][0]['completion'];assert facts['completed_count']==1 and not facts['is_complete']
     with SessionLocal() as db:db.get(CheckItem,exact_id).is_done=True;db.commit()
     facts=client.get(path,headers=pm_headers).json()['cells'][0]['completion'];assert facts['completed_count']==2 and facts['is_complete']
-
-
-def test_unknown_identity_credit_keeps_known_count_without_claiming_actual_date(client,pm_headers):
-    pid,units,ph,task=setup(client,pm_headers,vehicle=True)
-    with SessionLocal() as db:
-        for uid in units:db.delete(db.get(VehicleUnit,uid))
-        step=db.query(ProjectVehicleStep).filter_by(project_id=pid,key='arrival_inspection').one();step.expected_quantity=2
-        db.add(VehicleProgressMigration(project_id=pid,step_key=step.key,total_count=2,unassigned_count=2,source_metadata={'original_sum':2}))
-        db.commit()
-    row=create_cell(client,pm_headers,pid,task,mode='finish',target_count=2)
-    assert publish(client,pm_headers,pid,row).status_code==200
-    facts=client.get(f'/api/projects/{pid}/weekly-plans?week_start=2001-01-01&weeks=1',headers=pm_headers).json()['cells'][0]['completion']
-    assert facts['is_complete'] and facts['unidentified_completed']==2 and not facts['quantity_unknown']
-    assert facts['actual_dates']==[] and facts['completion_date_unknown'] and facts['warnings']
 
 
 def test_repair_draft_is_visible_to_planner_without_changing_actual_handler(client,pm_headers,worker_headers):

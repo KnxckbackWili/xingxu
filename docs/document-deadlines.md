@@ -55,16 +55,12 @@ PUT /api/projects/{project_id}/documents/{document_id}/owner
 
 提交记录时间与业务事件时间分开。项目锁内每份资料的新 `uploaded_at` 采用 `max(当前UTC, 上个记录时间+1微秒)`，保证冻结或回退时钟下最新版仍可确定；旧记录的空时间排在新记录之前。原件、下载、版本历史和门禁取同一最新版。业务事件的真实发生时间不做这种调整。
 
-迁移 `g3a23b000001` 增加定义/实例负责人、实例截止依据和触发时间，以及两张项目持久表：
-
 | 表 | 项目及其他外键 | 文件关系 |
 | --- | --- | --- |
 | document_notice_receipts | project_id → projects CASCADE；project_document_id → project_documents CASCADE；recipient_id → users SET NULL | 无新文件 |
 | project_report_receipts | project_id → projects CASCADE；recipient_id → users SET NULL | summary 是元数据，无新文件 |
 
 两个 owner_id → users SET NULL；新表加入 `project_retention.RETAINED_MODELS`。既有附件和项目空白模板原件继续遵循 UPLOAD_DIR 平级 stored_name 和已有 SHA manifest 契约。根集成 #85 永久删除时需覆盖上述两表。
-
-SQLite 在线迁移在事务内批量改两张表，保留 ID、原版本及附件 RESTRICT 外键，并验证 FK。离线增量承诺仅为“该命名 revision 的实际 down_revision → g3a23b000001”：复制源 schema 冻结在迁移中，只复用冻结的 g22 迁移列定义，不导入未来 ORM。生成 SQL 将 PRAGMA foreign_keys=OFF 放在 BEGIN 前，迁移、版本更新和 foreign_key_check 放在同一事务，成功后 COMMIT 并恢复 FK。执行器遇 SQL 错误须 rollback 并恢复 FK；测试真实执行 SQL，同时验证失败没有丢原行。历史全链包含在线数据核对，仍必须在线运行，不可 stamp 跳过。
 
 ## 后续事件接缝
 

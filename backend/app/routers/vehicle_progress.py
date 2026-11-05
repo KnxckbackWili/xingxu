@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from app.db import get_db
 from app.deps import get_current_user, require_admin
-from app.models import User, VehicleUnit, VehicleProgress, VehicleStep, VehicleProgressMigration, Template
+from app.models import User, VehicleUnit, VehicleProgress, VehicleStep, Template
 from app.services.system_permissions import route_permission, has_permission
 from app.services.scope import ensure_project_visible
 from app.services.permissions import C_PLAN, project_capabilities
@@ -58,7 +58,6 @@ class MatrixChange(BaseModel):
     done_on:date|None=None
     reason:str=Field(default='',max_length=1000)
     note:str=Field(default='',max_length=1000)
-    claim_migrated:bool=False
 
 
 def _apply_matrix(project_id,body,user,db):
@@ -73,9 +72,7 @@ def _apply_matrix(project_id,body,user,db):
         raise HTTPException(400,'现场实施之前或项目结束后，不能勾选车辆进度表')
     if not body.is_done and not body.reason.strip():
         raise HTTPException(400,'取消勾选必须填写理由')
-    if body.claim_migrated and not body.is_done:
-        raise HTTPException(400,'只能将历史凭证补录为已完成环节')
-    if body.is_done and not body.claim_migrated and body.done_on is None:
+    if body.is_done and body.done_on is None:
         raise HTTPException(400,'请填写实际完成日期')
     if body.done_on and body.done_on>project_today(project.timezone):
         raise HTTPException(400,'完成日期不能晚于项目当地今天')
@@ -85,30 +82,12 @@ def _apply_matrix(project_id,body,user,db):
     steps={r.key:r for r in service.project_steps(db,project_id)}
     units={r.id:r for r in db.query(VehicleUnit).filter(VehicleUnit.project_id==project_id,VehicleUnit.id.in_([r.vehicle_unit_id for r in body.cells])).all()}
     facts={(r.vehicle_unit_id,r.step_key):r for r in db.query(VehicleProgress).filter_by(project_id=project_id).all()}
-    credits={r.step_key:r for r in db.query(VehicleProgressMigration).filter_by(project_id=project_id).all()}
-    needed={}
     for cell in body.cells:
         if cell.vehicle_unit_id not in units or cell.step_key not in steps:
             raise HTTPException(404,'车辆或环节不属于当前项目')
         fact=facts.get((cell.vehicle_unit_id,cell.step_key))
         if (fact.version if fact else 0)!=cell.version:
             raise HTTPException(409,'车辆进度已更新，请刷新后核对原操作')
-        if body.claim_migrated and (not fact or not fact.is_done):
-            needed[cell.step_key]=needed.get(cell.step_key,0)+1
-    for key,count in needed.items():
-        if key not in credits or credits[key].unassigned_count<count:
-            raise HTTPException(400,'历史未知车号凭证不足，请刷新后核对')
-    for key,step in steps.items():
-        if step.expected_quantity is None:
-            continue
-        current=sum(1 for f in facts.values() if f.step_key==key and f.is_done)+(credits[key].unassigned_count if key in credits else 0)
-        delta=sum((1 if body.is_done else -1) for c in body.cells if c.step_key==key
-                  and bool(facts.get((c.vehicle_unit_id,key)) and facts[(c.vehicle_unit_id,key)].is_done)!=body.is_done)
-        if body.claim_migrated: delta=0
-        if not body.is_done:
-            delta+=sum(1 for c in body.cells if c.step_key==key and (f:=facts.get((c.vehicle_unit_id,key))) and f.is_done and f.migrated)
-        if current+delta>step.expected_quantity:
-            raise HTTPException(400,'该历史环节已有完成凭证，请用“补录迁移车号”转移凭证，不能重复计算')
     if body.is_done:
         from app.services.vehicle_checks import completion_blockers
         blockers = completion_blockers(db, project_id, body.cells)
@@ -119,22 +98,15 @@ def _apply_matrix(project_id,body,user,db):
         pair=(cell.vehicle_unit_id,cell.step_key)
         fact=facts.get(pair)
         if fact and fact.is_done==body.is_done:
-            if body.is_done and (body.claim_migrated or (fact.done_on==body.done_on and (fact.note or '')==body.note.strip())):
+            if body.is_done and fact.done_on==body.done_on and (fact.note or '')==body.note.strip():
                 continue
             if not body.is_done:
                 continue
-        old={'is_done':fact.is_done,'done_on':str(fact.done_on) if fact.done_on else None,'migrated':fact.migrated,'version':fact.version} if fact else None
+        old={'is_done':fact.is_done,'done_on':str(fact.done_on) if fact.done_on else None,'version':fact.version} if fact else None
         if fact is None:
             fact=VehicleProgress(project_id=project_id,vehicle_unit_id=cell.vehicle_unit_id,step_key=cell.step_key,version=0)
             db.add(fact)
-        was_done=bool(fact.is_done) if old else False
-        was_migrated=bool(fact.migrated) if old else False
-        if not body.is_done and was_done and was_migrated:
-            credits[cell.step_key].unassigned_count+=1
-        if body.is_done and not was_done and body.claim_migrated:
-            credits[cell.step_key].unassigned_count-=1
         fact.is_done=body.is_done
-        fact.migrated=body.claim_migrated if body.is_done and not was_done else was_migrated
         fact.done_on=body.done_on if body.is_done else None
         fact.done_by=user.id
         fact.recorded_at=utcnow()
@@ -142,8 +114,8 @@ def _apply_matrix(project_id,body,user,db):
         fact.version+=1
         db.flush()
         log_change(db,project_id,'vehicle_progress',fact.id,'complete' if body.is_done else 'reopen',user.id,
-            f"{units[cell.vehicle_unit_id].asset_code} · {steps[cell.step_key].name}：{'补录迁移凭证' if body.claim_migrated else '勾选' if body.is_done else '取消'} {body.reason.strip()}",old,
-            {'is_done':fact.is_done,'done_on':str(fact.done_on) if fact.done_on else None,'migrated':fact.migrated,'version':fact.version})
+            f"{units[cell.vehicle_unit_id].asset_code} · {steps[cell.step_key].name}：{'勾选' if body.is_done else '取消'} {body.reason.strip()}",old,
+            {'is_done':fact.is_done,'done_on':str(fact.done_on) if fact.done_on else None,'version':fact.version})
     db.flush()
     for unit in units.values(): service.derive_stage(db,unit)
     return service.matrix(db,project_id)
@@ -154,45 +126,6 @@ def _apply_matrix(project_id,body,user,db):
 def change_matrix(project_id:str,body:MatrixChange,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
     from app.services.field_operations import direct_matrix
     return direct_matrix(db,project_id,user,body)
-
-
-class HistoricalTarget(BaseModel):
-    model_config={'extra':'forbid'}
-    expected_quantity:int=Field(ge=0,le=100000)
-    previous_quantity:int|None
-    reason:str=Field(min_length=1,max_length=1000)
-
-
-@router.put('/projects/{project_id}/vehicle-progress/steps/{step_key}')
-@route_permission('project.manage_plan')
-def clarify_historical_target(project_id:str,step_key:str,body:HistoricalTarget,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-    from app.models import ProjectVehicleStep
-    from app.services.permissions import authorize_project
-    project=ensure_project_visible(db,project_id,user)
-    authorize_project(user,project,C_PLAN)
-    project=lock_writable_project(db,project,user)
-    db.refresh(user)
-    if not user.is_active:raise HTTPException(401,"账号已停用，请重新登录")
-    authorize_project(user,project,C_PLAN)
-    if project.status not in service.WRITE_STATUSES:
-        raise HTTPException(400,'现场实施之前或项目结束后，不能修改车辆进度表')
-    step=db.query(ProjectVehicleStep).filter_by(project_id=project_id,key=step_key).first()
-    if step is None:raise HTTPException(404,'车辆环节不存在')
-    credit=db.query(VehicleProgressMigration).filter_by(project_id=project_id,step_key=step_key).first()
-    unverified=(project.portable_unverified_snapshot or {}).get('vehicle_progress_matrix') or {}
-    source_step=next((s for s in unverified.get('steps',[]) if s.get('key')==step_key and s.get('source_task_id')),None)
-    source_credit=next((s for s in unverified.get('legacy',[]) if s.get('step_key')==step_key),None)
-    if credit is None and step.source_task_id is None and source_step is None and source_credit is None:raise HTTPException(400,'仅历史来源环节可核对应完成台数；新环节按车型配置计算')
-    if not body.reason.strip():raise HTTPException(400,'核对应完成台数须填写理由')
-    known=sum(1 for r in db.query(VehicleProgress).filter_by(project_id=project_id,step_key=step_key,is_done=True)) + (credit.unassigned_count if credit else 0)
-    if body.expected_quantity<known:raise HTTPException(400,'应完成台数不能少于已有完成凭证')
-    old=step.expected_quantity
-    if old!=body.previous_quantity:raise HTTPException(409,'环节应完成台数已变化，请刷新核对')
-    step.expected_quantity=body.expected_quantity
-    log_change(db,project_id,'project_vehicle_step',step.id,'clarify_target',user.id,
-        f'核对历史环节应完成台数：{step.name}；{body.reason.strip()}',{'expected_quantity':old},{'expected_quantity':body.expected_quantity})
-    db.commit()
-    return service.matrix(db,project_id)
 
 
 @router.get('/projects/{project_id}/vehicle-progress/source')

@@ -98,7 +98,6 @@ def statistics(db,projects,user,*,facts=None):
         'completed_projects':sum(project.status in ('completed','archived') for project in projects),
         'status_distribution':[{'status':status,'count':number} for status,number in sorted(states.items())],
         'vehicle_progress':{'target':target,'completed':completed,'quantity_unknown':unknown,
-            'unidentified_completed':sum(row['unidentified_completed'] for row in vehicles),
             'percent':None if unknown else (round(completed/target*100,1) if target else 0)},
         'documents':{'this_week_count':sum(row['document_attention']['this_week_count'] for row in facts.values()),
             'overdue_count':sum(row['document_attention']['overdue_count'] for row in facts.values())},

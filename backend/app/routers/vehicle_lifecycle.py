@@ -172,7 +172,6 @@ def _unit_dict(
         "frame_no": unit.frame_no or "",
         "factory_date": unit.factory_date.isoformat() if unit.factory_date else None,
         "current_stage": unit.current_stage,
-        "legacy_current_stage": unit.legacy_current_stage,
         "current_status": unit.current_status,
         "location": unit.location,
         "warranty_end": unit.warranty_end.isoformat() if unit.warranty_end else None,

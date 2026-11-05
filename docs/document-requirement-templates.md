@@ -30,10 +30,6 @@
 
 ## 迁移和模板版本
 
-Alembic `g3a21b000001` 接 `g3a20b000001`，新增 `document_requirements` 和 `document_template_files`。默认模板的数据库身份仍为 `template_id IS NULL`；两个部分唯一索引分别保证默认及自定义模板的编号唯一。
-
-迁移把冻结的 56 行写入默认模板和当时已存在的模板。既有流程树、项目、采购项、准备项和参考文档不变。新模板复制所选来源的资料定义。预置仅执行一次；用户删改资料后，重启不会重新补回。
-
 编辑、导入、删除、复制和发布共用模板事务锁。涉及源/目标时按稳定模板 ID 排序取锁；虚拟默认模板在 PostgreSQL 使用固定命名空间事务锁，在 SQLite 使用不改数据与时间的 UPDATE 取得写锁。拿锁后重新读取模板、父链与账号授权，避免两个管理员并发建立循环分组。
 
 资料定义与流程树独立。保存流程树不会清空资料要求。复制模板会重新映射资料和分组 ID，并为每个空白文件复制独立字节。发布快照在既有 `snapshot` 阶段树旁，增加同级 `document_requirements`；旧快照形状保持。
@@ -57,6 +53,5 @@ JSON 在原 `phases` 旁增加 `document_requirements` 与 `document_template_fi
 - `services/document_requirements.py`：规则、默认模板身份、定义 CRUD、不可变资产与事务清理、复制、便携包校验。
 - `services/document_requirement_workbook.py`：可编辑 Excel 定义及受限文件分片。
 - `routers/document_requirements.py`：模板读取/维护权限声明和真实认证依赖。
-- 种子冻结在 `migrations/v3_document_requirements_seed.json`，历史迁移不读取当前业务模型。
 
 验证覆盖新库/旧模板迁移、SQLite/PostgreSQL、模型结构差异、全部条目、规则非法值、明确禁止/授予、跨模板父级、克隆文件独立性、发布快照、旧格式保留、JSON/Excel 文件字节往返、坏 SHA256 全部回滚，以及上传审计失败时原引用与原字节保持。

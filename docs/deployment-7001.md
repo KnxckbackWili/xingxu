@@ -46,7 +46,7 @@ docker exec -i agv-pm-7001 python - < docker/scripts/verify_live_reads.py
 
 **数据库操作必须在容器内执行。** 禁止用 macOS SQLite 直接打开运行中的数据库。备份使用 `AGV_CONTAINER=agv-pm-7001 BACKUP_DIR=/absolute/backup/path bash docker/scripts/backup.sh`；宿主机只能检查已导出的离线备份。
 
-2026-09-17 已修复申请列表间歇性 500，并完成数据库存储迁移。此前的单次健康检查与宿主机数据库核对未覆盖真实运行状态；原因、恢复方法与验收范围见 [故障记录](retired-features.md)。
+2026-09-17 已修复申请列表间歇性 500，并完成数据库存储迁移。此前的单次健康检查与宿主机数据库核对未覆盖真实运行状态；原因、恢复方法与验收范围见 故障记录。
 
 ## 本次部署修复
 
@@ -54,10 +54,8 @@ docker exec -i agv-pm-7001 python - < docker/scripts/verify_live_reads.py
 - 为 Supervisor 4.2.5 固定 `setuptools==80.9.0`，并在 Docker 构建阶段验证进程管理器与调度器可导入。新版 setuptools 已移除旧接口，参见 [setuptools 官方记录](https://github.com/pypa/setuptools/issues/5174)。
 - SQLite 启动配置停用 PostgreSQL 子进程，兼容容器的最小权限设置。
 
-## 2026-09-16 验证
-
 ## 2026-09-16 Agent 与性能版本复核
 
 应用代码提交：`856ce2a7519195cf63ad379087ea52df0c24f6e5`。7001健康，本机 / 内网 / 外网域名的首页与静态资源均通过。主脚本gzip传输约193KB（原始约577KB），前端新配色与版本资源在浏览器中确认加载。数据库备份完成，部署后完整性与数据数量一致；8002启动时间未变化。
 
-外部助手从「系统 → Agent 接口」配置；具体参数与权限见 [接入文档](ai-internal-api.md)。性能对比与验证范围见 [本次改动记录](agent-interface-performance-2026-09-16.md)。
+外部助手从「系统 → Agent 接口」配置；具体参数与权限见 [接入文档](ai-internal-api.md)。性能对比与验证范围见 本次改动记录。

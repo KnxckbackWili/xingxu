@@ -212,46 +212,6 @@ def test_complete_json_preserves_exact_readonly_execution_evidence_and_reimport_
         assert checks and all(not row.is_done and not row.failed for row in checks)
 
 
-def test_vehicle_matrix_and_unknown_identity_credits_fit_six_sheets_and_stay_unverified_on_import(client,admin_headers):
-    from app.services.vehicle_progress import matrix
-    from tests.test_project_events import unit
-    from tests.test_vehicle_progress import write
-    pid=create_project(client,admin_headers)
-    response=client.post(f'/api/projects/{pid}/vehicles',headers=admin_headers,json={'vehicle_type':'潜伏式','model_name':'原实车','quantity':2})
-    assert response.status_code==200,response.text
-    uid=unit(client,admin_headers,pid,response.json()['id'],'AGV-原实车')
-    with SessionLocal() as db:
-        db.get(models.Project,pid).status='executing'
-        db.get(models.VehicleUnit,uid).legacy_current_stage='production'
-        db.add(models.ProjectVehicleStep(project_id=pid,key='legacy_unknown',name='历史环节：原调试',expected_quantity=2,sort_order=5))
-        db.add(models.VehicleProgressMigration(project_id=pid,step_key='legacy_unknown',total_count=1,unassigned_count=1,
-            source_metadata={'task_id':'original-task','target_quantity':2.4,'completed_quantity':1.2,'manually_completed':False,'identity':'unknown'}))
-        db.commit()
-    assert write(client,admin_headers,pid,[uid]).status_code==200
-    book=workbook(client,admin_headers,pid)
-    assert tuple(book.sheetnames)==SHEET_NAMES
-    overview=records(book['交付概览'])
-    assert any(row['类别']=='车辆环节事实' and 'AGV-原实车' in str(row) for row in overview)
-    assert any(row['类别']=='历史完成凭证' and '1.2' in str(row) and '原调试' in str(row) for row in overview)
-    assert records(book['生命周期表'])[0]['升级前九阶段（只读）']=='production'
-    payload=client.get(f'/api/projects/{pid}/export/json',headers=admin_headers).json()
-    facts=payload['execution_evidence']['vehicle_progress_matrix']
-    assert facts['read_only'] and facts['summary']['completed']==2
-    payload['project']['status']='draft'
-    imported=client.post('/api/projects/import/json',headers=admin_headers,json=payload)
-    assert imported.status_code==200,imported.text
-    imported_id=imported.json()['id']
-    with SessionLocal() as db:
-        assert matrix(db,imported_id)['summary']['completed']==0
-        assert db.query(models.VehicleProgress).filter_by(project_id=imported_id).count()==0
-        assert db.query(models.VehicleProgressMigration).filter_by(project_id=imported_id).count()==0
-        origin=db.get(models.Project,imported_id).portable_unverified_snapshot
-        assert origin['vehicle_progress_matrix']['legacy']==payload['vehicle_progress_matrix']['legacy']
-        assert origin['execution_evidence']==payload['execution_evidence']
-    source=client.get(f'/api/projects/{imported_id}/vehicle-progress/source',headers=admin_headers)
-    assert source.status_code==200 and source.json()['verified'] is False
-
-
 def test_portable_quantity_history_keeps_exact_original_fields_without_completing_new_work(client,admin_headers):
     from app.services.progress import project_progress_tree
     pid=create_project(client,admin_headers)

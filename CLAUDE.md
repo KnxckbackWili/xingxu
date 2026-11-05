@@ -26,7 +26,7 @@ PostgreSQL 回归同样只在首个用例建库，其余用例按内存中的行
 
 ## 编码约定
 
-- 沟通和业务文案使用中文。新文档按主题放 `docs/`；QA 原件放仓库外，更新[证据清单](docs/evidence-archive.md)。
+- 沟通和业务文案使用中文。新文档按主题放 `docs/`，只写现在的规则；检查记录、整改清单这类过程材料不进仓库。
 - 业务写入在同一事务中完成当前身份、项目归属、能力和版本复核，并通过 `log_change()` 留痕。新增写路由时先读[权限声明](docs/route-permissions.md)；声明必须对应真实 handler 动作，保留认证和资源检查。
 - 改资料、文件、导出或后台任务时先读[项目资料](docs/project-documents.md)、[保密边界](docs/confidential-documents.md)和[存储清理](docs/resumable-storage.md)。当前文件与全部引用家族共同决定可见性；生成文档同样核对来源和输出范围。
 - 改状态、门禁或日期时先读[人工状态与签单](docs/project-lifecycle-v3.md)、[完成核对](docs/completion-review.md)和[截止规则](docs/document-deadlines.md)。使用真实来源和现场时区；登记时间、业务日期、计划日期分别表达。

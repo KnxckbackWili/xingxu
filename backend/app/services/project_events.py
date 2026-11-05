@@ -5,7 +5,7 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.models import Project, ProjectEvent, Vehicle, VehicleUnit
@@ -21,15 +21,7 @@ EVENT_LABELS = {
 
 
 class EventPlanInput(BaseModel):
-    """New writes have one date source; legacy dates remain available for reading."""
     event_plans: dict[EventKey, date | None] = Field(default_factory=dict)
-
-    @model_validator(mode="before")
-    @classmethod
-    def reject_legacy_date(cls, value):
-        if isinstance(value, dict) and "planned_entry_date" in value:
-            raise ValueError("planned_entry_date 已只读，请通过 event_plans.ship 修改计划发车日期")
-        return value
 
 
 def iso_utc(value: datetime | None):

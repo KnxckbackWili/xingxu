@@ -12,7 +12,7 @@ from fastapi import HTTPException
 from sqlalchemy import select, or_
 
 from app.models import (WeeklyPlanCell, Project, Task, Phase, User, Vehicle, VehicleUnit,
-                        VehicleProgress, VehicleProgressMigration, ProjectVehicleStep,
+                        VehicleProgress, ProjectVehicleStep,
                         UserUnavailability)
 from app.services.permissions import C_SCHEDULE, authorize_project, project_capabilities
 from app.services.system_permissions import has_permission
@@ -330,21 +330,19 @@ def _unit_scope(db, project, task, scope, step):
     types = {row.id: row.vehicle_type for row in configured}
     if ids:
         selected = [unit for unit in units if unit.id in ids]
-        return selected, len(ids), len(selected) != len(ids), 0
+        return selected, len(ids), len(selected) != len(ids)
     applicable = set(task.applicable_vehicle_types or [])
     wanted = {kind} if kind else applicable
     selected = [unit for unit in units if not wanted or types.get(unit.vehicle_id) in wanted]
     matching = [row for row in configured if not wanted or row.vehicle_type in wanted]
     if kind:
-        return selected, max(sum(row.quantity or 0 for row in matching), len(selected)), not matching, 0
-    credit = db.query(VehicleProgressMigration).filter_by(project_id=project.id, step_key=step.key).one_or_none() if step else None
+        return selected, max(sum(row.quantity or 0 for row in matching), len(selected)), not matching
     if step and step.expected_quantity is not None:
         expected, unknown = step.expected_quantity, False
     else:
         expected = max(sum(row.quantity or 0 for row in matching), len(selected)) if applicable else total
         unknown = not matching if applicable else fleet_unknown
-        unknown = unknown or bool(step and step.source_task_id and step.expected_quantity is None)
-    return selected, expected, unknown, credit.unassigned_count if credit else 0
+    return selected, expected, unknown
 
 
 def completion_fact(db, project, cell, *, cache=None):
@@ -368,33 +366,29 @@ def completion_fact(db, project, cell, *, cache=None):
             if step is None or task.vehicle_step_key != cell.vehicle_step_key:
                 actual = {'completed_count': None, 'expected_count': None, 'quantity_unknown': True, 'warnings': ['车辆环节尚未明确或与计划原关联不一致，请负责人核对']}
             else:
-                units, expected, unknown, credits = _unit_scope(db, project, task, cell.scope or {}, step)
+                units, expected, unknown = _unit_scope(db, project, task, cell.scope or {}, step)
                 unit_ids = {unit.id for unit in units}
                 done = db.query(VehicleProgress).filter(VehicleProgress.project_id == project.id,
                     VehicleProgress.step_key == step.key, VehicleProgress.vehicle_unit_id.in_(unit_ids), VehicleProgress.is_done.is_(True)).all() if unit_ids else []
                 from app.services.vehicle_checks import checks_for_unit
                 eligible = [entry for entry in done if not any(check['task_id'] == task.id and check.get('blocker')
                     for check in checks_for_unit(db, project.id, entry.vehicle_unit_id, step.key))]
-                # Legacy task-wide checks constrain the original pool too; new per-car
-                # review duties are never silently attached to unidentified credits.
+                # Checks of the whole task (not tied to one car) also gate completion.
                 from app.models import CheckItem
                 from app.services.vehicle_checks import check_block_reason
-                legacy_blocked = any(check_block_reason(db, task, check) for check in db.query(CheckItem).filter(
+                task_blocked = any(check_block_reason(db, task, check) for check in db.query(CheckItem).filter(
                     CheckItem.task_id == task.id, CheckItem.vehicle_unit_id.is_(None),
                     or_(CheckItem.project_id == project.id, CheckItem.project_id.is_(None))))
-                if credits:
-                    warnings.append('含已完成（迁移，车号未知）；不能据此声称逐台核验或已知完成日期')
                 if unknown:
                     warnings.append('车辆应完成数量仍待核对')
                 if expected is not None and expected > len(units):
                     warnings.append(f'尚有 {expected-len(units)} 台配置数量未关联到本范围真实车号或车型归属；不自动补造车辆')
-                if len(eligible) != len(done) or legacy_blocked:
+                if len(eligible) != len(done) or task_blocked:
                     warnings.append('当前必需或安全检查尚未满足')
-                actual = {'completed_count': len(eligible) + (credits if not legacy_blocked else 0),
-                    'identified_completed': len(eligible), 'unidentified_completed': credits,
+                actual = {'completed_count': len(eligible),
                     'expected_count': None if unknown else expected, 'quantity_unknown': unknown,
                     'actual_dates': sorted({entry.done_on.isoformat() for entry in eligible if entry.done_on}),
-                    'completion_date_unknown': bool(credits or any(entry.done_on is None for entry in eligible)), 'warnings': warnings}
+                    'warnings': warnings}
         if cache is not None:
             cache[key] = actual
     actual = dict(actual)
@@ -653,7 +647,7 @@ def draft_preview(db, project, actor, rules, *, first_week=None):
                     if step is None:
                         warnings.append({'task_id': task.id, 'code': 'unmapped_step', 'message': f'「{task.name}」尚未关联真实环节，未生成猜测完成目标'})
                         continue
-                    _, expected, unknown, _ = _unit_scope(db, project, task, {}, step)
+                    _, expected, unknown = _unit_scope(db, project, task, {}, step)
                     if unknown or expected <= 0:
                         warnings.append({'task_id': task.id, 'code': 'unknown_target', 'message': f'「{task.name}」应完成台数待核对，未生成0台或猜测目标'})
                         continue

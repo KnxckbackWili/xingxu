@@ -33,7 +33,7 @@ from app.services.project_lifecycle import (
 )
 
 from app.services.project_events import (
-    DispatchPlatform, EventPlanInput, events_for_project, planned_event_date, update_plans, sync_arrival_all,
+    DispatchPlatform, EventPlanInput, events_for_project, update_plans, sync_arrival_all,
 )
 
 def _private_response(response:Response):
@@ -215,7 +215,7 @@ PROJECT_FIELD_LABELS = {
     'name': '名称', 'abbreviation': '简称', 'contract_no': '合同号', 'client': '客户', 'location': '地点', 'timezone': '时区', 'description': '说明',
     'start_date': '开始日期', 'end_date': '计划结束日期', 'manager': '负责人', 'technical_manager': '技术负责人',
     'co_managers': '协管', 'members': '成员', 'member_permissions': '成员权限', 'client_contacts': '联系人',
-    'entry_plan': '入场信息', 'planned_entry_date': '计划进场日期', 'rest_days': '休息日', 'rest_mode': '休息日规则',
+    'entry_plan': '入场信息', 'rest_days': '休息日', 'rest_mode': '休息日规则',
     'skip_holidays': '节假日规则', 'staffing_notes': '人员说明',
 }
 IGNORED_PROJECT_FIELDS = {'version', 'schedule_version', 'manager_name', 'technical_manager_name', 'id', 'status'}
@@ -268,7 +268,6 @@ def _project_dict(db: Session, p: Project, event_rows=None) -> dict:
         "start_date": p.start_date.isoformat() if p.start_date else None,
         "end_date": p.end_date.isoformat() if p.end_date else None,
         "status": p.status,
-        "legacy_lifecycle": p.legacy_lifecycle,
         "suspension": suspension,
         "description": p.description,
         "staffing_notes": p.staffing_notes or "",
@@ -279,9 +278,6 @@ def _project_dict(db: Session, p: Project, event_rows=None) -> dict:
         "skip_holidays": bool(p.skip_holidays),
         "schedule_version": p.schedule_version or 0,
         "version": p.version or 0,
-        "planned_entry_date": (
-            p.planned_entry_date.isoformat() if p.planned_entry_date else None
-        ),
         "prep_confirmed_by": p.prep_confirmed_by,
         "prep_confirmed_at": (
             p.prep_confirmed_at.isoformat() if p.prep_confirmed_at else None
@@ -573,7 +569,6 @@ def _create_project(data: ProjectCreate, user: User, db: Session):
     initialize_project(db, p, data.template_id)
     update_plans(db, p, data.event_plans, user.id)
     # 创建即生成默认准备清单（准备 Tab；按条件选项增补）+ 保存条件供任务生成时同步
-    from app.routers.preparations import seed_default_preparations
 
     conditions = {}
     for k in ("need_wms", "need_charging", "client_server", "new_vehicles", "overseas"):
@@ -589,7 +584,6 @@ def _create_project(data: ProjectCreate, user: User, db: Session):
     except ValueError as error:
         raise HTTPException(400, str(error))
     p.prep_conditions = [k for k, v in conditions.items() if v]
-    seed_default_preparations(db, p.id, conditions, planned_event_date(db, p.id))
     log_change(
         db,
         p.id,
@@ -1079,47 +1073,6 @@ def _status_change_project(
     return p
 
 
-class LegacyLifecycleRepair(BaseModel):
-    model_config = {'extra': 'forbid'}
-    version: int = Field(ge=0)
-    reason: str = Field(min_length=1, max_length=5000)
-
-
-@router.post('/{project_id}/lifecycle-repair')
-@route_permission('project.update')
-def repair_legacy_lifecycle(project_id: str, body: LegacyLifecycleRepair,
-    user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    from app.services.record_lock import lock_record
-    from app.services.optimistic import bump_version
-    from app.services.permissions import authorize_project, C_UPDATE
-    p = ensure_project_visible(db, project_id, user)
-    lock_record(db, p, conflict_detail='历史状态正在核对，请刷新后重试')
-    db.refresh(user)
-    if user.role != 'admin' or not user.is_active:
-        raise HTTPException(403, '仅系统管理员可核对无法识别的历史状态')
-    p = ensure_project_visible(db, project_id, user)
-    authorize_project(user, p, C_UPDATE)
-    evidence = dict(p.legacy_lifecycle or {})
-    if not evidence.get('requires_repair'):
-        raise HTTPException(409, '该项目无需历史状态修复，请使用正常状态推进')
-    reason = body.reason.strip()
-    if not reason:
-        raise HTTPException(400, '必须说明核对依据与重置为准备的理由')
-    bump_version(p, body.version, db=db)
-    before = {'status': p.status, 'suspension': p.suspension, 'legacy_lifecycle': evidence}
-    p.status = 'preparing'
-    p.suspension = {}
-    p.legacy_lifecycle = {**evidence, 'requires_repair': False, 'repaired_by': user.id,
-                          'repaired_at': utcnow().isoformat(), 'repair_reason': reason}
-    log_change(db, p.id, 'project', p.id, 'lifecycle_repair', user.id,
-               '管理员根据原始记录明确重置为准备；后续须逐阶段重新核对推进', before,
-               {'status': p.status, 'legacy_lifecycle': p.legacy_lifecycle})
-    db.commit()
-    from app.services.cache import cache_clear
-    cache_clear('dashboard:')
-    return {'status': p.status, 'version': p.version, 'legacy_lifecycle': p.legacy_lifecycle}
-
-
 @router.get("/{project_id}/completion-review")
 @route_permission('project.read')
 def read_completion_review(project_id: str, target: Literal['completed', 'archived'] = 'completed',
@@ -1166,8 +1119,6 @@ def change_status(
     if new_status not in PROJECT_STATUSES:
         raise HTTPException(status_code=400, detail=f"无效状态: {new_status}")
     old_status = p.status
-    if (p.legacy_lifecycle or {}).get("requires_repair"):
-        raise HTTPException(400, "历史状态尚未核对，请管理员根据原始记录明确重置为准备")
     suspension = p.suspension or {}
 
     # 突发停工（HYPE-71）：旁路状态，不参与 STATUS_FLOW 相邻流转。

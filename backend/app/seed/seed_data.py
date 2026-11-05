@@ -236,26 +236,8 @@ TEMPLATE_PROCUREMENT_ITEMS = [
 ]
 
 
-def seed_template_procurements(db):
-    """Retired: purchases are rows of the template (template_items) and compiled from them."""
-    return
-
-
-def seed_template_preparations(db):
-    """Retired: T22 freezes old rows and converts their requirements once in migration."""
-    return
-
-
 PRESET_VEHICLE_TYPES = ["潜伏式", "平衡重叉车", "堆高车", "前移式", "滚筒车", "顶升车", "其他/定制"]
 
-# 默认模板中按车辆的工作显式对应 H-2 默认车辆环节；生成项目时随工作复制。
-# 存量安装由迁移 g3a30b000002 按同一冻结映射补齐，已生成项目不改。
-DEFAULT_TASK_VEHICLE_STEPS = {
-    "task-005": "arrival_inspection", "task-006": "arrival_inspection", "task-007": "arrival_inspection",
-    "task-009": "single_commissioning", "task-010": "single_commissioning", "task-011": "single_commissioning",
-    "task-012": "single_commissioning", "task-013": "single_commissioning",
-    "task-022": "system_integration", "task-046": "system_integration",
-}
 
 
 def seed_vehicle_types(db):
@@ -331,27 +313,11 @@ DEFAULT_REFERENCE_GUIDES = {
 
 
 def seed_task_documents(db):
-    """Backfill reference guides only; document requirements are owned by T22."""
+    """Reference guides of the built-in template's work, added when that template is first created."""
     from app.config import UPLOAD_DIR
-    from app.models import Task, Template, TemplateDoc
+    from app.models import Task, TemplateDoc
 
-    managed_template_names = {
-        "系统默认模板",
-        "标准 AGV 实施模板",
-        "潜伏式简版模板",
-        "叉车重载项目模板",
-        "多车型集成模板",
-    }
-    managed_template_ids = {
-        template.id
-        for template in db.query(Template).filter(Template.name.in_(managed_template_names)).all()
-    }
-    template_tasks = db.query(Task).filter(Task.project_id.is_(None)).all()
-    template_tasks = [
-        task
-        for task in template_tasks
-        if task.template_id is None or task.template_id in managed_template_ids
-    ]
+    template_tasks = db.query(Task).filter(Task.project_id.is_(None), Task.template_id.is_(None)).all()
     for task in template_tasks:
         guide = DEFAULT_REFERENCE_GUIDES.get(task.name)
         if not guide:

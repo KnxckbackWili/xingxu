@@ -33,14 +33,3 @@ def test_later_added_work_preserves_project_document_identity_and_evidence(clien
     assert client.get(f'/api/projects/{pid}/procurements', headers=pm_headers).json()['items'] == []
 
 
-def test_upgrade_is_idempotent_and_never_changes_existing_projects(client, pm_headers):
-    from app.seed.scope_preparations import migrate_scope_preparations
-    pid = create(client, pm_headers, work_item_ids=default_work('mod-03'))
-    before = client.get(f'/api/projects/{pid}/tree', headers=pm_headers).json()
-    with SessionLocal() as db:
-        count = db.query(Module).count()
-        migrate_scope_preparations(db)
-        migrate_scope_preparations(db)
-        db.commit()
-        assert db.query(Module).count() == count
-    assert client.get(f'/api/projects/{pid}/tree', headers=pm_headers).json() == before

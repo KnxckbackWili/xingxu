@@ -7,7 +7,7 @@ from uuid import uuid4
 from fastapi import HTTPException
 from sqlalchemy import func,or_
 from app.models import (Task,Phase,Module,Project,User,CheckItem,DailyProgress,
-    VehicleUnit,ProjectVehicleStep,VehicleProgress,VehicleProgressMigration)
+    VehicleUnit,ProjectVehicleStep,VehicleProgress)
 from app.services.execution_scope import REMINDER_ONLY_PHASE_NAMES
 from app.services.permissions import C_PLAN,authorize_project,project_capabilities
 from app.services.system_permissions import has_permission
@@ -95,7 +95,6 @@ def step_states(db,tasks):
         steps={s.key:s for s in db.query(ProjectVehicleStep).filter(ProjectVehicleStep.project_id==project_id,ProjectVehicleStep.key.in_(keys))} if keys else {}
         done=dict(db.query(VehicleProgress.step_key,func.count(VehicleProgress.id)).filter(VehicleProgress.project_id==project_id,
             VehicleProgress.step_key.in_(steps),VehicleProgress.is_done.is_(True)).group_by(VehicleProgress.step_key)) if steps else {}
-        credits={c.step_key:c for c in db.query(VehicleProgressMigration).filter(VehicleProgressMigration.project_id==project_id,VehicleProgressMigration.step_key.in_(steps))} if steps else {}
         fleet=fleet_scope(db,project_id) if steps else None
         for task in rows:
             if not task.vehicle_step_key:result[task.id]={'linked':False,'complete':False,'percent':None,'warning':'尚未明确关联车辆环节'};continue
@@ -103,16 +102,12 @@ def step_states(db,tasks):
             if step is None:result[task.id]={'linked':False,'complete':False,'percent':None,'warning':'原车辆环节来源待核对'};continue
             units,total,unknown=fleet
             expected=step.expected_quantity if step.expected_quantity is not None else total
-            if step.source_task_id and step.expected_quantity is None:unknown=True
-            identified=done.get(step.key,0)
-            credit=credits.get(step.key)
-            unidentified=credit.unassigned_count if credit else 0
-            count=identified+unidentified
-            result[task.id]={'linked':True,'key':step.key,'name':step.name,'identified_completed':identified,'unidentified_completed':unidentified,
+            count=done.get(step.key,0)
+            result[task.id]={'linked':True,'key':step.key,'name':step.name,
                 'completed_count':count,'expected_count':None if unknown else expected,
                 'complete':not unknown and expected>0 and count>=expected,
                 'percent':None if unknown else min(100,round(count/expected*100,1)) if expected else 0,
-                'warning':'已完成（迁移，车号未知），不代表逐台核验' if unidentified else '车辆数量待核对' if unknown else ''}
+                'warning':'车辆数量待核对' if unknown else ''}
     return result
 
 

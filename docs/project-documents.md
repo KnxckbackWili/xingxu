@@ -22,8 +22,6 @@
 
 ## 原入口退役与迁移
 
-迁移 `g3a22b000001` 使用冻结 SQL/schema，不导入应用 ORM；精确父链以 Alembic 修订文件为准。重复升级不重复搬迁。
-
 | 原来源 | 新事实 | 保全规则 |
 | --- | --- | --- |
 | 每个 `Task.deliverables` 元素 | 每项一个规则与实例，默认待分类 | 来源记录保留 task/module/phase/id/index 和原 JSON；原提交人、时间、审核说明、附件均保留 |
@@ -59,4 +57,3 @@ Agent `documents_read` 需要 `projects:read` 和 `files:read`，遵守同样项
 
 新增测试位于 `backend/tests/test_project_documents.py` 和 `test_project_documents_migration.py`。覆盖真实附件、多项提交、版本与下载、可选审核、不适用、平台/车辆范围、真实事件接缝、跨项目原子性、上传故障回滚、规则编辑/分类、旧离线 UUID、采购 metadata、只读角色、复制/JSON/Excel/ZIP、验收指纹、Agent scope、删除恢复/物理清理和并发提交。
 
-迁移测试分别构造 SQLite、PostgreSQL 的 g3a21 数据，升级并重复升级后核对旧 7 个项目资料来源、4 个版本、原字段/审核事实、附件数量和文件 SHA256，执行 schema/metadata 对账。真实旧备份全链迁移由 T60 独立执行，不在业务卷上试验。

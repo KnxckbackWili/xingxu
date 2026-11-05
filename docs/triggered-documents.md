@@ -47,8 +47,6 @@ REPORT_WEEKLY_TIME=20:00
 
 项目 JSON 仍用于新项目计划导入。源问题性质、来源ID、原时刻和原来源元数据存入 `Issue.source_metadata`，只读标识为未验证导入历史；当前性质默认普通，不把导入时刻伪装成新事故上报或重新启动SLA。详情显示提示，后续明确的性质变更可建立本次真实来源。源触发记录随资料 JSON 保全为只读来源，不在新项目重建为真实触发。完整加密备份承担原项目事实恢复。
 
-迁移 `g3a24b000001` 暂接 `g3a27b000001`，增加 Issue.nature（旧行 normal）、nullable source_metadata 和两张新表，不读取 live ORM、不改旧 extra/报告时间/文件、不补造历史事故。命名 parent→g24 的 SQLite离线 SQL真实执行、失败回滚、FK恢复、PG在线、双方言编译及完整head schema比较均有精准测试；全历史链仍在线执行。
-
 新持久表及保留边界：
 
 - `document_trigger_events`：project_id→projects CASCADE；actor_id→users SET NULL。source_id为原问题/成员的历史身份引用，故不随单条问题删除而丢失。

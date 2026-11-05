@@ -79,7 +79,6 @@ curl -H "Authorization: Bearer $AGV_AGENT_TOKEN" \
 
 `project_files` 不提供文件正文、磁盘路径或下载凭据；分页响应含 `items` 和 `next_offset`，后者为 `null` 表示结束。不要把该工具的目录读取权限误当作附件下载权限。
 
-
 ## 5. 建议的 Agent 使用流程
 
 1. `projects_list` 定位项目，避免猜测 UUID。

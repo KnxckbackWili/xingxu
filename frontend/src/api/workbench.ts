@@ -1,6 +1,6 @@
 import { api } from './client'
 import type { DocumentAction, DocumentAttention } from './projectDocuments'
-export type VehicleSummary = { target: number; completed: number; identified_completed?: number; unidentified_completed?: number; quantity_unknown: boolean; fleet_quantity_unknown?: boolean; unregistered_quantity?: number; percent: number | null; progress_known?: boolean }
+export type VehicleSummary = { target: number; completed: number; quantity_unknown: boolean; unregistered_quantity?: number; percent: number | null; progress_known?: boolean }
 export type WorkbenchAction = DocumentAction & { project_id: string; project_name: string; timezone?: string }
 export type WorkbenchProject = { id: string; name: string; status: string; percent?: number; vehicle_progress?: VehicleSummary; document_attention?: DocumentAttention; next_signoff?: WorkbenchAction | null }
 export type WorkbenchOverview = { projects: WorkbenchProject[]; this_week_documents?: WorkbenchAction[]; weekly_plan?: WeeklyPlanAttention }

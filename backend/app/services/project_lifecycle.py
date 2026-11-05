@@ -36,9 +36,6 @@ def ensure_project_writable(p) -> None:
     仅用于业务写端点；状态流转（change_status）不走此守卫，因为它负责
     completed→archived 以及 archive→completed 的恢复路径。
     """
-    if (getattr(p, "legacy_lifecycle", None) or {}).get("requires_repair"):
-        from fastapi import HTTPException
-        raise HTTPException(400, "历史状态需要管理员根据原始记录明确核对修复，项目暂不可修改")
     if p.status == "archived":
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="项目已归档，不能修改")

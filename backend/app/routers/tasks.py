@@ -20,7 +20,6 @@ from app.services.generate_tasks import generate_tasks_for_modules, selected_exe
 from app.services.execution_scope import REMINDER_ONLY_PHASE_NAMES
 from app.services.project_lifecycle import TERMINAL_PROJECT_STATUSES
 from app.services.change_log import log_change
-from app.services.project_events import planned_event_date
 from app.services.system_permissions import has_permission
 
 router = APIRouter(tags=["任务"])
@@ -106,13 +105,10 @@ def generate_tasks(
     try:
         result = generate_tasks_for_modules(db, p, module_ids, template_id, [], task_quantities, [])
         # 独立准备清单只负责提醒，不生成执行任务。
-        from app.routers.preparations import sync_preparation_items, seed_default_preparations
+        from app.routers.preparations import sync_preparation_items
         from app.services.preparation_scope import conditions_for_scope
         added_conditions = conditions_for_scope(db, template_id, module_ids, [], [])
         p.prep_conditions = sorted(set(p.prep_conditions or []) | set(added_conditions))
-        added_preps = seed_default_preparations(db, p.id, dict.fromkeys(p.prep_conditions, True), planned_event_date(db, p.id))
-        if added_preps:
-            log_change(db, p.id, "preparation", p.id, "generate", user.id, f"随实施范围补充 {added_preps} 项准备事项")
         sync_preparation_items(db, p.id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

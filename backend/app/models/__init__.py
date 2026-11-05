@@ -112,7 +112,6 @@ class Project(Base):
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
     status = Column(String(20), nullable=False, default="preparing")
-    legacy_lifecycle = Column(JSON, nullable=True)  # read-only original status/suspension/migration provenance
     description = Column(Text, default="")
     staffing_notes = Column(Text, default="")  # 资料中的人员姓名/建议，不自动绑定系统账号
     members = Column(JSON, default=list)  # [user_id, ...]
@@ -125,7 +124,6 @@ class Project(Base):
     template_id = Column(String(36), nullable=True)  # 生成来源模板（P3：记录使用情况）
     template_version = Column(Integer, default=0)  # 生成时的模板版本
     portable_unverified_snapshot = Column(JSON, nullable=True)  # immutable imported execution source; never active qualification
-    planned_entry_date = Column(Date, nullable=True)  # 历史只读，保留一个版本；新计划使用ProjectEvent
     dispatch_platform = Column(String(20), nullable=True)  # NDC / GRACE / integrated
     readiness_state = Column(String(20), default="preparing")
     # preparing 准备中 / risky 有风险 / pending_confirm 待确认 / ready 已就绪（独立准备状态，不干扰项目状态）
@@ -205,7 +203,6 @@ class VehicleUnit(Base):
     frame_no = Column(String(100), default="")  # 门架号（门架钢印），质量问题反馈单使用
     factory_date = Column(Date, nullable=True)  # 出厂日期（铭牌），质量问题反馈单使用
     model_name = Column(String(100), default="")  # 生命周期表导入的车辆型号（未匹配车型档案时保留展示）
-    legacy_current_stage = Column(String(80), nullable=True)  # read-only original nine-stage fact
     current_stage = Column(String(80), default="planned")
     current_status = Column(String(30), default="normal")
     location = Column(String(200), default="")
@@ -250,27 +247,13 @@ class VehicleProgress(Base):
     vehicle_unit_id = Column(String(36), ForeignKey("vehicle_units.id", ondelete="CASCADE"), nullable=False, index=True)
     step_key = Column(String(80), nullable=False)
     is_done = Column(Boolean, nullable=False, default=True)
-    done_on = Column(Date, nullable=True)  # NULL only for unidentifiable historical completion dates
+    done_on = Column(Date, nullable=True)  # set when is_done
     recorded_at = Column(DateTime, nullable=False, default=utcnow)
     done_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     note = Column(Text, default="")
-    migrated = Column(Boolean, nullable=False, default=False)
     source_metadata = Column(JSON, nullable=True)
     version = Column(Integer, nullable=False, default=1)
     __table_args__ = (UniqueConstraint("vehicle_unit_id", "step_key", name="uq_vehicle_progress_unit_step"),)
-
-
-class VehicleProgressMigration(Base):
-    """Quantity facts whose real vehicle identities were never recorded."""
-    __tablename__ = "vehicle_progress_migrations"
-    id = Column(String(36), primary_key=True, default=gen_uuid)
-    project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
-    step_key = Column(String(80), nullable=False)
-    total_count = Column(Integer, nullable=False)
-    unassigned_count = Column(Integer, nullable=False)
-    source_metadata = Column(JSON, nullable=False, default=dict)
-    __table_args__ = (UniqueConstraint("project_id", "step_key", name="uq_vehicle_progress_migration_step"),
-        CheckConstraint("unassigned_count >= 0 AND unassigned_count <= total_count", name="ck_vehicle_progress_migration_count"))
 
 
 class VehicleLifecycleEvent(Base):

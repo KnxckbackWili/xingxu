@@ -268,26 +268,15 @@ def _init_db():
     _set_aside_old_database()
     _alembic_sync_schema()
 
-    # Seed default roles, admin user, and template
-    from app.seed.seed_data import (seed_all, seed_template_procurements, seed_task_documents,
-                                    seed_vehicle_types, seed_template_preparations)
+    # Admin account, vehicle types and the built-in template.
+    from app.seed.seed_data import seed_all, seed_task_documents, seed_vehicle_types
+    from app.seed.default_template import seed_default_template
     db = SessionLocal()
     try:
         seed_all(db)
-        from app.seed.default_template import seed_default_template
-        seed_default_template(db)
-        # These seeds previously lived inside the SQLite-only migration branch.
-        seed_template_preparations(db)
-        from app.seed.scope_preparations import migrate_scope_preparations
-        migrate_scope_preparations(db)
-        # 常用采购项库独立 seed（幂等）：seed_all 有 admin 守卫，旧库会早退。
-        seed_template_procurements(db)
-        seed_task_documents(db)
-        # HYPE-63：预置车型字典（幂等，独立于 seed_all 守卫，旧库也补齐）
+        if seed_default_template(db):
+            seed_task_documents(db)
         seed_vehicle_types(db)
-        # 所有账号都能看、都能记录所有项目：补齐旧项目的成员名单（开关关闭时不做任何事）。
-        from app.services.open_access import reconcile
-        reconcile(db)
         db.commit()
     finally:
         db.close()

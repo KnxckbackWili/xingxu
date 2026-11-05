@@ -1,6 +1,6 @@
 # 部署指南（NAS / 服务器）
 
-> 本文引用的 QA 回执描述历史时点，原件已[归档](evidence-archive.md)；当前 v3 操作请从[文档入口](index.md)开始。
+> 本文引用的 QA 回执描述历史时点，原件已归档；当前 v3 操作请从[文档入口](index.md)开始。
 
 ## 公网部署必改清单（T10）
 
@@ -58,113 +58,15 @@ server {
 
 上线核对：HTTP 域名跳转到 HTTPS；`curl -sS -D - -o /dev/null https://agv.example.com/health` 返回 HSTS；HTTPS 登录响应的四个会话 Cookie 均带 `Secure`；未配置域名返回 400。修改环境文件后重建/更新容器使启动校验生效。
 
-## 2.3.2 当前交付与部署状态（2026-10-12）
+## 从 3.6 之前的版本升级
 
-项目列表新增个人收藏、最近浏览和保留筛选的刷新；准备事项支持“我跟进的事项”，手机长名称与状态分行，确认按钮至少 44px。[本轮 10 项整改清单与页面效果](便民功能与视觉优化-20261012.md)。
+3.6 起数据库从新的起点开始，不迁移旧数据。升级后第一次启动时：
 
-最终产品源码 `0e4b7a9add2632346c9f6284bd0e4e7f04be5a2e`：后端 Python 3.12 全量 **1621 项**、前端 Node 22 全量 **116 文件 / 9权限目录中的**、TypeScript 和生产构建通过；269 份后端、288 份前端源与测试一致，170 个编译资源直接来自该构建。[测试回执](evidence-archive.md "原路径：docs/qa-convenience-2026-10-12/source-validation.json；SHA256：4ce717d776c8524cec50b3d4f5148a74be0695eedd6a1fff9e1dba69cea8ca16")。
+- 先照常生成一份迁移前加密备份（`DATA_DIR/backups/agvpm-before-migrate-*.agvenc`）。
+- 旧数据库原样挪开：SQLite 文件移到 `DATA_DIR/old-<时间>/`，PostgreSQL 的表移到 `old_<时间>` 架构；上传文件、项目删除备份一起移到 `DATA_DIR/old-<时间>/`。
+- 系统从空库开始，用 `INITIAL_ADMIN_PASSWORD` 建管理员账号，内置模板、车型字典自动写入。
 
-[本机工作台](http://workflow.localhost:18004)已更新并实际重启 2.3.2，单产品容器、PostgreSQL 17.11 和 5 个服务健康。58 张表的原始数据、4 用户、7 项目、84 个原文件的内容及权限、JWT 保持一致；本轮没有数据库迁移。自动 SQL 备份轮转后仅从冻结备份补回原文件；初次补回的两份权限差异已修正并通过完整复核，没有还原业务库或修改附件。[运行保全](evidence-archive.md "原路径：docs/qa-convenience-2026-10-12/upgrade-public.json；SHA256：030239259d302f1d88e1e339fde9a8a3bd9bd3586ef9c2ab8f06967ed1c89231")、[实际页面读回](evidence-archive.md "原路径：docs/qa-convenience-2026-10-12/actual-browser.json；SHA256：424f76c119dd343a6adaba884c38cd895949a7b5dee672fdcaa09ba09e6493c0")。
-
-ARM64 镜像沿用已验证 2.3.1 依赖基础，替换最终后端与前端；36 个历史层扫描、私密值检查和实际 Docker 导入通过。[镜像构建](evidence-archive.md "原路径：docs/qa-convenience-2026-10-12/image-build.json；SHA256：926788537c090cac806a458bb9eeef104c2242d5c8c0083ef48acfff09adfc64")、[导入核对](evidence-archive.md "原路径：docs/qa-convenience-2026-10-12/image-load.json；SHA256：fd91b608c04ec08ca80c9ebe8d7128ebc91c8c94eef811ff2fb7200b785689d5")。本轮未完整执行标准 Dockerfile，正式 NAS 和 amd64 未实机验收。
-
-NAS ARM64 新装可加载 `agv-project-workflow-2.3.2-linux-arm64-image.tar.gz`，设置 `AGV_IMAGE=agv-pm:2.3.2`，使用对应 Compose 入口与 `--no-build`；8002 入口配置 `docker/.env`，普通入口配置根 `.env`。x86_64 使用源码按标准 Dockerfile 构建。已有实例先完整备份并保留原卷与认证配置；2.3.2 与 2.3.1 迁移头均为 `d2e7f9a103b4`。本机已保留原 2.3.1 停止容器和私有一致备份。
-
-## 2.3.1 历史交付与部署状态（2026-10-08）
-
-最终产品源码为 `2a3031889dd2ab5a947fd664e087351666e52f40`。后端 Python 3.12 全量1617项、前端 Node 22 全量113文件935项、TypeScript及生产构建通过；268份后端、284份前端源码与测试时逐字节一致，169份前端构建产物与镜像及源码交付包一致。[测试与构建](evidence-archive.md "原路径：docs/qa-project-recovery-2026-10-08/source-validation-231.json；SHA256：b2680003508bd7ce67b76e6dc80bc41311c87af8db15ae71b8ce14b02e119bf5")。
-
-ARM64离线镜像继承已验证2.3.0依赖，替换最终后端、迁移和前端；完整历史层、7个精确私有值扫描及实际Docker导入通过。该轮未完整执行标准Dockerfile，正式NAS和amd64尚未实际验收。[镜像验证](evidence-archive.md "原路径：docs/qa-project-recovery-2026-10-08/offline-image-231-public-proof.json；SHA256：b6d75d09d89427928623cea915b6e78262aea3cc15a778ca0a7fea3792eb0589")。
-
-本轮还统一正式、演练及环境示例的默认镜像标签为2.3.1；三份YAML使用PyYAML静态解析并核对单服务、构建版本和镜像默认值，不计作Compose CLI或NAS运行验收。[部署默认值校验](evidence-archive.md "原路径：docs/qa-project-recovery-2026-10-08/deployment-defaults-231.json；SHA256：3b7010241a7b5680075bc50ef550dc0c41271dbde29b5eef7f9f2ceb3314d84e")。
-
-NAS ARM64新装先加载 `agv-project-workflow-2.3.1-linux-arm64-image.tar.gz`，设置 `AGV_IMAGE=agv-pm:2.3.1`，使用对应Compose入口和 `--no-build`；8002入口配置 `docker/.env`，普通入口配置根 `.env`。x86_64使用源码按标准Dockerfile构建。已有实例先一致备份，保留原卷及认证配置。新迁移头 `d2e7f9a103b4` 不可直接交给缺少该脚本的旧2.3.0镜像；兼容回退镜像保留旧程序，仅补迁移脚本，且要求两张新恢复表均为空。已有恢复记录时应保持新程序，或明确采用完整一致备份恢复策略，不能无条件回退。
-
-本机启动入口已验证2.3.1，原登录口令保留于本机600文件。网页验收TaskSpace12已关闭且零保留，临时后端、Vite和隔离PG容器已停止清理。[启动与清理](evidence-archive.md "原路径：docs/qa-project-recovery-2026-10-08/launcher-cleanup-231.json；SHA256：b7f25b40fe7c2a81a42e7888a4bb51ae72f2d8e26e1130d84d3b82b775431519")。以下内容为历史记录。
-
-## 2.3.0 历史交付与部署状态（2026-10-08）
-
-管理员在“设置 → 团队与权限 → 成员权限”按成员设置权限目录中的全系统操作。权限页提供分组、搜索、继承/允许/禁止、批量、结果来源、固定保存和冲突保护；原项目、本人资料与流程资格一起校验。见[详细目录、推荐设置及16项检查清单](system-member-permissions-2026-10-08.md)。
-
-最终产品源码 `4667f02c470dc85265ac68ce69cd3258c0a0accd`：后端1563项、256份源前后及最终Git字节一致；前端106文件886项、269份源、TypeScript和生产构建通过。全新Node22依赖安装569包及完整性校验通过，依赖版本保持原锁定值。桌面/手机浅深色、同会话授权撤销、只读字典、现场独立动作、未保存、并发合并、审计与归档拒绝完成网页检查。[最终验证](evidence-archive.md "原路径：docs/qa-permissions-2026-10-08/validation-summary.json；SHA256：c8a2b422dd04e9981e01622cfa03511b2c74cb4b8aa3aa67a5257cfc7e232164")。
-
-[本机工作台](http://workflow.localhost:18004/pm/permissions)已在原卷升级2.3.0并真实重启；单产品容器、PG17.11和5服务健康。4用户的原12列及ID、6项目、75原文件与JWT保持，2个新权限列仅默认继承。只变更预期User列和Alembic头，技术水位仅两个时间向前。原生成SQL备份按冻结归档逐字节补回，没有恢复数据库或改写用户文件。真实网页读回权限目录中的/4成员全继承、保护入口及39条已发布日程；没有给真实成员设置新策略。[升级保全](evidence-archive.md "原路径：docs/qa-permissions-2026-10-08/upgrade-2.3.0-public-receipt.json；SHA256：bcc2e4434a4cdb080db112b8fd8e5f16294d3649f814f4f6525d7b5e6b01b0dc")、[真实网页](evidence-archive.md "原路径：docs/qa-permissions-2026-10-08/actual-pg-permissions-readback-230.json；SHA256：1be4b76ab39d8c07b4847753c8654dc4519e4ad312608756a502e2823cd56dad")。
-
-ARM64离线镜像 `agv-project-workflow-2.3.0-linux-arm64-image.tar.gz` 为211223953B，SHA256 `6129998853e668469ecdda5ead2616621065ad46a7244ad7c4529197f6571da2`。继承已验证2.2.3依赖基础，完整替换最终后端、迁移及164前端资源；26历史层、5个精确私有值零命中及实际Docker导入通过。该轮未完整执行标准Dockerfile；正式NAS与amd64尚未实际验收。[镜像回执](evidence-archive.md "原路径：docs/qa-permissions-2026-10-08/offline-image-230-public-proof.json；SHA256：032c3d7c6d630cd8ac99f0ebafcce1321ac92309311925353a65cc82ae0aba63")。
-
-NAS ARM64新装先加载镜像，在对应环境文件设置 `AGV_IMAGE=agv-pm:2.3.0`，沿用相应Compose入口并使用 `--no-build`；8002入口用 `docker/.env`，普通入口用根 `.env`。x86_64从交付源码按标准Dockerfile构建。已有实例先一致备份，沿用原数据卷与认证配置；新迁移头b6不能直接交给不包含该迁移脚本的旧223镜像，应使用兼容回退镜像或对应的完整升级前快照与旧镜像。
-
-本机一键启动入口已实际运行2.3.0就绪，登录密码保持，仅本机600文件提供。Space11三页关闭、零保留，临时后端与Vite已停止。[启动](evidence-archive.md "原路径：docs/qa-permissions-2026-10-08/launcher-230-public-proof.json；SHA256：0cbdd2472ac8d3d805a5f6d56fef88d3e15c84f28aefcc8f6837608d846f9fe9")、[清理](evidence-archive.md "原路径：docs/qa-permissions-2026-10-08/browser-cleanup-230.json；SHA256：63403cbcd7cd842f11293a6b349a3ec933cb369fd5cab878c30452f218f74eeb")。以下保留历史记录。
-
-AGV 项目管理系统是一个**单容器**应用：前端（React SPA）由后端（FastAPI）直接托管，全部运行在一个 Docker 容器里。只需一个端口、一个数据卷。
-
-## 历史2.2.3交付与部署状态（2026-10-07）
-
-“重新安排全部任务”从更多菜单移到日程页头。有待发布安排时与发布按钮并排；全部已发布时成为主操作；空排程仍用自动安排。更多保留排期设置和逾期/受阻调整，设置说明同步指向页头。点击仍先预览，确认保存才改变日程。[入口整改与网页证据](日程重排入口整改-20261007.md)。
-
-最终产品`c11a01bc0d0c9393af1cd98f658a0fb9c9a36ea1`，Node22.23.3/UTC完整102文件824项（257.22秒）、TypeScript和构建通过，261源及160编译资源一致。1440/1100/700/390网页检查、桌面和手机预览取消通过。后端248份业务/测试源保持，仅版本默认变化，沿用历史1448基线＋最终IO67，本轮未新跑后端业务全量。
-
-[本机工作台](http://workflow.localhost:18004)已保留原卷更新2.2.3并实际重启，单产品容器PG17.11及5服务健康；55业务表、73原文件、6项目、4用户和JWT保持，技术表仅两个时间字段自然前进。正常SQL轮转缺失的生成备份只从冻结归档精确补回，没有恢复数据库或改写附件。真实项目39条已发布、两项手动工期下，重排主按钮及390/1440尺寸实际读回；预览取消后日程响应逐字一致。[运行保全](evidence-archive.md "原路径：docs/qa-replan-2026-10-07/upgrade-2.2.3-public-receipt.json；SHA256：fc4937af79d4408d1824a1bb650df28611d7be609c789fb1dda6e51cefa94960")、[真实网页读回](evidence-archive.md "原路径：docs/qa-replan-2026-10-07/actual-pg-replan-readback-223.json；SHA256：f1fe702d90c611a74084de3358deb64d8a16957a77fabeaa1b131fc4d74b8624")。
-
-Linux/arm64离线镜像`agv-project-workflow-2.2.3-linux-arm64-image.tar.gz`为209810892B，SHA256 `f57e7f44132ba6f641a4a9b8566c8dc974f13d3a5496ad68607f41ede09b794e`。镜像从已验证2.2.2运行基础继承，仅替换最终160个前端资源及后端版本配置，先删除旧dist；21个历史层完整扫描及实际docker load通过。该轮使用记录谱系的增量构建，仓库标准Dockerfile仅版本默认变化，本轮没有执行标准完整构建。[镜像回执](evidence-archive.md "原路径：docs/qa-replan-2026-10-07/offline-image-223-public-proof.json；SHA256：271ed4d96acfacf6d22700ecc569ca87392fadaf673d14988e493499101ad70d")。
-
-NAS ARM64新装可先docker load，再在对应环境文件将`AGV_IMAGE=agv-pm:2.2.3`，使用与部署形态对应的Compose入口及`--no-build`；8002入口用`docker/.env`，普通入口用根`.env`。x86_64从[交付仓库](https://gitea.arrowwood.top:8773/codex-mac/agv-project-workflow)或2.2.3源码ZIP按下方标准Dockerfile构建。已有实例先一致备份并沿用原数据卷和认证配置。正式NAS及amd64未实际验收，源码ZIP解压启动结果见包旁回执。
-
-本机一键启动的旧版本正则校验已修正，实际执行2.2.3就绪通过，[启动回执](evidence-archive.md "原路径：docs/qa-replan-2026-10-07/launcher-223-public-proof.json；SHA256：530faa1f5138bef65bcb2783f3f0df87c63c1598aed751e451c22b8a86cb2295")。Space10的2个任务页关闭、0页保留，临时QA后端/Vite停止，[清理回执](evidence-archive.md "原路径：docs/qa-replan-2026-10-07/browser-cleanup-223.json；SHA256：5c3a5cf729582adfe6550b2f712b31b38c49a90693b54b3fec973b5679013c7e")。下文为各历史轮次的状态。
-
-## 2.2.2历史交付与部署状态（2026-10-07）
-
-甘特图增加「按任务」和「按人员」：任务可展开每人的实际日程；人员视图逐日显示任务、数量及完成量，空档保持真实位置，同一天多条安排逐条查看。切换视角回到起点，滚动后每行仍保留姓名与阶段。手机日期格、日期调整及编辑按钮扩大，日历改为当天明细抽屉；月份、今日线、颜色对比和表格/弹窗尺寸一并核对。[13项检查与整改清单](甘特图多人分工与排版检查清单-20261007.md)。这次改善实际多人安排的展示，自动排程的人力算法沿用原规则，不会因为多名成员自动生成并行安排。
-
-产品检查点`672248a7b4ac91742e4a5d15cf18aba6d8648631`：Node22.23.3/UTC/单worker完整102文件824项，242.63秒，TypeScript与生产构建通过，原时限与断言保持；261份源及160个编译资源逐字一致。后端248个业务/测试文件沿用已验收2.1.4字节，仅APP_VERSION变化；验证口径为历史1448项基线加最终67项IO回归，本轮没有新跑后端全量。
-
-[本机工作台](http://workflow.localhost:18004)已保留原卷更新2.2.2并真实重启，只有一个运行的产品容器，内部PG17.11和5个服务健康。按本轮新鲜快照保全55张业务表、69个原文件、6项目、4用户与JWT；一张调度技术表仅两个时间字段自然前进。用户当前项目为待进场、39条安排已全部发布、2名执行人及3项多人任务，网页已读回；不沿用2.2.0的旧状态。仍有8条安排超出用户设定的项目周期，页面明确提示；本轮没有替用户改合同周期或已有日程。[运行保全回执](evidence-archive.md "原路径：docs/qa-gantt-multi-2026-10-07/upgrade-2.2.2-public-receipt.json；SHA256：9e0b1d72d291696023bbe0337fc1b66d2c9f8a0648bc62a0cdd70b3a2f12271b")、[真实网页读回](evidence-archive.md "原路径：docs/qa-gantt-multi-2026-10-07/actual-pg-person-readback-222.json；SHA256：015a92a9499897c256ebd4b37c04e9e19ea3d4cfba7c2d6e8636bf91c251f8e2")。
-
-启动中的既有迁移备份轮转规则会清理最旧的自动SQL备份。本轮从冻结一致归档中仅补回被轮转的生成文件，逐字核对69个原文件；没有恢复数据库或改写用户附件，备份保留规则保持。升级前私有一致归档及旧回退容器继续留在本机；数据库、登录信息和真实项目截图不进入公开交付。
-
-Linux/arm64离线镜像`agv-project-workflow-2.2.2-linux-arm64-image.tar.gz`为208787154B，SHA256 `ceee5a8f07c5ad12fd31911a6c62dc4d91553d47ca2c0b3712c8fb7cd33a8cee`。18个历史层全部扫描、实际docker load及RootFS/Config逐项核对通过；`agv-workflow:2.2.2-qa`与Compose默认`agv-pm:2.2.2`指向同一镜像，160个前端资源与测试构建一致，另经独立只读复核。[镜像回执](evidence-archive.md "原路径：docs/qa-gantt-multi-2026-10-07/offline-image-222-public-proof.json；SHA256：8831171611d683730b7591dbf7f049f2d3267aef6a98ba4cb7fefe619152a6bf")。正式NAS尚未部署2.2.2，amd64未实际验收。
-
-NAS新装先确认架构：ARM64可导入上述镜像，再使用与下方部署形态对应的Compose入口及`--no-build`；x86_64从[交付仓库](https://gitea.arrowwood.top:8773/codex-mac/agv-project-workflow)或2.2.2源码ZIP构建。已有实例先做一致备份，沿用自己的持久卷、环境和认证配置，再按原部署形态更新。源码ZIP附编译前端、清单、证据与校验文件，包旁回执记录最终文档提交、逐文件核对及独立解压启动结果。
-
-本机一键启动2.2.2实际执行成功，[启动回执](evidence-archive.md "原路径：docs/qa-gantt-multi-2026-10-07/launcher-222-public-proof.json；SHA256：2ecb530ed5679f4867184e002cefa634cb2c08427de786e29798d33e9a140059")。本轮Space9的3个任务页已关闭且0页保留，临时QA后端和Vite均停止，工作台持续在线，[清理回执](evidence-archive.md "原路径：docs/qa-gantt-multi-2026-10-07/browser-cleanup-222.json；SHA256：4d607202101eae01f6477a91c83c936edf6fd14848617620d72ea151c4dea7b7")。下文状态只对应各历史版本。
-
-## 2.2.0历史交付与部署状态（2026-10-07）
-
-界面按工作重排：全站四个常用入口，项目七个工作区域；页面正文、创建三步、任务与日程、现场、资料及手机工作同时整理。[23项改造与发现清单](整体界面重设计清单-20261007.md)、[名称与位置指引](功能位置与名称指引-20261007.md)。最终检查点`ff34aa22767184aebaae61218042a3fd7f474ee2`：Node22.23.3/UTC/单worker完整100文件796项、TypeScript与构建通过；255份源与159个编译资源逐字一致。后端248份非版本源/测试沿用已接受2.1.4字节，只改APP_VERSION；本轮未新跑后端全量。
-
-[本机工作台](http://workflow.localhost:18004)已保留原卷升级2.2.0并实际重启，仍只有一个运行的产品容器，内含PG17.11和应用服务。原55业务表、65文件、6项目、4用户及JWT保持；另外一张调度技术表5行稳定字段保持，2个运行时间字段自然前进并独立绑定快照。原项目仍为计划中、32任务和89条待发布；手机旧名检索、原138B附件精确下载及新版一键启动通过。[运行回执](evidence-archive.md "原路径：docs/qa-redesign-2026-10-07/upgrade-2.2.0-public-receipt.json；SHA256：330752b8396b2eddf4d96da458e36ec35ebc67397467820bd2db040c29a9f836")、[网页读回](evidence-archive.md "原路径：docs/qa-redesign-2026-10-07/actual-pg-browser-readback-220.json；SHA256：4f454ea2bcb1984dd52f2f3614027ef0770b9e7ab566a07f47058628618fc733")。一致私有备份和旧回退容器保留，数据库、登录信息及实际项目照片不进入公开交付。
-
-Linux/arm64离线镜像`agv-project-workflow-2.2.0-linux-arm64-image.tar.gz`为208784609B，SHA256 `6181fa7589bec3c6ae31927829ebfd5351c63d6893f5025f9b74a9a1c6d75849`。18个历史层全部扫描、实际docker load与RootFS/Config逐项核对通过；`agv-workflow:2.2.0-qa`和Compose默认`agv-pm:2.2.0`指向同一镜像，全部159前端资源与测试构建一致。正式NAS尚未更新本轮版本，amd64未实际验收。
-
-NAS新装先确认架构：ARM64可导入上述镜像，再按下方对应Compose入口使用`--no-build`；x86_64从[交付仓库](https://gitea.arrowwood.top:8773/codex-mac/agv-project-workflow)或2.2.0源码ZIP按下方流程构建。已有实例先做一致备份，沿用自己的持久卷、环境和认证配置，再按原部署形态更新；不使用本机QA库替换。源码ZIP附编译前端、清单、证据与校验文件，私有数据另行保存在本机。
-
-## 2.1.5历史交付与部署状态（2026-10-07）
-
-项目内采用桌面左侧树目录及手机目录抽屉；首页、准备提示和全站页面按本轮布局整理，详情见[整改说明](tree-navigation-layout-2026-10-07.md)。最终前端98文件784项、构建及已登记11项网页回归通过。后端248份非版本业务与测试文件与2.1.4逐字一致，只改APP_VERSION默认文字；沿用原1448项全量基线加67项IO回归，本轮未重新跑后端全量。[源码保全](evidence-archive.md "原路径：docs/qa-layout-2026-10-07/backend-business-source-unchanged.json；SHA256：15820fb51bfdcc0d20d1f264a81cc7e3db4573e7e819b308b8ec14211d9717c2")。
-
-[本机成品工作台](http://workflow.localhost:18004)已保留原卷升级2.1.5并真实重启，PostgreSQL17.11、5服务RUNNING；原56表、63文件、6项目、4用户及JWT保持。原生主页操作进入对应开工排程步骤，手机目录、搜索及目标数据读回通过。[脱敏运行回执](evidence-archive.md "原路径：docs/qa-layout-2026-10-07/upgrade-2.1.5-public-receipt.json；SHA256：8163a93b14ce433ff2571e38045729f97521e94e0039abed140b6c27919898cb")、[实际网页读回](evidence-archive.md "原路径：docs/qa-layout-2026-10-07/actual-pg-homepage-public-summary-215.json；SHA256：930ea7299482d02ce8c65fd0c6dc207dc34cacc00be37a9dcfd0f00573de832f")。
-
-Linux/arm64离线镜像208772213B、SHA256 `d5075d2d3f434130b9824b7b6f846a94351bf4edebc9273679b0384762af2a43`，已实际save/load；`agv-workflow:2.1.5-qa`及Compose默认`agv-pm:2.1.5`同一镜像，加载后可用对应`--no-build`入口。镜像和Node验收的全部150个前端资源逐字一致。正式NAS尚未部署，amd64未实际验收，x86_64请从源码构建。
-
-已有实例沿用自己的数据卷、认证和环境配置，使用下方与原部署形态一致的备份/更新入口。旧版本镜像、ZIP和回退条件保留；私有备份、登录资料、数据库、真实用户项目截图及运行文件不入源码包。下面旧版状态为对应历史轮次，不代表当前在线版本。
-
-## 2.1.4历史交付与部署状态（2026-10-07）
-
-本轮产品源码 `d0dfeb443d530715f0edcbedcc2b68aa4c90b03d` 修复人工工期在后续重排时反弹，保存项目倍率，提供仅影响后续重排的自动估算恢复入口；已有执行记录、锁定和下达不随取消预算改变。16个实际网页范围全部通过，前端98文件739项全量与构建通过；后端1448项全量基线通过后，最后仅IO路由及对应测试增加克隆预算的提前校验，由最终67项IO组覆盖，其余247份后端源码与测试字节一致。具体口径与证据见[本轮工期修复](manual-duration-regeneration-2026-10-07.md)。
-
-[本机工作台](http://workflow.localhost:18004)已从原2.1.3实例保留原卷升级2.1.4并真实重启，仍是一个产品容器，内部PostgreSQL17.11。54张旧表、61个旧文件、4用户、6项目与JWT保持，新增2张空策略表；原项目的最新状态按升级前新鲜快照保留。网页读回32任务/1成员/35下达、4项准备及原2026-10-05完成日期，原138B附件真实下载SHA256一致。[升级与镜像回执](evidence-archive.md "原路径：docs/qa-duration-2026-10-07/upgrade-2.1.4-receipt.json；SHA256：e52386e2bbf8579987f2ac37d23555973570e4f14a3bf328b50ff2a6e945514d")、[网页准备清单](evidence-archive.md "原路径：docs/qa-duration-2026-10-07/pg-final-preparation.png；SHA256：136b9f66abb83c03a00af93ed79053262510725c2b3dc01edf9105c8e3fd2cfd")、[网页下载证明](evidence-archive.md "原路径：docs/qa-duration-2026-10-07/pg-final-browser-download.json；SHA256：66598139504b6901487c65e0fdecc786fc1f1d0f92bfee28826d0784e25f9d3c")。
-
-Linux/arm64离线镜像208769692B，SHA256 `4a317f9a4ed0409a0592d704ee237e983afe2b6f09eb5167feaaff02abb75a2d`，已实际 `docker load`。包内 `agv-workflow:2.1.4-qa` 与源码Compose默认 `agv-pm:2.1.4` 指向同一镜像，可加载后使用对应Compose的 `--no-build` 入口。x86_64 NAS从[交付仓库](https://gitea.arrowwood.top:8773/codex-mac/agv-project-workflow)取得源码并按下方现有安装/更新流程本机构建；本轮未把ARM64测试称为amd64验证，尚未更新正式NAS。
-
-已有实例沿用自己的数据库、附件、认证和环境配置，执行与其原部署形态对应的备份更新入口；本轮新增两张表由启动建表，不替换原业务表或工时。2.1.3离线镜像、旧回退容器及升级前一致私有备份保留。本机私有配置、登录资料、数据库与业务附件不进入源码或镜像交付包。
-
-## 2.1.3历史部署状态（2026-10-06）
-
-本轮业务版本2.1.3，最终产品源码`c2e8649`，新增[14项快捷操作与流程整改及54份证据文件](usability-remediation-2026-10-06.md)，项目默认草稿及阶段契约见[生命周期说明](project-lifecycle-remediation-2026-10-06.md)。14项已实际网页回归，最终前端97文件719项（130.13秒）、后端1362项及构建通过；三条权限提示及原PG实例升级后的网页读回通过，见[最终验证摘要](evidence-archive.md "原路径：docs/qa-usability-2026-10-06/validation-summary.json；SHA256：38ee1596cd095f990c3268dd4cf8f8b5ccf72144b827a6e060c55612f2dd1140")。
-
-本机[成品工作台](http://workflow.localhost:18004)已在原单产品容器/容器内PostgreSQL数据卷升级2.1.3并真实重启，原用户及6项目保留；53张业务表、58个原文件及JWT一致。网页实际读回32任务/1成员/35下达、准备原状态及10/05完成日期、目标与甘特快捷入口，原138B附件真实下载一致。升级前完成一致备份；新安装或已有实例更新均按下方对应部署形态使用入口，沿用持久数据与认证配置，不替换为验收数据库。
-
-最终`c2e8649` Linux/arm64离线镜像已实际save/load，208750992B、SHA256 `cd84168b7eaecc02a1475458aa7ba3098adf66f99d7ff05513fe9869db05e39d`。包内`agv-workflow:2.1.3-qa`和源码Compose默认`agv-pm:2.1.3`指向同一镜像，arm64下加载后可使用`docker/docker-compose.yml`的`--no-build`入口；x86须重新构建。amd64尚未实际验收；本文架构支持和Registry多架构发布要求不等于本轮已交付多架构镜像。正式NAS尚未取得部署目标和访问条件，本轮没有更新正式NAS。下文旧版本标签与实测段落保留为历史示例，不能作为2.1.3已安装的证明；当前结果统一见[交付说明](browser-audit-delivery.md)与[验证记录](evidence-archive.md "原路径：docs/qa-final-validation.txt；SHA256：80a89ee8c819dacb854118e29395343668e19067564de7cc99813a929cb840a6")。
+旧数据不会被删除；确认不需要后，可以手动删掉 `old-<时间>` 目录和 `old_<时间>` 架构。
 
 ## 环境要求
 

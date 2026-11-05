@@ -34,8 +34,6 @@ def cell_text(cell):
     detail = f'{goal} · {"已发布" if cell["published"] else "未发布"}\n{people}\n{status}'
     if cell['kind'] == 'vehicle' and facts.get('required_count') is not None:
         detail += f'（当前有效 {facts.get("completed_count", 0)} / 累计目标 {facts["required_count"]}）'
-    if facts.get('unidentified_completed'):
-        detail += '\n含迁移完成、车号未知；不代表逐台核验'
     if cell.get('notes'):
         detail += '\n' + cell['notes']
     return detail

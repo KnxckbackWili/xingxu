@@ -132,7 +132,6 @@ def _validate_quick_import(payload: dict) -> dict:
     end = checked_date(project.get("end_date"), "project.end_date", True)
     if start and end and end < start:
         errors.append("项目结束日期不能早于开始日期")
-    checked_date(project.get("planned_entry_date"), "project.planned_entry_date")
     from app.services.project_events import EVENT_LABELS
     if project.get("dispatch_platform") not in (None, "NDC", "GRACE", "integrated"):
         errors.append("project.dispatch_platform 必须是 NDC/GRACE/integrated 或空")
@@ -611,7 +610,6 @@ def import_project_json(
         rest_mode=proj.get("rest_mode", "none"),
         rest_days=proj.get("rest_days", []),
         skip_holidays=bool(proj.get("skip_holidays", False)),
-        planned_entry_date=_parse_date(proj.get("planned_entry_date")),
         dispatch_platform=proj.get("dispatch_platform"),
         client_contacts=proj.get("client_contacts", []),
         entry_plan=proj.get("entry_plan", {}),
@@ -624,7 +622,7 @@ def import_project_json(
     from app.routers.projects import _sync_project_members
     _sync_project_members(db, p)
     from app.models import ProjectEvent
-    from app.services.project_events import normalize_actual, planned_event_date, sync_arrival_all, update_plans
+    from app.services.project_events import normalize_actual, sync_arrival_all, update_plans
     declared_arrival = None
     if "project_events" in payload:
         for data in payload["project_events"]:
@@ -636,10 +634,6 @@ def import_project_json(
             db.add(ProjectEvent(project_id=p.id, event_key=data["event_key"],
                 planned_date=_parse_date(data.get("planned_date")), actual_at=actual,
                 recorded_by=user.id if actual else None, note=data.get("note", "")))
-    else:
-        # Old portable snapshots have the same date meaning as the Alembic migration.
-        update_plans(db, p, {"ship": p.planned_entry_date,
-            "arrival_all": _parse_date((p.entry_plan or {}).get("entry_date"))}, user.id)
     db.flush()
 
     # Vehicles
@@ -730,7 +724,6 @@ def import_project_json(
         unit = VehicleUnit(project_id=p.id, vehicle_id=linked_vehicle_id, asset_code=unit_data.get("asset_code", "AGV"),
                            serial_number=unit_data.get("serial_number", ""), fleet_no=unit_data.get("fleet_no", ""),
                            current_stage="planned",
-                           legacy_current_stage=unit_data.get("legacy_current_stage") or (unit_data.get("current_stage") if not payload.get("vehicle_progress_matrix") else None),
                            current_status=unit_data.get("current_status", "normal"), location=unit_data.get("location", ""),
                            warranty_end=_parse_date(unit_data.get("warranty_end")), commissioned_at=_parse_date(unit_data.get("commissioned_at")),
                            arrived_at=_parse_date(unit_data.get("arrived_at")),
@@ -761,9 +754,6 @@ def import_project_json(
                 owner_party=item.get("owner_party", "project"), required_date=_parse_date(item.get("required_date")), committed_date=_parse_date(item.get("committed_date")),
                 forecast_date=_parse_date(item.get("forecast_date")), actual_date=_parse_date(item.get("actual_date")), risk=item.get("risk", "low"),
                 note=item.get("note", ""), extra=item.get("extra", {}), sort_order=item.get("sort_order", 0)))
-    else:
-        from app.routers.preparations import seed_default_preparations
-        seed_default_preparations(db, p.id, conditions, planned_event_date(db, p.id))
     for item in payload.get("issues", []):
         db.add(Issue(project_id=p.id, title=item.get("title", "导入问题"), description=item.get("description", ""),
                      issue_type=item.get("issue_type", "other"), severity=item.get("severity", "medium"),

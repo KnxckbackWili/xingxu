@@ -263,10 +263,6 @@ def _procurement_summary(db: Session, project: Project) -> dict:
         'dispatch_readiness': _summary(db, project)}
 
 
-def seed_default_preparations(db: Session, project_id: str, conditions=None, planned_entry_date=None) -> int:
-    """T22: document definitions replace non-procurement preparation generation."""
-    return 0
-
 
 class ProcurementImportItem(BaseModel):
     item_id: str

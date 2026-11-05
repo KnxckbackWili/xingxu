@@ -49,20 +49,3 @@ def test_anyone_starts_and_resolves_an_issue_but_only_the_reporter_or_manager_cl
     assert issue["id"] in [row["id"] for row in listed]
 
 
-def test_startup_reconcile_fills_old_projects_once_and_never_removes(client, pm_headers, monkeypatch):
-    from app import config
-    from app.services.open_access import reconcile
-    monkeypatch.setattr(config, "OPEN_PROJECT_ACCESS", False)
-    pid = _project(client, pm_headers, "旧项目")
-    with SessionLocal() as db:
-        before = set(db.get(Project, pid).members or [])
-        everyone = {row.id for row in db.query(User).filter(User.is_active.is_(True))}
-        assert not everyone <= before
-    monkeypatch.setattr(config, "OPEN_PROJECT_ACCESS", True)
-    with SessionLocal() as db:
-        assert reconcile(db) >= 1
-        db.commit()
-        members = set(db.get(Project, pid).members)
-        assert everyone <= members and before <= members
-        assert db.query(ChangeLog).filter_by(project_id=pid).filter(ChangeLog.detail.like("所有账号可见所有项目%")).count() == 1
-        assert reconcile(db) == 0

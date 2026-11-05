@@ -260,19 +260,8 @@ def test_statistics_known_matrix_counts_only_visible_real_vehicle_steps(client,p
     response=client.get('/api/dashboard/statistics',headers=pm_headers,params={'project_id':hidden.json()['id']})
     assert response.status_code==200,response.text
     result=response.json();assert result['projects']==1
-    assert result['vehicle_progress']=={'target':4,'completed':1,'quantity_unknown':False,'unidentified_completed':0,'percent':25.0}
+    assert result['vehicle_progress']=={'target':4,'completed':1,'quantity_unknown':False,'percent':25.0}
     assert 'HIDDEN-PROJECT' not in response.text and '1000米' not in response.text and 'person_days' not in response.text
-
-
-def test_archive_and_unrepaired_legacy_status_remain_readonly_for_transfer(client,pm_headers,admin_headers):
-    pid,_=setup_project(client,pm_headers);target,_=recipient(client,admin_headers)
-    view=preview(client,pm_headers,pid)
-    with SessionLocal() as db:db.get(Project,pid).status='archived';db.commit()
-    assert client.get(f'/api/projects/{pid}/transfer-preview',headers=admin_headers).status_code==400
-    assert transfer(client,admin_headers,pid,target,view).status_code==400
-    with SessionLocal() as db:
-        project=db.get(Project,pid);project.status='preparing';project.legacy_lifecycle={'requires_repair':True,'original_status':'unrecognized legacy'};db.commit()
-    assert transfer(client,admin_headers,pid,target,view).status_code==400
 
 
 def test_retired_approval_permission_hidden_inert_and_preserved_when_editing_other_policy(client,admin_headers,worker_headers):

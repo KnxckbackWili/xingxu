@@ -111,22 +111,6 @@ def test_task_complete_reopen_and_schedule_publication_never_change_project_stat
         assert project.status=='executing' and project.version==before
 
 
-def test_unrecognized_legacy_requires_explicit_admin_reset_preserving_original_value(client,admin_headers,pm_headers):
-    p=create(client,admin_headers);pid=p['id']
-    with SessionLocal() as db:
-        project=db.get(Project,pid);project.status='suspended';project.suspension={'status_before':None}
-        project.legacy_lifecycle={'original_status':'unrecognized_2x','requires_repair':True};db.commit()
-    assert state(client,admin_headers,pid,'preparing').status_code==400
-    body={'version':p['version'],'reason':'根据原备份与审计重新核对项目'}
-    assert client.post(f'/api/projects/{pid}/lifecycle-repair',headers=pm_headers,json=body).status_code in (403,404)
-    assert client.post(f'/api/projects/{pid}/lifecycle-repair',headers=admin_headers,json={**body,'reason':'  '}).status_code==400
-    response=client.post(f'/api/projects/{pid}/lifecycle-repair',headers=admin_headers,json=body)
-    assert response.status_code==200,response.text
-    assert response.json()['status']=='preparing' and response.json()['legacy_lifecycle']['original_status']=='unrecognized_2x'
-    assert not response.json()['legacy_lifecycle']['requires_repair']
-    assert client.post(f'/api/projects/{pid}/lifecycle-repair',headers=admin_headers,json=body).status_code==409
-
-
 def test_date_only_kickoff_creates_lifetime_and_same_submission_captures_real_deadline(client,admin_headers):
     pid=create(client,admin_headers)['id']
     rows=documents(client,admin_headers,pid)['documents']
