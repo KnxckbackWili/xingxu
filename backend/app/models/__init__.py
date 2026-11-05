@@ -481,8 +481,6 @@ class Task(Base):
     manual_completed_at = Column(DateTime, nullable=True)
     manual_completed_reason = Column(Text, default="")
     manual_check_overrides = Column(JSON, default=list)
-    # Custom template field values frozen when the work was generated: [{"name": ..., "value": ...}]
-    template_fields = Column(JSON, nullable=True)
 
     module = relationship("Module", backref=backref("tasks", passive_deletes=True, cascade="all, delete-orphan"))
     project = relationship("Project", backref=backref("tasks", passive_deletes=True, cascade="all, delete-orphan"))
@@ -754,23 +752,11 @@ class TemplateItem(Base):
     quantity = Column(Float, nullable=True)
     unit = Column(String(20), nullable=False, default="")
     spec = Column(String(300), nullable=False, default="")
-    fields = Column(JSON, nullable=False, default=dict)  # {template_field_id: value}
     extra = Column(JSON, nullable=False, default=dict)  # carried-over values of converted rows
     sort_order = Column(Integer, nullable=False, default=0)
     version = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
-
-
-class TemplateField(Base):
-    """A custom column a template defines for its items."""
-    __tablename__ = "template_fields"
-    id = Column(String(36), primary_key=True, default=gen_uuid)
-    template_id = Column(String(36), ForeignKey("templates.id", ondelete="CASCADE"), nullable=True, index=True)
-    name = Column(String(100), nullable=False)
-    field_type = Column(String(12), nullable=False, default="text")  # text / number / date / select
-    options = Column(JSON, nullable=False, default=list)
-    sort_order = Column(Integer, nullable=False, default=0)
 
 
 # ===== Attachment (附件) =====

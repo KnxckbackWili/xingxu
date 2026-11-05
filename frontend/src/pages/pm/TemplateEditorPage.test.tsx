@@ -14,8 +14,8 @@ vi.mock('../../hooks/useVehicleTypes', () => ({ useVehicleTypes: () => ({ option
 const file = { id: 'f1', code: '6.1', name: '车辆到场点检表', template_no: '', required: true, scope: 'vehicle', platform: null, timing_type: 'on_demand', timing_event: null,
   timing_offset_hours: null, timing_weekday: null, trigger_type: null, confidential_default: false, external_visible_default: false, external_never_visible: false, note: '', blank_file: null }
 const item = (id: string, name: string, extra: Record<string, unknown> = {}) => ({ id, section_id: 's1', kind: 'work', name, note: '', optional: false, per_vehicle: false, step_key: null,
-  checks: [], files: [], quantity: null, unit: '', spec: '', fields: {}, reference_docs: [], version: 3, sort_order: 0, ...extra })
-const content = () => ({ template_id: 'default', fields: [], stages: [], sections: [
+  checks: [], files: [], quantity: null, unit: '', spec: '', reference_docs: [], version: 3, sort_order: 0, ...extra })
+const content = () => ({ template_id: 'default', stages: [], sections: [
   { id: 's1', title: '到货与单车调试', stage_key: '6', stage_name: '实施', sort_order: 0, items: [
     item('w1', '到场点检', { per_vehicle: true, step_key: 'arrival', checks: [{ id: 'c1', name: '外观无损伤', required: true, safety: false }], files: [file] }),
     item('p1', 'AGV 本体', { kind: 'purchase', unit: '台', spec: '按合同' })] },

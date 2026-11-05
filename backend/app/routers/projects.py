@@ -622,7 +622,7 @@ def _create_project(data: ProjectCreate, user: User, db: Session):
     initialize(db, p, scope["excluded_requirement_ids"] if scope else ())
     if scope and scope["purchases"]:
         from app.services.template_items import add_purchases
-        add_purchases(db, p, scope["purchases"], scope["field_names"], user.id)
+        add_purchases(db, p, scope["purchases"], user.id)
     result = _project_dict(db, p)
     if data.module_ids is not None or data.work_item_ids is not None:
         from app.services.generate_tasks import (

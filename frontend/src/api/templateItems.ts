@@ -10,12 +10,11 @@ export interface TemplateFile {
 }
 export interface TemplateItem {
   id: string; section_id: string; kind: ItemKind; name: string; note: string; optional: boolean; per_vehicle: boolean; step_key: string | null
-  checks: TemplateCheck[]; files: TemplateFile[]; quantity: number | null; unit: string; spec: string; fields: Record<string, string | number>
+  checks: TemplateCheck[]; files: TemplateFile[]; quantity: number | null; unit: string; spec: string
   reference_docs: { id: string; filename: string; note: string }[]; version: number; sort_order: number
 }
 export interface TemplateSection { id: string; title: string; stage_key: string; stage_name: string; sort_order: number; items: TemplateItem[] }
-export interface TemplateFieldDef { id: string; name: string; field_type: 'text' | 'number' | 'date' | 'select'; options: string[] }
-export interface TemplateTree { template_id: string; sections: TemplateSection[]; fields: TemplateFieldDef[]; stages: { key: string; name: string }[] }
+export interface TemplateTree { template_id: string; sections: TemplateSection[]; stages: { key: string; name: string }[] }
 
 export const KIND_NAMES: Record<ItemKind, string> = { work: '工作', file: '资料', purchase: '采购' }
 export const STAGES = [
@@ -34,7 +33,7 @@ export const itemBody = (item: Omit<TemplateItem, 'id' | 'reference_docs' | 'sor
   checks: item.kind === 'work' ? item.checks.map(({ id, name, description, required, safety }) => ({ id, name, description: description ?? '', required, safety })) : [],
   files: item.files.map(({ blank_file: _blank, ...file }) => file),
   quantity: item.kind === 'purchase' ? item.quantity : null, unit: item.kind === 'purchase' ? item.unit : '', spec: item.kind === 'purchase' ? item.spec : '',
-  fields: item.fields, version: item.version,
+  version: item.version,
 })
 
 export const newFile = (name = ''): TemplateFile => ({
@@ -54,7 +53,6 @@ export const templateItemsApi = {
   updateItem: async (tid: string, id: string, body: ReturnType<typeof itemBody>) => (await api.put<TemplateTree>(`${base(tid)}/items/${id}`, body)).data,
   removeItem: async (tid: string, id: string) => (await api.delete<TemplateTree>(`${base(tid)}/items/${id}`)).data,
   copy: async (tid: string, body: { source_template_id: string; item_ids: string[]; section_id?: string }) => (await api.post<TemplateTree & { copied: string[] }>(`${base(tid)}/items/copy`, body)).data,
-  fields: async (tid: string, fields: (Omit<TemplateFieldDef, 'id'> & { id?: string })[]) => (await api.put<TemplateTree>(`${base(tid)}/fields`, { fields })).data,
   uploadBlank: async (tid: string, itemId: string, fileId: string, file: File) => {
     const data = new FormData(); data.append('file', file)
     return (await api.post<TemplateTree>(`${base(tid)}/items/${itemId}/files/${fileId}/blank`, data)).data
@@ -64,6 +62,6 @@ export const templateItemsApi = {
   exportExcel: async (tid: string) => (await api.get<Blob>(`${base(tid)}/excel`, { responseType: 'blob' })).data,
   importExcel: async (tid: string, file: File) => {
     const data = new FormData(); data.append('file', file)
-    return (await api.post<TemplateTree & { imported: { sections: number; items: number; fields: number } }>(`${base(tid)}/excel`, data)).data
+    return (await api.post<TemplateTree & { imported: { sections: number; items: number } }>(`${base(tid)}/excel`, data)).data
   },
 }

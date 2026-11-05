@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState, type MutableRefObject } from 'react'
-import { Button, Checkbox, DatePicker, Input, InputNumber, Popconfirm, Segmented, Select, Switch, Upload, message } from 'antd'
+import { Button, Checkbox, Input, InputNumber, Popconfirm, Segmented, Switch, Upload, message } from 'antd'
 import { ArrowUpOutlined, CloseOutlined, DeleteOutlined, PaperClipOutlined, PlusOutlined, SafetyOutlined, UploadOutlined } from '@ant-design/icons'
-import dayjs from 'dayjs'
 import { api, errMsg } from '../../api/client'
-import { itemBody, KIND_NAMES, newFile, templateItemsApi, type ItemKind, type TemplateFieldDef, type TemplateItem, type TemplateSection, type TemplateTree } from '../../api/templateItems'
+import { itemBody, KIND_NAMES, newFile, templateItemsApi, type ItemKind, type TemplateItem, type TemplateSection, type TemplateTree } from '../../api/templateItems'
 import TemplateFileEditor, { fileProblem } from './TemplateFileEditor'
 import { IconAction } from '../../components/IconAction'
 
@@ -16,7 +15,7 @@ export function SaveBadge({ save }: { save?: SaveState }) {
 }
 
 type Props = {
-  templateId: string; item: TemplateItem; sections: TemplateSection[]; fields: TemplateFieldDef[]; editable: boolean
+  templateId: string; item: TemplateItem; sections: TemplateSection[]; editable: boolean
   flushRef: MutableRefObject<(() => Promise<void>) | null>
   onTree: (tree: TemplateTree) => void; onClose: () => void; onReload: () => Promise<unknown> | void
 }
@@ -27,7 +26,7 @@ const detail = (error: any) => { const text = error?.response?.data?.detail; ret
  * Everything about one row of a template, edited in place. Typing saves itself shortly after you stop; switches save at once.
  * The parent awaits `flushRef` before switching rows so nothing typed is lost.
  */
-export default function TemplateItemPanel({ templateId, item, sections, fields, editable, flushRef, onTree, onClose, onReload }: Props) {
+export default function TemplateItemPanel({ templateId, item, sections, editable, flushRef, onTree, onClose, onReload }: Props) {
   const [draft, setDraft] = useState(item)
   const [save, setSave] = useState<SaveState>()
   const [openFile, setOpenFile] = useState<number | null>(item.files.length === 1 && item.kind === 'file' ? 0 : null)
@@ -100,19 +99,6 @@ export default function TemplateItemPanel({ templateId, item, sections, fields, 
     try { const tree = await templateItemsApi.removeItem(templateId, item.id); onTree(tree); message.success(`已删除「${item.name}」`); onClose() } catch (error) { message.error(detail(error)) }
   }
 
-  const fieldInput = (field: TemplateFieldDef) => {
-    const value = draft.fields[field.id]
-    const set = (next: string | number | null | undefined) => {
-      const values = { ...draft.fields }
-      if (next === null || next === undefined || next === '') delete values[field.id]; else values[field.id] = next
-      change({ fields: values }, field.field_type === 'text' || field.field_type === 'number' ? 600 : 0)
-    }
-    if (field.field_type === 'number') return <InputNumber aria-label={field.name} value={typeof value === 'number' ? value : value ? Number(value) : null} disabled={!editable} onChange={next => set(next as number | null)} style={{ width: '100%' }} />
-    if (field.field_type === 'date') return <DatePicker aria-label={field.name} value={value ? dayjs(String(value)) : null} disabled={!editable} onChange={next => set(next ? next.format('YYYY-MM-DD') : null)} style={{ width: '100%' }} />
-    if (field.field_type === 'select') return <Select aria-label={field.name} allowClear value={value as string | undefined} disabled={!editable} onChange={next => set(next)} options={field.options.map(option => ({ value: option, label: option }))} />
-    return <Input aria-label={field.name} value={value === undefined ? '' : String(value)} maxLength={2000} disabled={!editable} onChange={e => set(e.target.value)} />
-  }
-
   const section = sections.find(row => row.id === draft.section_id)
   return <aside className="tpl-panel" aria-label={`编辑：${item.name}`}>
     <header className="tpl-panel-head">
@@ -166,10 +152,6 @@ export default function TemplateItemPanel({ templateId, item, sections, fields, 
         {editable && <Button size="small" icon={<PlusOutlined />} onClick={() => { change({ files: [...draft.files, newFile()] }, 99999); setOpenFile(draft.files.length) }}>加一份文件</Button>}
       </section>
 
-      {fields.length > 0 && <section className="tpl-panel-block" aria-label="自定义字段">
-        <h4>自定义字段</h4>
-        <div className="tpl-custom-fields">{fields.map(field => <label key={field.id} className="tpl-field"><span>{field.name}</span>{fieldInput(field)}</label>)}</div>
-      </section>}
 
       <label className="tpl-field"><span>说明</span><Input.TextArea aria-label="说明" value={draft.note} maxLength={5000} autoSize={{ minRows: 2, maxRows: 8 }} placeholder="可选：做法、注意事项" disabled={!editable} onChange={e => change({ note: e.target.value })} /></label>
 

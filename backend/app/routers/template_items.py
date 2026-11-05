@@ -1,4 +1,4 @@
-"""Template content: sections, one-row items, custom fields, copying between templates and Excel.
+"""Template content: sections, one-row items, copying between templates and Excel.
 
 Every write locks the template, re-checks the actor, records the change and recompiles the rows
 projects are generated from in the same transaction (services/template_items.py).
@@ -89,14 +89,6 @@ def copy_items(template_id: str, data: content.CopyIn, user: User = Depends(requ
     copied = content.copy_items(db, template_id, data, user.id)
     db.commit()
     return {"copied": [row.id for row in copied], **content.tree(db, template_id)}
-
-
-@router.put("/{template_id}/fields")
-@route_permission("system.templates.manage")
-def replace_fields(template_id: str, data: content.FieldsIn, user: User = Depends(require_admin), db: Session = Depends(get_db)):
-    content.replace_fields(db, template_id, data, user.id)
-    db.commit()
-    return content.tree(db, template_id)
 
 
 @router.post("/{template_id}/items/{item_id}/files/{file_id}/blank")

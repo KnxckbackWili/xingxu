@@ -181,8 +181,7 @@ def item_dicts(db,tasks,*,checks=False):
                 'at':task.manual_completed_at.isoformat()+'Z' if task.manual_completed_at else None},
             'sort_order':task.sort_order or 0,'version':task.version or 0,'source_task_id':task.source_task_id,
             'source_vehicle_event_id':task.source_vehicle_event_id,'has_legacy_quantity':task.legacy_work_snapshot is not None or task.target_quantity is not None,
-            'reference_docs':[{'filename':ref.get('filename'),'note':ref.get('note','')} for ref in task.reference_docs or []],
-            'template_fields':[dict(field) for field in task.template_fields or []]}
+            'reference_docs':[{'filename':ref.get('filename'),'note':ref.get('note','')} for ref in task.reference_docs or []]}
         if not task.project_id:
             row['reference_docs']=[{'id':d.id,'filename':d.filename,'note':d.note} for d in template_docs[task.id]]
         if checks:
@@ -322,7 +321,6 @@ def generate(db,project,source_tasks):
             applicable_vehicle_types=list(source.applicable_vehicle_types or []),group_label=group_of(db,source),
             scope_conditions=list(source.scope_conditions or []),sort_order=source.sort_order,
             source_task_id=source.id,vehicle_step_key=source.vehicle_step_key,
-            template_fields=[dict(field) for field in source.template_fields or []] or None,
             legacy_work_snapshot={'kind':'template_definition_source','source_task_id':source.id,
                 'quantity':{'type':source.quantity_type,'target':source.target_quantity,'unit':source.unit},
                 'original':source.legacy_work_snapshot})

@@ -28,7 +28,7 @@ def new_template(client, headers, name='新事项模板', copy_from='default'):
 
 
 def body(item, **changes):
-    keep = ('section_id', 'kind', 'name', 'note', 'optional', 'per_vehicle', 'checks', 'files', 'quantity', 'unit', 'spec', 'fields', 'version')
+    keep = ('section_id', 'kind', 'name', 'note', 'optional', 'per_vehicle', 'checks', 'files', 'quantity', 'unit', 'spec', 'version')
     data = {key: item[key] for key in keep}
     data['files'] = [{key: value for key, value in file.items() if key != 'blank_file'} for file in item['files']]
     return {**data, **changes}
@@ -127,29 +127,6 @@ def test_drag_layout_moves_rows_and_refuses_a_stale_page(client, admin_headers):
         assert db.get(TemplateItem, moved).section_id == layout[0]['id']
     layout[0]['item_ids'].pop(0)
     assert client.put(f'/api/templates/{tid}/layout', headers=admin_headers, json={'sections': layout}).status_code == 409
-
-
-def test_custom_fields_fill_every_row_and_travel_into_project_work(client, admin_headers, pm_headers):
-    tid = new_template(client, admin_headers)
-    saved = client.put(f'/api/templates/{tid}/fields', headers=admin_headers, json={'fields': [
-        {'name': '标准工时', 'field_type': 'number'}, {'name': '责任部门', 'field_type': 'select', 'options': ['实施部', '软件部']}]})
-    assert saved.status_code == 200, saved.text
-    hours, team = saved.json()['fields']
-    item = rows(saved.json())['场地勘测']
-    bad = client.put(f'/api/templates/{tid}/items/{item["id"]}', headers=admin_headers, json=body(item, fields={team['id']: '财务部'}))
-    assert bad.status_code == 400 and '只能选' in bad.json()['detail']
-    ok = client.put(f'/api/templates/{tid}/items/{item["id"]}', headers=admin_headers, json=body(item, fields={hours['id']: '6', team['id']: '实施部'}))
-    assert ok.status_code == 200, ok.text
-    assert rows(ok.json())['场地勘测']['fields'] == {hours['id']: 6.0, team['id']: '实施部'}
-    project = client.post('/api/projects', headers=pm_headers, json={'name': '字段带入', 'start_date': '2026-11-01', 'end_date': '2027-01-31',
-                                                                     'template_id': tid, 'optional_item_ids': []})
-    assert project.status_code == 200, project.text
-    with SessionLocal() as db:
-        task = db.query(Task).filter_by(project_id=project.json()['id'], name='场地勘测').one()
-        assert task.template_fields == [{'name': '标准工时', 'value': 6.0}, {'name': '责任部门', 'value': '实施部'}]
-    # Dropping a choice clears it from the rows that used it.
-    trimmed = client.put(f'/api/templates/{tid}/fields', headers=admin_headers, json={'fields': [hours, {**team, 'options': ['软件部']}]})
-    assert rows(trimmed.json())['场地勘测']['fields'] == {hours['id']: 6.0}
 
 
 def test_rows_copy_between_templates_with_their_blank_forms(client, admin_headers):

@@ -2,7 +2,7 @@
 
 A template is now an ordered list of sections (free titles, each placed on one company stage 4–9)
 holding one row per thing to do: a work item (optionally per vehicle, with checks), a file bundle,
-or a purchase, plus template-defined custom fields. Any row may name the files it hands in.
+or a purchase. Any row may name the files it hands in.
 
 Projects are still generated from phases/tasks/check items/document requirements/vehicle steps and
 procurement rows. Those rows are compiled from the items with the same ids, so project documents
@@ -116,7 +116,7 @@ tasks = sa.Table('tasks', meta, *(sa.Column(name, kind) for name, kind in (
     ('standard_hours', sa.Float), ('safety_flag', sa.Boolean), ('applicable_vehicle_types', sa.JSON), ('sort_order', sa.Integer),
     ('depends_on', sa.JSON), ('deliverables', sa.JSON), ('reference_docs', sa.JSON), ('version', sa.Integer),
     ('source_task_id', sa.String), ('vehicle_step_key', sa.String), ('manually_completed', sa.Boolean),
-    ('manual_completed_reason', sa.Text), ('manual_check_overrides', sa.JSON), ('template_fields', sa.JSON))))
+    ('manual_completed_reason', sa.Text), ('manual_check_overrides', sa.JSON))))
 check_items = sa.Table('check_items', meta, *(sa.Column(name, kind) for name, kind in (
     ('id', sa.String), ('task_id', sa.String), ('project_id', sa.String), ('template_id', sa.String), ('name', sa.String),
     ('description', sa.Text), ('is_safety_critical', sa.Boolean), ('is_required', sa.Boolean), ('is_applicable', sa.Boolean),
@@ -160,15 +160,9 @@ def _items_table():
     return sa.Table('template_items', meta, *(sa.Column(name, kind) for name, kind in (
         ('id', sa.String), ('template_id', sa.String), ('section_id', sa.String), ('kind', sa.String), ('name', sa.String),
         ('note', sa.Text), ('optional', sa.Boolean), ('per_vehicle', sa.Boolean), ('step_key', sa.String), ('checks', sa.JSON),
-        ('files', sa.JSON), ('quantity', sa.Float), ('unit', sa.String), ('spec', sa.String), ('fields', sa.JSON),
+        ('files', sa.JSON), ('quantity', sa.Float), ('unit', sa.String), ('spec', sa.String),
         ('extra', sa.JSON), ('sort_order', sa.Integer), ('version', sa.Integer), ('created_at', sa.DateTime),
         ('updated_at', sa.DateTime))), extend_existing=True)
-
-
-def _fields_table():
-    return sa.Table('template_fields', meta, sa.Column('id', sa.String), sa.Column('template_id', sa.String),
-                    sa.Column('name', sa.String), sa.Column('field_type', sa.String), sa.Column('options', sa.JSON),
-                    sa.Column('sort_order', sa.Integer), extend_existing=True)
 
 
 def _file_from(row):
@@ -282,7 +276,7 @@ def _write(connection, template_id, sections, items):
                 id=item['id'], template_id=template_id, section_id=section['id'], kind=item['kind'], name=item['name'][:200],
                 note=item.get('note') or '', optional=bool(item.get('optional')), per_vehicle=bool(item.get('per_vehicle')),
                 step_key=item.get('step_key'), checks=item.get('checks') or [], files=item.get('files') or [],
-                quantity=item.get('quantity'), unit=item.get('unit') or '', spec=item.get('spec') or '', fields={},
+                quantity=item.get('quantity'), unit=item.get('unit') or '', spec=item.get('spec') or '',
                 extra=item.get('extra') or {}, sort_order=position, version=0, created_at=now, updated_at=now))
 
 
@@ -320,7 +314,7 @@ def _upsert(connection, table, condition, wanted, keep=()):
 
 def _compile(connection, template_id):
     """Regenerate the project-generation rows of one template from its sections and items, ids unchanged."""
-    section_table, item_table, field_table = _sections_table(), _items_table(), _fields_table()
+    section_table, item_table = _sections_table(), _items_table()
     now = _now()
     section_rows = list(connection.execute(sa.select(section_table).where(_is(section_table.c.template_id, template_id))
                                            .order_by(section_table.c.sort_order, section_table.c.id)).mappings())
@@ -328,7 +322,6 @@ def _compile(connection, template_id):
     stage_of = {row['id']: row['stage_key'] for row in section_rows}
     item_rows = sorted(connection.execute(sa.select(item_table).where(_is(item_table.c.template_id, template_id))).mappings(),
                        key=lambda row: (order.get(row['section_id'], 1 << 30), row['sort_order'] or 0, row['id']))
-    names = {row['id']: row['name'] for row in connection.execute(sa.select(field_table).where(_is(field_table.c.template_id, template_id))).mappings()}
     wanted_phases = {row['id']: {'id': row['id'], 'project_id': None, 'template_id': template_id, 'name': row['title'][:100],
                                  'sort_order': index, 'color': '#1890ff', 'entry_criteria': '', 'exit_criteria': '',
                                  'stage_key': row['stage_key']} for index, row in enumerate(section_rows)}
@@ -338,8 +331,6 @@ def _compile(connection, template_id):
     doc_order = 0
     for position, row in enumerate(item_rows):
         extra = row['extra'] or {}
-        fields = [{'name': names[key], 'value': value} for key, value in (row['fields'] or {}).items()
-                  if key in names and value not in (None, '', [])]
         if row['kind'] == 'work':
             per_vehicle = bool(row['per_vehicle'])
             wanted_tasks[row['id']] = {
@@ -352,8 +343,7 @@ def _compile(connection, template_id):
                 'safety_flag': bool(extra.get('safety_flag')), 'applicable_vehicle_types': extra.get('applicable_vehicle_types') or [],
                 'sort_order': position, 'depends_on': extra.get('depends_on') or [], 'deliverables': [], 'reference_docs': [],
                 'version': 0, 'source_task_id': None, 'vehicle_step_key': row['step_key'] if per_vehicle else None,
-                'manually_completed': False, 'manual_completed_reason': '', 'manual_check_overrides': [],
-                'template_fields': fields or None}
+                'manually_completed': False, 'manual_completed_reason': '', 'manual_check_overrides': []}
             for index, check in enumerate(row['checks'] or []):
                 wanted_checks[check['id']] = {
                     'id': check['id'], 'task_id': row['id'], 'project_id': None, 'template_id': template_id, 'name': check['name'],
@@ -437,22 +427,11 @@ def upgrade():
         sa.Column('quantity', sa.Float, nullable=True),
         sa.Column('unit', sa.String(20), nullable=False),
         sa.Column('spec', sa.String(300), nullable=False),
-        sa.Column('fields', sa.JSON, nullable=False),
         sa.Column('extra', sa.JSON, nullable=False),
         sa.Column('sort_order', sa.Integer, nullable=False),
         sa.Column('version', sa.Integer, nullable=False),
         sa.Column('created_at', sa.DateTime), sa.Column('updated_at', sa.DateTime),
     )
-    op.create_table(
-        'template_fields',
-        sa.Column('id', sa.String(36), primary_key=True),
-        sa.Column('template_id', sa.String(36), sa.ForeignKey('templates.id', ondelete='CASCADE'), nullable=True, index=True),
-        sa.Column('name', sa.String(100), nullable=False),
-        sa.Column('field_type', sa.String(12), nullable=False),
-        sa.Column('options', sa.JSON, nullable=False),
-        sa.Column('sort_order', sa.Integer, nullable=False),
-    )
-    op.add_column('tasks', sa.Column('template_fields', sa.JSON, nullable=True))
 
     connection = op.get_bind()
     previous = {row['code']: dict(row) for row in connection.execute(
@@ -515,7 +494,5 @@ def downgrade():
                                                            sort_order=0, description='', applies_to_all_vehicles=True,
                                                            source_module_id=None, preparation_conditions=[]))
         connection.execute(tasks.update().where(tasks.c.id == row['id']).values(module_id=groups[key]))
-    op.drop_column('tasks', 'template_fields')
-    op.drop_table('template_fields')
     op.drop_table('template_items')
     op.drop_table('template_sections')

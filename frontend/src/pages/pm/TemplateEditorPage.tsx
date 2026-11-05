@@ -4,10 +4,10 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Alert, Button, Checkbox, Drawer, Dropdown, Empty, Grid, Input, Modal, Select, Skeleton, Tag, Tooltip, message } from 'antd'
 import {
   ArrowLeftOutlined, CarOutlined, CopyOutlined, DeleteOutlined, DownloadOutlined, FileTextOutlined, HolderOutlined,
-  ImportOutlined, MoreOutlined, PlusOutlined, SearchOutlined, SettingOutlined, ShoppingCartOutlined, ToolOutlined, UploadOutlined,
+  ImportOutlined, MoreOutlined, PlusOutlined, SearchOutlined, ShoppingCartOutlined, ToolOutlined, UploadOutlined,
 } from '@ant-design/icons'
 import { api, errMsg } from '../../api/client'
-import { itemBody, KIND_NAMES, newFile, STAGE_GATES, STAGES, templateItemsApi, type ItemKind, type TemplateFieldDef, type TemplateItem, type TemplateTree } from '../../api/templateItems'
+import { itemBody, KIND_NAMES, newFile, STAGE_GATES, STAGES, templateItemsApi, type ItemKind, type TemplateItem, type TemplateTree } from '../../api/templateItems'
 import { useAuth } from '../../stores/auth'
 import { hasSystemPermission } from '../../constants/systemPermissions'
 import TemplateItemPanel from './TemplateItemPanel'
@@ -17,10 +17,8 @@ import type { TemplateRow } from './templateMeta'
 import './TemplateEditorPage.css'
 
 const KIND_ICONS: Record<ItemKind, JSX.Element> = { work: <ToolOutlined />, file: <FileTextOutlined />, purchase: <ShoppingCartOutlined /> }
-const FIELD_TYPES = [{ value: 'text', label: '文字' }, { value: 'number', label: '数字' }, { value: 'date', label: '日期' }, { value: 'select', label: '选项' }]
 type Drag = { type: 'item' | 'section'; id: string }
 type Drop = { id: string; pos: 'before' | 'after' | 'end' }
-type FieldDraft = { id?: string; name: string; field_type: TemplateFieldDef['field_type']; options: string[] }
 
 /** The small facts shown on a row: per vehicle, checks, files, quantity, optional. */
 function rowFacts(item: TemplateItem) {
@@ -56,7 +54,6 @@ export default function TemplateEditorPage() {
   const [adding, setAdding] = useState<{ sectionId: string; kind: ItemKind; name: string }>()
   const [sectionTitles, setSectionTitles] = useState<Record<string, string>>({})
   const [copyName, setCopyName] = useState<string>()
-  const [fieldDrafts, setFieldDrafts] = useState<FieldDraft[]>()
   const [copyFrom, setCopyFrom] = useState<{ source?: string; tree?: TemplateTree; chosen: string[]; target?: string }>()
   const [busy, setBusy] = useState(false)
   const [drop, setDrop] = useState<Drop | null>(null)
@@ -93,7 +90,6 @@ export default function TemplateEditorPage() {
   }
 
   const sections = tree?.sections ?? []
-  const fields = tree?.fields ?? []
   const allItems = sections.flatMap(section => section.items)
   const term = keyword.trim().toLowerCase()
   const hit = (item: TemplateItem) => !term || [item.name, item.note, item.spec, ...item.checks.map(check => check.name), ...item.files.flatMap(file => [file.code, file.name])].join(' ').toLowerCase().includes(term)
@@ -162,7 +158,7 @@ export default function TemplateEditorPage() {
     const { sectionId, kind, name } = adding
     setAdding(undefined)
     void mutate(async () => {
-      const result = await templateItemsApi.addItem(tid, itemBody({ section_id: sectionId, kind, name: name.trim(), note: '', optional: false, per_vehicle: false, checks: [], files: kind === 'file' ? [newFile(name.trim())] : [], quantity: null, unit: kind === 'purchase' ? '台' : '', spec: '', fields: {} }))
+      const result = await templateItemsApi.addItem(tid, itemBody({ section_id: sectionId, kind, name: name.trim(), note: '', optional: false, per_vehicle: false, checks: [], files: kind === 'file' ? [newFile(name.trim())] : [], quantity: null, unit: kind === 'purchase' ? '台' : '', spec: '' }))
       setSelectedId(result.id)
       return result
     })
@@ -218,11 +214,6 @@ export default function TemplateEditorPage() {
     title: `删除模板「${selected?.name}」？`, content: '已创建的项目不受影响；模板本身无法恢复。', okText: '删除模板', okButtonProps: { danger: true }, cancelText: '取消',
     onOk: async () => { try { ensureVerifiedAccount(user?.id); await api.delete(`/templates/${tid}`); message.success('模板已删除'); navigate('/pm/templates') } catch (e) { setError(errMsg(e)) } },
   })
-  const saveFields = () => {
-    if (!fieldDrafts) return
-    const clean = fieldDrafts.map(field => ({ ...field, name: field.name.trim() })).filter(field => field.name)
-    void mutate(async () => { const next = await templateItemsApi.fields(tid, clean); setFieldDrafts(undefined); return next }, '自定义字段已保存')
-  }
   const openCopy = () => setCopyFrom({ chosen: [], source: templates.find(t => t.id !== tid)?.id })
   useEffect(() => {
     if (!copyFrom?.source || copyFrom.tree?.template_id === copyFrom.source) return
@@ -252,7 +243,6 @@ export default function TemplateEditorPage() {
       <span className="tpl-row-name">{item.name}</span>
       {item.optional && <Tag className="tpl-row-optional">可选</Tag>}
       <span className="tpl-row-facts">{rowFacts(item).map(fact => <span key={fact}>{fact}</span>)}</span>
-      {fields.length > 0 && <span className="tpl-row-fields">{fields.filter(field => item.fields[field.id] !== undefined).map(field => <span key={field.id} title={field.name}>{field.name}：{String(item.fields[field.id])}</span>)}</span>}
     </button>
   </li>
 
@@ -296,7 +286,7 @@ export default function TemplateEditorPage() {
     </section>
   }
 
-  const panel = selectedItem && tree ? <TemplateItemPanel key={selectedItem.id} templateId={tid} item={selectedItem} sections={sections} fields={fields} editable={canManage}
+  const panel = selectedItem && tree ? <TemplateItemPanel key={selectedItem.id} templateId={tid} item={selectedItem} sections={sections} editable={canManage}
     flushRef={flushRef} onTree={setTree} onClose={() => setSelectedId(undefined)} onReload={load} /> : null
   const wide = screens.lg !== false
 
@@ -335,7 +325,6 @@ export default function TemplateEditorPage() {
       <span className="tpl-toolbar-note">{counts.work} 项工作 · {counts.file} 组资料 · {counts.purchase} 项采购 · 共 {counts.files} 份文件</span>
       {canManage && <span className="tpl-toolbar-actions">
         <Button icon={<PlusOutlined />} disabled={busy} onClick={() => void addSection()}>加段落</Button>
-        <Button icon={<SettingOutlined />} onClick={() => setFieldDrafts(fields.map(field => ({ ...field, options: [...field.options] })))}>自定义字段{fields.length ? `（${fields.length}）` : ''}</Button>
         {templates.length > 1 && <Button icon={<ImportOutlined />} onClick={openCopy}>从其他模板复制</Button>}
       </span>}
     </div>
@@ -355,20 +344,6 @@ export default function TemplateEditorPage() {
       <Input aria-label="新模板名称" value={copyName} onChange={e => setCopyName(e.target.value)} maxLength={200} />
     </Modal>
 
-    <Modal destroyOnHidden title="自定义字段" open={!!fieldDrafts} width={620} onCancel={() => { if (!busy) setFieldDrafts(undefined) }} onOk={saveFields} confirmLoading={busy} okText="保存字段" cancelText="取消">
-      <p className="tpl-modal-note">每件事都可以填这些字段，比如「标准工时」「责任部门」。工作带入项目后，字段值显示在工作详情里。</p>
-      <ul className="tpl-field-defs">
-        {fieldDrafts?.map((field, index) => <li key={field.id ?? `new-${index}`}>
-          <Input aria-label={`字段 ${index + 1} 名称`} placeholder="字段名称" value={field.name} maxLength={100} onChange={e => setFieldDrafts(fieldDrafts.map((row, i) => i === index ? { ...row, name: e.target.value } : row))} />
-          <Select aria-label={`字段 ${index + 1} 类型`} value={field.field_type} options={FIELD_TYPES} onChange={field_type => setFieldDrafts(fieldDrafts.map((row, i) => i === index ? { ...row, field_type, options: field_type === 'select' ? row.options : [] } : row))} />
-          {field.field_type === 'select' && <Select aria-label={`字段 ${index + 1} 选项`} mode="tags" placeholder="输入选项后回车" value={field.options} tokenSeparators={['、', ',', '，']}
-            onChange={options => setFieldDrafts(fieldDrafts.map((row, i) => i === index ? { ...row, options } : row))} />}
-          <IconAction label={`删除字段 ${field.name || index + 1}`} icon={<DeleteOutlined />} onClick={() => setFieldDrafts(fieldDrafts.filter((_, i) => i !== index))} />
-        </li>)}
-      </ul>
-      {!fieldDrafts?.length && <p className="tpl-empty-note">还没有自定义字段</p>}
-      <Button icon={<PlusOutlined />} onClick={() => setFieldDrafts([...(fieldDrafts ?? []), { name: '', field_type: 'text', options: [] }])}>加字段</Button>
-    </Modal>
 
     <Modal destroyOnHidden title="从其他模板复制事项" open={!!copyFrom} width={680} onCancel={() => { if (!busy) setCopyFrom(undefined) }} onOk={() => void doCopy()} confirmLoading={busy}
       okText={copyFrom?.chosen.length ? `复制 ${copyFrom.chosen.length} 件事` : '复制'} cancelText="取消" okButtonProps={{ disabled: !copyFrom?.chosen.length }}>

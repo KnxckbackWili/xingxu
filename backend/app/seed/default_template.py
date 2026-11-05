@@ -100,7 +100,7 @@ def seed_default_template(db):
                 optional=spec.get('optional', False), per_vehicle=spec.get('per_vehicle', False), step_key=spec.get('step'),
                 checks=[{'id': str(uuid4()), 'name': check, 'description': '', 'required': True, 'safety': safety}
                         for check, safety in spec.get('checks', [])],
-                files=files, quantity=None, unit=spec.get('unit', ''), spec=spec.get('spec', ''), fields={}, extra={},
+                files=files, quantity=None, unit=spec.get('unit', ''), spec=spec.get('spec', ''), extra={},
                 sort_order=position, version=0))
     db.flush()
     compile_template(db, None)

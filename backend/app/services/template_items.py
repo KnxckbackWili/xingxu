@@ -7,8 +7,7 @@ A template is an ordered list of sections. Each section has a free title and sit
 * ``file``     – a bundle of files to hand in;
 * ``purchase`` – something to buy, at any stage (also spare parts once the site runs).
 
-Any row may hand in files. Optional rows are chosen per project when it is created. Templates may
-define their own fields; every row can fill them in.
+Any row may hand in files. Optional rows are chosen per project when it is created.
 
 The rows are the only editing source. ``compile_template`` regenerates the rows projects are
 generated from (phases, tasks, check items, document requirements, vehicle steps and procurement
@@ -21,7 +20,7 @@ import io
 import os
 import re
 import shutil
-from typing import Any, Literal, Optional
+from typing import Literal, Optional
 from uuid import uuid4
 
 from fastapi import HTTPException
@@ -30,7 +29,7 @@ from sqlalchemy.orm import Session
 
 from app.config import UPLOAD_DIR
 from app.models import (CheckItem, DocumentRequirement, DocumentTemplateFile, Module, Phase, Task, Template,
-                        TemplateDoc, TemplateField, TemplateItem, TemplateProcurementItem, TemplateSection, VehicleStep)
+                        TemplateDoc, TemplateItem, TemplateProcurementItem, TemplateSection, VehicleStep)
 from app.services.change_log import log_change
 from app.services.template_stages import STAGE_NAMES, STAGE_KEYS
 from app.time_utils import utcnow
@@ -38,8 +37,6 @@ from app.time_utils import utcnow
 DEFAULT_TEMPLATE_ID = 'default'
 KINDS = ('work', 'file', 'purchase')
 KIND_NAMES = {'work': '工作', 'file': '资料', 'purchase': '采购'}
-FIELD_TYPES = ('text', 'number', 'date', 'select')
-FIELD_TYPE_NAMES = {'text': '文字', 'number': '数字', 'date': '日期', 'select': '选项'}
 SECTION_STAGES = (*STAGE_KEYS, 'legacy')
 FILE_RULE_KEYS = ('code', 'name', 'template_no', 'required', 'scope', 'platform', 'timing_type', 'timing_event',
                   'timing_offset_hours', 'timing_weekday', 'trigger_type', 'confidential_default',
@@ -127,7 +124,6 @@ class ItemIn(BaseModel):
     quantity: Optional[float] = Field(default=None, ge=0, le=1e9, allow_inf_nan=False)
     unit: str = Field(default='', max_length=20)
     spec: str = Field(default='', max_length=300)
-    fields: dict[str, Any] = Field(default_factory=dict)
     version: Optional[int] = None
 
     @model_validator(mode='after')
@@ -176,30 +172,6 @@ class LayoutIn(BaseModel):
     sections: list[LayoutSection] = Field(max_length=500)
 
 
-class FieldIn(BaseModel):
-    model_config = {'extra': 'forbid'}
-    id: Optional[str] = Field(default=None, max_length=36)
-    name: str = Field(min_length=1, max_length=100)
-    field_type: Literal[FIELD_TYPES] = 'text'
-    options: list[str] = Field(default_factory=list, max_length=100)
-
-    @model_validator(mode='after')
-    def _clean(self):
-        self.name = self.name.strip()
-        if not self.name:
-            raise ValueError('字段名称不能为空')
-        self.options = [option.strip()[:100] for option in self.options if option and option.strip()]
-        if self.field_type == 'select' and not self.options:
-            raise ValueError(f'选项字段「{self.name}」至少要有一个选项')
-        if self.field_type != 'select':
-            self.options = []
-        return self
-
-
-class FieldsIn(BaseModel):
-    fields: list[FieldIn] = Field(default_factory=list, max_length=50)
-
-
 class CopyIn(BaseModel):
     source_template_id: str = Field(min_length=1, max_length=100)
     item_ids: list[str] = Field(min_length=1, max_length=500)
@@ -219,15 +191,6 @@ def items_of(db: Session, tid):
     return sorted(rows, key=lambda row: (order.get(row.section_id, 1 << 30), row.sort_order or 0, row.id))
 
 
-def fields_of(db: Session, tid):
-    return db.query(TemplateField).filter(_scope(TemplateField.template_id, tid)).order_by(
-        TemplateField.sort_order, TemplateField.id).all()
-
-
-def field_dict(row: TemplateField) -> dict:
-    return {'id': row.id, 'name': row.name, 'field_type': row.field_type, 'options': list(row.options or [])}
-
-
 def item_dict(row: TemplateItem, refs=(), blanks=None) -> dict:
     blanks = blanks or {}
     return {
@@ -236,14 +199,14 @@ def item_dict(row: TemplateItem, refs=(), blanks=None) -> dict:
         'checks': [dict(check) for check in row.checks or []],
         'files': [{**{key: document.get(key) for key in ('id', *FILE_RULE_KEYS)},
                    'blank_file': blanks.get(document.get('blank_file_id'))} for document in row.files or []],
-        'quantity': row.quantity, 'unit': row.unit or '', 'spec': row.spec or '', 'fields': dict(row.fields or {}),
+        'quantity': row.quantity, 'unit': row.unit or '', 'spec': row.spec or '',
         'reference_docs': [{'id': ref.id, 'filename': ref.filename, 'note': ref.note or ''} for ref in refs],
         'version': row.version or 0, 'sort_order': row.sort_order or 0,
     }
 
 
 def tree(db: Session, template_id) -> dict:
-    """Sections with their rows, the template's own fields, and the stages a section may sit on."""
+    """Sections with their rows and the stages a section may sit on."""
     from collections import defaultdict
     tid = tid_of(template_id)
     if tid is not None and db.get(Template, tid) is None:
@@ -265,7 +228,6 @@ def tree(db: Session, template_id) -> dict:
         'template_id': template_id if tid else DEFAULT_TEMPLATE_ID,
         'sections': [{'id': row.id, 'title': row.title, 'stage_key': row.stage_key, 'stage_name': STAGE_NAMES.get(row.stage_key, '历史待分类'),
                       'sort_order': index, 'items': by_section[row.id]} for index, row in enumerate(sections)],
-        'fields': [field_dict(row) for row in fields_of(db, tid)],
         'stages': [{'key': key, 'name': STAGE_NAMES[key]} for key in STAGE_KEYS],
     }
 
@@ -309,37 +271,11 @@ def _item(db: Session, tid, item_id) -> TemplateItem:
 
 def _snapshot(row: TemplateItem) -> dict:
     return {key: getattr(row, key) for key in ('section_id', 'kind', 'name', 'note', 'optional', 'per_vehicle', 'step_key',
-                                               'checks', 'files', 'quantity', 'unit', 'spec', 'fields')}
+                                               'checks', 'files', 'quantity', 'unit', 'spec')}
 
 
 def _new_step_key() -> str:
     return f'step_{uuid4().hex}'
-
-
-def _clean_fields(db: Session, tid, values: dict) -> dict:
-    defined = {row.id: row for row in fields_of(db, tid)}
-    clean = {}
-    for key, value in (values or {}).items():
-        field = defined.get(key)
-        if field is None or value in (None, '', []):
-            continue
-        if field.field_type == 'number':
-            try:
-                value = float(value)
-            except (TypeError, ValueError):
-                raise HTTPException(400, f'字段「{field.name}」需要填数字')
-            if value != value or value in (float('inf'), float('-inf')):
-                raise HTTPException(400, f'字段「{field.name}」需要填数字')
-        elif field.field_type == 'select':
-            if str(value) not in (field.options or []):
-                raise HTTPException(400, f'字段「{field.name}」只能选：{"、".join(field.options or [])}')
-            value = str(value)
-        else:
-            value = str(value).strip()[:2000]
-            if field.field_type == 'date' and value and not re.fullmatch(r'\d{4}-\d{2}-\d{2}', value):
-                raise HTTPException(400, f'字段「{field.name}」需要填日期，如 2026-11-05')
-        clean[key] = value
-    return clean
 
 
 def _codes_in_use(db: Session, tid, skip_item_id=None) -> dict:
@@ -397,7 +333,6 @@ def _apply(db: Session, tid, row: TemplateItem, data: ItemIn, section: TemplateS
     _apply_checks(row, data.checks if data.kind == 'work' else [])
     _apply_files(db, tid, row, data.files, section.stage_key)
     row.quantity, row.unit, row.spec = data.quantity, data.unit.strip(), data.spec.strip()
-    row.fields = _clean_fields(db, tid, data.fields)
 
 
 def create_section(db: Session, template_id, data: SectionIn, actor_id):
@@ -471,7 +406,7 @@ def create_item(db: Session, template_id, data: ItemIn, actor_id):
     tid = lock(db, template_id, actor_id)
     section = _section(db, tid, data.section_id)
     position = db.query(TemplateItem).filter_by(section_id=section.id).count()
-    row = TemplateItem(id=str(uuid4()), template_id=tid, section_id=section.id, sort_order=position, checks=[], files=[], fields={}, extra={}, version=0)
+    row = TemplateItem(id=str(uuid4()), template_id=tid, section_id=section.id, sort_order=position, checks=[], files=[], extra={}, version=0)
     _apply(db, tid, row, data, section)
     db.add(row)
     db.flush()
@@ -513,37 +448,6 @@ def delete_item(db: Session, template_id, item_id, actor_id):
     compile_template(db, tid)
 
 
-def replace_fields(db: Session, template_id, data: FieldsIn, actor_id):
-    tid = lock(db, template_id, actor_id)
-    existing = {row.id: row for row in fields_of(db, tid)}
-    names = [field.name for field in data.fields]
-    if len(set(names)) != len(names):
-        raise HTTPException(400, '字段名称不能重复')
-    kept = set()
-    for index, field in enumerate(data.fields):
-        row = existing.get(field.id or '')
-        if row is None:
-            row = TemplateField(id=str(uuid4()), template_id=tid)
-            db.add(row)
-        row.name, row.field_type, row.options, row.sort_order = field.name, field.field_type, list(field.options), index
-        kept.add(row.id)
-    removed = [row for key, row in existing.items() if key not in kept]
-    for row in removed:
-        db.delete(row)
-    db.flush()
-    # Values of removed fields and choices no longer offered are dropped from every row.
-    current = {row.id: row for row in fields_of(db, tid)}
-    for item in db.query(TemplateItem).filter(_scope(TemplateItem.template_id, tid)):
-        values = {key: value for key, value in (item.fields or {}).items() if key in current
-                  and (current[key].field_type != 'select' or value in (current[key].options or []))}
-        if values != (item.fields or {}):
-            item.fields = values
-    log_change(db, None, 'template', template_id, 'update', actor_id, f'{template_label(db, template_id)}：设置自定义字段（{"、".join(names) or "无"}）')
-    compile_template(db, tid)
-
-
-# ===== Files that travel with rows =====
-
 def _copy_blank(db: Session, blank_file_id):
     from app.services.document_requirements import create_file, read_asset
     if not blank_file_id:
@@ -572,7 +476,7 @@ def _copy_references(db: Session, source_task_id, target_task_id, target_tid):
                            file_size=ref.file_size, content_type=ref.content_type, note=ref.note, uploaded_by=ref.uploaded_by))
 
 
-def _clone(db: Session, source: TemplateItem, target_tid, section_id, sort_order, used_codes, step_keys, field_map, stage):
+def _clone(db: Session, source: TemplateItem, target_tid, section_id, sort_order, used_codes, step_keys, stage):
     files = []
     for document in source.files or []:
         code = document.get('code') or ''
@@ -588,32 +492,12 @@ def _clone(db: Session, source: TemplateItem, target_tid, section_id, sort_order
         id=str(uuid4()), template_id=target_tid, section_id=section_id, kind=source.kind, name=source.name, note=source.note or '',
         optional=bool(source.optional), per_vehicle=bool(source.per_vehicle), step_key=step_key,
         checks=[{**check, 'id': str(uuid4())} for check in source.checks or []], files=files, quantity=source.quantity,
-        unit=source.unit or '', spec=source.spec or '', extra=dict(source.extra or {}), sort_order=sort_order, version=0,
-        fields={field_map[key]: value for key, value in (source.fields or {}).items() if key in field_map})
+        unit=source.unit or '', spec=source.spec or '', extra=dict(source.extra or {}), sort_order=sort_order, version=0)
     db.add(row)
     db.flush()
     if source.kind == 'work':
         _copy_references(db, source.id, row.id, target_tid)
     return row
-
-
-def _field_map(db: Session, source_tid, target_tid, *, create: bool) -> dict:
-    """Source field id → target field id, matched by name; missing fields are created when copying."""
-    target = {row.name: row for row in fields_of(db, target_tid)}
-    mapping = {}
-    for row in fields_of(db, source_tid):
-        match = target.get(row.name)
-        if match is None and create:
-            match = TemplateField(id=str(uuid4()), template_id=target_tid, name=row.name, field_type=row.field_type,
-                                  options=list(row.options or []), sort_order=len(target))
-            db.add(match)
-            target[row.name] = match
-        elif match is not None and match.field_type == 'select':
-            match.options = list(dict.fromkeys([*(match.options or []), *(row.options or [])]))
-        if match is not None:
-            mapping[row.id] = match.id
-    db.flush()
-    return mapping
 
 
 def copy_items(db: Session, template_id, data: CopyIn, actor_id):
@@ -639,14 +523,13 @@ def copy_items(db: Session, template_id, data: CopyIn, actor_id):
     by_title = {row.title: row for row in target_sections}
     used_codes = _codes_in_use(db, target_tid)
     step_keys = {row.step_key for row in items_of(db, target_tid) if row.step_key}
-    field_map = _field_map(db, source_tid, target_tid, create=True)
     copied = []
     for item_id in dict.fromkeys(data.item_ids):
         source = sources[item_id]
         source_section = source_sections.get(source.section_id)
         section = fallback or by_title.get(source_section.title if source_section else '') or target_sections[-1]
         position = db.query(TemplateItem).filter_by(section_id=section.id).count()
-        copied.append(_clone(db, source, target_tid, section.id, position, used_codes, step_keys, field_map, section.stage_key))
+        copied.append(_clone(db, source, target_tid, section.id, position, used_codes, step_keys, section.stage_key))
     log_change(db, None, 'template', template_id, 'update', actor_id,
                f'{template_label(db, template_id)}：从「{template_label(db, data.source_template_id)}」复制 {len(copied)} 件事：'
                + '、'.join(row.name for row in copied))
@@ -655,17 +538,15 @@ def copy_items(db: Session, template_id, data: CopyIn, actor_id):
 
 
 def clear_content(db: Session, tid):
-    """Remove a template's rows, sections and fields; the compiled rows follow on the next compile."""
+    """Remove a template's rows and sections; the compiled rows follow on the next compile."""
     db.query(TemplateItem).filter(_scope(TemplateItem.template_id, tid)).delete(synchronize_session=False)
     db.query(TemplateSection).filter(_scope(TemplateSection.template_id, tid)).delete(synchronize_session=False)
-    db.query(TemplateField).filter(_scope(TemplateField.template_id, tid)).delete(synchronize_session=False)
     db.flush()
 
 
 def copy_template(db: Session, source_template_id, target_tid):
     """Everything of one template into an empty new one (blank forms and reference files copied)."""
     source_tid = tid_of(source_template_id)
-    field_map = _field_map(db, source_tid, target_tid, create=True)
     used_codes, step_keys = {}, set()
     sections = {}
     for index, section in enumerate(sections_of(db, source_tid)):
@@ -677,7 +558,7 @@ def copy_template(db: Session, source_template_id, target_tid):
         section = sections.get(item.section_id)
         if section is None:
             continue
-        _clone(db, item, target_tid, section.id, item.sort_order or 0, used_codes, step_keys, field_map, section.stage_key)
+        _clone(db, item, target_tid, section.id, item.sort_order or 0, used_codes, step_keys, section.stage_key)
     compile_template(db, target_tid)
 
 
@@ -703,7 +584,6 @@ def compile_template(db: Session, tid):
     sections = sections_of(db, tid)
     stage_of = {row.id: row.stage_key for row in sections}
     items = items_of(db, tid)
-    names = {row.id: row.name for row in fields_of(db, tid)}
     now = utcnow()
 
     phases = {row.id: row for row in db.query(Phase).filter(_scope(Phase.template_id, tid), Phase.project_id.is_(None))}
@@ -716,7 +596,6 @@ def compile_template(db: Session, tid):
     order = 0
     for position, row in enumerate(items):
         extra = row.extra or {}
-        fields = [{'name': names[key], 'value': value} for key, value in (row.fields or {}).items() if key in names and value not in (None, '', [])]
         if row.kind == 'work':
             per_vehicle = bool(row.per_vehicle)
             wanted_tasks[row.id] = {
@@ -728,8 +607,7 @@ def compile_template(db: Session, tid):
                 'unit': '台' if per_vehicle else extra.get('unit') or '项', 'standard_hours': extra.get('standard_hours'),
                 'safety_flag': bool(extra.get('safety_flag')), 'applicable_vehicle_types': list(extra.get('applicable_vehicle_types') or []),
                 'sort_order': position, 'depends_on': list(extra.get('depends_on') or []), 'deliverables': [], 'reference_docs': [],
-                'version': 0, 'source_task_id': None, 'vehicle_step_key': row.step_key if per_vehicle else None,
-                'template_fields': fields or None}
+                'version': 0, 'source_task_id': None, 'vehicle_step_key': row.step_key if per_vehicle else None}
             for index, check in enumerate(row.checks or []):
                 wanted_checks[check['id']] = {
                     'task_id': row.id, 'project_id': None, 'template_id': tid, 'name': check['name'],
@@ -824,11 +702,10 @@ def creation_scope(db: Session, template_id, optional_item_ids) -> dict:
         'work_ids': [row.id for row in items if row.kind == 'work' and row.id in chosen],
         'excluded_requirement_ids': [document['id'] for row in items if row.id not in chosen for document in row.files or []],
         'purchases': [(row, stage_of.get(row.section_id)) for row in items if row.kind == 'purchase' and row.id in chosen],
-        'field_names': {row.id: row.name for row in fields_of(db, tid)},
     }
 
 
-def add_purchases(db: Session, project, purchases, field_names, actor_id) -> int:
+def add_purchases(db: Session, project, purchases, actor_id) -> int:
     """Purchase rows become the project's procurement records; later-stage purchases have no due date yet."""
     from app.models import ProjectPreparationItem
     from app.services.project_events import planned_event_date
@@ -838,14 +715,13 @@ def add_purchases(db: Session, project, purchases, field_names, actor_id) -> int
     for row, stage in purchases:
         if row.name in existing:
             continue
-        fields = [{'name': field_names[key], 'value': value} for key, value in (row.fields or {}).items() if key in field_names]
         db.add(ProjectPreparationItem(
             project_id=project.id, category='procurement', name=row.name, is_required=not row.optional, blocks_entry=False,
             owner_party=(row.extra or {}).get('owner_party') or 'procurement',
             required_date=planned_event_date(db, project.id) if stage in ('4', '5') else None,
             risk=(row.extra or {}).get('risk') or 'low', note=row.note or '',
             extra={'quantity': row.quantity, 'unit': row.unit, 'spec': row.spec, 'order_status': '未申请',
-                   'source': 'template', 'template_item_id': row.id, 'stage_key': stage, 'fields': fields},
+                   'source': 'template', 'template_item_id': row.id, 'stage_key': stage},
             sort_order=sort_order + created))
         existing.add(row.name)
         created += 1
@@ -856,7 +732,7 @@ def add_purchases(db: Session, project, purchases, field_names, actor_id) -> int
 
 # ===== Excel =====
 
-SHEET_ITEMS, SHEET_FILES, SHEET_FIELDS = '事项', '文件', '字段'
+SHEET_ITEMS, SHEET_FILES = '事项', '文件'
 ITEM_COLUMNS = ['段落', '阶段', '类型', '名称', '可选', '每台车', '检查要点', '要交的文件', '数量', '单位', '规格', '说明']
 FILE_COLUMNS = ['编号', '名称', '必交', '每台车一份', '什么时候交', '事件', '相隔天数', '星期', '触发情况', '只用于平台',
                 '默认保密', '禁止外部查看', '默认对外可见', '模板编号', '说明']
@@ -888,11 +764,10 @@ def export_workbook(db: Session, template_id) -> bytes:
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill
     data = tree(db, template_id)
-    fields = data['fields']
     book = Workbook()
     sheet = book.active
     sheet.title = SHEET_ITEMS
-    sheet.append(ITEM_COLUMNS + [field['name'] for field in fields])
+    sheet.append(ITEM_COLUMNS)
     files_sheet = book.create_sheet(SHEET_FILES)
     files_sheet.append(FILE_COLUMNS)
     for section in data['sections']:
@@ -902,8 +777,7 @@ def export_workbook(db: Session, template_id) -> bytes:
             sheet.append([section['title'], STAGE_NAMES.get(section['stage_key'], '历史待分类'), KIND_NAMES[item['kind']], item['name'],
                           '是' if item['optional'] else '', '是' if item['per_vehicle'] else '', checks,
                           '\n'.join(f"{document['code']} {document['name']}" for document in item['files']),
-                          item['quantity'], item['unit'], item['spec'], item['note']]
-                         + [item['fields'].get(field['id'], '') for field in fields])
+                          item['quantity'], item['unit'], item['spec'], item['note']])
             for document in item['files']:
                 offset = document.get('timing_offset_hours')
                 files_sheet.append([
@@ -914,20 +788,15 @@ def export_workbook(db: Session, template_id) -> bytes:
                     TRIGGER_NAMES.get(document.get('trigger_type') or '', ''), PLATFORM_NAMES.get(document.get('platform') or '', ''),
                     '是' if document.get('confidential_default') else '', '是' if document.get('external_never_visible') else '',
                     '是' if document.get('external_visible_default') else '', document.get('template_no') or '', document.get('note') or ''])
-    fields_sheet = book.create_sheet(SHEET_FIELDS)
-    fields_sheet.append(['字段', '类型', '选项（用、分隔）'])
-    for field in fields:
-        fields_sheet.append([field['name'], FIELD_TYPE_NAMES[field['field_type']], '、'.join(field['options'])])
     note = book.create_sheet('说明')
     for line in ('一行一件事。「段落」相同的行在同一段落里，段落和行的顺序按表格顺序。',
                  '阶段：内部启动会 / 发车前 / 实施 / 验收 / 交付 / 全项目周期，决定这一段要交的文件在哪个门禁前交齐。',
                  '类型：工作 / 资料 / 采购。每台车、可选填「是」。',
                  '检查要点：一行一个；前面加 [安全] 表示安全项，加 [选做] 表示不是必做。',
                  '要交的文件：一行一个「编号 名称」；编号可不填，导入时自动编号。交付时机等细节在「文件」表按编号填写。',
-                 '「事项」表「说明」之后的列是自定义字段，类型在「字段」表里设置。',
                  '导入会用表格内容整体替换当前模板；名称和编号相同的事项、文件会保留原有的空白模板和参考文件。'):
         note.append([line])
-    for target in (sheet, files_sheet, fields_sheet):
+    for target in (sheet, files_sheet):
         for cell in target[1]:
             cell.font = Font(bold=True)
             cell.fill = PatternFill('solid', fgColor='EEF2F7')
@@ -951,7 +820,7 @@ def _cell(row, index):
 
 
 def parse_workbook(content: bytes) -> dict:
-    """Workbook → {'fields': [...], 'sections': [{title, stage_key, items: [ItemIn-like dicts]}]}; raises ValueError."""
+    """Workbook → {'sections': [{title, stage_key, items: [ItemIn-like dicts]}]}; raises ValueError."""
     from openpyxl import load_workbook
     try:
         book = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
@@ -965,16 +834,6 @@ def parse_workbook(content: bytes) -> dict:
     header = [str(value or '').strip() for value in rows[0]]
     if header[:len(ITEM_COLUMNS)] != ITEM_COLUMNS:
         raise ValueError('「事项」表的列与导出格式不一致，请在导出的表格上修改')
-    custom = [name for name in header[len(ITEM_COLUMNS):] if name]
-    types = {}
-    if SHEET_FIELDS in book.sheetnames:
-        for row in list(book[SHEET_FIELDS].iter_rows(values_only=True))[1:]:
-            name = str(row[0] or '').strip() if row else ''
-            if name:
-                kind = _reverse(FIELD_TYPE_NAMES, row[1] if len(row) > 1 else '', f'字段「{name}」的类型') or 'text'
-                options = [part.strip() for part in re.split(r'[、,，\n]', str(row[2] or '')) if part.strip()] if len(row) > 2 else []
-                types[name] = (kind, options)
-    fields = [{'name': name, 'field_type': types.get(name, ('text', []))[0], 'options': types.get(name, ('text', []))[1]} for name in custom]
     rules = {}
     if SHEET_FILES in book.sheetnames:
         for number, row in enumerate(list(book[SHEET_FILES].iter_rows(values_only=True))[1:], start=2):
@@ -1042,14 +901,12 @@ def parse_workbook(content: bytes) -> dict:
             quantity = None if quantity in ('', None) else float(quantity)
         except (TypeError, ValueError):
             raise ValueError(f'「事项」表第 {number} 行：数量需要填数字')
-        values = {fields[index]['name']: _cell(row, len(ITEM_COLUMNS) + index) for index in range(len(fields))}
         section['items'].append({'kind': kind, 'name': name, 'optional': _yes(_cell(row, 4)), 'per_vehicle': _yes(_cell(row, 5)),
                                  'checks': checks, 'files': files, 'quantity': quantity, 'unit': str(_cell(row, 9)),
-                                 'spec': str(_cell(row, 10)), 'note': str(_cell(row, 11)),
-                                 'field_values': {key: value for key, value in values.items() if value not in ('', None)}, 'row': number})
+                                 'spec': str(_cell(row, 10)), 'note': str(_cell(row, 11)), 'row': number})
     if not sections:
         raise ValueError('「事项」表没有任何事项')
-    return {'fields': fields, 'sections': sections}
+    return {'sections': sections}
 
 
 def import_workbook(db: Session, template_id, content: bytes, actor_id) -> dict:
@@ -1061,27 +918,12 @@ def import_workbook(db: Session, template_id, content: bytes, actor_id) -> dict:
     tid = lock(db, template_id, actor_id, 'system.template_io.manage')
     from app.services.document_requirements import recheck_authority
     recheck_authority(db, actor_id)
-    try:
-        field_rows = FieldsIn(fields=[FieldIn(**field) for field in parsed['fields']])
-    except ValueError as error:
-        raise HTTPException(400, f'「字段」表：{error}')
     old_sections = {row.title: row for row in sections_of(db, tid)}
     old_items = {}
     for row in items_of(db, tid):
         old_items.setdefault((row.kind, row.name), row)
     old_files = {document['code']: document for row in old_items.values() for document in row.files or [] if document.get('code')}
     old_checks = {(row.id, check['name']): check['id'] for row in old_items.values() for check in row.checks or []}
-    # Fields: keep ids by name.
-    existing_fields = {row.name: row for row in fields_of(db, tid)}
-    kept_fields = {}
-    for index, field in enumerate(field_rows.fields):
-        row = existing_fields.pop(field.name, None) or TemplateField(id=str(uuid4()), template_id=tid)
-        row.name, row.field_type, row.options, row.sort_order = field.name, field.field_type, list(field.options), index
-        db.add(row)
-        kept_fields[field.name] = row
-    for row in existing_fields.values():
-        db.delete(row)
-    db.flush()
     kept_sections, kept_items = set(), set()
     used_codes, total = {}, 0
     explicit = {document['code'] for section in parsed['sections'] for item in section['items'] for document in item['files'] if document['code']}
@@ -1095,13 +937,12 @@ def import_workbook(db: Session, template_id, content: bytes, actor_id) -> dict:
             old = old_items.get((data['kind'], data['name']))
             if old is not None and old.id in kept_items:
                 old = None
-            row = old or TemplateItem(id=str(uuid4()), template_id=tid, checks=[], files=[], fields={}, extra={}, version=0)
+            row = old or TemplateItem(id=str(uuid4()), template_id=tid, checks=[], files=[], extra={}, version=0)
             try:
                 body = ItemIn(kind=data['kind'], name=data['name'], note=data['note'], optional=data['optional'], per_vehicle=data['per_vehicle'],
                               checks=[CheckIn(id=old_checks.get((row.id, check['name'])), **check) for check in data['checks']],
                               files=[FileIn(**{key: value for key, value in document.items() if value is not None}) for document in data['files']],
-                              quantity=data['quantity'], unit=data['unit'], spec=data['spec'],
-                              fields={kept_fields[name].id: value for name, value in data['field_values'].items() if name in kept_fields})
+                              quantity=data['quantity'], unit=data['unit'], spec=data['spec'])
             except ValueError as error:
                 raise HTTPException(400, f'「事项」表第 {data["row"]} 行：{error}')
             row.section_id, row.sort_order = section.id, position
@@ -1124,7 +965,6 @@ def import_workbook(db: Session, template_id, content: bytes, actor_id) -> dict:
                 files.append(values)
             row.files = files
             row.quantity, row.unit, row.spec = body.quantity, body.unit, body.spec
-            row.fields = _clean_fields(db, tid, body.fields)
             if old is not None:
                 row.version = (row.version or 0) + 1
             db.add(row)
@@ -1142,7 +982,7 @@ def import_workbook(db: Session, template_id, content: bytes, actor_id) -> dict:
     log_change(db, None, 'template', template_id, 'import', actor_id,
                f'{template_label(db, template_id)}：从 Excel 导入 {len(parsed["sections"])} 个段落、{total} 件事')
     compile_template(db, tid)
-    return {'sections': len(parsed['sections']), 'items': total, 'fields': len(parsed['fields'])}
+    return {'sections': len(parsed['sections']), 'items': total}
 
 
 # ===== Blank forms of a row's files =====
