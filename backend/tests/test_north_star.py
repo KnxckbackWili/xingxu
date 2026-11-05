@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
 from app.models import DailyProgress, ScheduleEntry, Task, User
+from tests.template_work import default_work
 
 
 def _project_with_tasks(client, pm_headers):
@@ -14,7 +15,7 @@ def _project_with_tasks(client, pm_headers):
     })
     assert r.status_code == 200, r.text
     pid = r.json()["id"]
-    r = client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers, json={"module_ids": ["mod-01"]})
+    r = client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers, json={"work_item_ids": default_work("mod-01")})
     assert r.status_code == 200, r.text
     return pid
 

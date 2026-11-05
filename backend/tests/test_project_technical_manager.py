@@ -4,6 +4,7 @@ from tests.lifecycle_helpers import versioned
 from datetime import date
 
 import pytest
+from tests.template_work import default_work
 
 
 def _project(client, pm_headers, technical_id):
@@ -64,7 +65,7 @@ def test_explicit_clear_preserves_member_grants_and_assigned_history(
     assert detail.json()['capabilities'] == [C_EXPORT]
     assert detail.json()['member_permissions'] == [{'user_id': uid, 'capabilities': [C_EXPORT]}]
     assert client.post(f'/api/projects/{pid}/tasks/generate', headers=worker_headers,
-                       json={'module_ids': ['mod-01']}).status_code == 403
+                       json={'work_item_ids': default_work('mod-01')}).status_code == 403
     with SessionLocal() as db:
         assert db.query(ProjectMember).filter_by(project_id=pid, user_id=uid).count() == 1
         assert db.get(Task, task_id).target_quantity == 2

@@ -80,6 +80,9 @@ class ProjectCreate(EventPlanInput):
     vehicles: list[VehicleCreate] = Field(default_factory=list, max_length=100)
     module_ids: Optional[list[str]] = Field(default=None, max_length=500)  # legacy source adapter
     work_item_ids: Optional[list[str]] = Field(default=None, max_length=2000)
+    # Optional template rows chosen for this project; when given, every required row comes in
+    # (work, files and purchases) and work_item_ids is not needed.
+    optional_item_ids: Optional[list[str]] = Field(default=None, max_length=2000)
     template_id: str = Field(default="default", min_length=1, max_length=100)
     task_quantities: dict[str, Annotated[float, Field(gt=0, allow_inf_nan=False)]] = (
         Field(default_factory=dict)
@@ -535,6 +538,14 @@ def _create_project(data: ProjectCreate, user: User, db: Session):
     )
     if data.template_id != "default" and template is None:
         raise HTTPException(400, "所选模板已不存在，请重新选择实施方案")
+    scope = None
+    if data.optional_item_ids is not None:
+        from app.services.template_items import creation_scope
+        try:
+            scope = creation_scope(db, data.template_id, data.optional_item_ids)
+        except ValueError as error:
+            raise HTTPException(400, str(error))
+        data.work_item_ids = scope["work_ids"]
     p = Project(
         template_id=data.template_id,
         template_version=template.version or 1 if template else 1,
@@ -608,7 +619,10 @@ def _create_project(data: ProjectCreate, user: User, db: Session):
             f"新增车型 {vehicle.vehicle_type} {vehicle.model_name}",
         )
     from app.services.project_documents import initialize
-    initialize(db, p)
+    initialize(db, p, scope["excluded_requirement_ids"] if scope else ())
+    if scope and scope["purchases"]:
+        from app.services.template_items import add_purchases
+        add_purchases(db, p, scope["purchases"], scope["field_names"], user.id)
     result = _project_dict(db, p)
     if data.module_ids is not None or data.work_item_ids is not None:
         from app.services.generate_tasks import (

@@ -53,8 +53,8 @@ def test_binds_only_untouched_default_and_preset_rows_with_audit(client, tmp_pat
             # preset-2 was edited after seeding: its copies stay as they are.
             connection.execute(text("INSERT INTO change_logs(id,entity_type,entity_id,action,detail) "
                                     "VALUES ('edit-1','template','preset-2','update','管理员修改模板')"))
-        upgrade('head')
-        upgrade('head')
+        upgrade('g3a92b000001')
+        upgrade('g3a92b000001')
         with isolated.connect() as connection:
             keys = dict(connection.execute(text('SELECT id,vehicle_step_key FROM tasks')).all())
             assert keys == {'task-005': 'arrival_inspection', 'task-009': 'single_commissioning', 'task-012': None,
@@ -68,6 +68,11 @@ def test_binds_only_untouched_default_and_preset_rows_with_audit(client, tmp_pat
             assert action == 'bind_vehicle_steps'
             assert {row['task_id'] for row in new['tasks']} == {'task-005', 'task-009', 'copy-1'}
             assert all(row['vehicle_step_key'] is None for row in old['tasks'])
+        # Later, template rows replace the old built-in work; the presets become ordinary row-based templates.
+        upgrade('head')
+        with isolated.connect() as connection:
+            assert connection.execute(text('SELECT count(*) FROM template_sections WHERE template_id IS NULL')).scalar() > 0
+            assert connection.execute(text("SELECT count(*) FROM tasks WHERE template_id IS NULL AND project_id IS NULL AND id LIKE 'task-%'")).scalar() == 0
     finally:
         isolated.dispose()
         if pg:

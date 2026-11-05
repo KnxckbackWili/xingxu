@@ -12,8 +12,8 @@ vi.mock('../../hooks/useVehicleTypes', () => ({ useVehicleTypes: () => ({ option
   toVehicleTypeSelectOptions: (options: { name: string }[]) => options.map(o => ({ label: o.name, value: o.name })) }))
 
 const templates = [
-  { id: 'default', name: '系统默认模板', description: '标准 AGV 实施', is_system: true, version: 1, summary: { work: { '5': 4, '6': 41, '7': 4 }, documents: { '4': 5, '6': 32 }, vehicle_steps: 5 } },
-  { id: 't2', name: '叉车模板', is_system: false, vehicle_type: '叉车式', status: 'draft', version: 2, usage_count: 3, summary: { work: { '6': 10 }, documents: {}, vehicle_steps: 3 } },
+  { id: 'default', name: '系统默认模板', description: '标准 AGV 实施', is_system: true, version: 1, summary: { work: 13, file: 5, purchase: 5, files: 53, sections: 9 } },
+  { id: 't2', name: '叉车模板', is_system: false, vehicle_type: '叉车式', status: 'draft', version: 2, usage_count: 3, summary: { work: 10, file: 0, purchase: 0, files: 0, sections: 2 } },
 ]
 beforeEach(() => {
   setOfflineAccount('admin'); vi.clearAllMocks(); auth.user = { id: 'admin', role: 'admin' }
@@ -28,9 +28,10 @@ const show = () => render(<ConfigProvider theme={{ token: { motion: false } }}><
 it('shows every template as a simple card with its totals, without versions or publish states', async () => {
   show()
   const card = (await screen.findByRole('button', { name: '打开模板「系统默认模板」' })).closest('li')!
-  expect(card).toHaveTextContent('49 项工作')
-  expect(card).toHaveTextContent('37 份资料')
-  expect(card).toHaveTextContent('5 个车辆环节')
+  expect(card).toHaveTextContent('23 件事')
+  expect(card).toHaveTextContent('13 项工作')
+  expect(card).toHaveTextContent('5 项采购')
+  expect(card).toHaveTextContent('53 份文件')
   expect(card).toHaveTextContent('通用')
   const other = screen.getByRole('button', { name: '打开模板「叉车模板」' }).closest('li')!
   expect(other).toHaveTextContent('叉车式')

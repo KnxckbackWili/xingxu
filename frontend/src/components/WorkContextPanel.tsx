@@ -50,7 +50,8 @@ export default function WorkContextPanel({ data, onRefresh }: { data: any; entry
     {receipt && <Alert type="success" message={receipt} />}
     {error && <Alert type="error" message={error} action={<Button onClick={() => void onRefresh().then(() => setError('')).catch(() => {})}>刷新核对</Button>} />}
     <Space wrap>{work && <WorkCompletionAction projectId={data.project.id} item={work} canRecord={canRecord} canOverride={!!data.can_override} onSaved={onRefresh} />}<Link to={`/pm/projects/${data.project.id}/schedule`}>查看周计划</Link><Link to={`/pm/projects/${data.project.id}/documents`}>项目资料清单</Link></Space>
-    <h3>人员与安排</h3>
+    {/* Old day-by-day arrangements stay readable; new work is not assigned to people. */}
+    {(data.entries || []).some((entry: any) => entry.status !== 'skipped') && <h3>历史安排</h3>}
     {(data.entries || []).filter((entry: any) => entry.status !== 'skipped').map((entry: any) => <p key={entry.id}>{entry.work_date} · {entry.assignee_name}<Tag>{entry.is_confirmed ? '已发布' : '未发布'}</Tag>{entry.notes}</p>)}
     {data.repair && <><h3>维修与验证</h3><p>{data.repair.asset_code} · {data.repair.title} · {data.repair.is_closed ? '已关闭' : '待处理'}</p><p>{data.repair.action_taken}</p><p>{data.repair.verification}</p>{canRepair && <Button onClick={() => { form.setFieldsValue(draft.repair || { ...data.repair, status_after: undefined }); setRepairing(true) }}>记录维修与验证</Button>}</>}
     {repairing && <Form form={form} layout="vertical" disabled={busy || !canRepair} onFinish={saveRepair} onValuesChange={(_, value) => setDraft((d: any) => ({ ...d, repair: value }))}>

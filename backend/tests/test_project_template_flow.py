@@ -91,36 +91,6 @@ def test_one_template_per_vehicle_type(client, admin_headers, pm_headers):
     assert client.put(f'/api/templates/{other}', headers=pm_headers, json={'name': 'x', 'vehicle_type': '潜伏式'}).status_code == 403
 
 
-def test_template_edit_keeps_identity_documents_and_project_customization(client, admin_headers, pm_headers):
-    tid, phase_id, mid, manual, vehicle = make_template()
-    doc = client.post(f'/api/templates/{tid}/tasks/{manual}/reference-docs', headers=admin_headers,
-                      files={'file': ('现场规范.txt', b'field guide', 'text/plain')})
-    assert doc.status_code == 200
-    tree = client.get(f'/api/templates/{tid}/tree', headers=pm_headers).json()
-    pid = client.post('/api/projects', headers=pm_headers, json={
-        'name': '方案更新前项目', 'start_date': '2026-09-16', 'end_date': '2026-12-31',
-        'template_id': tid, 'module_ids': [mid],
-    }).json()['id']
-    project_tree = client.get(f'/api/projects/{pid}/tree', headers=pm_headers).json()
-    tree[0]['name'] = '新现场安装标准'
-    tree[0]['modules'][0]['is_selected'] = False
-    tree[0]['modules'][0]['tasks'][0]['name'] = '新版站点确认'
-    saved = client.put(f'/api/templates/{tid}/tree', headers=admin_headers, json={'phases': tree, 'replace_missing_phases': True})
-    assert saved.status_code == 200, saved.text
-    new_tree = client.get(f'/api/templates/{tid}/tree', headers=pm_headers).json()
-    assert new_tree[0]['id'] == phase_id
-    assert new_tree[0]['modules'][0]['id'] == mid
-    assert new_tree[0]['modules'][0]['is_selected'] is False
-    assert next(task for task in new_tree[0]['modules'][0]['tasks'] if task['id'] == manual)['ref_docs'][0]['filename'] == '现场规范.txt'
-    assert client.get(f'/api/projects/{pid}/tree', headers=pm_headers).json() == project_tree
-    preps = client.get(f'/api/templates/{tid}/document-requirements', headers=pm_headers).json()
-    assert {item['name'] for item in preps} == {'窄巷道净宽确认'}
-    # 编辑器明确删除的阶段不会保存后又被自动恢复。
-    assert client.put(f'/api/templates/{tid}/tree', headers=admin_headers, json={'phases': [], 'replace_missing_phases': True}).status_code == 200
-    assert client.get(f'/api/templates/{tid}/tree', headers=pm_headers).json() == []
-    assert client.get(f'/api/projects/{pid}/tree', headers=pm_headers).json() == project_tree
-
-
 def test_clone_keeps_project_scope_and_local_edits(client, pm_headers):
     tid, _, mid, manual, vehicle = make_template()
     response = client.post('/api/projects', headers=pm_headers, json={

@@ -2,6 +2,7 @@
 from tests.lifecycle_helpers import versioned
 import pytest
 from tests.test_permissions import _project, _user, _login
+from tests.template_work import default_work
 
 WORKER = "user-worker-001"
 
@@ -30,7 +31,7 @@ def test_scoped_grant_enforced_and_revoked(client, pm_headers, worker_headers, a
     assert detail["grantable_capabilities"] == []
     assert client.put(path, headers=worker_headers, json=versioned(pid, {"description": "after"})).status_code == 200
     assert client.get(f"/api/projects/{other}", headers=worker_headers).status_code == 404
-    assert client.post(f"{path}/tasks/generate", headers=worker_headers, json={"module_ids": ["mod-01"]}).status_code == 403
+    assert client.post(f"{path}/tasks/generate", headers=worker_headers, json={"work_item_ids": default_work("mod-01")}).status_code == 403
     assert client.get("/api/auth/me", headers=worker_headers).json()["role"] == "worker"
     assert grant(client, pm_headers, pid, []).status_code == 200
     assert client.put(path, headers=worker_headers, json=versioned(pid, {"description": "revoked"})).status_code == 403
@@ -87,7 +88,7 @@ def test_grants_do_not_unlock_archived_writes(client, pm_headers, worker_headers
         db.get(Project, pid).status = "archived"
         db.commit()
     assert client.post(f"/api/projects/{pid}/procurements", headers=worker_headers, json={"name": "late"}).status_code == 400
-    assert client.post(f"/api/projects/{pid}/tasks/generate", headers=worker_headers, json={"module_ids": ["mod-01"]}).status_code == 400
+    assert client.post(f"/api/projects/{pid}/tasks/generate", headers=worker_headers, json={"work_item_ids": default_work("mod-01")}).status_code == 400
     assert client.post(f"/api/projects/{pid}/documents/files", headers=worker_headers, files={"file": ("late.txt", b"x", "text/plain")}).status_code == 400
     assert client.get(f"/api/projects/{pid}/export/excel", headers=worker_headers).status_code == 200
 

@@ -3,31 +3,7 @@
 from tests.lifecycle_helpers import versioned
 import io
 import json
-
-
-def test_export_template_excel(client, pm_headers):
-    r = client.get("/api/templates/export/excel", headers=pm_headers)
-    assert r.status_code == 200
-    assert r.headers["content-type"].startswith("application/vnd.openxmlformats")
-    assert len(r.content) > 1000
-
-
-def test_import_export_template_roundtrip(client, pm_headers, admin_headers):
-    """Export → import → tree should survive."""
-    r = client.get("/api/templates/export/excel", headers=pm_headers)
-    assert r.status_code == 200
-    data = r.content
-
-    r = client.post("/api/templates/import/excel", headers=admin_headers,
-                    files={"file": ("template.xlsx", data, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")})
-    assert r.status_code == 200, r.json()
-    result = r.json()
-    assert result["tasks"] > 30
-
-    # Tree still has content
-    r = client.get("/api/templates/default/tree", headers=pm_headers)
-    assert r.status_code == 200
-    assert len(r.json()) == 9  # C2-2：模板树完整返回 9 阶段（含项目准备）
+from tests.template_work import default_work
 
 
 def test_project_export_json(client, pm_headers):
@@ -39,7 +15,7 @@ def test_project_export_json(client, pm_headers):
     client.post(f"/api/projects/{pid}/vehicles", headers=pm_headers,
                 json={"vehicle_type": "潜伏式", "model_name": "AGV-500", "quantity": 3})
     client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers,
-                json={"module_ids": ["mod-02", "mod-03"]})
+                json={"work_item_ids": default_work("mod-02", "mod-04")})
 
     r = client.get(f"/api/projects/{pid}/export/json", headers=pm_headers)
     assert r.status_code == 200
@@ -68,7 +44,7 @@ def test_clone_project(client, pm_headers):
     client.post(f"/api/projects/{pid}/vehicles", headers=pm_headers,
                 json={"vehicle_type": "堆高车", "model_name": "Fork-1500", "quantity": 2})
     client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers,
-                json={"module_ids": ["mod-03"]})
+                json={"work_item_ids": default_work("mod-03")})
 
     r = client.post(f"/api/projects/{pid}/clone", headers=pm_headers, json={
         "name": "克隆目标项目（二期）",
@@ -87,7 +63,7 @@ def test_clone_project(client, pm_headers):
     # Tasks copied
     r = client.get(f"/api/projects/{new_id}/tree", headers=pm_headers)
     tasks = [t for ph in r.json() for m in ph["modules"] for t in m["tasks"]]
-    assert len(tasks) == 5  # 单车调试 has 5 tasks
+    assert len(tasks) == 1  # 单车调试 is one row
 
 
 def test_project_export_excel(client, pm_headers):
@@ -96,7 +72,7 @@ def test_project_export_excel(client, pm_headers):
         "start_date": "2026-08-10", "new_vehicles": False, "end_date": "2026-09-30"})
     pid = r.json()["id"]
     client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers,
-                json={"module_ids": ["mod-03"]})
+                json={"work_item_ids": default_work("mod-03")})
     r = client.get(f"/api/projects/{pid}/export/excel", headers=pm_headers)
     assert r.status_code == 200
     assert len(r.content) > 500
@@ -114,7 +90,7 @@ def test_project_export_excel_sheets(client, pm_headers, worker_headers):
     client.post(f"/api/projects/{pid}/vehicles", headers=pm_headers,
                 json={"vehicle_type": "潜伏式", "model_name": "AGV-500", "quantity": 2})
     client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers,
-                json={"module_ids": ["mod-03"]})
+                json={"work_item_ids": default_work("mod-03")})
 
     # worker 加入项目（成员校验）
     r = client.get("/api/auth/me", headers=worker_headers)
@@ -156,7 +132,7 @@ def test_project_export_package_zip(client, pm_headers, worker_headers):
     client.post(f"/api/projects/{pid}/vehicles", headers=pm_headers,
                 json={"vehicle_type": "潜伏式", "model_name": "AGV-500", "quantity": 2})
     client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers,
-                json={"module_ids": ["mod-03"]})
+                json={"work_item_ids": default_work("mod-03")})
 
     # 同名附件 × 2 → ZIP 内 files/ 自动去重（-1 序号），manifest 记录 sha256/size
     for content in (b"hello-pkg-1", b"hello-pkg-2"):
@@ -240,22 +216,6 @@ def test_project_export_package_zip_missing_file(client, pm_headers):
     # xlsx / json / manifest 本体仍在，导出可用
     assert "项目数据.xlsx" in zf.namelist()
     assert "项目备份.json" in zf.namelist()
-
-
-def test_template_json_export_route(client, pm_headers):
-    """模板中心调用的 /templates/export/json（修复 404）。"""
-    r = client.get("/api/templates/export/json", headers=pm_headers)
-    assert r.status_code == 200
-    assert len(r.json()["phases"]) == 9
-    assert any(p["name"] == "项目准备" for p in r.json()["phases"])  # C2-2：完整返回含项目准备
-
-
-def test_template_tree_route(client, pm_headers):
-    """模板中心加载用的 /templates/tree（修复 404）。"""
-    r = client.get("/api/templates/tree", headers=pm_headers)
-    assert r.status_code == 200
-    assert len(r.json()) == 9
-    assert any(p["name"] == "项目准备" for p in r.json())  # C2-2：完整返回含项目准备
 
 
 def test_ai_quick_import_template_preview_and_full_import(client, pm_headers):

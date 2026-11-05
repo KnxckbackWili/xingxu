@@ -3,6 +3,7 @@
 from tests.lifecycle_helpers import versioned
 from datetime import timedelta
 from app.time_utils import utcnow
+from tests.template_work import default_work
 
 def test_recycle_retention_never_auto_purges(client, pm_headers, admin_headers):
     """#85：旧软删和新回收站项目均不再自动物理清理。"""
@@ -40,7 +41,7 @@ def test_legacy_immutable_archive_remains_readable_without_new_automatic_purge(c
     from app.services.report_scheduler import purge_soft_deleted_projects
     pid = client.post('/api/projects', headers=pm_headers, json={'name': '归档审计项目', 'start_date': '2026-08-10', 'new_vehicles': False, 'end_date': '2026-09-30'}).json()['id']
     client.post(f'/api/projects/{pid}/vehicles', headers=pm_headers, json={'vehicle_type': '潜伏式', 'model_name': 'AGV-500', 'quantity': 2})
-    client.post(f'/api/projects/{pid}/tasks/generate', headers=pm_headers, json={'module_ids': ['mod-03']})
+    client.post(f'/api/projects/{pid}/tasks/generate', headers=pm_headers, json={'work_item_ids': default_work('mod-03')})
     client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'client': '归档客户'}))
     # Construct a real pre-v3 module source in addition to current flat work.
     from app.models import Phase, Module, Task

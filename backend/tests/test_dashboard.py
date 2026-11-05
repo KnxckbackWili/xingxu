@@ -1,5 +1,6 @@
 """Dashboard overview tests."""
 from tests.lifecycle_helpers import versioned
+from tests.template_work import default_work
 
 
 def _project_with_data(client, pm_headers):
@@ -17,7 +18,7 @@ def _project_with_data(client, pm_headers):
         "vehicle_type": "潜伏式", "model_name": "AGV-500", "quantity": 2})
     assert response.status_code == 200, response.json()
     response = client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers,
-                json={"module_ids": ["mod-03"]})
+                json={"work_item_ids": default_work("mod-03")})
     assert response.status_code == 200, response.json()
     response = client.post(f"/api/projects/{pid}/issues", headers=pm_headers, json={
         "title": "安全问题", "severity": "critical"})
@@ -52,7 +53,7 @@ def test_overview_reflects_progress(client, pm_headers, worker_headers):
     for ph in tree:
         for m in ph["modules"]:
             for t in m["tasks"]:
-                if t["name"] == "单车机械与导航调试":
+                if t["name"] == "单车调试":
                     task = t
     client.post("/api/worker/reports", headers=worker_headers, json={
         "task_id": task["id"], "work_date": "2026-08-06",

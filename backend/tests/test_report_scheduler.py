@@ -1,6 +1,7 @@
 """定时日报/周报：纯函数直接单测（不启动 APScheduler 线程）。"""
 
 from tests.lifecycle_helpers import versioned
+from tests.template_work import default_work
 from datetime import date,datetime
 
 from app import config
@@ -31,7 +32,7 @@ def _project_with_work(client, pm_headers, worker_headers, name="调度测试项
     pid = _project(client, pm_headers, name)
     client.post(f"/api/projects/{pid}/vehicles", headers=pm_headers, json={
         "vehicle_type": "潜伏式", "model_name": "AGV-500", "quantity": 2})
-    client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers, json={"module_ids": ["mod-01"]})
+    client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers, json={"work_item_ids": default_work("mod-01")})
     wid = client.get("/api/auth/me", headers=worker_headers).json()["id"]
     r = client.get(f"/api/projects/{pid}", headers=pm_headers)
     client.put(f"/api/projects/{pid}", headers=pm_headers,
@@ -51,7 +52,7 @@ def _project_full_progress(client, pm_headers, worker_headers, name="调度测�
     pid = _project(client, pm_headers, name)
     client.post(f"/api/projects/{pid}/vehicles", headers=pm_headers, json={
         "vehicle_type": "潜伏式", "model_name": "AGV-500", "quantity": 2})
-    client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers, json={"module_ids": ["mod-01"]})
+    client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers, json={"work_item_ids": default_work("mod-01")})
     wid = client.get("/api/auth/me", headers=worker_headers).json()["id"]
     r = client.get(f"/api/projects/{pid}", headers=pm_headers)
     client.put(f"/api/projects/{pid}", headers=pm_headers,

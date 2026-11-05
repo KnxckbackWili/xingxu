@@ -109,9 +109,9 @@ def test_project_snapshot_blank_ownership_clone_portable_history_and_excel(clien
     from app.models import Project,User
     from app.services.import_export import project_package_zip
     tid=client.post('/api/templates',headers=admin_headers,json={'name':'项目独立模板'}).json()['id']
-    requirement=next(row for row in client.get(f'/api/templates/{tid}/document-requirements',headers=admin_headers).json() if row['code']=='4.1')
+    from tests.template_work import upload_template_blank
     blank=b'original blank form\x00'
-    assert client.post(f'/api/templates/{tid}/document-requirements/{requirement["id"]}/blank-file',headers=admin_headers,files={'file':('blank.bin',blank)}).status_code==200
+    assert upload_template_blank(client,admin_headers,'4.1',{'file':('blank.bin',blank)},tid).status_code==200
     p=create(client,admin_headers,template_id=tid);pid=p['id']
     definition=next(row for row in view(client,admin_headers,pid)['definitions'] if row['code']=='4.1')
     document=next(row for row in view(client,admin_headers,pid)['documents'] if row['code']=='4.1')
@@ -379,25 +379,6 @@ def test_acceptance_scope_survives_structural_migration_but_detects_real_changes
         assert acceptance_scope_fingerprint(db,pid)==before
         task.name+='真实范围修改';db.flush()
         assert acceptance_scope_fingerprint(db,pid)!=before
-
-
-def test_old_template_import_keeps_original_sources_as_legacy_without_old_writes(client,admin_headers):
-    from app.db import SessionLocal
-    from app.models import Task,TemplatePreparationItem
-    tid=client.post('/api/templates',headers=admin_headers,json={'name':'历史模板导入'}).json()['id']
-    payload={'phases':[{'name':'原第1阶段','modules':[{'name':'原模块','tasks':[{'name':'原任务','quantity_type':'manual',
-        'deliverables':[{'name':'原自定义交付要求','required':False,'original_extra':{'keep':'原字段'}}]}]}]}]}
-    assert client.put(f'/api/templates/{tid}/tree',headers=admin_headers,json=payload).status_code==400
-    imported=client.post(f'/api/templates/{tid}/import/json',headers=admin_headers,json=payload)
-    assert imported.status_code==200,imported.text
-    rows=client.get(f'/api/templates/{tid}/document-requirements',headers=admin_headers).json()
-    row=next(row for row in rows if row['name']=='原自定义交付要求')
-    assert row['stage_key']=='legacy' and not row['required']
-    facts=row['source_metadata']['original']
-    assert facts['original']['original_extra']=={'keep':'原字段'} and facts['phase']['name']=='原第1阶段'
-    with SessionLocal() as db:
-        assert not any(task.deliverables for task in db.query(Task).filter_by(template_id=tid))
-        assert not db.query(TemplatePreparationItem).filter_by(template_id=tid).first()
 
 
 def test_concurrent_real_submissions_keep_every_accepted_version_and_file(client,admin_headers):

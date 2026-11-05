@@ -481,6 +481,8 @@ class Task(Base):
     manual_completed_at = Column(DateTime, nullable=True)
     manual_completed_reason = Column(Text, default="")
     manual_check_overrides = Column(JSON, default=list)
+    # Custom template field values frozen when the work was generated: [{"name": ..., "value": ...}]
+    template_fields = Column(JSON, nullable=True)
 
     module = relationship("Module", backref=backref("tasks", passive_deletes=True, cascade="all, delete-orphan"))
     project = relationship("Project", backref=backref("tasks", passive_deletes=True, cascade="all, delete-orphan"))
@@ -717,6 +719,58 @@ class Template(Base):
     snapshots = Column(JSON, default=list)  # C2-3 发布版本快照 [{version, at, by, snapshot}]
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class TemplateSection(Base):
+    """A titled part of a template, placed on one company stage (4–9) for gates and deadlines."""
+    __tablename__ = "template_sections"
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    template_id = Column(String(36), ForeignKey("templates.id", ondelete="CASCADE"), nullable=True, index=True)  # NULL = 通用模板
+    title = Column(String(200), nullable=False)
+    stage_key = Column(String(8), nullable=False, default="6")
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class TemplateItem(Base):
+    """One row of a template: a work item, a file bundle or a purchase, any of which may hand in files.
+
+    The editing source of a template. Phases, tasks, check items, document requirements, vehicle steps
+    and procurement rows are compiled from these with the same ids (services/template_items.py).
+    """
+    __tablename__ = "template_items"
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    template_id = Column(String(36), ForeignKey("templates.id", ondelete="CASCADE"), nullable=True, index=True)
+    section_id = Column(String(36), ForeignKey("template_sections.id", ondelete="CASCADE"), nullable=False, index=True)
+    kind = Column(String(12), nullable=False)  # work / file / purchase
+    name = Column(String(200), nullable=False)
+    note = Column(Text, nullable=False, default="")
+    optional = Column(Boolean, nullable=False, default=False)  # chosen per project when it is created
+    per_vehicle = Column(Boolean, nullable=False, default=False)
+    step_key = Column(String(80), nullable=True)  # vehicle step a per-vehicle work item records
+    checks = Column(JSON, nullable=False, default=list)  # [{id, name, description, required, safety}]
+    files = Column(JSON, nullable=False, default=list)  # [{id, code, name, ...document rule, blank_file_id}]
+    quantity = Column(Float, nullable=True)
+    unit = Column(String(20), nullable=False, default="")
+    spec = Column(String(300), nullable=False, default="")
+    fields = Column(JSON, nullable=False, default=dict)  # {template_field_id: value}
+    extra = Column(JSON, nullable=False, default=dict)  # carried-over values of converted rows
+    sort_order = Column(Integer, nullable=False, default=0)
+    version = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class TemplateField(Base):
+    """A custom column a template defines for its items."""
+    __tablename__ = "template_fields"
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    template_id = Column(String(36), ForeignKey("templates.id", ondelete="CASCADE"), nullable=True, index=True)
+    name = Column(String(100), nullable=False)
+    field_type = Column(String(12), nullable=False, default="text")  # text / number / date / select
+    options = Column(JSON, nullable=False, default=list)
+    sort_order = Column(Integer, nullable=False, default=0)
 
 
 # ===== Attachment (附件) =====

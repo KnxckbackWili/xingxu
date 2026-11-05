@@ -1,6 +1,7 @@
 import pytest
 """Current seven-role permission matrix and project relation tests."""
 from tests.lifecycle_helpers import versioned
+from tests.template_work import default_work
 
 PASSWORD = "pw123456"
 
@@ -42,7 +43,7 @@ def test_designated_technical_manager_capabilities(client, admin_headers, pm_hea
     project_id = _project(client, pm_headers, "技术管理项目", technical_manager_id=lead_id)
     assert client.get(f"/api/projects/{project_id}", headers=lead_headers).status_code == 200
     generated = client.post(f"/api/projects/{project_id}/tasks/generate", headers=lead_headers,
-                            json={"module_ids": ["mod-01"]})
+                            json={"work_item_ids": default_work("mod-01")})
     assert generated.status_code == 200, generated.text
     assert client.get(f"/api/projects/{project_id}/export/excel", headers=lead_headers).status_code == 200
     assert client.put(f"/api/projects/{project_id}", headers=lead_headers, json=versioned(project_id, {"name": "越权"})).status_code == 403
@@ -57,10 +58,10 @@ def test_ordinary_technician_is_read_only_until_designated(client, admin_headers
     client.put(f"/api/projects/{project_id}", headers=pm_headers, json=versioned(project_id, {"members": [tech_id]}))
     assert client.get(f"/api/projects/{project_id}", headers=tech_headers).status_code == 200
     assert client.post(f"/api/projects/{project_id}/tasks/generate", headers=tech_headers,
-                       json={"module_ids": ["mod-01"]}).status_code == 403
+                       json={"work_item_ids": default_work("mod-01")}).status_code == 403
     client.put(f"/api/projects/{project_id}", headers=pm_headers, json=versioned(project_id, {"technical_manager_id": tech_id}))
     assert client.post(f"/api/projects/{project_id}/tasks/generate", headers=tech_headers,
-                       json={"module_ids": ["mod-01"]}).status_code == 200
+                       json={"work_item_ids": default_work("mod-01")}).status_code == 200
 
 
 def test_director_sees_all_but_cannot_edit(client, admin_headers, pm_headers):

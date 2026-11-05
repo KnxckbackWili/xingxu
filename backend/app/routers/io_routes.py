@@ -519,46 +519,6 @@ def preview_quick_import(payload: dict, _: User = Depends(require_pm)):
         return {"valid": False, "errors": [f"日期或字段格式错误：{error}"], "warnings": [], "summary": {}}
 
 
-# ===== Template export =====
-
-@router.get("/templates/export/excel")
-@route_permission('system.templates.read')
-def export_template_excel(template_id: str = "default", db: Session = Depends(get_db), _: User = Depends(rate_limit_export())):
-    try:
-        data = import_export.template_to_excel(db, template_id)
-    except ValueError as error:
-        raise HTTPException(status_code=404, detail=str(error))
-    # B5/E5：流式返回，避免大文件整块驻留响应缓冲；导出接口按用户限流
-    return StreamingResponse(
-        _stream_bytes(data),
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename*=UTF-8''AGV%E5%AE%9E%E6%96%BD%E6%A8%A1%E6%9D%BF.xlsx"},
-    )
-
-
-@router.post("/templates/import/excel")
-@route_permission('system.template_io.manage')
-def import_template_excel(
-    file: UploadFile = File(...),
-    template_id: str = "default",
-    user: User = Depends(require_admin),
-    db: Session = Depends(get_db),
-):
-    data = file.file.read(MAX_UPLOAD_SIZE + 1)
-    if not data:
-        raise HTTPException(status_code=400, detail="文件为空")
-    if len(data) > MAX_UPLOAD_SIZE:
-        raise HTTPException(status_code=413, detail=f"文件超过大小限制（{MAX_UPLOAD_SIZE // 1024 // 1024}MB）")
-    try:
-        result = import_export.template_from_excel(db, data, template_id, actor_id=user.id)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Excel 解析失败：{str(e)[:200]}")
-    log_change(db, None, "template", template_id, "import", user.id,
-               f"导入模板 Excel：{result['tasks']} 任务")
-    db.commit()
-    return result
-
-
 # ===== Project export =====
 
 def _safe_export_name(name: str) -> str:

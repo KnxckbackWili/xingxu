@@ -16,7 +16,7 @@ def test_stats_excludes_soft_deleted_project(client,pm_headers):
     pid,_=setup_fleet(client,pm_headers,2)
     before=client.get('/api/dashboard/statistics',headers=pm_headers)
     assert before.status_code==200 and before.json()['projects']==1
-    assert before.json()['vehicle_progress']['target']==10
+    assert before.json()['vehicle_progress']['target']==8
     assert any(row['id']==pid for row in client.get('/api/projects',headers=pm_headers).json())
     remove(client,pm_headers,pid)
     after=client.get('/api/dashboard/statistics',headers=pm_headers).json()

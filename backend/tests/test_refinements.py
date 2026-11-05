@@ -1,5 +1,6 @@
 """Refinement tests: work-definition permissions + check item ticking (v3: quantities are read-only)."""
 from tests.lifecycle_helpers import versioned
+from tests.template_work import default_work
 
 
 def _project(client, pm_headers):
@@ -12,7 +13,7 @@ def _project(client, pm_headers):
     client.post(f"/api/projects/{pid}/vehicles", headers=pm_headers, json={
         "vehicle_type": "潜伏式", "model_name": "AGV-500", "quantity": 3})
     client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers,
-                json={"module_ids": ["mod-01", "mod-03"]})
+                json={"work_item_ids": default_work("mod-01", "mod-03")})
     client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": ["user-worker-001"]}))
     from tests.lifecycle_helpers import enter_execution
     enter_execution(client, pm_headers, pid)  # 检查项只在现场实施期间登记

@@ -1,6 +1,7 @@
 """Worker offline sync: per-item isolation, idempotency and current-version checks."""
 
 from tests.lifecycle_helpers import versioned
+from tests.template_work import default_work
 
 
 def _setup(client, pm_headers, worker_id="user-worker-001"):
@@ -11,7 +12,7 @@ def _setup(client, pm_headers, worker_id="user-worker-001"):
     })
     assert r.status_code == 200, r.text
     pid = r.json()["id"]
-    generated = client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers, json={"module_ids": ["mod-01"]})
+    generated = client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers, json={"work_item_ids": default_work("mod-01")})
     assert generated.status_code == 200, generated.text
     r = client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": [worker_id]}))
     assert r.status_code == 200, r.text

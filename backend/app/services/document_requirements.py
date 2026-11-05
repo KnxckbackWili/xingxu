@@ -58,43 +58,57 @@ class RequirementInput(BaseModel):
         self.name, self.code = self.name.strip(), self.code.strip()
         if self.code in {'6.11.6','6.11.6a','6.11.6b','6.11.6c'} and 'confidential_default' not in self.model_fields_set:
             self.confidential_default=True
-        valid_code = bool(re.fullmatch(r"legacy\.[a-f0-9]{32}", self.code)) if self.stage_key == "legacy" else bool(re.fullmatch(r"[4-9]\.[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)*", self.code)) and self.code.split('.')[0] == self.stage_key
+        # Codes follow the company numbering (6.11.1a) or a template's own; the stage comes from where the
+        # document sits, so a 6.x sign-off may be due in the acceptance stage.
+        valid_code = bool(re.fullmatch(r"legacy\.[a-f0-9]{32}", self.code)) if self.stage_key == "legacy" else bool(re.fullmatch(r"[A-Za-z0-9]+(?:[.\-][A-Za-z0-9]+)*", self.code))
         if not self.name or not valid_code:
-            raise ValueError("名称不能为空；编号必须属于所选第4–9阶段（如6.11.1a）")
-        if (self.confidential_default or self.external_never_visible or self.code in {"6.11.6", "6.11.6a", "6.11.6b", "6.11.6c"}) and self.external_visible_default:
-            raise ValueError("保密资料或禁止外部查看的资料不能默认对外可见")
-        if self.code in {"6.11.6", "6.11.6a", "6.11.6b", "6.11.6c"}:
-            self.external_never_visible = True
+            raise ValueError("名称不能为空；编号只能用字母、数字、点和短横线（如6.11.1a）")
         if self.is_group:
+            if self.code in {"6.11.6", "6.11.6a", "6.11.6b", "6.11.6c"}:
+                self.external_never_visible = True
+            if self.confidential_default and self.external_visible_default or self.external_never_visible and self.external_visible_default:
+                raise ValueError("保密资料或禁止外部查看的资料不能默认对外可见")
             if self.scope is not None or any(getattr(self, key) is not None for key in RULE_FIELDS) or self.required:
                 raise ValueError("分组不能设置资料范围、输出规则或必需提交")
             return self
-        if not self.scope or not self.timing_type:
-            raise ValueError("资料必须选择范围和输出时机")
-        kind = self.timing_type
-        allowed = {"timing_type"}
-        if kind in {"before_event", "after_event", "after_milestone"}:
-            valid = MILESTONES if kind == "after_milestone" else EVENTS | ({"vehicle_arrival"} if kind == "after_event" else set())
-            if self.timing_event not in valid or self.timing_offset_hours is None:
-                raise ValueError("事件规则必须选择有效事件并填写非负偏移小时")
-            if self.timing_event == "vehicle_arrival" and self.scope != "vehicle":
-                raise ValueError("逐车到场规则仅适用于车辆范围")
-            allowed |= {"timing_event", "timing_offset_hours"}
-        elif kind == "weekly":
-            if self.timing_weekday is None:
-                raise ValueError("weekly每周规则必须选择星期")
-            allowed.add("timing_weekday")
-        elif kind == "on_trigger":
-            if self.trigger_type is None or self.timing_offset_hours is None:
-                raise ValueError("触发规则必须选择触发类型和非负偏移小时")
-            allowed |= {"trigger_type", "timing_offset_hours"}
-        elif kind == "lifetime":
-            if self.timing_event != "internal_kickoff":
-                raise ValueError("全周期资料在内部启动会建档")
-            allowed.add("timing_event")
-        if any(getattr(self, key) is not None for key in RULE_FIELDS if key not in allowed):
-            raise ValueError("输出时机包含不适用于当前规则的字段，请清除后保存")
+        check_rule(self)
         return self
+
+
+def check_rule(self):
+    """Visibility and output-timing rules of one document; shared by template items and legacy rows."""
+    if self.code in {"6.11.6", "6.11.6a", "6.11.6b", "6.11.6c"}:
+        if self.external_visible_default:
+            raise ValueError("保密资料或禁止外部查看的资料不能默认对外可见")
+        self.external_never_visible = True
+    if (self.confidential_default or self.external_never_visible) and self.external_visible_default:
+        raise ValueError("保密资料或禁止外部查看的资料不能默认对外可见")
+    if not self.scope or not self.timing_type:
+        raise ValueError("资料必须选择范围和输出时机")
+    kind = self.timing_type
+    allowed = {"timing_type"}
+    if kind in {"before_event", "after_event", "after_milestone"}:
+        valid = MILESTONES if kind == "after_milestone" else EVENTS | ({"vehicle_arrival"} if kind == "after_event" else set())
+        if self.timing_event not in valid or self.timing_offset_hours is None:
+            raise ValueError("事件规则必须选择有效事件并填写非负偏移小时")
+        if self.timing_event == "vehicle_arrival" and self.scope != "vehicle":
+            raise ValueError("逐车到场规则仅适用于车辆范围")
+        allowed |= {"timing_event", "timing_offset_hours"}
+    elif kind == "weekly":
+        if self.timing_weekday is None:
+            raise ValueError("weekly每周规则必须选择星期")
+        allowed.add("timing_weekday")
+    elif kind == "on_trigger":
+        if self.trigger_type is None or self.timing_offset_hours is None:
+            raise ValueError("触发规则必须选择触发类型和非负偏移小时")
+        allowed |= {"trigger_type", "timing_offset_hours"}
+    elif kind == "lifetime":
+        if self.timing_event != "internal_kickoff":
+            raise ValueError("全周期资料在内部启动会建档")
+        allowed.add("timing_event")
+    if any(getattr(self, key) is not None for key in RULE_FIELDS if key not in allowed):
+        raise ValueError("输出时机包含不适用于当前规则的字段，请清除后保存")
+    return self
 
 
 def template_key(db, template_id):

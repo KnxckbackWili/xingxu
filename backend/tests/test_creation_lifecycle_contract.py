@@ -1,6 +1,7 @@
 """New project defaults and explicit human lifecycle decisions (v3: every project starts in preparing)."""
 from tests.lifecycle_helpers import versioned
 import pytest
+from tests.template_work import default_work
 
 
 def create_body(**fields):
@@ -69,7 +70,7 @@ def test_worker_cannot_create_project_or_gain_stage_management(client, worker_he
 def test_template_creation_generates_content_without_starting_the_project(client, pm_headers):
     created = client.post('/api/projects', headers=pm_headers, json=create_body(
         vehicles=[{'vehicle_type': '潜伏式', 'model_name': 'QA', 'quantity': 2}],
-        template_id='default', module_ids=['mod-01'],
+        template_id='default', work_item_ids=default_work('mod-01'),
     ))
     assert created.status_code == 200, created.text
     assert created.json()['status'] == 'preparing'

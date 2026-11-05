@@ -5,6 +5,7 @@
 """
 
 from tests.lifecycle_helpers import versioned, enter_execution, complete_all_work, register_kickoff
+from tests.template_work import default_work
 
 
 def _status(client, headers, pid):
@@ -27,7 +28,7 @@ def test_end_to_end_closure(client, pm_headers, worker_headers):
     assert _status(client, pm_headers, pid) == "preparing"
     assert client.post(f"/api/projects/{pid}/vehicles", headers=pm_headers,
         json={"vehicle_type": "潜伏式", "model_name": "AGV-500", "quantity": 2}).status_code == 200
-    assert client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers, json={"module_ids": ["mod-01"]}).status_code == 200
+    assert client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers, json={"work_item_ids": default_work("mod-01")}).status_code == 200
     wid = client.get("/api/auth/me", headers=worker_headers).json()["id"]
     members = client.get(f"/api/projects/{pid}", headers=pm_headers).json()["members"]
     assert client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": [*members, wid]})).status_code == 200

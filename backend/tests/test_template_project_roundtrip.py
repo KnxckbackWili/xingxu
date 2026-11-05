@@ -8,43 +8,9 @@ def _new_template(client, headers):
     response = client.post('/api/templates', headers=headers, json={'name': 'round6 identity'})
     assert response.status_code == 200, response.text
     tid = response.json()['id']
-    return tid, client.get(f'/api/templates/{tid}/tree', headers=headers).json()
-
-
-def test_template_save_keeps_reference_download_and_uploader_identity(client, admin_headers):
-    from app.db import SessionLocal
-    from app.models import TemplateDoc
-    tid, tree = _new_template(client, admin_headers)
-    task = tree[0]['modules'][0]['tasks'][0]
-    base = f"/api/templates/{tid}/tasks/{task['id']}/reference-docs"
-    uploaded = client.post(base, headers=admin_headers, files={'file': ('identity.txt', b'keep me', 'text/plain')}).json()
-    with SessionLocal() as db:
-        document = db.get(TemplateDoc, uploaded['id'])
-        before = (document.uploaded_by, document.uploaded_at)
-    assert client.put(f'/api/templates/{tid}/tree', headers=admin_headers, json={'phases': tree}).status_code == 200
-    assert client.get(f"{base}/{uploaded['id']}/download", headers=admin_headers).status_code == 200
-    with SessionLocal() as db:
-        document = db.get(TemplateDoc, uploaded['id'])
-        assert (document.uploaded_by, document.uploaded_at) == before
-
-
-def test_partial_template_save_keeps_omitted_tree_identities(client, admin_headers):
-    tid, tree = _new_template(client, admin_headers)
-    before = tree[1:]
-    response = client.put(f'/api/templates/{tid}/tree', headers=admin_headers, json={'phases': tree[:1]})
-    assert response.status_code == 200, response.text
-    after = client.get(f'/api/templates/{tid}/tree', headers=admin_headers).json()
-    assert after[1:] == before
-
-
-def test_partial_template_save_rename_does_not_resurrect_old_phase(client, admin_headers):
-    tid, tree = _new_template(client, admin_headers)
-    tree[0]['name'] = 'Renamed phase'
-    response = client.put(f'/api/templates/{tid}/tree', headers=admin_headers, json={'phases': tree})
-    assert response.status_code == 200, response.text
-    after = client.get(f'/api/templates/{tid}/tree', headers=admin_headers).json()
-    assert len(after) == len(tree)
-    assert {phase['id'] for phase in after} == {phase['id'] for phase in tree}
+    rows = client.get(f'/api/templates/{tid}/items', headers=headers).json()
+    # A work row's id is the template task its reference documents hang on.
+    return tid, [{'modules': [{'tasks': [item for section in rows['sections'] for item in section['items'] if item['kind'] == 'work']}]}]
 
 
 def test_reference_delete_failure_does_not_destroy_file(client, admin_headers, monkeypatch):

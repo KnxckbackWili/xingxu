@@ -12,6 +12,7 @@ from tests.lifecycle_helpers import versioned
 import io
 import pytest
 from openpyxl import Workbook
+from tests.template_work import default_work
 
 
 # ===== 1. Schedule 字段约束 =====
@@ -86,7 +87,7 @@ def _setup_plan(client, pm_headers, pid):
     client.post(f"/api/projects/{pid}/vehicles", headers=pm_headers, json={
         "vehicle_type": "潜伏式", "model_name": "AGV-500", "quantity": 2})
     r = client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers,
-                    json={"module_ids": ["mod-03"]})
+                    json={"work_item_ids": default_work("mod-03")})
     assert r.status_code == 200, r.json()
 
 

@@ -1,4 +1,5 @@
 """Explicit human decisions required by lifecycle fixtures, using real API gates."""
+from tests.template_work import default_work
 
 
 def approve_risk_entry(client, headers, project_id):
@@ -136,7 +137,7 @@ def setup_project(client, headers):
     response = client.post('/api/projects', headers=headers, json={
         'name': '开工安排测试', 'client': '客户', 'start_date': '2026-09-16',
         'end_date': '2026-10-30', 'new_vehicles': False,
-        'template_id': 'default', 'module_ids': ['mod-01'],
+        'template_id': 'default', 'work_item_ids': default_work('mod-01'),
     })
     assert response.status_code == 200, response.text
     pid = response.json()['id']

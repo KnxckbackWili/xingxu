@@ -17,17 +17,6 @@ from app.time_utils import project_today, utcnow
 router=APIRouter(tags=['车辆进度表'])
 
 
-class StepDefinition(BaseModel):
-    model_config={'extra':'forbid'}
-    key:str=Field(min_length=1,max_length=80,pattern=r'^[a-z][a-z0-9_]*$')
-    name:str=Field(min_length=1,max_length=200)
-
-
-class StepList(BaseModel):
-    model_config={'extra':'forbid'}
-    steps:list[StepDefinition]=Field(min_length=1,max_length=30)
-
-
 @router.get('/templates/{template_id}/vehicle-steps')
 @route_permission('system.templates.read')
 def list_steps(template_id:str,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
@@ -35,33 +24,6 @@ def list_steps(template_id:str,user:User=Depends(get_current_user),db:Session=De
         raise HTTPException(404,'模板不存在')
     rows=service.template_steps(db,template_id)
     return [{'key':r.key,'name':r.name} for r in rows] or [{'key':k,'name':n} for k,n in service.DEFAULT_STEPS]
-
-
-@router.put('/templates/{template_id}/vehicle-steps')
-@route_permission('system.templates.manage')
-def save_steps(template_id:str,body:StepList,user:User=Depends(require_admin),db:Session=Depends(get_db)):
-    from app.services.document_requirements import lock_templates, recheck_authority
-    lock_templates(db,template_id)
-    recheck_authority(db,user.id)
-    if template_id!='default' and db.get(Template,template_id) is None:
-        raise HTTPException(404,'模板不存在')
-    keys=[r.key for r in body.steps]
-    if len(keys)!=len(set(keys)) or any(not r.name.strip() for r in body.steps):
-        raise HTTPException(400,'环节标识不能重复，名称不能为空')
-    from app.models import Task
-    tid = None if template_id == 'default' else template_id
-    linked = db.query(Task).filter(Task.project_id.is_(None), Task.template_id == tid,
-        Task.vehicle_step_key.isnot(None), Task.vehicle_step_key.notin_(keys)).first()
-    if linked:
-        raise HTTPException(400, '仍有工作关联待删除环节，请先调整工作关联')
-    old=[{'key':r.key,'name':r.name} for r in service.template_steps(db,template_id)]
-    db.query(VehicleStep).filter_by(template_id=template_id).delete()
-    for i,row in enumerate(body.steps):
-        db.add(VehicleStep(template_id=template_id,key=row.key,name=row.name.strip(),sort_order=i))
-    new=[r.model_dump() for r in body.steps]
-    log_change(db,None,'vehicle_steps',template_id,'update',user.id,'修改模板车辆环节（已有项目快照不变）',old,new)
-    db.commit()
-    return new
 
 
 @router.get('/projects/{project_id}/vehicle-progress')

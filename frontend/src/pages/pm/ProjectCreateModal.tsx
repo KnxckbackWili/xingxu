@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Alert, Button, Checkbox, DatePicker, Form, Input, Modal, Select, Typography, message } from 'antd'
 import dayjs, { type Dayjs } from 'dayjs'
-import { flatWorkItems, selectedWorkItems } from '../../components/TemplateScope'
+import { templateItemsApi, type TemplateItem } from '../../api/templateItems'
 import { projectApi } from '../../api'
 import { api, errMsg } from '../../api/client'
 import { DEFAULT_TIMEZONE } from '../../constants/timezones'
@@ -10,9 +10,6 @@ import { toVehicleTypeSelectOptions, useVehicleTypes } from '../../hooks/useVehi
 import { useSubmitLock } from '../../hooks/useSubmitLock'
 
 type TemplateRow = { id: string; name: string; is_system?: boolean; vehicle_type?: string | null }
-type Work = { id: string; group_label?: string; phase_name?: string; applicable_vehicle_types?: string[] }
-// A work item belongs to an optional module when its label differs from its group (e.g. 电梯 under 联调工作).
-const moduleOf = (item: Work) => item.group_label && item.group_label !== item.phase_name ? item.group_label : ''
 type Values = { name: string; range: [Dayjs, Dayjs]; template: string }
 
 /** One screen: name, period, vehicle types and template (the vehicle type's own template is picked for you). Customer, people and documents are filled in the project's preparation checklist. */
@@ -23,8 +20,8 @@ export default function ProjectCreateModal({ open, initialTemplate, onClose }: {
   const creationKey = useRef<string | null>(null)
   const request = useRef(0)
   const [templates, setTemplates] = useState<TemplateRow[]>([])
-  const [work, setWork] = useState<Work[] | null>(null)
-  const [skipped, setSkipped] = useState<string[]>([])
+  const [rows, setRows] = useState<TemplateItem[] | null>(null)
+  const [chosen, setChosen] = useState<string[]>([])
   const [vehicleTypes, setVehicleTypes] = useState<string[]>([])
   const { options: vehicleDictionary } = useVehicleTypes()
   const [loadError, setLoadError] = useState('')
@@ -34,14 +31,11 @@ export default function ProjectCreateModal({ open, initialTemplate, onClose }: {
 
   const loadWork = async (tid: string) => {
     const ticket = ++request.current
-    setWork(null); setSkipped([]); setLoadError('')
+    setRows(null); setChosen([]); setLoadError('')
     try {
-      const response = await api.get(`/templates/${tid}/work-items`)
-      if (!Array.isArray(response.data?.phases)) throw new Error('模板工作内容返回格式无效')
-      const phases = response.data.phases
-      const all: Work[] = flatWorkItems(phases)
-      const chosen = new Set(selectedWorkItems(phases, all.map(task => task.id), []))
-      if (ticket === request.current) setWork(all.filter(task => chosen.has(task.id)))
+      const tree = await templateItemsApi.read(tid)
+      if (!Array.isArray(tree?.sections)) throw new Error('模板内容返回格式无效')
+      if (ticket === request.current) setRows(tree.sections.flatMap(section => section.items))
     } catch (error) {
       if (ticket === request.current) setLoadError(errMsg(error))
     }
@@ -50,7 +44,7 @@ export default function ProjectCreateModal({ open, initialTemplate, onClose }: {
   useEffect(() => {
     if (!open) return
     form.setFieldsValue({ name: '', range: [dayjs(), dayjs().add(3, 'month').subtract(1, 'day')], template: initialTemplate || 'default' })
-    creationKey.current = null; pickedByHand.current = !!initialTemplate; setVehicleTypes([]); setSkipped([])
+    creationKey.current = null; pickedByHand.current = !!initialTemplate; setVehicleTypes([]); setChosen([])
     void (async () => {
       try {
         const response = await api.get('/templates')
@@ -65,10 +59,11 @@ export default function ProjectCreateModal({ open, initialTemplate, onClose }: {
   }, [open])
 
   useEffect(() => { if (open && template) void loadWork(template) }, [open, template])
-  const modules = [...new Set((work ?? []).map(moduleOf).filter(Boolean))]
-  // Work limited to certain vehicle types comes in only when the project has one of them (none chosen = everything).
-  const fitsVehicles = (item: Work) => !vehicleTypes.length || !item.applicable_vehicle_types?.length || item.applicable_vehicle_types.some(type => vehicleTypes.includes(type))
-  const workIds = work ? work.filter(item => !skipped.includes(moduleOf(item)) && fitsVehicles(item)).map(item => item.id) : null
+  // Required rows always come in; optional ones (elevator, PLC, spare parts…) only when ticked here.
+  const optional = (rows ?? []).filter(row => row.optional)
+  const taken = rows ? rows.filter(row => !row.optional || chosen.includes(row.id)) : null
+  const summary = taken && [`${taken.filter(row => row.kind === 'work').length} 项工作`, `${taken.reduce((n, row) => n + row.files.length, 0)} 份文件`,
+    `${taken.filter(row => row.kind === 'purchase').length} 项采购`].join(' · ')
 
   // One template per vehicle type: choosing types switches to the first type's own template, unless one was picked by hand.
   const chooseTypes = (types: string[]) => {
@@ -78,20 +73,20 @@ export default function ProjectCreateModal({ open, initialTemplate, onClose }: {
     const next = own?.id ?? templates.find(row => row.is_system)?.id ?? 'default'
     if (next !== form.getFieldValue('template')) form.setFieldValue('template', next)
   }
-  const vehicleOptions = toVehicleTypeSelectOptions(vehicleDictionary, [...new Set([...(work ?? []).flatMap(item => item.applicable_vehicle_types ?? []), ...templates.flatMap(row => row.vehicle_type ? [row.vehicle_type] : [])])])
+  const vehicleOptions = toVehicleTypeSelectOptions(vehicleDictionary, [...new Set(templates.flatMap(row => row.vehicle_type ? [row.vehicle_type] : []))])
 
   const submit = async (values: Values) => {
-    if (!workIds || !lock.tryAcquire()) return
+    if (!rows || !lock.tryAcquire()) return
     setSaving(true)
     creationKey.current ??= globalThis.crypto?.randomUUID?.() ?? `local-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
     try {
       const project = await projectApi.create({
         name: values.name.trim(), status: 'preparing', timezone: DEFAULT_TIMEZONE,
         start_date: values.range[0].format('YYYY-MM-DD'), end_date: values.range[1].format('YYYY-MM-DD'),
-        template_id: values.template, work_item_ids: workIds, client_uuid: creationKey.current,
+        template_id: values.template, optional_item_ids: chosen.filter(id => optional.some(row => row.id === id)), client_uuid: creationKey.current,
       })
       const tasks = project.initial_generation?.tasks ?? 0
-      message.success(tasks ? `项目已创建，带入 ${tasks} 项工作；按准备清单补全车型、人员和资料` : '项目已创建；可在计划页从模板带入工作')
+      message.success(tasks ? `项目已创建，带入 ${tasks} 项工作；按准备清单补全车辆和资料` : '项目已创建；可在计划页从模板带入工作')
       creationKey.current = null
       onClose()
       navigate(`/pm/projects/${project.id}/overview`)
@@ -107,7 +102,7 @@ export default function ProjectCreateModal({ open, initialTemplate, onClose }: {
     onCancel={() => { if (!saving) onClose() }}
     footer={<>
       <Button disabled={saving} onClick={onClose}>取消</Button>
-      <Button type="primary" loading={saving} disabled={!workIds} onClick={() => form.submit()}>创建并进入项目</Button>
+      <Button type="primary" loading={saving} disabled={!rows} onClick={() => form.submit()}>创建并进入项目</Button>
     </>}>
     <Form form={form} layout="vertical" onFinish={submit} disabled={saving} className="project-quick-create" requiredMark={false}>
       <Form.Item name="name" label="项目名称" rules={[{ required: true, whitespace: true, message: '请输入项目名称' }]}>
@@ -124,15 +119,15 @@ export default function ProjectCreateModal({ open, initialTemplate, onClose }: {
         <Select aria-label="工作模板" loading={!templates.length && !loadError} onChange={() => { pickedByHand.current = true }}
           options={templates.map(row => ({ value: row.id, label: row.vehicle_type ? `${row.name}（${row.vehicle_type}）` : row.is_system ? `${row.name}（通用）` : row.name }))} />
       </Form.Item>
-      {!loadError && <Typography.Paragraph type="secondary" className="project-quick-create-count">{workIds ? `将带入 ${workIds.length} 项工作，进项目后可增删` : '正在读取模板…'}</Typography.Paragraph>}
-      {modules.length > 0 && <Form.Item label="这个现场需要的模块" extra="不勾选的模块，其工作不会带入。">
-        <Checkbox.Group className="project-create-modules" aria-label="这个现场需要的模块" value={modules.filter(name => !skipped.includes(name))}
-          onChange={value => setSkipped(modules.filter(name => !value.includes(name)))} options={modules} />
+      {!loadError && <Typography.Paragraph type="secondary" className="project-quick-create-count">{summary ? `将带入 ${summary}，进项目后可增删` : '正在读取模板…'}</Typography.Paragraph>}
+      {optional.length > 0 && <Form.Item label="这个现场还需要" extra="可选事项，勾选的才带入（工作、要交的文件和采购）。">
+        <Checkbox.Group className="project-create-modules" aria-label="这个现场还需要" value={chosen}
+          onChange={value => setChosen(value as string[])} options={optional.map(row => ({ value: row.id, label: row.name }))} />
       </Form.Item>}
       {loadError && <Alert type="error" showIcon message="模板读取失败，暂不能创建" description={loadError}
         action={<Button size="small" onClick={() => void loadWork(form.getFieldValue('template'))}>重试</Button>} />}
       <Typography.Paragraph type="secondary" className="project-quick-create-note">
-        客户、地点、具体车辆、人员和资料在项目的“准备清单”里补全。
+        客户、地点、具体车辆和资料在项目的“准备清单”里补全。
       </Typography.Paragraph>
     </Form>
   </Modal>

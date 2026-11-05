@@ -1,5 +1,6 @@
 """检查项三态（通过/不通过/不适用）测试。"""
 from tests.lifecycle_helpers import versioned, enter_execution, put_check
+from tests.template_work import default_work
 
 
 def _project_with_check(client, pm_headers):
@@ -7,7 +8,7 @@ def _project_with_check(client, pm_headers):
         "name": "三态项目", "start_date": "2026-09-01", "new_vehicles": False, "end_date": "2026-10-31"})
     pid = r.json()["id"]
     r = client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers,
-                    json={"module_ids": ["mod-01"]})
+                    json={"work_item_ids": default_work("mod-01")})
     client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": ["user-worker-001"]}))
     enter_execution(client, pm_headers, pid)  # 检查项只在现场实施期间登记
     r = client.get(f"/api/projects/{pid}/tree", headers=pm_headers)

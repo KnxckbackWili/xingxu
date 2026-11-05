@@ -1,5 +1,6 @@
 """Template + task generation tests."""
 from tests.lifecycle_helpers import versioned
+from tests.template_work import default_work
 
 
 def _new_project(client, pm_headers, name="任务生成测试项目"):
@@ -13,38 +14,23 @@ def _new_project(client, pm_headers, name="任务生成测试项目"):
     return r.json()["id"]
 
 
-def test_template_tree_has_seed_content(client, pm_headers):
-    r = client.get("/api/templates/default/tree", headers=pm_headers)
-    assert r.status_code == 200
-    phases = r.json()
-    # C2-2：模板树完整返回 9 阶段（含「项目准备」），编辑器不再排除
-    assert len(phases) == 9
-    assert any(p["name"] == "项目准备" for p in phases)
-    # 单车调试阶段按名称查找，避免依赖排序。
-    phase3 = next(p for p in phases if p["name"] == "单车调试")
-    assert any(m["name"] == "单车调试" for m in phase3["modules"])
-    # 单车调试 module has 5 tasks, first with check items
-    mod = next(m for m in phase3["modules"] if m["name"] == "单车调试")
-    assert len(mod["tasks"]) == 5
-    assert len(mod["tasks"][0]["check_items"]) >= 3
-
-    survey = next(
-        t for phase in phases for module in phase["modules"] for t in module["tasks"]
-        if t["name"] == "场地勘测"
-    )
-    assert 'deliverables' not in survey
+def test_template_rows_have_seed_content(client, pm_headers):
+    tree = client.get("/api/templates/default/items", headers=pm_headers)
+    assert tree.status_code == 200, tree.text
+    rows = {item["name"]: item for section in tree.json()["sections"] for item in section["items"]}
+    assert 15 <= len(rows) <= 30
+    single = rows["单车调试"]
+    assert single["kind"] == "work" and single["per_vehicle"] and len(single["checks"]) >= 3
+    assert rows["场地勘测"]["reference_docs"][0]["filename"] == "现场勘测检查要点.txt"
+    assert sum(len(item["files"]) for item in rows.values()) == 53
     requirements = client.get('/api/templates/default/document-requirements', headers=pm_headers).json()
-    assert len([row for row in requirements if not row['is_group'] and row['stage_key'] != 'legacy']) == 53
-    assert survey["ref_docs"][0]["filename"] == "现场勘测检查要点.txt"
+    assert len([row for row in requirements if not row['is_group']]) == 53
 
 
-def test_template_has_extra_modules(client, pm_headers):
-    r = client.get("/api/templates/default/tree", headers=pm_headers)
-    phases = r.json()
-    all_mods = [m for ph in phases for m in ph["modules"]]
-    names = [m["name"] for m in all_mods]
-    for extra in ["相机", "二维码扫描", "自动门", "电梯", "PLC", "PDA", "自动充电"]:
-        assert extra in names, f"缺少附加模块: {extra}"
+def test_template_has_optional_modules(client, pm_headers):
+    rows = {item["name"]: item for section in client.get("/api/templates/default/items", headers=pm_headers).json()["sections"] for item in section["items"]}
+    for name in ["WMS/MES 对接", "电梯/自动门对接", "PLC 对接"]:
+        assert rows[name]["optional"], f"缺少可选事项: {name}"
 
 
 def _tree_tasks(tree):
@@ -58,20 +44,18 @@ def test_generate_tasks_with_vehicles(client, pm_headers):
         "vehicle_type": "潜伏式", "model_name": "AGV-500", "quantity": 5})
     client.post(f"/api/projects/{project_id}/vehicles", headers=pm_headers, json={
         "vehicle_type": "堆高车", "model_name": "Fork-1000", "quantity": 3})
-    core_ids = [f"mod-{i:02d}" for i in range(1, 9)]
     r = client.post(f"/api/projects/{project_id}/tasks/generate", headers=pm_headers,
-                    json={"module_ids": core_ids})
+                    json={"work_item_ids": default_work(*[f"mod-{i:02d}" for i in range(1, 9)])})
     assert r.status_code == 200, r.json()
-    assert r.json()["tasks"] > 20
+    assert r.json()["tasks"] >= 8
     tree = client.get(f"/api/projects/{project_id}/tree", headers=pm_headers).json()
-    assert len(tree) == 8
     tasks = _tree_tasks(tree)
-    opening = tasks["开箱检查"]
+    opening = tasks["到场点检"]
     assert opening["quantity_type"] == "per_vehicle"
     assert opening["vehicle_step_key"] == "arrival_inspection"
     assert opening["target_quantity"] is None
-    assert tasks["单车机械与导航调试"]["vehicle_step_key"] == "single_commissioning"
-    server_task = tasks["服务器部署与配置"]
+    assert tasks["单车调试"]["vehicle_step_key"] == "single_commissioning"
+    server_task = tasks["服务器与网络部署"]
     assert server_task["kind"] != "vehicle" and server_task["target_quantity"] is None
     progress = client.get(f"/api/projects/{project_id}/vehicle-progress", headers=pm_headers)
     assert progress.status_code == 200, progress.text
@@ -82,7 +66,7 @@ def test_project_preparation_is_reminder_only(client, pm_headers):
     r = client.post(
         f"/api/projects/{project_id}/tasks/generate",
         headers=pm_headers,
-        json={"module_ids": ["mod-16", "mod-01"]},
+        json={"work_item_ids": default_work("mod-16", "mod-01")},
     )
     assert r.status_code == 200, r.json()
     tree = client.get(f"/api/projects/{project_id}/tree", headers=pm_headers).json()
@@ -101,10 +85,10 @@ def test_task_target_quantity_is_read_only(client, pm_headers):
     vid = client.post(f"/api/projects/{project_id}/vehicles", headers=pm_headers, json={
         "vehicle_type": "前移式", "model_name": "Reach-2000", "quantity": 4}).json()["id"]
     assert client.post(f"/api/projects/{project_id}/tasks/generate", headers=pm_headers,
-                       json={"module_ids": ["mod-03"]}).status_code == 200
+                       json={"work_item_ids": default_work("mod-03")}).status_code == 200
     assert client.put(f"/api/projects/{project_id}/vehicles/{vid}", headers=pm_headers,
                       json={"quantity": 10}).status_code == 200
-    task = _tree_tasks(client.get(f"/api/projects/{project_id}/tree", headers=pm_headers).json())["单车机械与导航调试"]
+    task = _tree_tasks(client.get(f"/api/projects/{project_id}/tree", headers=pm_headers).json())["单车调试"]
     assert task["target_quantity"] is None
     r = client.put(f"/api/projects/{project_id}/tasks/{task['id']}", headers=pm_headers,
                    json=versioned(task["id"], {"target_quantity": 10}, "Task"))
@@ -117,19 +101,19 @@ def test_per_vehicle_safety_checks_are_frozen_vehicle_definitions(client, pm_hea
     from app.models import VehicleCheckDefinition
     project_id = _new_project(client, pm_headers)
     client.post(f"/api/projects/{project_id}/tasks/generate", headers=pm_headers,
-                json={"module_ids": ["mod-03"]})
-    task = _tree_tasks(client.get(f"/api/projects/{project_id}/tree", headers=pm_headers).json())["异常急停测试"]
+                json={"work_item_ids": default_work("mod-03")})
+    task = _tree_tasks(client.get(f"/api/projects/{project_id}/tree", headers=pm_headers).json())["单车调试"]
     assert task["quantity_type"] == "per_vehicle" and task["check_items"] == []
     with SessionLocal() as db:
         definitions = {d.name: d for d in db.query(VehicleCheckDefinition).filter_by(task_id=task["id"])}
-    assert definitions["紧急停止按钮功能(100ms内断电)"].is_safety_critical
+    assert definitions["急停、触边与失速保护"].is_safety_critical
 
 
 def test_regular_check_item_can_be_ignored_with_reason(client, pm_headers):
     """Non-safety check item needs a reason to be ignored."""
     project_id = _new_project(client, pm_headers)
     client.post(f"/api/projects/{project_id}/tasks/generate", headers=pm_headers,
-                json={"module_ids": ["mod-01"]})
+                json={"work_item_ids": default_work("mod-01")})
     from tests.lifecycle_helpers import enter_execution
     enter_execution(client, pm_headers, project_id)  # 检查项只在现场实施期间登记
     tree = client.get(f"/api/projects/{project_id}/tree", headers=pm_headers).json()
@@ -156,16 +140,16 @@ def test_generation_is_idempotent(client, pm_headers):
     """Re-generating the same module doesn't duplicate tasks."""
     project_id = _new_project(client, pm_headers)
     client.post(f"/api/projects/{project_id}/tasks/generate", headers=pm_headers,
-                json={"module_ids": ["mod-05"]})
+                json={"work_item_ids": default_work("mod-05")})
     r1 = client.get(f"/api/projects/{project_id}/tree", headers=pm_headers)
     count1 = sum(len(m["tasks"]) for ph in r1.json() for m in ph["modules"])
 
     client.post(f"/api/projects/{project_id}/tasks/generate", headers=pm_headers,
-                json={"module_ids": ["mod-05"]})
+                json={"work_item_ids": default_work("mod-05")})
     r2 = client.get(f"/api/projects/{project_id}/tree", headers=pm_headers)
     count2 = sum(len(m["tasks"]) for ph in r2.json() for m in ph["modules"])
 
-    assert count1 == count2 == 4  # 系统部署 module has 4 tasks
+    assert count1 == count2 == 1  # 服务器与网络部署 is one row
 
 
 # ===== 看板：跨阶段/跨模块移动 =====
@@ -175,7 +159,7 @@ def _project_with_two_phases(client, pm_headers):
     """Generate tasks for two modules in different phases; return (pid, tree)."""
     pid = _new_project(client, pm_headers, "看板移动测试项目")
     r = client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers,
-                    json={"module_ids": ["mod-01", "mod-03"]})
+                    json={"work_item_ids": default_work("mod-01", "mod-03")})
     assert r.status_code == 200, r.json()
     r = client.get(f"/api/projects/{pid}/tree", headers=pm_headers)
     return pid, r.json()

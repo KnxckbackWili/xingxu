@@ -260,7 +260,7 @@ def test_statistics_known_matrix_counts_only_visible_real_vehicle_steps(client,p
     response=client.get('/api/dashboard/statistics',headers=pm_headers,params={'project_id':hidden.json()['id']})
     assert response.status_code==200,response.text
     result=response.json();assert result['projects']==1
-    assert result['vehicle_progress']=={'target':5,'completed':1,'quantity_unknown':False,'unidentified_completed':0,'percent':20.0}
+    assert result['vehicle_progress']=={'target':4,'completed':1,'quantity_unknown':False,'unidentified_completed':0,'percent':25.0}
     assert 'HIDDEN-PROJECT' not in response.text and '1000米' not in response.text and 'person_days' not in response.text
 
 

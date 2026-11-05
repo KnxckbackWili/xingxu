@@ -41,7 +41,7 @@
 | 分组 | 页面 |
 |---|---|
 | 团队与权限 | 账号 `/pm/users`、成员权限 `/pm/permissions` |
-| 项目配置 | 项目模板 `/pm/templates`（模板库卡片；点开为全宽编辑页 `/pm/templates/{id}`，页签：工作、资料、车辆环节、采购物料，工作与资料按第 4–9 阶段分节，见[模板阶段主线](template-stage-backbone.md)）、车型库 `/pm/vehicle-types`、节假日 `/pm/holidays` |
+| 项目配置 | 项目模板 `/pm/templates`（模板库卡片；点开为全宽编辑页 `/pm/templates/{id}`：自定义标题的段落，一件事一行——工作、资料、采购，右侧面板编辑选中的一行；段落、自定义字段、从其他模板复制、Excel 导入导出都在这一页，见[项目模板](project-templates.md)）、车型库 `/pm/vehicle-types`、节假日 `/pm/holidays` |
 | 数据与安全 | 备份与恢复 `/pm/backups`、存储 `/pm/storage`、项目回收站 `/pm/project-recycle-bin` |
 | 系统 | 通知设置 `/pm/notification-channels`、外部工具接入 `/pm/ai-tokens`、系统更新 `/pm/system-updates` |
 

@@ -12,7 +12,6 @@ import type { TemplateRow } from './templateMeta'
 import { toVehicleTypeSelectOptions, useVehicleTypes } from '../../hooks/useVehicleTypes'
 import './TemplateEditorPage.css'
 
-const total = (counts?: Record<string, number>) => Object.values(counts ?? {}).reduce((a, b) => a + b, 0)
 
 /** The template library: one template per vehicle type plus the general one; a card opens the template. */
 export default function TemplateLibraryPage() {
@@ -50,7 +49,7 @@ export default function TemplateLibraryPage() {
   const sorted = [...templates].sort((a, b) => order(a) - order(b))
 
   const card = (t: TemplateRow) => {
-    const work = total(t.summary?.work); const docs = total(t.summary?.documents)
+    const count = t.summary ?? { work: 0, file: 0, purchase: 0, files: 0, sections: 0 }
     return <li key={t.id} className="tpl-card">
       <button type="button" className="tpl-card-main" onClick={() => navigate(`/pm/templates/${t.id}`)} aria-label={`打开模板「${t.name}」`}>
         <span className="tpl-card-top">
@@ -59,7 +58,7 @@ export default function TemplateLibraryPage() {
           {t.is_system ? <Tag color="blue">通用</Tag> : t.vehicle_type ? <Tag color="geekblue">{t.vehicle_type}</Tag> : <Tag>未设车型</Tag>}
         </span>
         <span className="tpl-card-desc">{t.description || '没有说明'}</span>
-        <span className="tpl-card-stats"><span><strong>{work}</strong> 项工作</span><span><strong>{docs}</strong> 份资料</span><span><strong>{t.summary?.vehicle_steps ?? 0}</strong> 个车辆环节</span></span>
+        <span className="tpl-card-stats"><span><strong>{count.work + count.file + count.purchase}</strong> 件事</span><span><strong>{count.work}</strong> 项工作</span><span><strong>{count.purchase}</strong> 项采购</span><span><strong>{count.files}</strong> 份文件</span></span>
       </button>
       <footer className="tpl-card-foot">
         <span>{t.usage_count ? `已用于 ${t.usage_count} 个项目` : ''}</span>

@@ -205,6 +205,8 @@ def _init_db():
     db = SessionLocal()
     try:
         seed_all(db)
+        from app.seed.default_template import seed_default_template
+        seed_default_template(db)
         # These seeds previously lived inside the SQLite-only migration branch.
         seed_template_preparations(db)
         from app.seed.scope_preparations import migrate_scope_preparations

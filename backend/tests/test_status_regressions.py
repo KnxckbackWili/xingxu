@@ -1,5 +1,6 @@
 """生命周期回归：相邻流转、验收门禁、生成工作不改状态、终态聚合口径（v3 六状态 + 突发停工）。"""
 from tests.lifecycle_helpers import versioned, enter_execution, complete_all_work, register_kickoff
+from tests.template_work import default_work
 
 
 def _create(client, pm_headers, name, start="2026-08-10"):
@@ -9,7 +10,7 @@ def _create(client, pm_headers, name, start="2026-08-10"):
     pid = r.json()["id"]
     assert client.post(f"/api/projects/{pid}/vehicles", headers=pm_headers, json={
         "vehicle_type": "潜伏式", "model_name": "AGV-500", "quantity": 2}).status_code == 200
-    assert client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers, json={"module_ids": ["mod-01"]}).status_code == 200
+    assert client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers, json={"work_item_ids": default_work("mod-01")}).status_code == 200
     return pid
 
 
@@ -133,7 +134,7 @@ def test_acceptance_gate_allows_completion_when_complete(client, pm_headers):
 def test_preparing_preserved_after_task_generation(client, pm_headers):
     """生成工作不隐式改变项目状态。"""
     pid = _create(client, pm_headers, "保持筹备")
-    r = client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers, json={"module_ids": ["mod-04"]})
+    r = client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers, json={"work_item_ids": default_work("mod-04")})
     assert r.status_code == 200, r.json()
     assert _status(client, pm_headers, pid) == "preparing"
     assert client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"description": "生成后可编辑"})).status_code == 200

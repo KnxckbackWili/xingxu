@@ -62,49 +62,6 @@ def test_before_entry_and_unknown_quantity_fields_cannot_grant_completion(client
     assert client.put(url+'/completion',headers=pm_headers,json={'version':0,'is_completed':True,'reason':'尚未实施'}).status_code==400
 
 
-def test_template_direct_work_copy_generate_export_and_portable_reset(client,admin_headers,pm_headers):
-    tid=client.post('/api/templates',headers=admin_headers,json={'name':'工作项模板'}).json()['id']
-    r=client.post(f'/api/templates/{tid}/work-phases',headers=admin_headers,json={'name':'自定义实施阶段'})
-    assert r.status_code==200,r.text
-    ph=r.json()['id']
-    r=client.post(f'/api/templates/{tid}/work-items',headers=admin_headers,json={'phase_id':ph,'name':'无数量的工作','description':'原说明完整保留','group_label':'范围标签',
-        'scope_conditions':['need_wms'],'checks':[{'name':'接口验证','description':'保存原检查说明'}]})
-    assert r.status_code==200,r.text
-    source=r.json()
-    copied=client.post('/api/templates',headers=admin_headers,json={'name':'新工作模板副本','copy_from':tid})
-    assert copied.status_code==200,copied.text
-    rows=client.get(f"/api/templates/{copied.json()['id']}/work-items",headers=admin_headers).json()['phases']
-    copy=next(w for p in rows for w in p['work_items'] if w['name']=='无数量的工作')
-    assert copy['description']=='原说明完整保留' and copy['group_label']=='范围标签' and copy['scope_conditions']==['need_wms']
-    assert copy['check_definitions'][0]['description']=='保存原检查说明'
-    pid,ids=setup_fleet(client,pm_headers,1)
-    r=client.post(f'/api/projects/{pid}/tasks/generate',headers=pm_headers,json={'template_id':tid,'work_item_ids':[source['id']]})
-    assert r.status_code==200,r.text
-    with SessionLocal() as db:
-        task=db.query(Task).filter_by(project_id=pid,source_task_id=source['id']).one();wid=task.id
-        assert task.module_id is None and task.target_quantity is None and task.scope_conditions==['need_wms']
-        assert db.query(Module).filter_by(project_id=pid).count()==0
-        check=db.query(CheckItem).filter_by(task_id=wid).one();cid=check.id
-    assert client.put(f'/api/projects/{pid}/check-items/{cid}',headers=pm_headers,json={'version':0,'is_done':True}).status_code==200
-    assert client.put(f'/api/projects/{pid}/work-items/{wid}/completion',headers=pm_headers,json={'version':0,'is_completed':True,'reason':'已完成接口闭环'}).status_code==200
-    exported=client.get(f'/api/projects/{pid}/export/json',headers=pm_headers)
-    assert exported.status_code==200,exported.text
-    payload=exported.json();payload['project']['status']='preparing';payload['project']['name']='原工作便携副本'
-    assert next(t for m in payload['modules'] for t in m['tasks'] if t['source_id']==wid)['description']=='原说明完整保留'
-    imported=client.post('/api/projects/import/json',headers=pm_headers,json=payload)
-    assert imported.status_code==200,imported.text
-    with SessionLocal() as db:
-        fresh=db.query(Task).filter_by(project_id=imported.json()['id'],name='无数量的工作').one()
-        assert fresh.module_id is None and fresh.phase_id and not fresh.manually_completed and fresh.target_quantity is None
-        assert not db.query(CheckItem).filter_by(task_id=fresh.id).one().is_done
-    cloned=client.post(f'/api/projects/{pid}/clone',headers=pm_headers,json={'name':'工作定义克隆'})
-    assert cloned.status_code==200,cloned.text
-    with SessionLocal() as db:
-        fresh=db.query(Task).filter_by(project_id=cloned.json()['id'],name='无数量的工作').one()
-        assert fresh.phase_id and fresh.module_id is None and not fresh.manually_completed
-        assert not db.query(CheckItem).filter_by(task_id=fresh.id).one().is_done
-
-
 def test_member_boolean_completion_and_same_failed_version_override(client,pm_headers,worker_headers):
     from app.models import User
     pid,ids=setup_fleet(client,pm_headers,1);ph=phase(client,pm_headers,pid)
@@ -207,23 +164,6 @@ def test_canonical_work_rejects_legacy_quantity_writes_and_new_work_appends(clie
     with SessionLocal() as db:assert db.get(Task,row['id']).target_quantity is None
 
 
-def test_template_roundtrip_keeps_readonly_snapshot_and_edit_returns_to_draft(client,admin_headers):
-    from app.models import Template
-    tid=client.post('/api/templates',headers=admin_headers,json={'name':'来源保全'}).json()['id']
-    ph=client.post(f'/api/templates/{tid}/work-phases',headers=admin_headers,json={'name':'来源阶段'}).json()['id']
-    row=client.post(f'/api/templates/{tid}/work-items',headers=admin_headers,json={'phase_id':ph,'name':'来源工作','group_label':'独立标签','scope_conditions':['need_wms']}).json()
-    source={'kind':'original_source','target':2.7,'unit':'套','unmodified':{'name':'原始工作'}}
-    with SessionLocal() as db:db.get(Task,row['id']).legacy_work_snapshot=source;db.commit()
-    tree=client.get(f'/api/templates/{tid}/tree',headers=admin_headers).json()
-    r=client.put(f'/api/templates/{tid}/tree',headers=admin_headers,json={'phases':tree});assert r.status_code==200,r.text
-    with SessionLocal() as db:
-        t=db.get(Task,row['id']);assert (t.legacy_work_snapshot,t.scope_conditions,t.group_label)==(source,['need_wms'],'独立标签')
-        db.get(Template,tid).status='published';db.commit()
-    current=next(w for p in client.get(f'/api/templates/{tid}/work-items',headers=admin_headers).json()['phases'] for w in p['work_items'] if w['id']==row['id'])
-    assert client.put(f"/api/templates/{tid}/work-items/{row['id']}",headers=admin_headers,json={'version':current['version'],'name':'修订工作'}).status_code==200
-    with SessionLocal() as db:assert db.get(Template,tid).status=='draft' and db.get(Task,row['id']).legacy_work_snapshot==source
-
-
 def test_project_lock_rechecks_quality_before_boolean_completion(client,pm_headers):
     from app.db import engine
     import pytest
@@ -262,16 +202,3 @@ def test_canonical_and_legacy_plan_adapters_respect_closed_project_status(client
     with SessionLocal() as db:assert db.get(Task,row['id']).name=='现场确认' and not db.get(Task,row['id']).manually_completed
 
 
-def test_work_stage_labels_change_without_destroying_original_phase_names(client,admin_headers,pm_headers):
-    from app.models import Phase
-    tid=client.post('/api/templates',headers=admin_headers,json={'name':'阶段原名保全'}).json()['id']
-    ph=client.post(f'/api/templates/{tid}/work-phases',headers=admin_headers,json={'name':'原自定义阶段'}).json()['id']
-    row=client.post(f'/api/templates/{tid}/work-items',headers=admin_headers,json={'phase_id':ph,'name':'联调工作内容'}).json()
-    with SessionLocal() as db:db.get(Phase,ph).name='系统联调';db.commit()
-    stage=next(p for p in client.get(f'/api/templates/{tid}/work-items',headers=admin_headers).json()['phases'] if p['id']==ph)
-    assert stage['name']=='联调工作' and stage['source_name']=='系统联调'
-    pid,_=setup_fleet(client,pm_headers,1)
-    r=client.post(f'/api/projects/{pid}/tasks/generate',headers=pm_headers,json={'template_id':tid,'work_item_ids':[row['id']]});assert r.status_code==200,r.text
-    with SessionLocal() as db:
-        assert db.get(Phase,ph).name=='系统联调'
-        task=db.query(Task).filter_by(project_id=pid,source_task_id=row['id']).one();assert db.get(Phase,task.phase_id).name=='联调工作'

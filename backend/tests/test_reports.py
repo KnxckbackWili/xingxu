@@ -1,5 +1,6 @@
 """Report generation: real field actuals, document submissions and vehicle-step progress."""
 from tests.lifecycle_helpers import versioned
+from tests.template_work import default_work
 
 
 def _project_with_work(client, pm_headers, worker_headers):
@@ -14,7 +15,7 @@ def _project_with_work(client, pm_headers, worker_headers):
     pid = r.json()["id"]
     assert client.post(f"/api/projects/{pid}/vehicles", headers=pm_headers, json={
         "vehicle_type": "潜伏式", "model_name": "AGV-500", "quantity": 2}).status_code == 200
-    assert client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers, json={"module_ids": ["mod-01"]}).status_code == 200
+    assert client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers, json={"work_item_ids": default_work("mod-01")}).status_code == 200
     assert client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": ["user-worker-001"]})).status_code == 200
     enter_execution(client, pm_headers, pid)
     with SessionLocal() as db:

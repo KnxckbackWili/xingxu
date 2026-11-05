@@ -6,11 +6,10 @@ import pytest
 
 
 def body(client, headers):
-    tree = client.get('/api/templates/default/tree', headers=headers).json()
-    mid = next(m['id'] for phase in tree if phase['name'] != '项目准备' for m in phase['modules'] if m['tasks'])
+    from tests.template_work import default_work
     return {'name': '一次完成的项目', 'start_date': '2026-09-15', 'end_date': '2026-10-30', 'status': 'preparing',
             'vehicles': [{'vehicle_type': '潜伏式', 'model_name': 'T6', 'quantity': 3}],
-            'module_ids': [mid], 'template_id': 'default', 'client_uuid': 'creation-audit-0001'}
+            'work_item_ids': default_work('mod-01'), 'template_id': 'default', 'client_uuid': 'creation-audit-0001'}
 
 
 def test_creation_is_atomic_and_replayable(client, pm_headers):
@@ -59,7 +58,7 @@ def test_generate_rejects_malformed_modules(client, pm_headers, invalid):
 
 def test_creation_rejects_partially_invalid_module_selection(client, pm_headers):
     data = body(client, pm_headers)
-    data['module_ids'].append('missing-module')
+    data['work_item_ids'].append('missing-module')
     r = client.post('/api/projects', json=data, headers=pm_headers)
     assert r.status_code == 400
     assert '模板' in r.json()['detail']

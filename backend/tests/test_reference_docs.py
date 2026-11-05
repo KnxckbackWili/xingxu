@@ -1,6 +1,7 @@
 """模板任务参考文档：上传/列表/下载/删除 + 生成项目任务自动复制。"""
 
 import io
+from tests.template_work import default_work
 
 
 def _project(client, pm_headers):
@@ -12,18 +13,10 @@ def _project(client, pm_headers):
 
 
 def _first_template_task(client, headers):
-    """默认模板中未预置参考资料的任务，用于独立 CRUD 测试。
-
-    避开「项目准备」阶段模块（C2-6：其任务不参与项目任务生成）。
-    """
-    r = client.get("/api/templates/tree", headers=headers)
+    """默认模板中未预置参考资料的工作（工作的 id 就是项目生成用的任务 id）。"""
+    r = client.get("/api/templates/default/items", headers=headers)
     assert r.status_code == 200
-    mod = next(
-        phase["modules"][0]
-        for phase in r.json()
-        if phase["name"] != "项目准备" and phase["modules"]
-    )
-    return {**mod["tasks"][1], "module_id": mod["id"]}
+    return next(item for section in r.json()["sections"] for item in section["items"] if item["kind"] == "work" and not item["reference_docs"])
 
 
 def _project_task(tree, name):
@@ -81,7 +74,7 @@ def test_generate_copies_reference_docs(client, pm_headers, admin_headers):
         pid = _project(client, pm_headers)
         # 生成第一个模块的任务
         r = client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers,
-                        json={"module_ids": [t["module_id"]]})
+                        json={"work_item_ids": [t["id"]]})
         assert r.status_code == 200, r.text
         r = client.get(f"/api/projects/{pid}/tree", headers=pm_headers)
         ptask = _project_task(r.json(), t["name"])
@@ -89,7 +82,7 @@ def test_generate_copies_reference_docs(client, pm_headers, admin_headers):
         ptask_id = ptask["id"]  # 项目任务 = 新 UUID
         assert ptask_id != task_id
         r = client.get(f"/api/projects/{pid}/tree", headers=pm_headers)
-        pj = next(x for x in r.json()[0]["modules"][0]["tasks"] if x["id"] == ptask_id)
+        pj = _project_task(r.json(), t["name"])
         refs = pj.get("reference_docs") or []
         assert len(refs) == 1
         assert refs[0]["filename"] == "施工方案.pdf"
@@ -109,7 +102,7 @@ def test_generate_without_docs_ok(client, pm_headers):
     """无参考文档的任务生成不受影响。"""
     pid = _project(client, pm_headers)
     r = client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers,
-                    json={"module_ids": ["mod-01"]})
+                    json={"work_item_ids": default_work("mod-01")})
     assert r.status_code == 200
 
 
@@ -120,7 +113,7 @@ def test_generate_preserves_existing_reference_snapshot(client, pm_headers, admi
     pid = _project(client, pm_headers)
     # 先生成（无参考文档）
     r = client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers,
-                    json={"module_ids": [t["module_id"]]})
+                    json={"work_item_ids": [t["id"]]})
     assert r.status_code == 200
     r = client.get(f"/api/projects/{pid}/tree", headers=pm_headers)
     ptask = _project_task(r.json(), t["name"])
@@ -132,7 +125,7 @@ def test_generate_preserves_existing_reference_snapshot(client, pm_headers, admi
         doc = r.json()
         # 重新生成（幂等跳过已存在任务，但补齐参考文档）
         r = client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers,
-                        json={"module_ids": [t["module_id"]]})
+                        json={"work_item_ids": [t["id"]]})
         assert r.status_code == 200
         r = client.get(f"/api/projects/{pid}/tree", headers=pm_headers)
         ptask2 = _project_task(r.json(), t["name"])
@@ -140,7 +133,7 @@ def test_generate_preserves_existing_reference_snapshot(client, pm_headers, admi
         assert refs == []
         # 幂等：再生成不重复
         client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers,
-                    json={"module_ids": [t["module_id"]]})
+                    json={"work_item_ids": [t["id"]]})
         r = client.get(f"/api/projects/{pid}/tree", headers=pm_headers)
         assert len(_project_task(r.json(), t["name"]).get("reference_docs") or []) == 0
     finally:

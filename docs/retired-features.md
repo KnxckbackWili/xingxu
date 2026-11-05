@@ -39,3 +39,17 @@ python scripts/read_v3_retirement_export.py /data/migration-exports/t03/owners/O
 - **规则**（`OPEN_PROJECT_ACCESS`，默认 `1`）：每个启用账号自动是每个项目的成员——建项目、改项目、导入/转移项目时补上全部启用账号；新建或重新启用账号时加入全部项目（账号上一条操作记录）；启动时核对一次旧项目（每个项目一条“所有账号可见所有项目：加入 …”记录）。从不因此移除成员。已发布的周计划不认领即可登记；任何项目成员都可以开始处理、提交问题结果，开始处理的人记为处理人；关闭和作废仍限报告人、项目负责人或管理员。项目负责人、技术负责人和管理员仍维护工作项、周计划和项目设置。
 - **保留的数据**：已有的周计划负责人、认领、协助记录、问题处理人、资料负责人、成员权限和协管授予原样保留，后端规则照常生效，只是页面不再显示或修改；请假/不可用时段保留在数据库，可在管理员接口或备份中查阅。
 - **恢复旧规则**：部署环境设 `OPEN_PROJECT_ACCESS=0` 后，后端恢复“仅项目成员可见、须认领、须指派”的规则（开启期间加入的成员不会自动移除）；页面不再提供认领、指派和成员维护入口，需要时通过旧接口或回退版本处理。
+
+## 模板旧编辑接口（3.5.5）
+
+模板改为段落 + 一件事一行（[项目模板](project-templates.md)）后，下列写接口下线，返回 404：
+
+- `PUT /templates/{id}/tree`、`POST /templates/{id}/import/json`、`GET /templates/{id}/export/json`、`GET /templates/tree`、`GET /templates/{id}/tree`
+- `GET /templates/export/excel`、`POST /templates/import/excel`（由 `GET/POST /templates/{id}/excel` 代替）
+- `POST/PUT/DELETE /templates/{id}/work-items`、`PUT /templates/{id}/work-layout`、`POST/PUT/DELETE /templates/{id}/work-phases`
+- `PUT /templates/{id}/vehicle-steps`
+- `POST/PUT/DELETE /templates/{id}/document-requirements`、空白模板上传与移除
+- `POST/PUT/DELETE /templates/{id}/procurements`
+
+读取工作列表、资料要求、车辆环节、采购项和参考文档的接口保留。旧通用模板在已有项目的安装里整份保留为“通用模板（升级前内容）”。
+

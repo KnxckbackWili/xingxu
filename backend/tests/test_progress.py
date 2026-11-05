@@ -1,5 +1,6 @@
 """Current progress: work-item completion and real vehicle steps, never daily quantities."""
 from tests.lifecycle_helpers import versioned
+from tests.template_work import default_work
 
 
 def _setup(client, pm_headers):
@@ -11,7 +12,7 @@ def _setup(client, pm_headers):
     # A configured fleet makes the vehicle-step target known; otherwise progress stays unknown (0).
     vehicles = client.post(f"/api/projects/{pid}/vehicles", headers=pm_headers, json={"vehicle_type": "潜伏式", "model_name": "AGV-500", "quantity": 1})
     assert vehicles.status_code == 200, vehicles.text
-    generated = client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers, json={"module_ids": ["mod-01", "mod-04"]})
+    generated = client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers, json={"work_item_ids": default_work("mod-01", "mod-04")})
     assert generated.status_code == 200, generated.text
     from tests.lifecycle_helpers import enter_execution
     enter_execution(client, pm_headers, pid)
@@ -46,11 +47,11 @@ def test_progress_starts_at_zero(client, pm_headers):
 
 def test_completed_work_items_raise_progress_equally(client, pm_headers):
     pid = _setup(client, pm_headers)
-    _complete_phase(pid, "进场准备")
+    _complete_phase(pid, "发车前")
     data = client.get(f"/api/projects/{pid}/progress", headers=pm_headers).json()
     assert 0 < data["percent"] < 100
     phases = {row["name"]: row for row in data["phases"]}
-    assert phases["进场准备"]["percent"] == 100
+    assert phases["发车前"]["percent"] == 100
 
 
 def test_timeline_returns_series(client, pm_headers):
@@ -66,11 +67,11 @@ def test_current_phase_moves_after_earlier_work_completes(client, pm_headers):
     pid = _setup(client, pm_headers)
     first = client.get(f"/api/projects/{pid}/current-phase", headers=pm_headers)
     assert first.status_code == 200, first.text
-    assert first.json()["current"]["name"] == "进场准备"
-    _complete_phase(pid, "进场准备")
+    assert first.json()["current"]["name"] == "发车前"
+    _complete_phase(pid, "发车前")
     moved = client.get(f"/api/projects/{pid}/current-phase", headers=pm_headers).json()
-    assert moved["current"]["name"] == "地图与站点"
-    assert [row["name"] for row in moved["chain"]][:2] == ["进场准备", "地图与站点"]
+    assert moved["current"]["name"] == "系统部署与联调"
+    assert [row["name"] for row in moved["chain"]][:2] == ["发车前", "系统部署与联调"]
 
 
 def test_project_and_dashboard_overdue_are_document_based(client, pm_headers):

@@ -2,6 +2,7 @@
 from tests.lifecycle_helpers import versioned
 from datetime import date
 import pytest
+from tests.template_work import default_work
 
 
 def project(client, headers):
@@ -71,7 +72,7 @@ def test_vehicle_notes_edit_preserves_manual_target(client, pm_headers):
     vehicle = client.post(f'/api/projects/{pid}/vehicles', headers=pm_headers, json={
         'vehicle_type': '潜伏式', 'model_name': 'A', 'quantity': 2,
     }).json()
-    assert client.post(f'/api/projects/{pid}/tasks/generate', headers=pm_headers, json={'module_ids': ['mod-03']}).status_code == 200
+    assert client.post(f'/api/projects/{pid}/tasks/generate', headers=pm_headers, json={'work_item_ids': default_work('mod-03')}).status_code == 200
     with SessionLocal() as db:
         task = db.query(Task).filter_by(project_id=pid, quantity_type='per_vehicle').first()
         task.target_quantity = 17

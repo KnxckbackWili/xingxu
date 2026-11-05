@@ -37,3 +37,8 @@
   .plan-row { flex-wrap: wrap; padding-left: 8px; }
   .plan-row-meta { margin-left: 24px; flex-wrap: wrap; }
 }
+/* Custom template fields carried by a work item (标准工时、责任部门…). */
+.work-template-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px 16px; margin: 12px 0; }
+.work-template-fields div { min-width: 0; }
+.work-template-fields dt { color: var(--agv-text-secondary); font-size: 12px; }
+.work-template-fields dd { margin: 0; overflow-wrap: anywhere; }

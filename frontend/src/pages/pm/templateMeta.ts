@@ -1,6 +1,6 @@
 export type TemplateRow = {
   id: string; name: string; description?: string; version?: number; status?: string; usage_count?: number; is_system: boolean; vehicle_type?: string | null
-  summary?: { work: Record<string, number>; documents: Record<string, number>; vehicle_steps: number }
+  summary?: { work: number; file: number; purchase: number; files: number; sections: number }
 }
 
 export const templateStatus = (t?: TemplateRow) => t?.is_system ? '系统模板' : t?.status === 'published' ? '已发布' : '草稿'

@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.db import engine  # noqa: E402
+from tests.template_work import default_work
 
 PASS = "✅"
 FAIL = "❌"
@@ -106,7 +107,7 @@ def run():
         client.post(f"/api/projects/{pid}/vehicles", headers=pm_headers, json={
             "vehicle_type": "潜伏式", "model_name": "AGV-500", "quantity": 2})
         r = client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers,
-                        json={"module_ids": ["mod-03"]})
+                        json={"work_item_ids": default_work("mod-03")})
         if r.status_code != 200:
             _step_fail(f"生成任务失败：{r.status_code} {r.text}")
         client.put(f"/api/projects/{pid}", headers=pm_headers,

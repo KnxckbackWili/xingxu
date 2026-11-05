@@ -32,18 +32,18 @@ def test_25_by_5_batch_and_cancel_is_audited_without_state_change(client,pm_head
     from app.models import Project,VehicleUnit,VehicleProgress,ChangeLog
     pid,ids=setup_fleet(client,pm_headers,25)
     data=matrix(client,pm_headers,pid)
-    assert len(data['steps'])==5 and len(data['units'])==25 and data['summary']['target']==125
+    assert len(data['steps'])==4 and len(data['units'])==25 and data['summary']['target']==100
     for key in [s['key'] for s in data['steps']]:
         r=write(client,pm_headers,pid,ids,key=key)
         assert r.status_code==200,r.text
-    assert r.json()['summary']['completed']==125 and r.json()['summary']['percent']==100
+    assert r.json()['summary']['completed']==100 and r.json()['summary']['percent']==100
     assert write(client,pm_headers,pid,[ids[0]],key='go_live',version=1,is_done=False,done_on=None).status_code==400
     r=write(client,pm_headers,pid,[ids[0]],key='go_live',version=1,is_done=False,done_on=None,reason='复测发现需重做')
-    assert r.status_code==200 and r.json()['summary']['completed']==124
+    assert r.status_code==200 and r.json()['summary']['completed']==99
     with SessionLocal() as db:
         assert db.get(Project,pid).status=='executing'
         assert db.get(VehicleUnit,ids[0]).current_stage=='system_integration'
-        assert db.query(VehicleProgress).filter_by(project_id=pid).count()==125
+        assert db.query(VehicleProgress).filter_by(project_id=pid).count()==100
         assert db.query(ChangeLog).filter_by(project_id=pid,entity_type='vehicle_progress',action='reopen').one().detail.endswith('复测发现需重做')
 
 
@@ -80,15 +80,15 @@ def test_template_steps_are_frozen_and_old_lifecycle_is_independent(client,pm_he
     from app.db import SessionLocal
     from app.models import VehicleUnit,VehicleLifecycleEvent
     pid,ids=setup_fleet(client,pm_headers,1)
-    # 默认模板工作已关联环节：不能直接删掉被关联的环节。
-    r=client.put('/api/templates/default/vehicle-steps',headers=admin_headers,json={'steps':[{'key':'custom','name':'现场自定义环节'}]})
-    assert r.status_code==400 and '工作关联' in r.json()['detail']
+    # A new per-vehicle row in the template adds a step for later projects only.
     current=client.get('/api/templates/default/vehicle-steps',headers=admin_headers).json()
-    r=client.put('/api/templates/default/vehicle-steps',headers=admin_headers,json={'steps':current+[{'key':'custom','name':'现场自定义环节'}]})
+    section=client.get('/api/templates/default/items',headers=admin_headers).json()['sections'][2]['id']
+    r=client.post('/api/templates/default/items',headers=admin_headers,json={'section_id':section,'kind':'work','name':'现场自定义环节','per_vehicle':True})
     assert r.status_code==200,r.text
-    assert len(matrix(client,pm_headers,pid)['steps'])==5
+    custom=next(item['step_key'] for s in r.json()['sections'] for item in s['items'] if item['id']==r.json()['id'])
+    assert len(matrix(client,pm_headers,pid)['steps'])==4
     next_pid,next_ids=setup_fleet(client,pm_headers,1)
-    assert [s['key'] for s in matrix(client,pm_headers,next_pid)['steps']]==[s['key'] for s in current]+['custom']
+    assert sorted(s['key'] for s in matrix(client,pm_headers,next_pid)['steps'])==sorted([s['key'] for s in current]+[custom])
     assert write(client,pm_headers,pid,ids,key='go_live').status_code==200
     assert write(client,pm_headers,pid,ids,key='arrival_inspection',done_on=project_today('Asia/Shanghai').isoformat()).status_code==200
     assert client.put(f'/api/projects/{pid}/vehicle-units/{ids[0]}',headers=pm_headers,json={'current_stage':'retired'}).status_code==400
@@ -102,7 +102,7 @@ def test_template_steps_are_frozen_and_old_lifecycle_is_independent(client,pm_he
 def test_unregistered_quantity_does_not_fabricate_real_vehicles(client,pm_headers):
     p,vid=fleet(client,pm_headers,25)
     data=matrix(client,pm_headers,p['id'])
-    assert data['units']==[] and data['summary']['target']==125
+    assert data['units']==[] and data['summary']['target']==100
     assert data['summary']['unregistered_quantity']==25 and not data['summary']['quantity_unknown']
     p2=client.post('/api/projects',headers=pm_headers,json={'name':'数量未知','start_date':'2026-01-01','end_date':'2026-12-31'}).json()
     assert matrix(client,pm_headers,p2['id'])['summary']['quantity_unknown'] is True
@@ -135,10 +135,10 @@ def test_progress_ignores_mixed_quantity_weights_and_curve_is_weekly(client,pm_h
         t2=Task(project_id=pid,module_id=module.id,name='一次培训',quantity_type='fixed',unit='次',target_quantity=1)
         db.add_all([t1,t2]);db.flush()
         totals=project_progress_tree(db,pid)
-        assert totals['target']==7 and totals['completed']==2 and totals['percent']==28.6
+        assert totals['target']==6 and totals['completed']==2 and totals['percent']==33.3
         from app.routers.dashboard import _project_progress_totals
         portfolio=_project_progress_totals(db,[t1,t2],[pid])[pid]
-        assert (portfolio['target'],portfolio['completed'],portfolio['percent'])==(7,2,28.6)
+        assert (portfolio['target'],portfolio['completed'],portfolio['percent'])==(6,2,33.3)
         timeline=plan_vs_actual_timeline(db,pid,None,None)
         assert all(r['period']=='week' and r['unit']=='车辆环节' for r in timeline)
         assert sum(r['actual'] for r in timeline)==1
@@ -172,7 +172,7 @@ def test_portable_matrix_restores_real_vehicle_links_and_clone_has_no_actuals(cl
     clone=client.post(f'/api/projects/{pid}/clone',headers=pm_headers,json={'name':'新现场'})
     assert clone.status_code==200,clone.text
     target=matrix(client,pm_headers,clone.json()['id'])
-    assert len(target['steps'])==5 and target['units']==[] and target['summary']['completed']==0
+    assert len(target['steps'])==4 and target['units']==[] and target['summary']['completed']==0
     # Tampered provenance must fail in preview before creating any project.
     snapshot['vehicle_progress_matrix']['units'][0]['id']='foreign-unit'
     with pytest.raises(ValueError,match='真实车辆'):parse_snapshot(snapshot)

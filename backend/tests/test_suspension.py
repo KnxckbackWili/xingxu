@@ -10,6 +10,7 @@
 
 from datetime import date
 from urllib.parse import unquote
+from tests.template_work import default_work
 
 
 def _project(client, pm_headers, name="突发停工测试项目"):
@@ -35,7 +36,7 @@ def _setup_active(client, pm_headers, worker_headers=None, name="突发停工测
     """On-site project with generated work items (with checks); worker optionally a member."""
     from tests.lifecycle_helpers import versioned
     pid = _project(client, pm_headers, name)
-    generated = client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers, json={"module_ids": ["mod-01"]})
+    generated = client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers, json={"work_item_ids": default_work("mod-01")})
     assert generated.status_code == 200, generated.text
     if worker_headers:
         me = client.get("/api/auth/me", headers=worker_headers).json()
@@ -220,7 +221,7 @@ def test_export_filename_sanitized_name_plus_date(client, pm_headers):
     today = date.today().isoformat()
     pid = _project(client, pm_headers, "华东/物流:AGV*二期")
     client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers,
-                json={"module_ids": ["mod-03"]})
+                json={"work_item_ids": default_work("mod-03")})
     for url, ext in ((f"/api/projects/{pid}/export/excel", "xlsx"),
                      (f"/api/projects/{pid}/export/json", "json"),
                      (f"/api/projects/{pid}/export/package", "zip")):
@@ -237,7 +238,7 @@ def test_export_filename_fallback_when_name_sanitizes_empty(client, pm_headers):
     today = date.today().isoformat()
     pid = _project(client, pm_headers, "...")
     client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers,
-                json={"module_ids": ["mod-03"]})
+                json={"work_item_ids": default_work("mod-03")})
     r, fname, cd = _export_filename(client, pm_headers, f"/api/projects/{pid}/export/json")
     assert fname.startswith("项目_"), fname
     assert fname.endswith(f"_{today}.json"), fname

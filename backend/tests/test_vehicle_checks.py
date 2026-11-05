@@ -168,25 +168,23 @@ def test_portable_and_clone_only_requirements_no_qualification(client,pm_headers
 
 
 def test_template_mapping_copy_and_generation_reset_all_source_qualification(client,admin_headers,pm_headers):
-    from app.models import Template
-    from app.routers.templates import copy_tree
+    from tests.template_work import default_work
     pid,ids=setup_fleet(client,pm_headers,2)
     with SessionLocal() as db:
-        source=db.query(Task).join(Module,Task.module_id==Module.id).join(Phase,Module.phase_id==Phase.id).filter(
-            Task.project_id.is_(None),Task.template_id.is_(None),Task.quantity_type=='per_vehicle',Phase.name!='项目准备').first()
-        assert source is not None
+        source=db.get(Task,default_work('mod-02')[0])
+        assert source is not None and source.quantity_type=='per_vehicle'
         source.vehicle_step_key='arrival_inspection'
         check=db.query(CheckItem).filter_by(task_id=source.id).first()
         if check is None:check=CheckItem(task_id=source.id,name='模板定义',is_required=True,is_safety_critical=True);db.add(check)
         check.is_done=True;check.failed=False;check.done_by='source-actor';check.version=19
-        db.commit();source_id=source.id;mid=source.module_id;check_id=check.id
-        dest=Template(name='逐车检查模板副本');db.add(dest);db.flush()
-        copy_tree(db,'default',dest.id)
-        db.commit()
-        copied=db.query(Task).filter_by(template_id=dest.id,name=source.name).first()
+        db.commit();source_id=source.id;check_id=check.id;source_name=source.name
+    dest=client.post('/api/templates',headers=admin_headers,json={'name':'逐车检查模板副本','copy_from':'default'})
+    assert dest.status_code==200,dest.text
+    with SessionLocal() as db:
+        copied=db.query(Task).filter_by(template_id=dest.json()['id'],name=source_name).first()
         assert copied.vehicle_step_key=='arrival_inspection'
         assert all(not c.is_done and not c.failed and c.done_by is None and c.done_at is None for c in db.query(CheckItem).filter_by(task_id=copied.id))
-    r=client.post(f'/api/projects/{pid}/tasks/generate',headers=pm_headers,json={'module_ids':[mid]})
+    r=client.post(f'/api/projects/{pid}/tasks/generate',headers=pm_headers,json={'work_item_ids':[source_id]})
     assert r.status_code==200,r.text
     with SessionLocal() as db:
         target=db.query(Task).filter_by(project_id=pid,source_task_id=source_id).one()
@@ -197,7 +195,6 @@ def test_template_mapping_copy_and_generation_reset_all_source_qualification(cli
         assert {x.vehicle_unit_id for x in items}==set(ids)
         assert all(not x.is_done and not x.failed and x.done_by is None and x.done_at is None and x.version==0 for x in items)
         assert db.query(CheckItem).filter_by(task_id=target.id,vehicle_unit_id=None).count()==0
-    assert client.put('/api/templates/default/vehicle-steps',headers=admin_headers,json={'steps':[{'key':'other_step','name':'其它环节'}]}).status_code==400
 
 
 def test_project_lock_prevents_stale_pass_from_qualifying_matrix(client,pm_headers):

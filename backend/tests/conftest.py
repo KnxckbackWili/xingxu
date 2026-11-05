@@ -256,6 +256,12 @@ def upgrade_legacy_schema():
         with engine.begin() as connection:
             original = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
             connection.execute(text("DELETE FROM change_logs WHERE entity_type='migration' AND entity_id='g3a03b000001'"))
+            # The 2.4.3 schema keeps every task under a module; template work compiled from template
+            # rows has none, so it is set aside for this replay (each test restores its own snapshot).
+            template_work = "SELECT id FROM tasks WHERE project_id IS NULL AND module_id IS NULL"
+            connection.execute(text(f"DELETE FROM check_items WHERE task_id IN ({template_work})"))
+            connection.execute(text(f"DELETE FROM template_docs WHERE task_id IN ({template_work})"))
+            connection.execute(text("DELETE FROM tasks WHERE project_id IS NULL AND module_id IS NULL"))
             connection.execute(text("UPDATE alembic_version SET version_num='d2e7f9a103b4'"))
         cfg = Config(str(BASE_DIR / "alembic.ini"))
         cfg.set_main_option("script_location", str(BASE_DIR / "migrations"))

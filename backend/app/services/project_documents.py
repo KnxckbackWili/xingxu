@@ -355,13 +355,15 @@ def materialize_static(db, project, actor_id=None, now=None):
     refresh_project(db, project,actor_id=actor_id,now=now)
 
 
-def initialize(db, project):
+def initialize(db, project, excluded_requirement_ids=()):
+    """Copy the template's document rules; files of optional template rows not chosen are left out."""
     tid = None if project.template_id in (None,'default') else project.template_id
     requirements = db.query(DocumentRequirement).filter_by(template_id=tid,is_group=False).order_by(DocumentRequirement.sort_order).all()
     existing = {row.source_key for row in db.query(ProjectDocumentDefinition).filter_by(project_id=project.id)}
+    excluded = set(excluded_requirement_ids or ())
     for rule in requirements:
         source_key = 'template:'+rule.id
-        if source_key in existing:
+        if source_key in existing or rule.id in excluded:
             continue
         db.add(ProjectDocumentDefinition(project_id=project.id,requirement_id=rule.id,source_key=source_key,
             **{key:deepcopy(getattr(rule,key)) for key in RULE_FIELDS+DEFAULT_FIELDS}))

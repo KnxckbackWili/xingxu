@@ -29,6 +29,7 @@ from app.routers import (
     storage,
     logs,
     templates,
+    template_items,
     document_requirements,
     tasks,
     work_items,
@@ -192,6 +193,7 @@ app.include_router(storage.router,prefix='/api')
 app.include_router(project_recycle_bin.router, prefix="/api")
 app.include_router(logs.router, prefix="/api")
 app.include_router(templates.router, prefix="/api")
+app.include_router(template_items.router, prefix="/api")
 app.include_router(document_requirements.router, prefix="/api")
 app.include_router(tasks.router, prefix="/api")
 app.include_router(work_items.router, prefix="/api")

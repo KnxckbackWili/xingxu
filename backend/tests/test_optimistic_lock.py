@@ -9,6 +9,7 @@ version 缺省（旧前端）时跳过校验但仍自增，保持向后兼容。
 
 from tests.lifecycle_helpers import versioned
 import pytest
+from tests.template_work import default_work
 
 
 def _project_with_tree(client, pm_headers):
@@ -21,7 +22,7 @@ def _project_with_tree(client, pm_headers):
     client.post(f"/api/projects/{pid}/vehicles", headers=pm_headers,
                 json={"vehicle_type": "潜伏式", "model_name": "AGV-500", "quantity": 2})
     r = client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers,
-                    json={"module_ids": ["mod-03"]})
+                    json={"work_item_ids": default_work("mod-03")})
     assert r.status_code == 200, r.json()
     tree = client.get(f"/api/projects/{pid}/tree", headers=pm_headers).json()
     return pid, tree

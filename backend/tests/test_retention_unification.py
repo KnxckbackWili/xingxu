@@ -37,11 +37,9 @@ def purge(client, admin, row, receipt, **extra):
 
 def test_explicit_purge_preserves_encrypted_download_receipt_after_project_cascade(client, admin_headers, pm_headers, tmp_path):
     from tests.document_helpers import documents
-    base = '/api/templates/default/document-requirements'
-    rule = next(row for row in client.get(base, headers=admin_headers).json() if row['code'] == '4.1')
+    from tests.template_work import upload_template_blank
     blank_bytes = b'original blank form'
-    blank = client.post(f"{base}/{rule['id']}/blank-file", headers=admin_headers,
-                        files={'file': ('blank.txt', blank_bytes, 'text/plain')})
+    blank = upload_template_blank(client, admin_headers, '4.1', {'file': ('blank.txt', blank_bytes, 'text/plain')})
     assert blank.status_code == 200, blank.text
     p = _project(client, pm_headers)
     document = next(row for row in documents(client, pm_headers, p['id'])['documents'] if row['code'] == '4.1')

@@ -5,6 +5,7 @@ from datetime import timedelta
 import pytest
 from sqlalchemy.exc import IntegrityError
 from app.time_utils import utcnow
+from tests.template_work import default_work
 
 def _project(client, pm_headers, name='功能边界项目'):
     r = client.post('/api/projects', headers=pm_headers, json={'name': name, 'start_date': '2026-08-10', 'status': 'preparing', 'new_vehicles': False, 'end_date': '2026-09-30'})
@@ -105,7 +106,7 @@ def _make_project_with_task(client, pm_headers, name):
     pid = r.json()['id']
     r = client.post(f'/api/projects/{pid}/vehicles', headers=pm_headers, json={'vehicle_type': '潜伏式', 'model_name': 'AGV-500', 'quantity': 1})
     assert r.status_code == 200, r.text
-    r = client.post(f'/api/projects/{pid}/tasks/generate', headers=pm_headers, json={'module_ids': ['mod-03']})
+    r = client.post(f'/api/projects/{pid}/tasks/generate', headers=pm_headers, json={'work_item_ids': default_work('mod-03')})
     assert r.status_code == 200, r.text
     tree = client.get(f'/api/projects/{pid}/tree', headers=pm_headers).json()
     tid = tree[0]['modules'][0]['tasks'][0]['id']

@@ -220,10 +220,8 @@ def test_private_encrypted_snapshot_keeps_originals_while_legacy_plain_reader_re
 
 
 def test_project_blank_uses_family_scope_while_global_unfilled_template_stays_public(client,pm_headers,admin_headers,worker_headers):
-    base='/api/templates/default/document-requirements'
-    rule=next(row for row in client.get(base,headers=admin_headers).json() if row['code']=='6.11.6b')
-    global_url=base+'/'+rule['id']+'/blank-file'
-    response=client.post(global_url,headers=admin_headers,files={'file':('unfilled-position.txt',b'empty form: password manager location','text/plain')})
+    from tests.template_work import upload_template_blank
+    response=upload_template_blank(client,admin_headers,'6.11.6b',{'file':('unfilled-position.txt',b'empty form: password manager location','text/plain')})
     assert response.status_code==200,response.text
     pid,users=setup_project(client,pm_headers)
     state=documents(client,pm_headers,pid)
@@ -236,7 +234,8 @@ def test_project_blank_uses_family_scope_while_global_unfilled_template_stays_pu
     changed=policy(client,pm_headers,pid,'definition',definition,[users['worker1']])
     assert changed.status_code==200,changed.text
     assert client.get(project_url,headers=worker_headers).content==b'empty form: password manager location'
-    assert client.get(global_url,headers=admin_headers).status_code==200
+    rule=next(row for row in client.get('/api/templates/default/document-requirements',headers=admin_headers).json() if row['code']=='6.11.6b')
+    assert client.get(f"/api/templates/default/document-requirements/{rule['id']}/blank-file",headers=admin_headers).status_code==200
 
 
 def test_completion_review_real_status_and_future_blockers_never_reveal_private_titles(client,pm_headers,admin_headers):

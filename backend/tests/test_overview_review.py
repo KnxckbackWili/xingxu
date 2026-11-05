@@ -1,6 +1,7 @@
 """Overview must use the same overdue definition as the dedicated action list (v3: document deadlines)."""
 from datetime import date, datetime
 from tests.test_project_timezone import _create_project
+from tests.template_work import default_work
 
 
 def _legacy_past_schedule(pid):
@@ -17,7 +18,7 @@ def _legacy_past_schedule(pid):
 def _generated_project(client, pm_headers, **kwargs):
     p = _create_project(client, pm_headers, **kwargs)
     assert client.post(f"/api/projects/{p['id']}/tasks/generate", headers=pm_headers,
-                       json={"module_ids": ["mod-01"]}).status_code == 200
+                       json={"work_item_ids": default_work("mod-01")}).status_code == 200
     return p
 
 
