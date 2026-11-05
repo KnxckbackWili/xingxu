@@ -3,7 +3,7 @@ import VehicleProgressMatrix from '../../../components/VehicleProgressMatrix'
 import VehicleArrivalEditor from '../../../components/VehicleArrivalEditor'
 import { hasProjectCapability, useProjectWriteBlocked } from '../../../hooks/useProjectCapability'
 import { openWorkDetail } from '../../../stores/workDetail'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert, Button, Checkbox, DatePicker, Drawer, Empty, Form, Input, InputNumber, Modal, Select,
   Space, Table, Tag, Typography, message, Popconfirm, Popover, Upload,
@@ -121,6 +121,11 @@ export default function VehicleLifecyclePage({ project, onReload, configurationO
   const [assignment, setAssignment] = useState<any>(null)
   const [typeForm] = Form.useForm()
   const [typeConfigOpen, setTypeConfigOpen] = useState(false)
+  const [ioOpen, setIoOpen] = useState(false)
+  const [newType, setNewType] = useState<{ model: string; count: number } | null>(null)
+  const [newTypeSaving, setNewTypeSaving] = useState(false)
+  const newTypeLock = useSubmitLock()
+  const [newTypeForm] = Form.useForm()
   const writeBlocked = useProjectWriteBlocked(project.status)
   const hasManagePermission = hasProjectCapability(project.capabilities, 'project.manage_plan', user?.role === 'admin'
     || (user?.role === 'pm' && project.manager === user.id)
@@ -141,7 +146,9 @@ export default function VehicleLifecyclePage({ project, onReload, configurationO
   if (currentProject.current.id !== projectId) currentProject.current = { id: projectId, generation: currentProject.current.generation + 1 }
   const loadSequence = useRef(0)
 
-  const load = async () => {
+  // The progress list reads its own data; page-side fleet changes ask it to read again.
+  const [matrixVersion, setMatrixVersion] = useState(0)
+  const load = async ({ matrix = true }: { matrix?: boolean } = {}) => {
     const generation = currentProject.current.generation
     const request = ++loadSequence.current
     try {
@@ -153,6 +160,7 @@ export default function VehicleLifecyclePage({ project, onReload, configurationO
       setUnits(list)
       setVehicles(types)
       setLoaded(true)
+      if (matrix) setMatrixVersion(version => version + 1)
     } catch (error) { if (request === loadSequence.current && generation === currentProject.current.generation) message.error(errMsg(error)) }
   }
   useEffect(() => {
@@ -201,6 +209,23 @@ export default function VehicleLifecyclePage({ project, onReload, configurationO
   }
   const removeVehicleType = async (vid: string) => {
     try { await projectApi.removeVehicle(projectId, vid); await load(); await onReload?.() } catch (error) { message.error(errMsg(error)) }
+  }
+  /** Vehicles imported by model (生命周期表) before the project had that type: model → count. */
+  const untyped = useMemo(() => {
+    const groups = new Map<string, number>()
+    for (const unit of units) if (!unit.vehicle_id && unit.model_name) groups.set(unit.model_name, (groups.get(unit.model_name) ?? 0) + 1)
+    return [...groups].map(([model, count]) => ({ model, count }))
+  }, [units])
+  const openNewType = (model: string, count: number) => setNewType({ model, count })
+  const saveNewType = async (values: any) => {
+    if (!newType || !newTypeLock.tryAcquire()) return
+    setNewTypeSaving(true)
+    try {
+      const configNo = String(values.config_no ?? '').trim()
+      await projectApi.addVehicle(projectId, { vehicle_type: values.vehicle_type, model_name: String(values.model_name).trim(), quantity: values.quantity, configuration: configNo ? { config_no: configNo } : {} })
+      message.success(String(values.model_name).trim() === newType.model ? `已添加车型，${newType.count} 台车归入此车型` : '已添加车型')
+      setNewType(null); await load(); await onReload?.()
+    } catch (error) { message.error(errMsg(error)) } finally { newTypeLock.release(); setNewTypeSaving(false) }
   }
   const openTypeConfig = (v: any) => {
     setTypeConfig(v)
@@ -338,9 +363,9 @@ export default function VehicleLifecyclePage({ project, onReload, configurationO
   return <div className="field-work-page">
     <WorkPageHeader title="车辆" description="每台车一行：点环节登记完成，点位置修改，点右侧图标看这台车的问题和资料。"
       primary={canManage && <Button type="primary" icon={<PlusOutlined />} onClick={() => setUnitOpen(true)}>添加车辆</Button>}
-      tools={<Space wrap>{canManage && units.length > 0 && <VehicleArrivalEditor key={projectId} project={project} units={units} onSaved={async () => { await load(); await onReload?.() }} />}{(canManage || canExport) && <Popover trigger="click" placement="bottomRight" content={<div className="field-secondary-actions">
-        {canManage && <Upload showUploadList={false} accept=".xlsx" beforeUpload={(f) => importLifecycle(f as File)}><Button icon={<UploadOutlined />}>导入车辆表</Button></Upload>}
-        {canExport && <Button icon={<DownloadOutlined />} onClick={downloadLifecycle}>导出车辆表</Button>}
+      tools={<Space wrap>{canManage && units.length > 0 && <VehicleArrivalEditor key={projectId} project={project} units={units} onSaved={async () => { await load(); await onReload?.() }} />}{(canManage || canExport) && <Popover trigger="click" placement="bottomRight" open={ioOpen} onOpenChange={setIoOpen} content={<div className="field-secondary-actions">
+        {canManage && <Upload showUploadList={false} accept=".xlsx" beforeUpload={(f) => { setIoOpen(false); return importLifecycle(f as File) }}><Button icon={<UploadOutlined />}>导入车辆表</Button></Upload>}
+        {canExport && <Button icon={<DownloadOutlined />} onClick={() => { setIoOpen(false); void downloadLifecycle() }}>导出车辆表</Button>}
         <Typography.Text type="secondary">Excel 按车辆编号匹配，重复导入不重复建档；保留原生命周期表格式。</Typography.Text>
       </div>}><IconAction bordered label="导入与导出" icon={<SwapOutlined />} /></Popover>}</Space>}
       meta={<Space wrap><span>{units.length} 台车辆</span><span>{openIssues} 个未关闭问题</span></Space>} />
@@ -353,11 +378,30 @@ export default function VehicleLifecyclePage({ project, onReload, configurationO
         <div>未确认建档：{batchFailure.failed}（{batchFailure.reason}）；后续 {batchFailure.remaining} 台未提交</div>
         <div>列表已重新加载。请先核对未确认编号是否存在，再用「添加车辆」补录缺少的编号。</div></div>} />}
     {/* One list: every vehicle with its location, status and steps; the record drawer holds issues and documents. */}
-    <VehicleProgressMatrix projectId={projectId} status={project.status} onChanged={() => { void load(); void onReload?.() }} info={units}
+    <VehicleProgressMatrix projectId={projectId} status={project.status} onChanged={() => { void load({ matrix: false }); void onReload?.() }} info={units} reloadKey={matrixVersion}
+      notice={canConfigure && untyped.length > 0 ? <Alert type="warning" showIcon className="vehicle-untyped"
+        message={`${untyped.map(group => `${group.model} ${group.count} 台`).join('、')}还没有车型`}
+        description="选好车型类别，台数和逐车检查才会按车型算。"
+        action={<Space direction="vertical" size={4}>{untyped.map(group => <Button key={group.model} size="small" type="primary" icon={<PlusOutlined />} onClick={() => openNewType(group.model, group.count)}>{untyped.length > 1 ? `添加车型 ${group.model}` : '添加为车型'}</Button>)}</Space>} /> : undefined}
       renderLocation={id => { const unit = units.find(row => row.id === id); return !unit ? '-' : canManage ? <VehicleLocationEditor key={`${projectId}:${unit.id}`} code={unit.asset_code} location={unit.location || ''} onSave={next => saveLocation(unit, next)} /> : unit.location || '-' }}
       onOpenRecord={id => { const unit = units.find(row => row.id === id); if (unit) void openHistory(unit) }} />
     </>}
 
+
+    <Modal className="field-work-modal" title={`添加车型：${newType?.model ?? ''}`} open={!!newType} destroyOnHidden confirmLoading={newTypeSaving}
+      onCancel={() => { if (!newTypeSaving) setNewType(null) }} onOk={() => newTypeForm.submit()} okText="添加车型" width={480}>
+      <Form form={newTypeForm} layout="vertical" onFinish={saveNewType} initialValues={{ model_name: newType?.model, quantity: newType?.count, config_no: '' }}>
+        <Typography.Paragraph type="secondary">从车辆表导入的 {newType?.count ?? 0} 台车会归入这个车型。</Typography.Paragraph>
+        <Form.Item name="vehicle_type" label="车型类别" rules={[{ required: true, message: '请选择车型类别' }]}>
+          <Select placeholder="选择车型类别" loading={dictLoading} options={toVehicleTypeSelectOptions(dictOptions)} />
+        </Form.Item>
+        <Space wrap style={{ width: '100%' }} align="start">
+          <Form.Item name="model_name" label="型号" rules={[{ required: true, whitespace: true }]}><Input maxLength={100} /></Form.Item>
+          <Form.Item name="quantity" label="台数" rules={[{ required: true }]}><InputNumber min={1} precision={0} /></Form.Item>
+          <Form.Item name="config_no" label="配置号"><Input maxLength={100} placeholder="不填沿用车辆表里的" /></Form.Item>
+        </Space>
+      </Form>
+    </Modal>
 
     <Modal className="field-work-modal" title="添加现场车辆" open={unitOpen} onCancel={() => { if (!unitSaving) { setUnitOpen(false); unitForm.resetFields() } }} onOk={() => unitForm.submit()} confirmLoading={unitSaving} cancelButtonProps={{ disabled: unitSaving }} okText="建立档案" width={520}>
       <Form form={unitForm} layout="vertical" onFinish={createUnit}>

@@ -1410,6 +1410,36 @@ def list_vehicles(
     ]
 
 
+def _attach_imported_units(db: Session, vehicle: Vehicle) -> int:
+    """Vehicles imported by model before their type existed (lifecycle table) join the type with that model.
+
+    Their config no comes along when the type has none. Unknown type already kept every
+    safety check applicable, so joining a type creates no new check obligations.
+    """
+    from app.models import VehicleUnit, VehicleLifecycleEvent
+
+    model = (vehicle.model_name or "").strip()
+    if not model:
+        return 0
+    units = [unit for unit in db.query(VehicleUnit).filter(
+        VehicleUnit.project_id == vehicle.project_id, VehicleUnit.vehicle_id.is_(None)).all()
+        if (unit.model_name or "").strip() == model]
+    if not units:
+        return 0
+    for unit in units:
+        unit.vehicle_id = vehicle.id
+    if not (vehicle.configuration or {}).get("config_no"):
+        events = db.query(VehicleLifecycleEvent).filter(
+            VehicleLifecycleEvent.vehicle_unit_id.in_([unit.id for unit in units])
+        ).order_by(VehicleLifecycleEvent.event_date, VehicleLifecycleEvent.created_at).all()
+        config_no = next((str(event.extra["config_no"]).strip() for event in events
+                          if isinstance(event.extra, dict) and str(event.extra.get("config_no") or "").strip()), "")
+        if config_no:
+            vehicle.configuration = {**(vehicle.configuration or {}), "config_no": config_no}
+    db.flush()
+    return len(units)
+
+
 @router.post("/{project_id}/vehicles", response_model=dict)
 @route_permission('project.update')
 def add_vehicle(
@@ -1437,6 +1467,7 @@ def add_vehicle(
     v = Vehicle(project_id=project_id, **payload)
     db.add(v)
     db.flush()
+    attached = _attach_imported_units(db, v)
     from app.services.generate_tasks import recompute_per_vehicle_targets
 
     recompute_per_vehicle_targets(db, project_id)
@@ -1448,7 +1479,8 @@ def add_vehicle(
         v.id,
         "create",
         user.id,
-        f"添加车型 {payload['vehicle_type']} {data.model_name} ×{data.quantity}",
+        f"添加车型 {payload['vehicle_type']} {data.model_name} ×{data.quantity}"
+        + (f"，同型号已建档车辆 {attached} 台归入此车型" if attached else ""),
     )
     db.commit()
     db.refresh(v)
@@ -1496,9 +1528,16 @@ def update_vehicle(
         from app.services.project_lifecycle import ensure_schedule_writable
 
         ensure_schedule_writable(p)
+    previous_model = v.model_name
     for f, val in payload.items():
         setattr(v, f, val)
     db.flush()
+    attached = _attach_imported_units(db, v) if v.model_name != previous_model else 0
+    if attached and not quantity_inputs_changed:
+        from app.services.project_lifecycle import ensure_schedule_writable
+
+        ensure_schedule_writable(p)
+        quantity_inputs_changed = True
     from app.services.generate_tasks import recompute_per_vehicle_targets
 
     if quantity_inputs_changed:
@@ -1519,7 +1558,8 @@ def update_vehicle(
         v.id,
         "update",
         user.id,
-        f"更新车型 {v.vehicle_type} {v.model_name}",
+        f"更新车型 {v.vehicle_type} {v.model_name}"
+        + (f"，同型号已建档车辆 {attached} 台归入此车型" if attached else ""),
     )
     db.commit()
     db.refresh(v)

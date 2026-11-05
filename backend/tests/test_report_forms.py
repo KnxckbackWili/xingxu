@@ -757,6 +757,47 @@ def test_company_lifecycle_table_rows_cover_several_vehicles_and_merged_cells(cl
     assert reimport.json()["events"] == 0
 
 
+def test_type_added_after_lifecycle_import_takes_its_vehicles_and_config_no(client, pm_headers):
+    """Importing before the project has the type leaves vehicles by model; adding the type brings them in."""
+    pid = _project(client, pm_headers)
+    other = client.post(f"/api/projects/{pid}/vehicles", headers=pm_headers, json={"vehicle_type": "平衡重叉车", "model_name": "其他型号", "quantity": 1}).json()
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["AGV生命周期表"])
+    ws.append(["序号", "项目名称", "项目合同号", "型号", "配置号", "车辆编号", "调车时间记录", "车号", "分类", "变更内容", "记录人", "记录时间"])
+    ws.append([1, "测试客户项目", "HT-2026-001", "AGVLCDD20", "MN1", "TEST01233、TEST01237", "2026.5.23", "51.52", "机械件损坏更换", "下降阀更换", "张测试", "2026.5.31"])
+    ws.append([2, "测试客户项目", "HT-2026-001", "AGVX9", "", "TEST09001", "2026.5.24", "9", "软件升级", "调度参数更新", "张测试", "2026.5.24"])
+    buf = io.BytesIO(); wb.save(buf)
+    r = client.post(f"/api/projects/{pid}/import/lifecycle", headers=pm_headers,
+                    files={"file": ("生命周期表.xlsx", buf.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")})
+    assert r.status_code == 200, r.text
+    units = {u["asset_code"]: u for u in client.get(f"/api/projects/{pid}/vehicle-units", headers=pm_headers).json()}
+    assert units["TEST01233"]["vehicle_id"] is None and units["TEST01233"]["model_name"] == "AGVLCDD20"
+
+    added = client.post(f"/api/projects/{pid}/vehicles", headers=pm_headers,
+                        json={"vehicle_type": "平衡重叉车", "model_name": "AGVLCDD20", "quantity": 2})
+    assert added.status_code == 200, added.text
+    assert added.json()["configuration"]["config_no"] == "MN1"
+    units = {u["asset_code"]: u for u in client.get(f"/api/projects/{pid}/vehicle-units", headers=pm_headers).json()}
+    assert units["TEST01233"]["vehicle_id"] == units["TEST01237"]["vehicle_id"] == added.json()["id"]
+    assert units["TEST01233"]["vehicle_type"] == "平衡重叉车"
+    assert units["TEST09001"]["vehicle_id"] is None
+
+    # Renaming a type to an imported model brings those vehicles in too; a typed config no is kept.
+    client.put(f"/api/projects/{pid}/vehicles/{other['id']}", headers=pm_headers, json={"configuration": {"config_no": "K1"}})
+    renamed = client.put(f"/api/projects/{pid}/vehicles/{other['id']}", headers=pm_headers, json={"model_name": "AGVX9"})
+    assert renamed.status_code == 200, renamed.text
+    assert renamed.json()["configuration"]["config_no"] == "K1"
+    units = {u["asset_code"]: u for u in client.get(f"/api/projects/{pid}/vehicle-units", headers=pm_headers).json()}
+    assert units["TEST09001"]["vehicle_id"] == other["id"]
+    from app.db import SessionLocal
+    from app.models import ChangeLog
+    with SessionLocal() as db:
+        summaries = [row.detail for row in db.query(ChangeLog).filter(ChangeLog.project_id == pid, ChangeLog.entity_type == "vehicle")]
+    assert any("同型号已建档车辆 2 台归入此车型" in text for text in summaries)
+    assert any("同型号已建档车辆 1 台归入此车型" in text for text in summaries)
+
+
 def test_lifecycle_dates_without_year_are_refused(client, pm_headers):
     pid = _project(client, pm_headers)
     wb = Workbook(); ws = wb.active

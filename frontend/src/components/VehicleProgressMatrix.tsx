@@ -27,9 +27,13 @@ const short = (date: string | null | undefined) => date ? date.slice(5) : ''
  * The project's vehicles in one list: each row is a vehicle with its location, status and every vehicle step.
  * A step is one button — tap to record it done (or to take it back with a reason); its checks open from the dialog.
  */
-export default function VehicleProgressMatrix({ projectId, status, onChanged, info = [], renderLocation, onOpenRecord, emptyHint }: {
+export default function VehicleProgressMatrix({ projectId, status, onChanged, info = [], renderLocation, onOpenRecord, emptyHint, notice, reloadKey }: {
   projectId: string; status: string; onChanged?: () => void
   info?: VehicleRowInfo[]; renderLocation?: (unitId: string) => ReactNode; onOpenRecord?: (unitId: string) => void; emptyHint?: ReactNode
+  /** A page-level fix for the fleet (e.g. add the type imported vehicles lack); replaces the generic quantity warning unless history needs it. */
+  notice?: ReactNode
+  /** Changes when the page changed the fleet itself (added vehicles or a type, imported a table) so progress is read again. */
+  reloadKey?: number
 }) {
   const isMobile = useMediaQuery('(max-width: 767px)')
   const [search, setSearch] = useState('')
@@ -63,6 +67,8 @@ export default function VehicleProgressMatrix({ projectId, status, onChanged, in
     finally { if (generation.current === id) setLoading(false) }
   }
   useEffect(() => { setData(null); setChecking(null); setSelected([]); setVehicleType(undefined); setEditing(null); setTargetEdit(null); setSource(undefined); setReadingSource(false); void load(); return () => { generation.current++ } }, [projectId])
+  const seenReload = useRef(reloadKey)
+  useEffect(() => { if (seenReload.current === reloadKey) return; seenReload.current = reloadKey; void load() }, [reloadKey])
   const readSource = async () => {
     const id = projectId; const gen = generation.current
     setReadingSource(true)
@@ -131,7 +137,8 @@ export default function VehicleProgressMatrix({ projectId, status, onChanged, in
         <RefreshAction label="刷新车辆" onClick={() => { void load(); onChanged?.() }} loading={loading} />
       </div>
       {data.source_snapshot_available && <Alert type="info" message="便携导入来源仅供核对，不计入本项目完成资格" action={<Button loading={readingSource} onClick={() => void readSource()}>查阅原始来源</Button>} />}
-      {(data.migration_warnings ?? []).length > 0 && <Alert type="warning" showIcon message={data.migration_warnings.join('；')} description="未知数量与未知车号分别保留；历史完成凭证计入数量，但不代表已逐台核验。" />}
+      {notice}
+      {(data.migration_warnings ?? []).length > 0 && (!notice || data.legacy.length > 0) && <Alert type="warning" showIcon message={data.migration_warnings.join('；')} description={data.legacy.length > 0 ? '未知数量与未知车号分别保留；历史完成凭证计入数量，但不代表已逐台核验。' : undefined} />}
       {data.legacy.filter(c => c.unassigned_count > 0 || data.steps.find(s => s.key === c.step_key)?.expected_quantity == null).map(c => <details key={c.step_key} style={{ margin: '8px 0' }}><summary><Tag color="orange">已完成（迁移，车号未知）</Tag>{data.steps.find(s => s.key === c.step_key)?.name} · {c.unassigned_count} 台待核对</summary><p>原目标：{String(c.source_metadata.target_quantity ?? '未知')} 台；原累计：{String(c.source_metadata.completed_quantity ?? '未知')} 台。迁移凭证：{c.unassigned_count} 台未核对；实际完成日期未知。</p>{data.can_manage && ['executing', 'acceptance'].includes(status) && <Button onClick={() => { const old = data.steps.find(s => s.key === c.step_key)?.expected_quantity ?? null; setReason(''); setTargetEdit({ key: c.step_key, previous: old, quantity: old }) }}>核对应完成台数</Button>}</details>)}
       {/* Batch tools appear once vehicles are ticked; tapping a step is enough for one-by-one work. */}
       {canRecord && selected.length > 0 && <Space wrap className="vboard-batch"><span>已选 {selected.length} 台</span><Select aria-label="批量车辆环节" placeholder="选择环节" value={step} onChange={setStep} options={data.steps.map(s => ({ value: s.key, label: s.name }))} style={{ minWidth: 170 }} />

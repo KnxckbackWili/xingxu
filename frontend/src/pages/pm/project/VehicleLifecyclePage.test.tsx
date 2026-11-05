@@ -1,5 +1,5 @@
 vi.mock('../../../components/VehicleDocumentsPanel', () => ({ default: ({ unitId }: { unitId: string }) => <div>资料面板 {unitId}</div> }))
-vi.mock('../../../components/VehicleProgressMatrix', () => ({ default: (props: any) => <div>{(props.info ?? []).map((unit: any) => <div key={unit.id}><span>{unit.asset_code}</span>{props.renderLocation?.(unit.id)}<button type="button" aria-label={`${unit.asset_code} 车辆记录`} onClick={() => props.onOpenRecord?.(unit.id)}>记录</button></div>)}</div> }))
+vi.mock('../../../components/VehicleProgressMatrix', () => ({ default: (props: any) => <div>{props.notice}{(props.info ?? []).map((unit: any) => <div key={unit.id}><span>{unit.asset_code}</span>{props.renderLocation?.(unit.id)}<button type="button" aria-label={`${unit.asset_code} 车辆记录`} onClick={() => props.onOpenRecord?.(unit.id)}>记录</button></div>)}</div> }))
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 
@@ -168,4 +168,40 @@ it('prevents rapid duplicate vehicle-event creation and keeps the dialog open wh
   await waitFor(() => expect(apiPost).toHaveBeenCalledTimes(1))
   expect(apiPost).toHaveBeenCalledWith('/projects/p1/vehicle-units/unit-1/events', expect.objectContaining({ title: '避障传感器报警' }))
   expect(screen.getByLabelText('问题标题')).toBeInTheDocument()
+})
+
+
+it('vehicles imported by model without a type offer to add that type with model and count filled in', async () => {
+  useAuth.setState({ user: { id: 'u-pm', role: 'admin', username: 'admin', display_name: '管理员' } as any })
+  let units: { id: string; asset_code: string; vehicle_id: string | null; model_name: string; current_status: string }[] = [
+    { id: 'u1', asset_code: 'TEST01', vehicle_id: null, model_name: 'AGVLCDD20', current_status: 'normal' },
+    { id: 'u2', asset_code: 'TEST02', vehicle_id: null, model_name: 'AGVLCDD20', current_status: 'normal' },
+  ]
+  apiGet.mockImplementation((url: string) => Promise.resolve({ data:
+    url === '/vehicle-types' ? [{ id: 't1', name: '平衡重叉车', is_enabled: true, sort_order: 0 }] : url.endsWith('/vehicle-units') ? units : [] }))
+  apiPost.mockImplementation(async (_url: string, payload: any) => {
+    units = units.map(unit => ({ ...unit, vehicle_id: 'v1' }))
+    return { data: { id: 'v1', ...payload } }
+  })
+  render(<VehicleLifecyclePage project={{ ...PROJECT, capabilities: ['project.update', 'project.manage_plan'] } as any} />)
+  expect(await screen.findByText('AGVLCDD20 2 台还没有车型')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: /添加为车型/ }))
+  expect(await screen.findByText('从车辆表导入的 2 台车会归入这个车型。')).toBeInTheDocument()
+  expect(screen.getByLabelText('型号')).toHaveValue('AGVLCDD20')
+  expect(screen.getByRole('spinbutton', { name: '台数' })).toHaveValue('2')
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: '车型类别' }))
+  fireEvent.click(await screen.findByTitle('平衡重叉车'))
+  fireEvent.click(screen.getByRole('button', { name: '添加车型' })); fireEvent.click(screen.getByRole('button', { name: '添加车型' }))
+  await waitFor(() => expect(apiPost).toHaveBeenCalledWith('/projects/p1/vehicles',
+    { vehicle_type: '平衡重叉车', model_name: 'AGVLCDD20', quantity: 2, configuration: {} }))
+  await waitFor(() => expect(screen.queryByText('AGVLCDD20 2 台还没有车型')).toBeNull())
+  expect(apiPost).toHaveBeenCalledTimes(1)
+})
+
+it('a viewer without project update rights sees no add-type prompt for untyped vehicles', async () => {
+  apiGet.mockImplementation((url: string) => Promise.resolve({ data: url.endsWith('/vehicle-units')
+    ? [{ id: 'u1', asset_code: 'TEST01', vehicle_id: null, model_name: 'AGVLCDD20', current_status: 'normal' }] : [] }))
+  render(<VehicleLifecyclePage project={{ ...PROJECT, capabilities: [] } as any} />)
+  expect(await screen.findByText('TEST01')).toBeInTheDocument()
+  expect(screen.queryByText(/还没有车型/)).toBeNull()
 })
