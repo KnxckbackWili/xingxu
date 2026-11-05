@@ -48,7 +48,7 @@ const SEV: Record<string, { label: string; color: string }> = {
 }
 
 /**
- * 实施端问题关注：普通成员查看本人问题，项目协管查看协管项目全部待处理问题。
+ * 问题：所有账号看到所有项目的问题，不用指派，谁处理谁开始。
  */
 export default function WorkerIssuesPage() {
   const [scope,setScope] = useState('active')
@@ -135,9 +135,10 @@ export default function WorkerIssuesPage() {
     return () => { active = false }
   }, [user?.id, retry])
 
-  const canWork = (issue: MyIssue) => canHandleIssue && issue.source !== 'vehicle' && issue.assignee_id === user?.id && ['open', 'processing'].includes(issue.status) && !isProjectWriteBlocked(issue.project_status)
+  // No assignment: anyone may start or resolve an open issue; whoever starts it becomes its handler.
+  const canWork = (issue: MyIssue) => canHandleIssue && user?.role !== 'readonly' && issue.source !== 'vehicle' && ['open', 'processing'].includes(issue.status) && !isProjectWriteBlocked(issue.project_status)
   const handleIssue = async (status: 'processing' | 'resolved', resolution?: string, target: MyIssue | null = detail) => {
-    if (!permissions.current.handle || !target || conflict || target.assignee_id !== user?.id || isProjectWriteBlocked(target.project_status) || !['open', 'processing'].includes(target.status) || !handlingLock.tryAcquire()) return
+    if (!permissions.current.handle || !target || conflict || !canWork(target) || !handlingLock.tryAcquire()) return
     setHandling(true)
     try {
       await api.put(`/issues/${target.id}`, { status, ...(resolution ? { resolution } : {}), version: target.version })
@@ -203,13 +204,13 @@ export default function WorkerIssuesPage() {
   const openIssue=(issue:MyIssue)=>{setDetail(issue);setConflict(false);setSearchParams({issue_id:issue.id},{replace:true})}
   return (
     <div className="worker-work-page">
-      <WorkPageHeader title="我的问题" description="分给我处理的、我上报的，协管项目的问题也在这里。点标题看详情和处理。"
+      <WorkPageHeader title="问题" description="所有项目的问题都在这里，不用指派：谁处理谁点“开始处理”，处理完提交结果。"
         primary={<Button type="primary" aria-label="上报问题" icon={<PlusOutlined />} disabled={!canRaiseIssue || loadError || writableProjects.length===0} onClick={()=>{if(!permissions.current.raise)return;if(writableProjects.length===1)reportForm.setFieldValue('project_id',writableProjects[0].id);setReportOpen(true)}}>上报问题</Button>}
         tools={<RefreshAction onClick={()=>setRetry(value=>value+1)} />} meta={loadError?'数据暂不可用':`${issues.filter(issue=>['open','processing'].includes(issue.status)).length} 项待处理`} />
       <WorkSection filters={<><Segmented aria-label="问题查看范围" value={scope} onChange={value=>setScope(String(value))} options={[{value:'active',label:'待处理'},{value:'reported',label:'我上报的'},{value:'all',label:'全部'}]} /><Input.Search aria-label="搜索我的问题" placeholder="搜索问题或项目" allowClear value={search} onChange={event=>setSearch(event.target.value)} /></>}>
 
       {!loadError && focusIssueId && !issues.some(issue => issue.id === focusIssueId) && <Alert type="warning" showIcon style={{ marginBottom: 12 }}
-        message="问题不存在或无权访问" description="此链接的问题不在你的可见范围内。你仍可查看下方本人及协管项目的问题。"
+        message="问题不存在或无权访问" description="此链接的问题不在你的可见范围内（可能已删除）。下方是其余的问题。"
         action={<Button onClick={closeDetail}>查看我的问题</Button>} />}
       {loadError ? (
         <Alert type="warning" showIcon message="暂时无法加载问题和项目" description="这不代表没有待处理问题。请检查网络后重试；已填写的上报内容仍保留在本页。" action={<Button onClick={() => setRetry((value) => value + 1)}>重新加载</Button>} />
@@ -220,7 +221,7 @@ export default function WorkerIssuesPage() {
           <span className={`issue-row-severity${i.source === 'vehicle' ? ' is-vehicle' : ''}`} title={`严重程度：${SEV[i.severity]?.label ?? ''}`} aria-hidden />
           <div className="issue-row-main">
             <button type="button" className="issue-row-title" onClick={() => openIssue(i)}>{i.title}</button>
-            <span className="issue-row-meta"><span>{i.project_name}</span><span>{i.source === 'vehicle' ? `${i.asset_code || '车辆'}故障` : `${formatDateTime(i.created_at).split(' ')[0]} 上报`}</span><span>{i.assignee_name ? (i.assignee_id === user?.id ? '我处理' : `处理人 ${i.assignee_name}`) : '未指派'}</span></span>
+            <span className="issue-row-meta"><span>{i.project_name}</span><span>{i.source === 'vehicle' ? `${i.asset_code || '车辆'}故障` : `${formatDateTime(i.created_at).split(' ')[0]} 上报`}</span>{i.assignee_name && <span>{i.assignee_id === user?.id ? '我在处理' : `${i.assignee_name} 处理`}</span>}</span>
           </div>
           <span className="issue-row-tags">{['critical', 'high'].includes(i.severity) && <Tag color={SEV[i.severity]?.color}>{SEV[i.severity]?.label}</Tag>}<Tag color={ISSUE_STATUS_MAP[i.status]?.color}>{ISSUE_STATUS_MAP[i.status]?.label}</Tag></span>
           <span className="issue-row-action">{!detail && canWork(i) && i.status === 'open' && <Button size="small" loading={handling} onClick={() => void handleIssue('processing', undefined, i)}>开始处理</Button>}</span>
@@ -290,7 +291,7 @@ export default function WorkerIssuesPage() {
               {detail.source === 'vehicle' && <Tag color="blue">车辆 {detail.asset_code}</Tag>}
             </Space>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {detail.project_name} · 处理人：{detail.assignee_name || '未指派'} · 上报 {detail.source === 'vehicle' ? formatDate(detail.created_at) : formatDateTime(detail.created_at)}
+              {detail.project_name}{detail.assignee_name ? ` · ${detail.assignee_name} 处理` : ''} · 上报 {detail.source === 'vehicle' ? formatDate(detail.created_at) : formatDateTime(detail.created_at)}
             </Typography.Text>
             {extraSummary(detail.extra) && <Typography.Text type="secondary" style={{ fontSize: 12 }}>{extraSummary(detail.extra)}</Typography.Text>}
             {detail.sla_due_at && <Typography.Paragraph type="secondary">处理时限 {detail.sla_hours} 小时 · 截止 {formatDateTime(detail.sla_due_at)}；仅关闭或作废算闭环。</Typography.Paragraph>}
@@ -309,13 +310,13 @@ export default function WorkerIssuesPage() {
             </Typography.Paragraph>
             {detail.project_status === 'completed' && <Alert type="warning" showIcon message="项目已完成" description="重开问题后，请项目经理确认返工；需要安排或报工时，先将项目恢复到验收中。" />}
             {detail.project_status !== undefined && !isProjectStatus(detail.project_status) && <Alert type="warning" showIcon message="项目存在未知历史状态，当前只读" description={`原始状态：${detail.project_status || '空值'}。问题历史仍可查阅，请管理员核对后修复。`} />}
-            {canHandleIssue && detail.source !== 'vehicle' && !isProjectWriteBlocked(detail.project_status) && detail.assignee_id === user?.id && ['open', 'processing'].includes(detail.status) && <Space>
+            {canWork(detail) && <Space>
               {detail.status === 'open' && <Button loading={handling} onClick={() => handleIssue('processing')}>开始处理</Button>}
               <Button loading={handling} onClick={() => { resolutionForm.setFieldsValue({ resolution: detail.resolution || '' }); setResolutionOpen(true) }}>提交处理结果</Button>
             </Space>}
             {canHandleIssue && detail.source !== 'vehicle' && !isProjectWriteBlocked(detail.project_status)
               && ['resolved', 'closed', 'cancelled'].includes(detail.status)
-              && (detail.reporter_id === user?.id || detail.assignee_id === user?.id) && (
+              && user?.role !== 'readonly' && (
               <Button loading={reopening} onClick={async () => {
                 if (!permissions.current.handle || isProjectWriteBlocked(detail.project_status) || !reopenLock.tryAcquire()) return
                 setReopening(true)
@@ -329,7 +330,7 @@ export default function WorkerIssuesPage() {
           </Space>
         )}
       </Drawer>
-      <Modal className="worker-work-modal" title="提交处理结果" open={resolutionOpen} confirmLoading={handling} okButtonProps={{ disabled: !canHandleIssue || conflict || isProjectWriteBlocked(detail?.project_status) || detail?.assignee_id !== user?.id || !['open', 'processing'].includes(detail?.status || '') }} onOk={() => resolutionForm.submit()} onCancel={() => { if (!handling) setResolutionOpen(false) }} okText="提交复核" cancelButtonProps={{ disabled: handling }}>
+      <Modal className="worker-work-modal" title="提交处理结果" open={resolutionOpen} confirmLoading={handling} okButtonProps={{ disabled: !detail || !canWork(detail) || conflict }} onOk={() => resolutionForm.submit()} onCancel={() => { if (!handling) setResolutionOpen(false) }} okText="提交复核" cancelButtonProps={{ disabled: handling }}>
         {conflict && <Alert type="warning" message="问题已被他人修改，填写内容仍保留" action={<Button onClick={async () => {
           try {
             const result = await api.get('/dashboard/issues', { params: { include_closed: true } })

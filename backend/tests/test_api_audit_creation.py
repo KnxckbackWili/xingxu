@@ -65,6 +65,7 @@ def test_creation_rejects_partially_invalid_module_selection(client, pm_headers)
     assert '模板' in r.json()['detail']
 
 
+@pytest.mark.member_rules
 def test_project_read_routes_do_not_expose_other_projects(client, pm_headers, worker_headers):
     data = body(client, pm_headers)
     pid = client.post('/api/projects', json=data, headers=pm_headers).json()['id']

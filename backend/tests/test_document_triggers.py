@@ -71,6 +71,7 @@ def test_batch_and_offline_use_same_true_source_contract(client,admin_headers):
         assert db.query(ProjectDocument).filter(ProjectDocument.project_id==pid,ProjectDocument.trigger_ref.isnot(None)).count()==3
 
 
+@pytest.mark.member_rules
 def test_removal_preview_and_exact_confirmation_create_one_source_per_person(client,admin_headers):
     project=create(client,admin_headers);pid=project['id']
     original=project['members'];members=original+['user-worker-001','user-worker-002']
@@ -154,6 +155,7 @@ def test_quality_excel_preserves_date_metadata_and_can_be_submitted_as_real_6_8_
     assert client.get('/api'+submitted['latest_version']['download_url'],headers=admin_headers).content==exported.content
 
 
+@pytest.mark.member_rules
 def test_member_failure_rolls_back_confirmation_source_and_preserves_original_file(client,admin_headers,worker_headers,monkeypatch):
     project=create(client,admin_headers);pid=project['id'];original=project['members']
     added=client.put(f'/api/projects/{pid}',headers=admin_headers,json={'members':[*original,'user-worker-001'],'version':project['version']}).json()

@@ -150,7 +150,7 @@ describe('项目总览按需展开', () => {
   })
   it('首屏只保留一个下一步操作，工作入口与图表按需展开', async () => {
     render(<OverviewPage projectId="p1" projectStatus="preparing" vehicleTotal={2} />)
-    expect(within(await screen.findByRole('region', { name: '当前行动' })).getByRole('button', { name: /^人员/ })).toBeVisible()
+    expect(within(await screen.findByRole('region', { name: '当前行动' })).getByRole('button', { name: /^资料清单/ })).toBeVisible()
     // 项目页签已提供工作项、资料等入口，概况不再重复「继续工作」
     expect(screen.queryByRole('region', { name: '项目常用工作' })).toBeNull()
     expect(screen.queryByText('把项目准备好')).not.toBeInTheDocument()

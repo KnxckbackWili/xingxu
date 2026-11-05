@@ -125,7 +125,7 @@ it('each row shows who handles it and only the next step; read-only projects sho
   useMediaQueryMock.mockReturnValue(false)
   const view = render(<IssuesPage projectId="p1" canManage />)
   const row = (await screen.findByRole('button', { name: PROJECT_ISSUES[0].title })).closest('li')!
-  expect(row).toHaveTextContent(PROJECT_ISSUES[0].assignee_name ? `处理人 ${PROJECT_ISSUES[0].assignee_name}` : '未指派')
+  expect(row).not.toHaveTextContent('未指派')
   expect(within(row).getByRole('button', { name: /开始处理/ })).toBeInTheDocument()
   expect(within(row).queryByRole('button', { name: /解.*决/ })).not.toBeInTheDocument()
   view.rerender(<IssuesPage projectId="p1" canManage={false} archived />)
@@ -270,47 +270,6 @@ it('解决提交失败保留方案，重试后才关闭', async () => {
   expect(vi.mocked(api.put).mock.calls[1][1]).toMatchObject({ status: 'resolved', resolution: '重新固定连接线并复测' })
 })
 
-it('候选处理人只来自当前项目端点，禁止回退全员', async () => {
-  useMediaQueryMock.mockReturnValue(true)
-  const original = apiGet.getMockImplementation()!
-  apiGet.mockImplementation((url: string) => url.endsWith('/issue-assignees')
-    ? Promise.resolve({ data: [{ id: 'member', display_name: '项目内处理人' }] }) : original(url))
-  render(<IssuesPage projectId="p1" canManage />)
-  await screen.findByText(PROJECT_ISSUES[0].title)
-  expect(apiGet).toHaveBeenCalledWith('/projects/p1/issue-assignees')
-  expect(userListActive).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByRole('button', {name: PROJECT_ISSUES[0].title}))
-  fireEvent.click(screen.getByRole('button', { name: /指派/ }))
-  fireEvent.mouseDown(screen.getByRole('combobox', { name: '问题处理人' }))
-  expect(await screen.findByText('项目内处理人')).toBeInTheDocument()
-})
-
-it('候选人读取失败禁用指派，保留重试入口', async () => {
-  useMediaQueryMock.mockReturnValue(true)
-  const original = apiGet.getMockImplementation()!
-  apiGet.mockImplementation((url: string) => url.endsWith('/issue-assignees') ? Promise.reject(new Error('offline')) : original(url))
-  render(<IssuesPage projectId="p1" canManage />)
-  await screen.findByText(PROJECT_ISSUES[0].title)
-  fireEvent.click(screen.getByRole('button', {name: PROJECT_ISSUES[0].title}))
-  fireEvent.click(screen.getByRole('button', { name: /指派/ }))
-  expect(await screen.findByText('可处理人员加载失败，请重试')).toBeInTheDocument()
-  expect(screen.getByRole('combobox', { name: '问题处理人' })).toBeDisabled()
-  expect(userListActive).not.toHaveBeenCalled()
-})
-
-it.each(['pm', 'lead', 'technician', 'worker', 'intern'])('已指派的 %s 可在共享工作区处理本人问题，不能改派', async role => {
-  useMediaQueryMock.mockReturnValue(true)
-  useAuthMock.mockReturnValue({ user: { id: 'handler', role } })
-  const original = apiGet.getMockImplementation()!
-  apiGet.mockImplementation((url: string) => url.endsWith('/issues')
-    ? Promise.resolve({ data: [{ ...PROJECT_ISSUES[0], assignee_id: 'handler' }] }) : original(url))
-  render(<IssuesPage projectId="p1" />)
-  fireEvent.click(await screen.findByText(PROJECT_ISSUES[0].title))
-  expect(screen.getByRole('button', { name: '开始处理' })).toBeVisible()
-  expect(screen.getByRole('button', { name: /解.*决/ })).toBeVisible()
-  expect(screen.queryByRole('button', { name: /指派/ })).toBeNull()
-})
-
 it('归档项目不显示任何问题写入口，但保留详情与导出', async () => {
   useMediaQueryMock.mockReturnValue(true)
   render(<IssuesPage projectId="p1" canManage archived />)
@@ -328,23 +287,6 @@ it('unknown history hides issue writes, including reporter/assignee role fallbac
     expect(screen.queryByRole('button', { name: new RegExp(name) })).toBeNull()
   }
   expect(screen.getAllByRole('button', { name: /导出单据/ }).length).toBeGreaterThan(0)
-})
-
-it('指派请求在途时锁住选择及关闭，避免重复改派', async () => {
-  useMediaQueryMock.mockReturnValue(true)
-  const original = apiGet.getMockImplementation()!
-  apiGet.mockImplementation((url: string) => url.endsWith('/issue-assignees')
-    ? Promise.resolve({ data: [{ id: 'member', display_name: '项目内处理人' }] }) : original(url))
-  vi.mocked(api.put).mockImplementation(() => new Promise(() => {}))
-  render(<IssuesPage projectId="p1" canManage />)
-  await screen.findByText(PROJECT_ISSUES[0].title)
-  fireEvent.click(screen.getByRole('button', {name: PROJECT_ISSUES[0].title}))
-  fireEvent.click(screen.getByRole('button', { name: /指派/ }))
-  fireEvent.mouseDown(screen.getByRole('combobox', { name: '问题处理人' }))
-  fireEvent.click(await screen.findByText('项目内处理人'))
-  await waitFor(() => expect(api.put).toHaveBeenCalledTimes(1))
-  expect(screen.getByRole('combobox', { name: '问题处理人' })).toBeDisabled()
-  expect(within(screen.getByRole('combobox', {name:'问题处理人'}).closest('[role="dialog"]') as HTMLElement).queryByRole('button', { name: 'Close' })).toBeNull()
 })
 
 it('keeps resolved vehicle events out of the project close queue and exposes history through All', async () => {
@@ -373,4 +315,15 @@ it('reports accident nature independently from hardware type and preserves the t
   fireEvent.click(screen.getByText('事故',{selector:'.ant-select-item-option-content'}))
   fireEvent.click(modal.getByRole('button',{name:'提交问题'}))
   await waitFor(()=>expect(api.post).toHaveBeenCalledWith('/projects/p1/issues',expect.objectContaining({nature:'accident',issue_type:'hardware',title:'碰撞事故'})))
+})
+
+it('has no assignment: no 指派 button, and anyone on the project can start handling', async () => {
+  useMediaQueryMock.mockReturnValue(false)
+  useAuthMock.mockReturnValue({ user: { id: 'someone', role: 'worker' } })
+  render(<IssuesPage projectId="p1" />)
+  await screen.findByText(PROJECT_ISSUES[0].title)
+  expect(apiGet).not.toHaveBeenCalledWith('/projects/p1/issue-assignees')
+  fireEvent.click(screen.getByRole('button', { name: PROJECT_ISSUES[0].title }))
+  expect(screen.queryByRole('button', { name: /指派/ })).toBeNull()
+  expect(screen.getByRole('button', { name: '开始处理' })).toBeVisible()
 })

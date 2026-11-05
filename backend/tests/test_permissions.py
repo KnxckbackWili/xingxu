@@ -1,3 +1,4 @@
+import pytest
 """Current seven-role permission matrix and project relation tests."""
 from tests.lifecycle_helpers import versioned
 
@@ -25,6 +26,7 @@ def _project(client, headers, name, **extra):
     return response.json()["id"]
 
 
+@pytest.mark.member_rules
 def test_pm_and_worker_scope_is_explicit(client, admin_headers, pm_headers, worker_headers):
     other_pm = _user(client, admin_headers, "pm2", "pm")
     other = _project(client, admin_headers, "其他项目", manager_id=other_pm)

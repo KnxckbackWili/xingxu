@@ -1,3 +1,4 @@
+import pytest
 """项目参与者校验、人工阶段权限与直接移交。"""
 from tests.lifecycle_helpers import versioned
 
@@ -96,6 +97,7 @@ def _create_user(client, admin_headers, username, role='pm'):
     assert response.status_code == 200, response.text
     return response.json()['id']
 
+@pytest.mark.member_rules
 def test_transfer_removes_old_manager_without_explicit_role(client, admin_headers):
     """T007：旧负责人无其他显式角色 → 从 members 与 project_members 同时移除且无法再读取项目。"""
     oldpm = _create_user(client, admin_headers, 'oldpm')

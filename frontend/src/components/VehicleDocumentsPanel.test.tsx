@@ -22,7 +22,7 @@ it('uses the real vehicle filter, canonical instance and project-local deadline 
   expect(screen.queryByText(/另一台车的资料/)).not.toBeInTheDocument()
   expect(screen.getByText(/2026-10-21 00:00/)).toBeVisible()
   expect(screen.getByText(/未记录实际时刻/)).toBeVisible()
-  expect(screen.getByText(/资料负责人/)).toBeVisible()
+  expect(screen.queryByText(/资料负责人/)).toBeNull()
   expect(screen.getByRole('link', { name: '在资料清单查看此车' })).toHaveAttribute('href', '/pm/projects/p1/documents?vehicle=real-car-1')
 })
 it('pre-entry uploads one version to the same document and blocks rapid duplicate clicks', async () => {

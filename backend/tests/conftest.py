@@ -138,6 +138,17 @@ def _pg_restore(engine):
         raw.close()
 
 
+def pytest_configure(config):
+    config.addinivalue_line("markers", "member_rules: 用例检验“仅项目成员可见/须认领/须指派”的旧规则，运行时关闭 OPEN_PROJECT_ACCESS")
+
+
+@pytest.fixture(autouse=True)
+def _project_access_mode(request, monkeypatch):
+    """默认按发布配置运行（所有账号可见所有项目）；标了 member_rules 的用例检验关闭开关后的旧规则。"""
+    from app import config
+    monkeypatch.setattr(config, "OPEN_PROJECT_ACCESS", request.node.get_closest_marker("member_rules") is None)
+
+
 @pytest.fixture()
 def client():
     """Fresh tables + seed per test."""

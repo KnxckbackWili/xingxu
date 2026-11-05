@@ -108,6 +108,7 @@ def test_unregistered_quantity_does_not_fabricate_real_vehicles(client,pm_header
     assert matrix(client,pm_headers,p2['id'])['summary']['quantity_unknown'] is True
 
 
+@pytest.mark.member_rules
 def test_worker_membership_system_permission_and_hidden_project(client,pm_headers,worker_headers):
     from app.db import SessionLocal
     from app.models import Project,User

@@ -203,7 +203,6 @@ vi.mock('./SchedulePage', () => ({ default: () => <div>日程占位</div> }))
 vi.mock('./SiteInformationPage', () => ({ default: ({ sub }: { sub: string }) => <div>现场占位 {sub}</div> }))
 vi.mock('./DocumentsPage', () => ({ default: () => <div>资料占位</div> }))
 vi.mock('./ActivityPage', () => ({ default: ({ sub }: { sub: string }) => <div>动态占位 {sub}</div> }))
-vi.mock('./TeamPage', () => ({ default: () => <div>团队占位</div> }))
 
 describe('persistent project directory during route refresh', () => {
   beforeEach(() => {

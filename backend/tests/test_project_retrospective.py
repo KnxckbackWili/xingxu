@@ -40,6 +40,7 @@ def test_detail_returns_full_retrospective_to_owner_and_member_without_listing_i
         assert db.get(Project, pid).retrospective == original  # Read does not rewrite historical data.
 
 
+@pytest.mark.member_rules
 def test_unrelated_worker_cannot_read_retrospective(client, pm_headers, worker_headers):
     pid = _project(client, pm_headers, {'content': '只有本项目成员可见的复盘'})
     response = client.get(f'/api/projects/{pid}', headers=worker_headers)

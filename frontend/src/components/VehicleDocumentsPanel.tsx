@@ -106,7 +106,6 @@ export default function VehicleDocumentsPanel({ projectId, unitId, unitLabel, pr
       <Space wrap><Typography.Text strong>{row.code} {row.name}</Typography.Text><Tag color={row.status === 'submitted' ? 'green' : row.status === 'waived' ? 'default' : 'orange'}>{statusName[row.status]}</Tag>{row.period_key && <Tag>{row.period_key}</Tag>}<Tag>{row.required ? '必需' : '可选'}</Tag>{row.confidential && <Tag>保密</Tag>}{row.applicable === false && <Tag>当前项目不适用</Tag>}</Space>
       <p style={{ margin: '8px 0' }}>截止：{deadlineLabel(row.due_at, timezone)}{row.due_is_estimated ? '（预计）' : ''}{row.due_state === 'overdue' && <Tag color="red">已逾期</Tag>}</p>
       {basisLabel(row) && <Typography.Paragraph type="secondary">{basisLabel(row)}</Typography.Paragraph>}
-      <Typography.Paragraph type="secondary">负责人：{row.effective_owner_name || '待指派'}{row.owner_warning ? `；${row.owner_warning}` : ''}</Typography.Paragraph>
       {row.status === 'waived' && <p>不适用理由：{row.waived_reason}</p>}
       {row.latest_version && <p>最新版本：{row.latest_version.filename} · {row.latest_version.uploaded_by_name || '原上传人未记录'} · {formatDateTime(row.latest_version.uploaded_at)}</p>}
       <Space wrap>

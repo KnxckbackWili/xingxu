@@ -116,6 +116,9 @@ COOKIE_SESSION_MARKER = "agvpm_session"
 
 # 定时报告（APScheduler；默认关，测试/本地开发不启动线程）
 SCHEDULER_ENABLED = os.getenv("SCHEDULER_ENABLED", "0") == "1"
+# 所有账号都能看、都能记录所有项目（默认开）：每个启用账号自动是每个项目的成员，
+# 周计划不需认领即可登记，问题不需指派即可处理。设为 0 恢复“按项目成员与指派”的旧规则。
+OPEN_PROJECT_ACCESS = os.getenv("OPEN_PROJECT_ACCESS", "1") != "0"
 # C8-4：治理软删除的保留期（天）——超过保留期由每日清理任务物理删除（数据可恢复窗口）
 # Deprecated #85: ignored; recycled projects never expire automatically.
 SOFT_DELETE_RETENTION_DAYS = 30

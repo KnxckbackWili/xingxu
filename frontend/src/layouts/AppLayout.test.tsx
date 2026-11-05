@@ -19,11 +19,11 @@ const mainLinks = () => within(screen.getByRole('navigation', { name: '主导航
 it('gives managers and field staff the same shell, with entries following permissions', () => {
   const { unmount } = render(<MemoryRouter initialEntries={['/pm/dashboard']}><AppLayout /></MemoryRouter>)
   // 项目回收站随设置页进入，项目经理也有入口
-  expect(mainLinks()).toEqual(['工作台', '项目', '问题', '人员', '消息', '设置'])
+  expect(mainLinks()).toEqual(['工作台', '项目', '问题', '消息', '设置'])
   unmount()
   auth.role = 'admin'
   const admin = render(<MemoryRouter initialEntries={['/pm/dashboard']}><AppLayout /></MemoryRouter>)
-  expect(mainLinks()).toEqual(['工作台', '项目', '问题', '人员', '消息', '设置'])
+  expect(mainLinks()).toEqual(['工作台', '项目', '问题', '消息', '设置'])
   admin.unmount()
   auth.role = 'worker'
   render(<MemoryRouter initialEntries={['/worker/week']}><AppLayout /></MemoryRouter>)
@@ -62,9 +62,10 @@ it('finds a function by purpose without exposing admin settings to a project man
   render(<MemoryRouter initialEntries={['/pm/projects/project-a/overview']}><AppLayout /><LocationProbe /></MemoryRouter>)
   fireEvent.click(screen.getByRole('button', { name: '查找功能' })); const dialog = within(await screen.findByRole('dialog'))
   expect(dialog.queryByRole('link', { name: '账号' })).toBeNull(); expect(dialog.queryByRole('link', { name: '项目模板' })).toBeNull()
-  fireEvent.change(dialog.getByRole('textbox', { name: '查找功能' }), { target: { value: '周' } })
-  fireEvent.click(dialog.getByRole('link', { name: '人员' }))
-  expect(screen.getByTestId('route')).toHaveTextContent('/pm/people'); await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  fireEvent.change(dialog.getByRole('textbox', { name: '查找功能' }), { target: { value: '消息' } })
+  expect(dialog.queryByRole('link', { name: '人员' })).toBeNull()
+  fireEvent.click(dialog.getByRole('link', { name: '消息' }))
+  expect(screen.getByTestId('route')).toHaveTextContent('/pm/messages'); await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
 })
 
 it('opens find outside projects, respects editing, and restores Escape focus', async () => {

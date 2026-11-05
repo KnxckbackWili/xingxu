@@ -1,3 +1,4 @@
+import pytest
 """System grants affect real feature routes without changing resource ownership."""
 from tests.lifecycle_helpers import versioned
 from tests.test_permissions import _project
@@ -59,6 +60,7 @@ def test_system_project_denial_wins_over_existing_member_grant(client, admin_hea
     assert 'project.update' not in client.get(f'/api/projects/{pid}', headers=worker_headers).json()['capabilities']
 
 
+@pytest.mark.member_rules
 def test_system_project_grant_does_not_establish_membership(client, admin_headers, pm_headers, worker_headers):
     pid = _project(client, pm_headers, 'private project')
     policy(client, admin_headers, WORKER, {'project.update': True})

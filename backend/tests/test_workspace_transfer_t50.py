@@ -31,6 +31,7 @@ def transfer(client,headers,pid,target,view,**extra):
         'member_removal_confirmations':[row['user_id'] for row in view['removed']],**extra})
 
 
+@pytest.mark.member_rules
 def test_direct_transfer_moves_current_owner_acl_creates_real_departure_and_preserves_history(client,pm_headers,admin_headers):
     pid,people=setup_project(client,pm_headers);target,new_headers=recipient(client,admin_headers)
     private=requirement(client,pm_headers,pid,name='PRIVATE-OWNER-SCOPE')
@@ -242,6 +243,7 @@ def test_full_legacy_governance_row_survives_actual_encrypted_backup_and_purge(c
         assert retained.reason=='保全原理由' and retained.status=='pending' and retained.project_id==pid
 
 
+@pytest.mark.member_rules
 def test_statistics_known_matrix_counts_only_visible_real_vehicle_steps(client,pm_headers,admin_headers):
     from tests.test_vehicle_progress import setup_fleet
     from app.models import VehicleProgress,ProjectVehicleStep,Task,Phase,Module

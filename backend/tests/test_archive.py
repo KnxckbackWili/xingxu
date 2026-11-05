@@ -1,3 +1,4 @@
+import pytest
 """T22 archive material evidence uses the canonical document stream."""
 from tests.document_helpers import documents, upload_documents
 
@@ -26,6 +27,7 @@ def test_archive_material_requires_real_file(client, pm_headers):
     assert submitted['status'] == 'submitted' and submitted['versions'][0]['attachment_id']
 
 
+@pytest.mark.member_rules
 def test_nonmember_cannot_write_archive_material(client, pm_headers, worker_headers):
     pid = project(client, pm_headers)
     row = documents(client, pm_headers, pid)['documents'][0]

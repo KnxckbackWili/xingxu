@@ -264,7 +264,7 @@ export default function SystemPermissionsPage() {
   }
   const writeBlocked = detail?.user.role === 'readonly' || !detail?.user.is_active
 
-  if (!isAdmin) return <Result status="403" title="只有系统管理员可管理系统权限" subTitle="项目内授权请使用项目中的人员与协管设置。" />
+  if (!isAdmin) return <Result status="403" title="只有系统管理员可管理系统权限" subTitle="项目设置由项目负责人和管理员维护。" />
 
   return <div className="system-permissions-page">
     <WorkPageHeader title="系统权限" description="选一位成员，按角色自带权限；需要多做什么，打开对应开关即可。"

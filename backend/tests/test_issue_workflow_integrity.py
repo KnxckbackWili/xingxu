@@ -53,6 +53,7 @@ def test_issue_cancelled_status(client, pm_headers):
     r3 = client.put(f'/api/issues/{i2}', headers=pm_headers, json=versioned(i2, {'status': 'cancelled'}, 'Issue'))
     assert r3.status_code == 400
 
+@pytest.mark.member_rules
 def test_reporter_can_reopen_resolved_issue(client, pm_headers, worker_headers):
     pid = _project(client, pm_headers)
     wid = _add_worker(client, pm_headers, worker_headers, pid)

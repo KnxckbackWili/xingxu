@@ -21,6 +21,7 @@ def _login(client, username):
 
 
 
+@pytest.mark.member_rules
 def test_project_transfer_and_delete_workflow(client, admin_headers, pm_headers):
     target_id = _create_user(client, admin_headers, "targetpm")
     project = client.post("/api/projects", headers=pm_headers, json={

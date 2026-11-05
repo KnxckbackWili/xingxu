@@ -380,7 +380,11 @@ def update_issue(
     if is_closure and not may_close:
         raise HTTPException(403, "仅项目经理或报告人可关闭或作废问题")
     personal_fields = {"status", "resolution", "version"}
-    assigned_update = i.assignee_id == user.id and not is_closure
+    from app.services.open_access import enabled as open_access
+    from app.services.system_permissions import has_permission as _has
+    # 所有账号都能记录时，不用指派：项目成员都可以开始处理、提交解决结果（关闭仍由报告人或项目经理确认）。
+    member_update = open_access() and user.role != 'readonly' and user.id in (p.members or []) and _has(user, 'worker.issues', default=True)
+    assigned_update = (i.assignee_id == user.id or member_update) and not is_closure
     reporter_closure = i.reporter_id == user.id and is_closure
     if not ((assigned_update or reporter_closure) and not (fields_requested - personal_fields)):
         authorize_project(user, p, C_ISSUES)
@@ -483,8 +487,9 @@ def reopen_issue(
         raise HTTPException(status_code=404, detail="问题不存在")
     p = ensure_project_visible(db, i.project_id, user)
     lock_writable_project(db, p, user)
-    # 报告人/被指派人可重开；否则需 C_ISSUES
-    if not (i.reporter_id == user.id or i.assignee_id == user.id):
+    # 报告人/被指派人可重开（所有账号可记录时项目成员也可）；否则需 C_ISSUES
+    from app.services.open_access import enabled as open_access
+    if not (i.reporter_id == user.id or i.assignee_id == user.id or (open_access() and user.role != 'readonly' and user.id in (p.members or []))):
         authorize_project(user, p, C_ISSUES)
     if i.status not in ("resolved", "closed", "cancelled"):
         raise HTTPException(status_code=400, detail=f"仅可重开已解决/已作废的问题（当前 {i.status}）")

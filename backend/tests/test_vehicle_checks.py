@@ -1,3 +1,4 @@
+import pytest
 """T32 exact real identity, safe matrix gates and portable fresh qualification."""
 from tests.lifecycle_helpers import versioned
 from datetime import date
@@ -114,6 +115,7 @@ def test_legacy_null_safety_still_gates_exact_step(client,pm_headers):
     with SessionLocal() as db:assert db.query(CheckItem).filter_by(task_id=tid,vehicle_unit_id=None).count()==1
 
 
+@pytest.mark.member_rules
 def test_permission_state_and_acceptance_scope(client,pm_headers,worker_headers):
     from app.services.acceptance import acceptance_scope_fingerprint
     pid,ids=setup_fleet(client,pm_headers,1);work(pid,ids)

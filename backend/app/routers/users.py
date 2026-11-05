@@ -119,6 +119,8 @@ def create_user(
         None,
         _audit_fields(u),
     )
+    from app.services.open_access import join_all_projects
+    join_all_projects(db, u, admin.id)
     db.commit()
     db.refresh(u)
     return _user_dict(u)
@@ -206,6 +208,9 @@ def update_user(
     log_change(
         db, None, "user", u.id, "update", admin.id, detail, before, _audit_fields(u)
     )
+    if data.is_active is True and not before.get("is_active"):
+        from app.services.open_access import join_all_projects
+        join_all_projects(db, u, admin.id)
     db.commit()
     db.refresh(u)
     return _user_dict(u)

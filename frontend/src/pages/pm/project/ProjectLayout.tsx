@@ -147,7 +147,7 @@ export default function ProjectLayout() {
   const activeTab = specialView === 'edit' ? 'overview' : specialView === 'export' ? 'delivery' : activeParent
 
   useEffect(() => {
-    const redirected: Record<string,string> = { schedule: 'plan?view=weeks', team: 'edit?section=members', start: 'overview', site: 'vehicles', activity: 'history' }
+    const redirected: Record<string,string> = { schedule: 'plan?view=weeks', team: 'edit', start: 'overview', site: 'vehicles', activity: 'history' }
     if (redirected[rawTab]) { navigate(`/pm/projects/${projectId}/${redirected[rawTab]}`, { replace: true }); return }
     const oldDocumentTab = ['delivery', 'files', 'archive', 'preparation'].includes(rawTab)
     const oldTaskDocument = ['plan', 'tasks'].includes(rawTab) && new URLSearchParams(location.search).get('tab') === 'deliverables'
@@ -251,7 +251,7 @@ export default function ProjectLayout() {
           { key: 'schedule', label: '周计划', children: <Button type="link" onClick={() => navigateSafely(`/pm/projects/${project.id}/plan?view=weeks`)}>查看计划与发布情况</Button> },
           { key: 'source', label: '来源模板', children: project.source_template?.name || '未关联模板' },
         ]} />
-        <Typography.Paragraph type="secondary" style={{ marginTop: 16 }}>项目成员可查看完整项目；编辑、人员安排等操作按本项目授权开放。</Typography.Paragraph>
+        <Typography.Paragraph type="secondary" style={{ marginTop: 16 }}>所有账号都能查看并记录这个项目；修改设置、周计划等由负责人和管理员操作。</Typography.Paragraph>
 
         {canEditSettings && <Button onClick={() => navigateSafely(`/pm/projects/${project.id}/edit`)}>打开项目设置</Button>}
 

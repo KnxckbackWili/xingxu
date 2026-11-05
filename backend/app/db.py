@@ -214,6 +214,9 @@ def _init_db():
         seed_task_documents(db)
         # HYPE-63：预置车型字典（幂等，独立于 seed_all 守卫，旧库也补齐）
         seed_vehicle_types(db)
+        # 所有账号都能看、都能记录所有项目：补齐旧项目的成员名单（开关关闭时不做任何事）。
+        from app.services.open_access import reconcile
+        reconcile(db)
         db.commit()
     finally:
         db.close()

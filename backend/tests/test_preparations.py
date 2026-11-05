@@ -1,3 +1,4 @@
+import pytest
 """Project preparation (准备 Tab) tests."""
 from tests.lifecycle_helpers import versioned
 
@@ -137,6 +138,7 @@ def test_confirm_ready(client, pm_headers):
     assert '具体说明' in result['prep_conclusion']
 
 
+@pytest.mark.member_rules
 def test_worker_read_only(client, pm_headers, worker_headers):
     pid = _project(client, pm_headers)
     # worker 非成员不可见

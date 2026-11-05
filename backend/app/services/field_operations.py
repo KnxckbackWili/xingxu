@@ -154,9 +154,12 @@ def _assignment(db,project,user,data):
     from app.models import WeeklyPlanCell
     cell=db.get(WeeklyPlanCell,cell_id,populate_existing=True)
     if not cell or cell.project_id!=project.id or not cell.published or getattr(cell,'is_cancelled',False):raise HTTPException(404,'已发布周计划不存在')
-    assignees=cell.assignee_ids or []
-    if not assignees:raise HTTPException(409,'此工作尚未分配，请先使用认领按钮')
-    if (assisted or user.id) not in assignees:raise HTTPException(403,'实际记录与当前周计划负责人不匹配')
+    from app.services.open_access import enabled as open_access
+    # 所有账号都能记录时，周计划只说“这周做什么”，谁做完谁登记，不再要求认领或负责人本人。
+    if not open_access():
+        assignees=cell.assignee_ids or []
+        if not assignees:raise HTTPException(409,'此工作尚未分配，请先使用认领按钮')
+        if (assisted or user.id) not in assignees:raise HTTPException(403,'实际记录与当前周计划负责人不匹配')
     task_id=data['target_id'] if data['kind']=='work' else db.get(CheckItem,data['target_id']).task_id if data['kind']=='check' and db.get(CheckItem,data['target_id']) else None
     if task_id and task_id!=cell.task_id:raise HTTPException(404,'工作不属于该周计划')
     task=db.get(Task,cell.task_id)

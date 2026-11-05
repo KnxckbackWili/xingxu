@@ -1,3 +1,4 @@
+import pytest
 """Real preset accounts, durable read-only ceilings, and project-scoped reasons."""
 from tests.lifecycle_helpers import versioned
 from types import SimpleNamespace
@@ -71,6 +72,7 @@ def test_readonly_ceiling_cannot_be_removed_by_system_or_member_grants(client, a
     assert denied.status_code == 400 and '只读预设' in denied.text
 
 
+@pytest.mark.member_rules
 def test_readonly_can_change_own_password_and_remains_scoped(client, admin_headers, pm_headers):
     reader, headers = account(client, admin_headers, 'readonly', 'self-reader')
     pid = _project(client, pm_headers, 'private project')
@@ -94,6 +96,7 @@ def test_delegated_creator_cannot_choose_manager_or_admin_through_preset(client,
     assert user['role'] == 'readonly'
 
 
+@pytest.mark.member_rules
 def test_project_reasons_distinguish_layers_and_enforce_inspector_scope(client, admin_headers, pm_headers, worker_headers):
     reader, _ = account(client, admin_headers, 'readonly', 'reasons-reader')
     pid = _project(client, pm_headers, 'reasons')

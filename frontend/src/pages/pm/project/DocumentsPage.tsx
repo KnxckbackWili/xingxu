@@ -70,8 +70,6 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
   const [procurementOpen, setProcurementOpen] = useState(false)
   const [acceptanceOpen, setAcceptanceOpen] = useState(false)
   const [entryOpen, setEntryOpen] = useState(false)
-  const [ownerEditing, setOwnerEditing] = useState<ProjectDocument | null>(null)
-  const [ownerId, setOwnerId] = useState<string | undefined>()
   const [historyId, setHistoryId] = useState<string | null>(null)
   const [statusChange, setStatusChange] = useState<{ row: ProjectDocument; status: 'pending' | 'waived' } | null>(null)
   const [reason, setReason] = useState('')
@@ -121,7 +119,7 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
   }, [projectId])
   useEffect(() => {
     setData(null); setSearch(''); setStatus('all'); setStage(undefined); setVehicle(undefined); setSelected([]); setActionError('')
-    setEditing(null); setOwnerEditing(null); setHistoryId(null); setStatusChange(null); setReview(null); setUploadOpen(false); setUploadFile(null); setUploadNote(''); setSignatureDates({}); setExistingFileId(undefined)
+    setEditing(null); setHistoryId(null); setStatusChange(null); setReview(null); setUploadOpen(false); setUploadFile(null); setUploadNote(''); setSignatureDates({}); setExistingFileId(undefined)
     setConfidentialityTarget(null); setConfidentialityDirty(false)
     setProcurementOpen(false); setAcceptanceOpen(false); setEntryOpen(false); setRequirementDirty(false); setProcurementDirty(false); setAcceptanceDirty(false); setEntryDirty(false)
     mutation.current = false; setBusy(false); void load()
@@ -209,7 +207,6 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
   const vehicleOptions = [...new Map(documents.filter(row => row.vehicle_unit_id).map(row => [row.vehicle_unit_id!, { value: row.vehicle_unit_id!, label: row.vehicle_label || '车号待补录' }])).values()]
   const renderActions = (row: ProjectDocument) => {
     const more = [
-      ...(canManage ? [{ key: 'owner', label: '指派负责人', disabled: busy || loading, onClick: () => { setOwnerEditing(row); setOwnerId(row.owner_id ?? undefined) } }] : []),
       { key: 'history', label: `版本记录 ${row.versions.length}`, onClick: () => setHistoryId(row.id) },
       ...(row.blank_file_id && row.definition_id ? [{ key: 'blank', label: '下载空白模板', onClick: () => void download(`/projects/${encodeURIComponent(projectId)}/documents/requirements/${encodeURIComponent(row.definition_id!)}/blank-file`, `${row.name}空白模板`) }] : []),
       ...(row.code === '4.4' ? [{ key: 'procurement', label: '采购明细', onClick: () => setProcurementOpen(true) }] : []),
@@ -251,7 +248,7 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
           <div className="documents-card-head"><strong>{row.code} {row.name}</strong><span>{renderState(row)}</span></div>
           <p className="documents-card-meta">{[row.vehicle_label, row.period_key].filter(Boolean).join(' · ')}{(row.vehicle_label || row.period_key) && ' · '}
             <span title={basisLabel(row) || undefined}>{row.due_at ? `截止 ${shortDeadline(deadlineLabel(row.due_at, row.due_basis?.timezone || data?.timezone || 'Asia/Shanghai'))}${row.due_is_estimated ? '（预计）' : ''}` : '截止待定'}</span>
-            {' · '}{row.effective_owner_name || '待指派'}{row.owner_warning && <Typography.Text type="warning"> · {row.owner_warning}</Typography.Text>}</p>
+</p>
           {row.trigger_event && <p className="documents-note">{row.trigger_event.source_type==='issue'?`问题：${row.trigger_event.source_metadata.title || '原问题'}`:`人员离开：${row.trigger_event.source_metadata.member_name || '原成员'}`} · {row.trigger_event.source_metadata.note}</p>}
           {row.latest_version && <div className="documents-card-file">{renderFile(row)}</div>}
           <div className="field-record-actions">{renderActions(row)}</div>
@@ -261,7 +258,6 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
               { title: '资料', width: 260, render: (_, row) => <><Typography.Text strong>{row.code} {row.name}</Typography.Text><div>{row.vehicle_label}{row.period_key && ` · ${row.period_key}`}</div>{row.trigger_event && <div className="documents-note">{row.trigger_event.source_type==='issue'?`问题：${row.trigger_event.source_metadata.title || '原问题'}`:`人员离开：${row.trigger_event.source_metadata.member_name || '原成员'}`}<div>{row.trigger_event.source_metadata.note}</div></div>}{row.template_no && <Typography.Text type="secondary">{row.template_no}</Typography.Text>}</> },
             { title: '状态', width: 150, render: (_, row) => renderState(row) },
             { title: '截止', width: 190, render: (_, row) => row.due_at ? <>{row.due_is_estimated && <Tooltip title={basisLabel(row)}><Tag className="documents-due-tag">预计</Tag></Tooltip>}<span className="documents-due">{deadlineLabel(row.due_at, row.due_basis?.timezone || data?.timezone || 'Asia/Shanghai')}</span>{row.due_basis?.kind !== 'planned_date_anchor' && basisLabel(row) && <div className="documents-note">{basisLabel(row)}</div>}</> : <Tooltip title={basisLabel(row)}><Typography.Text type="secondary" className="documents-due-pending">待定</Typography.Text></Tooltip> },
-            { title: '负责人', width: 150, render: (_, row) => <>{row.effective_owner_name || '待指派'}{row.owner_warning && <div className="documents-note">{row.owner_warning}</div>}</> },
             { title: '最近文件', width: 200, render: (_, row) => renderFile(row) },
             { title: '操作', width: 310, render: (_, row) => renderActions(row) },
           ]} />}
@@ -287,7 +283,6 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
       action={<Button size="small" onClick={() => document.getElementById('documents-unclassified')?.scrollIntoView({ behavior: 'smooth' })}>去归类</Button>} />}
     {triggerFilter && <Alert type="info" message="正在查看单个事件生成的资料" action={<Button href={`/pm/projects/${projectId}/documents`}>查看全部资料</Button>} style={{marginBottom:12}} />}
     {data?.trigger_events?.filter(event=>event.source_metadata.warning).map(event=><Alert key={event.id} type="warning" showIcon message={`${event.source_metadata.title || event.source_metadata.member_name || '真实事件'}：${event.source_metadata.warning}`} style={{marginBottom:12}} />)}
-    {data?.document_actions?.owner_warnings?.length ? <Typography.Text type="warning" className="documents-owner-warning">{data.document_actions.owner_warnings.length} 项资料的负责人需核对，可在资料行指派</Typography.Text> : null}
     {/* One filter row: search, status (a dropdown on phones), and vehicle only when the project has vehicle documents. */}
     <WorkSection className="documents-list" filters={<div className="documents-filters">
       <Input.Search aria-label="搜索项目资料" placeholder="搜索编号、资料、车号或周期" allowClear value={search} onChange={event => setSearch(event.target.value)} className="documents-search" />
@@ -326,13 +321,6 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
         { title: '操作', render: (_, row) => <Space>{canManageConfidentiality && <Button size="small" disabled={busy} onClick={() => setConfidentialityTarget({ kind: 'file', row })}>附件保密范围</Button>}{canSubmit && <Button size="small" disabled={busy || loading} onClick={() => openUpload([], row)}>关联资料</Button>}{canDeleteFile && <Popconfirm title="删除此未引用文件？已被资料或其他记录引用的文件会被保留。" onConfirm={() => act(() => projectDocumentsApi.deleteFile(row.id), '未引用文件已删除')}><Button size="small" danger disabled={busy || loading}>删除</Button></Popconfirm>}</Space> },
       ]} />
     </WorkSection>}
-    <Modal title="指派资料负责人" okText="保存负责人" cancelText="取消" open={!!ownerEditing} destroyOnHidden confirmLoading={busy} okButtonProps={{ disabled: !canManage }}
-      onCancel={() => !busy && setOwnerEditing(null)} onOk={() => { if (ownerEditing) void act(() => projectDocumentsApi.assignOwner(projectId, ownerEditing.id, ownerId ?? null, ownerEditing.version), '资料负责人已更新').then(ok => ok && setOwnerEditing(null)) }}>
-      <Typography.Paragraph>{ownerEditing && rowName(ownerEditing)}</Typography.Paragraph>
-      <Select aria-label="资料负责人" allowClear showSearch optionFilterProp="label" style={{ width: '100%' }} value={ownerId} onChange={setOwnerId}
-        placeholder="默认技术负责人 / 项目经理" options={(data?.owner_options ?? []).map(person => ({ value: person.id, label: person.name }))} />
-      <Typography.Paragraph type="secondary">留空时默认由活跃技术负责人接收提醒，其次为项目经理。负责人失效会显示提示，并转交可联系的负责人或管理员。</Typography.Paragraph>
-    </Modal>
     <ProjectDocumentRequirementEditor canSetConfidentiality={canManageConfidentiality} ownerOptions={data?.owner_options} canEdit={canManage} key={projectId} projectId={projectId} editing={editing} onClose={() => setEditing(null)} onSaved={onDefinitionSaved} onDirtyChange={setRequirementDirty} />
     <DocumentConfidentialityModal key={`confidentiality-${projectId}`} projectId={projectId} target={confidentialityTarget} disabled={!canManageConfidentiality || busy}
       onClose={() => { setConfidentialityTarget(null); setConfidentialityDirty(false) }} onDirtyChange={setConfidentialityDirty}

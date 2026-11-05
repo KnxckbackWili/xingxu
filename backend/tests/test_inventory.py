@@ -1,3 +1,4 @@
+import pytest
 """Project inventory ownership, movement, scope and portability tests."""
 
 
@@ -9,6 +10,7 @@ def _project(client, headers, name="物品测试项目"):
     return response.json()["id"]
 
 
+@pytest.mark.member_rules
 def test_inventory_crud_movements_and_global_view(client, pm_headers, worker_headers):
     project_id = _project(client, pm_headers)
     company = client.post(f"/api/projects/{project_id}/inventory", headers=pm_headers, json={

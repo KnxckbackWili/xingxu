@@ -1,3 +1,4 @@
+import pytest
 """Attachment + notification tests."""
 from tests.lifecycle_helpers import versioned
 
@@ -51,6 +52,7 @@ def test_upload_oversize_rejected(client, pm_headers):
     assert r.status_code == 413
 
 
+@pytest.mark.member_rules
 def test_worker_cannot_upload(client, pm_headers, worker_headers):
     pid = _project(client, pm_headers)
     r = client.post(f"/api/projects/{pid}/documents/files", headers=worker_headers,
@@ -193,6 +195,7 @@ def test_worker_member_can_upload(client, pm_headers, worker_headers):
 
 # ===== 处理人自动记录（v1.2）=====
 
+@pytest.mark.member_rules
 def test_start_processing_sets_assignee(client, pm_headers, worker_headers):
     """开始处理时自动把操作者记为处理人（上报不再选处理人）。"""
     pid = _project(client, pm_headers)

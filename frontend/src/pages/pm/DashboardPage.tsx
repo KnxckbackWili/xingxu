@@ -93,7 +93,7 @@ export default function DashboardPage() {
   }
   for (const row of current?.issues ?? []) if (!row.assignee_id || row.assignee_id === user?.id) {
     todos.push({ key: `issue:${row.id}`, kind: '问题', title: <Link to={`/pm/projects/${encodeURIComponent(row.project_id)}/issues`}>{row.title}</Link>,
-      meta: `${row.project_name} · ${row.assignee_id ? '指派给我' : '未指派'}`, due: row.sla_due_at ? `截止 ${dayjs(row.sla_due_at).format('MM-DD HH:mm')}` : '待处理', urgent: !!row.sla_due_at && dayjs(row.sla_due_at).isBefore(dayjs()) })
+      meta: row.project_name, due: row.sla_due_at ? `截止 ${dayjs(row.sla_due_at).format('MM-DD HH:mm')}` : '待处理', urgent: !!row.sla_due_at && dayjs(row.sla_due_at).isBefore(dayjs()) })
   }
   for (const row of data?.this_week_documents ?? []) if (!seen.has(`${row.project_id}:${row.id}`)) {
     todos.push({ key: `week:${row.project_id}:${row.id}`, kind: '资料', title: docLink(row), meta: `${row.project_name} · 本周待交`,

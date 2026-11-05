@@ -65,6 +65,7 @@ def test_owner_delete_restore_redelete_original_identity_and_independent_backups
         assert db.query(ChangeLog).filter_by(project_id=p['id'], action='restore').count() == 1
 
 
+@pytest.mark.member_rules
 def test_explicit_grant_scope_and_deny_override_owner_and_admin(client, admin_headers, pm_headers, worker_headers):
     owned = _project(client, pm_headers, members=['user-worker-001'])
     unrelated = _project(client, admin_headers)

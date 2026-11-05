@@ -66,7 +66,8 @@ export default function ProjectDocumentRequirementEditor({ projectId, editing, o
           <Select options={DOCUMENT_STAGES} placeholder="选择阶段" style={{ width: 160 }} />
         </Form.Item>
       </Space>
-      <Form.Item name="owner_id" label="负责人" help="留空时由技术负责人负责，其次为项目经理。"><Select allowClear showSearch optionFilterProp="label" placeholder="技术负责人 / 项目经理" options={ownerOptions.map(person => ({ value: person.id, label: person.name }))} /></Form.Item>
+      {/* 资料不再指定负责人：提醒发给项目负责人；已有的指定保留不变。 */}
+      <Form.Item name="owner_id" hidden><Select options={ownerOptions.map(person => ({ value: person.id, label: person.name }))} /></Form.Item>
       <Space align="start" wrap size={24}>
         <Form.Item name="required" label="必须提交" valuePropName="checked"><Switch /></Form.Item>
         <Form.Item name="scope" label="每台车一份" rules={[{ required: true }]} getValueProps={value => ({ checked: value === 'vehicle' })} getValueFromEvent={checked => checked ? 'vehicle' : 'project'}>

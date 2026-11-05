@@ -49,6 +49,7 @@ def scope_issues(
     """Open issues across the user's visible projects (per role scope)."""
     from app.services.scope import visible_projects, active_co_manager
     from app.models import VehicleLifecycleEvent, VehicleUnit
+    from app.services.open_access import enabled as open_access_enabled
 
     projects = visible_projects(db, user)
     pids = [p.id for p in projects]
@@ -96,7 +97,7 @@ def scope_issues(
             "extra": i.extra or {},
         }
         for i, pname in rows
-        if user.role not in ("worker", "intern")
+        if open_access_enabled() or user.role not in ("worker", "intern")
         or i.reporter_id == user.id
         or i.assignee_id == user.id
         or active_co_manager(project_by_id[i.project_id], user.id)

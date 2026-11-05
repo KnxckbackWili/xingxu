@@ -35,6 +35,8 @@ def week_view(db,user,*,week_start=None,project_id=None):
     if project_id:projects=[ensure_project_visible(db,project_id,user)]
     by_id={p.id:p for p in projects};users={u.id:u for u in db.query(User).filter_by(is_active=True)}
     planned=[];unassigned=[];assistable=[];warnings=[];matrices={};windows={}
+    # 所有账号都能记录时，本周已发布的工作都列在“要做的工作”里，不分认领、协助。
+    from app.services.open_access import enabled as open_access_enabled
     can_read_plan=has_permission(user,'personal.schedule.read',default=True)
     if not can_read_plan:warnings.append({'project_id':'','message':'本人周计划查看权限已关闭'})
     for project in projects:
@@ -53,7 +55,7 @@ def week_view(db,user,*,week_start=None,project_id=None):
             from app.services.project_lifecycle import EXECUTION_PROJECT_STATUSES
             row={**cell_dict(db,cell,project,user,cache=cache),'work_item':work,'date_window':windows[project.id],
                  'can_record':has_permission(user,'worker.report',default=True) and project.status in EXECUTION_PROJECT_STATUSES and (user.id in set(project.members or [])|{project.manager,project.technical_manager} or C_PLAN in project_capabilities(user,project))}
-            if user.id in (cell.assignee_ids or []):planned.append(row)
+            if open_access_enabled() or user.id in (cell.assignee_ids or []):planned.append(row)
             elif not cell.assignee_ids and can_claim(project,user):unassigned.append(row)
             else:assistable.append(row)
         from app.services.vehicle_progress import matrix
@@ -66,7 +68,8 @@ def week_view(db,user,*,week_start=None,project_id=None):
     documents=[item for facts in facts.values() for item in facts['document_attention']['this_week']]
     for item in documents:
         rule=db.get(ProjectDocument,item['document_id']);item['timing_event']=rule.timing_event if rule else None
-    issues=db.query(Issue).filter(Issue.project_id.in_(by_id),or_(Issue.reporter_id==user.id,Issue.assignee_id==user.id),
+    issue_scope=Issue.project_id.in_(by_id) if open_access_enabled() else or_(Issue.reporter_id==user.id,Issue.assignee_id==user.id)
+    issues=db.query(Issue).filter(Issue.project_id.in_(by_id),issue_scope,
         Issue.status.notin_(('closed','cancelled'))).order_by(Issue.created_at.desc()).limit(100).all()
     return {'state':'unavailable' if any('尚未就绪' in w['message'] for w in warnings) else 'ready','plans':planned,
         'unassigned':unassigned,'assistable':assistable,'vehicle_matrices':matrices,'this_week_documents':documents,

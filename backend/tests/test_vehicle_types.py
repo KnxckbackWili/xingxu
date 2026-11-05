@@ -1,3 +1,4 @@
+import pytest
 """车型字典（HYPE-63）测试：预置种子 / 权限 / CRUD / 排序 / 引用 / 旧数据兼容 / 车辆写入校验 / 导入。"""
 
 
@@ -100,6 +101,7 @@ def test_admin_rename_referenced_forbidden(client, admin_headers, pm_headers):
 
 # ===== 车辆写入的字典校验 =====
 
+@pytest.mark.member_rules
 def test_vehicle_write_validates_dictionary(client, admin_headers, pm_headers, worker_headers):
     pid = _create_project(client, pm_headers)
 

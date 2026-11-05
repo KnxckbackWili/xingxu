@@ -43,7 +43,6 @@ export function appNavItems(user?: NavigationUser): AppNavItem[] {
   if (workbench) items.push({ ...item(workbench), label: '工作台', description: NAV_DESCRIPTION['/pm/dashboard'], match: ['/pm/dashboard', '/worker/week'] })
   if (canAccessNav('/pm/projects', user)) items.push({ ...item('/pm/projects'), match: ['/pm/projects', '/pm/inventory', '/worker/projects'] })
   if (canAccessNav('/worker/issues', user)) items.push({ ...item('/worker/issues'), match: ['/worker/issues'] })
-  if (canAccessNav('/pm/people', user)) items.push({ ...item('/pm/people'), match: ['/pm/people'] })
   const messages = canAccessNav('/pm/messages', user) ? '/pm/messages' : canAccessNav('/worker/messages', user) ? '/worker/messages' : ''
   if (messages) items.push({ ...item(messages), match: ['/pm/messages', '/worker/messages'] })
   if (MENU_ITEMS(user).length) items.push({ key: '/pm/settings', icon: ICONS['/pm/settings'], label: '设置', description: '账号、模板、备份与系统配置', aliases: [],

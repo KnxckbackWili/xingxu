@@ -1,3 +1,4 @@
+import pytest
 """Project & vehicle tests."""
 from tests.lifecycle_helpers import versioned
 
@@ -114,6 +115,7 @@ def test_vehicle_flow(client, pm_headers):
     assert len(r.json()) == 1
 
 
+@pytest.mark.member_rules
 def test_worker_visibility(client, worker_headers, pm_headers):
     """Worker not in project members cannot view it."""
     pid = client.post("/api/projects", headers=pm_headers, json={

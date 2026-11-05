@@ -127,6 +127,7 @@ def test_replaced_daily_projections_are_authenticated_retired(client,pm_headers,
     client.cookies.clear();assert client.get(path).status_code==401
 
 
+@pytest.mark.member_rules
 def test_personnel_week_matrix_uses_visible_published_plans_and_hides_peer_reasons(client,pm_headers,worker_headers,admin_headers,monkeypatch):
     from app.services import field_week
     from app.models import UserUnavailability
@@ -337,6 +338,7 @@ def test_work_annotation_revision_never_refreshes_an_old_failed_check_override(c
         assert db.get(CheckItem,cid).version==2
 
 
+@pytest.mark.member_rules
 def test_intern_with_explicit_record_permission_uses_same_member_and_check_guards(client,pm_headers):
     from tests.test_work_items_t34 import phase,create
     pid,_,people=prepared(client,pm_headers)
@@ -389,6 +391,7 @@ def weekly_work(client,headers,*,vehicle=False,assignees=None,scope=None,publish
     return pid,units,people,task,row
 
 
+@pytest.mark.member_rules
 def test_real_weekly_claim_then_actual_fact_and_report_share_canonical_completion(client,pm_headers,worker_headers):
     pid,units,people,task,cell=weekly_work(client,pm_headers)
     response=client.get('/api/worker/week',headers=worker_headers);assert response.status_code==200,response.text
@@ -411,6 +414,7 @@ def test_real_weekly_claim_then_actual_fact_and_report_share_canonical_completio
         assert len(rows)==1 and rows[0].actor_id==people['worker1'] and rows[0].assisted_user_id is None
 
 
+@pytest.mark.member_rules
 @pytest.mark.parametrize('change',['cancel','reassign','draft'])
 def test_stale_field_cell_cannot_complete_cancelled_reassigned_or_unpublished_plan(client,pm_headers,worker_headers,change):
     pid,units,people,task,cell=weekly_work(client,pm_headers,published=change!='draft')

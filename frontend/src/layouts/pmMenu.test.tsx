@@ -18,12 +18,12 @@ describe('主导航与设置目录', () => {
   })
   it('gives every role one main navigation; field staff land on their week as the workbench', () => {
     expect(primaryItems('pm').map(item => [item.key, item.label])).toEqual([
-      ['/pm/dashboard', '工作台'], ['/pm/projects', '项目'], ['/worker/issues', '问题'], ['/pm/people', '人员'], ['/pm/messages', '消息'],
+      ['/pm/dashboard', '工作台'], ['/pm/projects', '项目'], ['/worker/issues', '问题'], ['/pm/messages', '消息'],
     ])
     for (const role of ['worker', 'intern']) expect(primaryItems(role).map(item => [item.key, item.label])).toEqual([
       ['/worker/week', '工作台'], ['/pm/projects', '项目'], ['/worker/issues', '问题'], ['/pm/messages', '消息'],
     ])
-    expect(appNavItems('admin').map(item => item.label)).toEqual(['工作台', '项目', '问题', '人员', '消息', '设置'])
+    expect(appNavItems('admin').map(item => item.label)).toEqual(['工作台', '项目', '问题', '消息', '设置'])
     expect(appNavItems('readonly').map(item => item.label)).not.toContain('问题')
   })
   it('groups low-frequency tools into four settings groups without duplicate daily links', () => {

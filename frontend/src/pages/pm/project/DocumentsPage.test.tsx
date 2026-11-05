@@ -31,18 +31,17 @@ function show(capabilities = ['project.manage_plan', 'project.update'], initialP
   return router
 }
 beforeEach(() => { vi.resetAllMocks(); h.auth.user = { id: 'me', role: 'admin', permission_version: 1 }; h.state.status = 'executing'; h.list.mockResolvedValue(response()); h.files.mockResolvedValue([]); h.upload.mockResolvedValue({}); h.status.mockResolvedValue({}); h.review.mockResolvedValue({}); h.owner.mockResolvedValue({}); h.download.mockResolvedValue(undefined); h.package.mockResolvedValue(undefined); h.members.mockResolvedValue([{ id: 'person-1', display_name: '指定工程师' }]); h.policy.mockResolvedValue({}) })
-it('shows date precision and exposes real owner assignment with the current version', async () => {
+it('shows date precision and no longer asks anyone to own a document', async () => {
   h.list.mockResolvedValue({ ...response([row('d1', { name: '到场点检', timing_type: 'after_event', due_at: '2026-11-02T04:00:00Z',
     due_basis: { kind: 'actual_date_anchor', rule: 'after_event', timezone: 'America/New_York', precision: 'date', actual_date: '2026-11-01' },
     effective_owner_name: '原负责人', owner_warning: '原负责人已停用' })]), owner_options: [{ id: 'u1', name: '张工' }] })
   show()
   expect(await screen.findByText(/按实际到场日 2026-11-01/)).toHaveTextContent('未记录实际时刻')
-  fireEvent.click(await rowMenu('指派负责人'))
-  const modal = within(screen.getByRole('dialog'))
-  fireEvent.mouseDown(modal.getByRole('combobox', { name: '资料负责人' }))
-  fireEvent.click(screen.getByText('张工', { selector: '.ant-select-item-option-content' }))
-  fireEvent.click(modal.getByRole('button', { name: '保存负责人' }))
-  await waitFor(() => expect(h.owner).toHaveBeenCalledExactlyOnceWith('p1', 'd1', 'u1', 7))
+  expect(screen.queryByText('原负责人')).toBeNull()
+  expect(screen.queryByRole('columnheader', { name: '负责人' })).toBeNull()
+  fireEvent.click((await screen.findAllByRole('button', { name: /的更多操作$/ }))[0])
+  expect(screen.queryByRole('menuitem', { name: '指派负责人' })).toBeNull()
+  expect(h.owner).not.toHaveBeenCalled()
 })
 it('filters server-defined current-week work separately from on-demand inspections', async () => {
   const weekly = row('weekly', { code: '6.2', name: '本周生命周期', timing_type: 'weekly', period_key: '2026-W44', due_at: '2026-11-01T15:59:59Z' })

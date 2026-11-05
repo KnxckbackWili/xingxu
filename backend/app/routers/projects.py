@@ -380,6 +380,8 @@ def list_projects(
 
 def _sync_project_members(db: Session, project: Project):
     """把项目 JSON members/manager/technical/co_managers 同步到 project_members 表。"""
+    from app.services.open_access import include_everyone
+    include_everyone(db, project)
     project.member_permissions = [
         grant
         for grant in project.member_permissions or []

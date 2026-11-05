@@ -21,7 +21,6 @@ const InventoryOverviewPage = lazy(() => import('./pages/pm/InventoryOverviewPag
 const TemplateEditorPage = lazy(() => import('./pages/pm/TemplateEditorPage'))
 const TemplateLibraryPage = lazy(() => import('./pages/pm/TemplateLibraryPage'))
 const DashboardPage = lazy(() => import('./pages/pm/DashboardPage'))
-const PeoplePlanPage = lazy(() => import('./pages/pm/PeoplePlanPage'))
 const UsersPage = lazy(() => import('./pages/pm/UsersPage'))
 const SystemPermissionsPage = lazy(() => import('./pages/pm/SystemPermissionsPage'))
 const SystemBackupPanel = lazy(() => import('./pages/pm/SystemBackupPanel'))
@@ -172,9 +171,10 @@ export default function App() {
         <Route path="inventory" element={<ProtectedRoute navKey="/pm/inventory">{load(<InventoryOverviewPage />)}</ProtectedRoute>} />
         <Route path="ai" element={<Navigate to="/pm/projects" replace />} />
         <Route path="dashboard" element={<ProtectedRoute navKey="/pm/dashboard">{load(<DashboardPage />)}</ProtectedRoute>} />
-        <Route path="my-schedule" element={<Navigate to="/pm/people?view=mine" replace />} />
-        <Route path="team-schedule" element={<Navigate to="/pm/people?view=team" replace />} />
-        <Route path="people" element={<ProtectedRoute navKey="/pm/people">{load(<PeoplePlanPage />)}</ProtectedRoute>} />
+        <Route path="my-schedule" element={<Navigate to="/worker/week" replace />} />
+        <Route path="team-schedule" element={<Navigate to="/pm/dashboard" replace />} />
+        {/* 人员排班已下线：只记录实际做了什么，不再安排人。旧链接回到工作台。 */}
+        <Route path="people" element={<Navigate to="/pm/dashboard" replace />} />
         <Route path="projects/:projectId" element={<ProtectedRoute navKey="/pm/projects">{load(<ProjectLayout />)}</ProtectedRoute>} />
         <Route path="projects/:projectId/:tab" element={<ProtectedRoute navKey="/pm/projects">{load(<ProjectLayout />)}</ProtectedRoute>} />
         <Route path="templates" element={<ProtectedRoute navKey="/pm/templates">{load(<TemplateLibraryPage />)}</ProtectedRoute>} />

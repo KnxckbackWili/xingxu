@@ -39,10 +39,11 @@ it('离线勾选保留原UUID和payload，不发送完成请求', async () => {
   expect(mocks.post).not.toHaveBeenCalled()
 })
 
-it('读页面不静默认领，明确点击才写入', async () => {
-  mocks.get.mockResolvedValue({ data: { ...base, plans: [], unassigned: [{ ...plan, assignee_ids: [], assignees: [] }] } }); draw()
-  const button = await screen.findByRole('button', { name: /认\s*领/ }); expect(mocks.post).not.toHaveBeenCalled(); fireEvent.click(button)
-  await waitFor(() => expect(mocks.post).toHaveBeenCalledWith('/projects/project-1/weekly-plans/cell-1/claim', { version: 4 }, { headers: { 'X-AGV-Expected-Account': 'worker-1' } }))
+it('no claiming: the page never offers to claim work and never writes on read', async () => {
+  mocks.get.mockResolvedValue({ data: { ...base, plans: [{ ...plan, assignee_ids: [], assignees: [] }], unassigned: [] } }); draw()
+  expect(await screen.findByText('现场网络核对')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /认\s*领/ })).toBeNull()
+  expect(mocks.post).not.toHaveBeenCalled()
 })
 
 it('未知计划保持未知状态', async () => {
@@ -87,12 +88,12 @@ it('shows repeated warnings and the shared not-on-site notice once, naming the p
   expect(screen.getAllByRole('link', { name: '项目甲' })[0]).toHaveAttribute('href', '/pm/projects/project-1/overview')
 })
 
-it('本周资料先列本人负责的，其他人负责的折叠并标明车号', async () => {
+it('本周资料全部列出，不分负责人，并标明车号', async () => {
   mocks.get.mockResolvedValue({ data: { ...base, this_week_documents: [
     { document_id: 'mine', project_id: 'project-1', project_name: '项目甲', code: '6.2', name: '本人周表', due_at: null, effective_owner_id: 'worker-1', effective_owner_name: '本人', vehicle_label: '' },
     { document_id: 'other', project_id: 'project-1', project_name: '项目甲', code: '6.11.2a', name: '车辆参数包', due_at: null, effective_owner_id: 'pm-1', effective_owner_name: '项目经理', vehicle_label: 'AGV-002' },
   ] } }); draw()
   expect(await screen.findByText(/本人周表/)).toBeVisible()
-  expect(screen.getByText('项目里其他人负责 1 项')).toBeVisible()
-  expect(screen.getByText(/车辆参数包 · AGV-002/)).not.toBeVisible()
+  expect(screen.queryByText(/其他人负责/)).toBeNull()
+  expect(screen.getByText(/车辆参数包 · AGV-002/)).toBeVisible()
 })

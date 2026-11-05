@@ -1,15 +1,13 @@
 import ExternalSharePanel from './ExternalSharePanel'
-import TeamPage from './TeamPage'
 import VehicleLifecyclePage from './VehicleLifecyclePage'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import { DISPATCH_PLATFORMS, PLAN_EVENTS, PROJECT_EVENT_LABELS, planFormValues, planPayload, plannedDate } from '../../../constants/projectEvents'
 import { useProjectCapability, useProjectWriteBlocked } from '../../../hooks/useProjectCapability'
 import ProjectOwnerPanel from './ProjectOwnerPanel'
 import WeeklyPlanSettings from './WeeklyPlanSettings'
-import MemberPermissions from './MemberPermissions'
 import Tabs from '../../../components/VisibleTabs'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Card, Form, Input, DatePicker, Button, Table, Select, message, Tag, Row, Col, Typography, Popconfirm, Modal } from 'antd'
+import { Card, Form, Input, DatePicker, Button, Select, message, Row, Col, Modal } from 'antd'
 import { SaveOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { projectApi, userApi, type Project } from '../../../api'
@@ -52,7 +50,7 @@ const fieldsFromSnapshot = (snapshot: string) => {
  */
 export default function EditPage({ project, onReload }: { project: Project; onReload: () => void }) {
   const { user } = useAuth()
-  const location = useLocation(); const navigate = useNavigate()
+  const location = useLocation()
   const isOwner = user?.role === 'admin' || (user?.role === 'pm' && project.manager === user.id)
   const writeBlocked = useProjectWriteBlocked(project.status)
   const hasEditPermission = useProjectCapability('project.update', isOwner || !!project.is_co_manager)
@@ -69,7 +67,8 @@ export default function EditPage({ project, onReload }: { project: Project; onRe
   const [settingsTab, setSettingsTab] = useState(() => {
     const section = new URLSearchParams(location.search).get('section') || 'info'
     // 成员与负责人在同一个“人员”页签；旧链接照常落到这里。
-    return ({ 'member-permissions': 'people', 'co-managers': 'people', members: 'people', owner: 'people' } as Record<string, string>)[section] ?? section
+    // 人员页签已下线（所有账号都能看、都能记录）；旧链接落到基本信息，负责人在那里。
+    return ({ 'member-permissions': 'info', 'co-managers': 'info', members: 'info', owner: 'info', people: 'info' } as Record<string, string>)[section] ?? section
   })
   const [coDraftEpoch, setCoDraftEpoch] = useState(0)
   const tabDialog = useRef<ReturnType<typeof Modal.confirm> | null>(null)
@@ -87,9 +86,7 @@ export default function EditPage({ project, onReload }: { project: Project; onRe
     if (area === 'info') setInfoDirty(value)
     setDirty(Object.values(dirtyAreas.current).some(Boolean))
   }, [setDirty])
-  const coManagersDirty = useCallback((value: boolean) => updateDirty('coManagers', value), [updateDirty])
   const externalDirty = useCallback((value: boolean) => updateDirty('external', value), [updateDirty])
-  const membersDirty = useCallback((value:boolean)=>updateDirty('members',value),[updateDirty])
   const vehiclesDirty = useCallback((value:boolean)=>updateDirty('vehicles',value),[updateDirty])
   const ownerDirty = useCallback((value:boolean)=>updateDirty('owner',value),[updateDirty])
   const scheduleDirty = useCallback((value:boolean)=>updateDirty('schedule',value),[updateDirty])
@@ -201,6 +198,7 @@ export default function EditPage({ project, onReload }: { project: Project; onRe
           disabled: saving,
           label: '基本信息',
           children: (
+            <>
             <Card className="project-info-form" size="small" style={{ maxWidth: 760 }}>
               <Form form={infoForm} layout="vertical" disabled={!canEdit || saving} onFinish={saveInfo} onValuesChange={(_, values) => {
                 if (canEdit && !saving) {
@@ -216,7 +214,7 @@ export default function EditPage({ project, onReload }: { project: Project; onRe
                 <Form.Item name="dispatch_platform" label="调度平台"><Select aria-label="调度平台" allowClear options={DISPATCH_PLATFORMS} placeholder="选择 NDC / GRACE / 集成" /></Form.Item>
                 <Row gutter={12}>{PLAN_EVENTS.map(key => <Col xs={24} md={8} key={key}><Form.Item name={["event_plans", key]} label={`${PROJECT_EVENT_LABELS[key]}计划日期`}><DatePicker style={{ width: "100%" }} /></Form.Item></Col>)}</Row>
                 <Form.Item name="range" label="实施周期" rules={[{ required: true, message: '请选择实施开始和结束日期' }]}><DatePicker.RangePicker style={{ width: '100%' }} /></Form.Item>
-                <Form.Item name="technical_manager_id" label="技术负责人" extra="每个项目指定一名项目经理或实施工程师作为技术负责人；项目协管不能变更正式负责人。">
+                <Form.Item name="technical_manager_id" label="技术负责人" extra="可选：技术负责人和项目负责人一样能维护工作项和周计划。">
                   <Select aria-label="技术负责人" allowClear showSearch optionFilterProp="label" disabled={!isOwner || !canEdit || saving} placeholder="选择技术负责人"
                     options={users.filter((u) => ['lead', 'technician', 'pm', 'worker'].includes(u.role)).map((u) => ({ label: `${u.display_name}（${ROLE_NAME[u.role] ?? u.role}）`, value: u.id }))} />
                 </Form.Item>
@@ -233,18 +231,13 @@ export default function EditPage({ project, onReload }: { project: Project; onRe
                 </div>}
               </Form>
             </Card>
+            <div className="project-settings-stack" style={{ maxWidth: 760, marginTop: 16 }}>
+              <ProjectOwnerPanel key={`${project.id}:${coDraftEpoch}`} project={project} onReload={onReload} onDirtyChange={ownerDirty} />
+            </div>
+            </>
           ),
         },
         { key:'vehicles',label:'车型',disabled:saving,children:<VehicleLifecyclePage key={`${project.id}:${coDraftEpoch}`} project={project} onReload={onReload} configurationOnly onDirtyChange={vehiclesDirty} /> },
-        // One “人员” tab: who leads, who helps lead, who works here and what extra they may do.
-        { key:'people',label:'人员',disabled:saving,children:<div className="project-settings-stack">
-          <ProjectOwnerPanel key={`${project.id}:${coDraftEpoch}`} project={project} onReload={onReload} onDirtyChange={ownerDirty} />
-          <TeamPage key={`${project.id}:${coDraftEpoch}`} project={project} onReload={onReload} canEdit={canEdit && project.capabilities?.includes('project.manage_members') !== false} inlineSetup onDirtyChange={membersDirty} onSchedule={()=>navigate(`/pm/projects/${project.id}/plan?view=weeks`)} />
-          <MemberPermissions key={project.id} project={project} members={(project.members ?? []).map(id => users.find(person => person.id === id) ?? { id, display_name: id })} onReload={onReload} />
-          <details className="project-settings-more"><summary>项目协管（可代负责人管理整个项目）</summary>
-            <ProjectCoManagers key={`co:${project.id}:${coDraftEpoch}`} project={project} users={users} canEdit={isOwner && canEdit} onReload={onReload} onDirtyChange={coManagersDirty} />
-          </details>
-        </div> },
         { key:'schedule',label:'工作日',disabled:saving,children:<WeeklyPlanSettings key={`${project.id}:${coDraftEpoch}`} project={project} onReload={onReload} onDirtyChange={scheduleDirty}/> },
         {
           key: 'external',
@@ -257,49 +250,4 @@ export default function EditPage({ project, onReload }: { project: Project; onRe
 
           </>
   )
-}
-
-function ProjectCoManagers({ project, users, canEdit, onReload, onDirtyChange }: { project: Project; users: any[]; canEdit: boolean; onReload: () => void; onDirtyChange: (value: boolean) => void }) {
-  const [form] = Form.useForm()
-  const grants = project.co_managers ?? []
-  useEffect(() => { form.resetFields(); onDirtyChange(false) }, [project.id, form, onDirtyChange])
-  const save = async (values: any) => {
-    try {
-      const next = [
-        ...grants.filter((grant) => grant.user_id !== values.user_id),
-        { user_id: values.user_id, expires_at: values.expires_at?.format('YYYY-MM-DD') },
-      ]
-      await projectApi.update(project.id, { co_managers: next.map(({ user_id, expires_at }) => ({ user_id, expires_at })), version: project.version })
-      message.success('项目协管授权已保存')
-      form.resetFields()
-      onDirtyChange(false)
-      onReload()
-    } catch (error) { message.error(errMsg(error)) }
-  }
-  const remove = async (userId: string) => {
-    try {
-      await projectApi.update(project.id, { co_managers: grants.filter((grant) => grant.user_id !== userId).map(({ user_id, expires_at }) => ({ user_id, expires_at })), version: project.version })
-      message.success('协管授权已撤销')
-      onReload()
-    } catch (error) { message.error(errMsg(error)) }
-  }
-  return <Card size="small" title="项目级协管授权" style={{ maxWidth: 760 }}>
-    <Typography.Paragraph type="secondary">
-      适合只有一名实施工程师的小项目。协管可共同维护工作项、周计划、成员、问题和资料，但负责人更换、项目删除和继续授权仍单独校验。
-    </Typography.Paragraph>
-    {canEdit && <Form form={form} layout="inline" onFinish={save} onValuesChange={(_, values) => onDirtyChange(!!values.user_id || !!values.expires_at)} style={{ marginBottom: 16 }}>
-      <Form.Item name="user_id" rules={[{ required: true, message: '请选择协管人员' }]}>
-        <Select aria-label="项目协管人员" showSearch optionFilterProp="label" placeholder="选择实施/技术人员" style={{ width: 240 }} options={users.filter((item) => ['worker', 'technician', 'pm'].includes(item.role) && item.id !== project.manager).map((item) => ({ value: item.id, label: `${item.display_name}（${ROLE_NAME[item.role] ?? item.role}）` }))} />
-      </Form.Item>
-      <Form.Item name="expires_at" rules={[{ required: true, message: '请选择授权截止日期' }]}><DatePicker placeholder="授权截止日期" /></Form.Item>
-      <Button type="primary" htmlType="submit">授权协管</Button>
-    </Form>}
-    <Table size="small" rowKey="user_id" pagination={false} dataSource={grants} locale={{ emptyText: '暂无项目协管' }} columns={[
-      { title: '协管人员', dataIndex: 'display_name', render: (value: string) => value || '未知账号' },
-      { title: '岗位', dataIndex: 'role', width: 120, render: (value: string) => ROLE_NAME[value] ?? value },
-      { title: '有效期至', dataIndex: 'expires_at', width: 140, render: (value: string) => value || '长期' },
-      { title: '状态', dataIndex: 'is_active', width: 100, render: (value: boolean) => <Tag color={value ? 'green' : 'default'}>{value ? '生效中' : '已过期'}</Tag> },
-      ...(canEdit ? [{ title: '操作', width: 90, render: (_: any, item: any) => <Popconfirm title="撤销该协管授权？" onConfirm={() => remove(item.user_id)}><Button size="small" danger type="link">撤销</Button></Popconfirm> }] : []),
-    ]} />
-  </Card>
 }

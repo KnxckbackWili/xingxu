@@ -14,7 +14,7 @@ beforeEach(()=>{vi.clearAllMocks();h.user={id:'pm',role:'pm',permission_override
 it('creates one explicit weekly draft with several separate planning fields and no hours',async()=>{
  let finish!:(v:any)=>void;h.post.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve}));show();const save=await screen.findByRole('button',{name:'保存为周计划草稿'});await waitFor(()=>expect(save).toBeEnabled())
  fireEvent.change(screen.getByLabelText('维修安排说明'),{target:{value:'带驱动轮和工具'}});fireEvent.click(save);fireEvent.click(save)
- await waitFor(()=>expect(h.post).toHaveBeenCalledOnce());expect(h.post).toHaveBeenCalledWith('/projects/p1/vehicle-units/unit1/events/fault1/weekly-plans',{week_start:'2026-10-26',assignee_ids:['u1'],mode:'finish',notes:'带驱动轮和工具'});expect(h.verify).toHaveBeenCalledWith('pm')
+ await waitFor(()=>expect(h.post).toHaveBeenCalledOnce());expect(h.post).toHaveBeenCalledWith('/projects/p1/vehicle-units/unit1/events/fault1/weekly-plans',{week_start:'2026-10-26',assignee_ids:[],mode:'finish',notes:'带驱动轮和工具'});expect(h.verify).toHaveBeenCalledWith('pm')
  await act(async()=>finish({data:{created:true}}));expect(h.saved).toHaveBeenCalledOnce();expect(h.close).toHaveBeenCalledOnce()
 })
 it('keeps a duplicate result explicit without pretending to overwrite or publish the old plan',async()=>{

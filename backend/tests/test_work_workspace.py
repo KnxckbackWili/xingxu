@@ -1,3 +1,4 @@
+import pytest
 """Shared work detail is one permission-scoped view of existing records."""
 from tests.test_work_assignment import setup_work, repair
 
@@ -31,6 +32,7 @@ def test_detail_and_repair_update_original_records(client, pm_headers, worker_he
     assert summary['counts']['faults'] == 0
 
 
+@pytest.mark.member_rules
 def test_detail_and_handover_cannot_leak_another_project(client, pm_headers, worker_headers):
     p, _, _, ids = assigned_repair(client, pm_headers)
     other = client.post('/api/projects',headers=pm_headers,json={'name':'不可见项目','start_date':'2026-09-01','end_date':'2026-12-31'}).json()['id']

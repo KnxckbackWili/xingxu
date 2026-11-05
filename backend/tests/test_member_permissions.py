@@ -18,6 +18,7 @@ def member_project(client, pm_headers):
     return pid
 
 
+@pytest.mark.member_rules
 def test_scoped_grant_enforced_and_revoked(client, pm_headers, worker_headers, admin_headers):
     pid = member_project(client, pm_headers)
     other = _project(client, pm_headers, "不能跨项目")
@@ -53,6 +54,7 @@ def test_no_redelegation_or_global_promotion(client, pm_headers, worker_headers)
     assert client.put(f"/api/projects/{pid}", headers=worker_headers, json=versioned(pid, {"members": [WORKER]})).status_code == 200
 
 
+@pytest.mark.member_rules
 def test_targets_require_membership_and_removal_revokes(client, pm_headers, worker_headers):
     pid = _project(client, pm_headers, "移除授权")
     assert grant(client, pm_headers, pid, ["project.update"]).status_code == 400
@@ -64,6 +66,7 @@ def test_targets_require_membership_and_removal_revokes(client, pm_headers, work
     assert client.get(f"/api/projects/{pid}", headers=worker_headers).json()["capabilities"] == []
 
 
+@pytest.mark.member_rules
 def test_directory_is_project_scoped_and_version_only_denied(client, pm_headers, worker_headers, admin_headers):
     unrelated = _user(client, admin_headers, "unrelated", "worker")
     pid = member_project(client, pm_headers)

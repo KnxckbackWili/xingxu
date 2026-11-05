@@ -9,14 +9,15 @@ describe('人工推进和概况准备清单', () => {
     expect(result.action.status).toBeUndefined()
   })
   it('uses the ordered setup areas and moves only to the adjacent execution state', () => {
-    expect(projectWorkflow(ready).checklist.map(row=>row.title)).toEqual(['车型','人员','资料清单','周计划','发车前资料确认'])
-    expect(projectWorkflow({...ready,infoComplete:false}).checklist.map(row=>row.title)).toEqual(['基本资料','车型','人员','资料清单','周计划','发车前资料确认'])
+    expect(projectWorkflow(ready).checklist.map(row=>row.title)).toEqual(['车型','资料清单','周计划','发车前资料确认'])
+    expect(projectWorkflow({...ready,infoComplete:false}).checklist.map(row=>row.title)).toEqual(['基本资料','车型','资料清单','周计划','发车前资料确认'])
     expect(projectWorkflow({...ready,infoComplete:false}).action.path).toBe('/edit?section=info')
     expect(projectWorkflow(ready).action.status).toBe('executing')
     expect(projectWorkflow({...ready,vehicles:0}).action.path).toBe('/edit?section=vehicles')
-    expect(projectWorkflow({...ready,members:0}).action.path).toBe('/edit?section=members')
+    // 不再安排人：没有成员、周计划没写谁来做，都不挡进场。
+    expect(projectWorkflow({...ready,members:0}).action.status).toBe('executing')
     expect(projectWorkflow({...ready,kickoffReady:false}).action.path).toBe('/documents?stage=4')
-    expect(projectWorkflow({...ready,unassigned:1}).action.path).toBe('/plan?view=weeks')
+    expect(projectWorkflow({...ready,unassigned:1}).action.status).toBe('executing')
     expect(projectWorkflow({...ready,prepReady:false}).action.path).toBe('/documents?review=1')
   })
   it('describes signoffs and milestones without retired project states', () => {

@@ -85,14 +85,9 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
   const [issues, setIssues] = useState<Issue[]>([])
   const [vehicleIssues, setVehicleIssues] = useState<VehicleIssue[]>([])
   const [vehicleDetail, setVehicleDetail] = useState<VehicleIssue | null>(null)
-  const [users, setUsers] = useState<any[]>([])
-  const [usersLoading, setUsersLoading] = useState(false)
-  const [usersError, setUsersError] = useState(false)
-  const peopleRequest = useRef(0)
   const loadRequest = useRef(0)
   const currentProject = useRef(projectId)
   currentProject.current = projectId
-  const [assigning, setAssigning] = useState<Issue | null>(null)
   const [tasks, setTasks] = useState<{ id: string; label: string; phase: string }[]>([])
   const [issueAtts, setIssueAtts] = useState<Record<string, any[]>>({})
   const [fileList, setFileList] = useState<any[]>([])
@@ -111,7 +106,8 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
   const writeBlocked = archived || contextWriteBlocked
   const canEdit = canManage && !writeBlocked
   const canClose = (issue: Issue) => !writeBlocked && user?.role !== 'readonly' && user?.permission_overrides?.['project.manage_issues'] !== false && issue.can_close === true
-  const canHandle = (issue: Issue) => !writeBlocked && (canEdit || issue.assignee_id === user?.id)
+  // No assignment: anyone on the project (everyone) may start and resolve; the first to start becomes the handler.
+  const canHandle = (_issue: Issue) => !writeBlocked && user?.role !== 'readonly' && user?.permission_overrides?.['worker.issues'] !== false
   const importLock = useSubmitLock()
   const [importing, setImporting] = useState(false)
   const submitLock = useSubmitLock()
@@ -124,17 +120,6 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
   const [resolveForm] = Form.useForm()
   // 移动端（≤640px）：不再压缩桌面表格，改用卡片/分层行布局（见下方 isMobile 分支）
   const isMobile = useMediaQuery(MEDIA_QUERY.mobile)
-
-  const loadUsers = async () => {
-    const request = ++peopleRequest.current
-    setUsersLoading(true); setUsersError(false)
-    try {
-      const { data } = await api.get(`/projects/${projectId}/issue-assignees`)
-      if (request === peopleRequest.current && currentProject.current === projectId) setUsers(data)
-    } catch {
-      if (request === peopleRequest.current && currentProject.current === projectId) { setUsers([]); setUsersError(true) }
-    } finally { if (request === peopleRequest.current && currentProject.current === projectId) setUsersLoading(false) }
-  }
 
   const load = async () => {
     const request = ++loadRequest.current
@@ -156,25 +141,6 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
         setLoadError(true); message.error('问题列表加载失败')
       }
     } finally { if (request === loadRequest.current && currentProject.current === projectId) setLoading(false) }
-  }
-
-  const doAssign = async (uid: string | undefined) => {
-    if (!assigning || !canEdit || usersLoading || usersError || !statusLock.tryAcquire()) return
-    setStatusSaving(true)
-    try {
-      await api.put(`/issues/${assigning.id}`, { assignee_id: uid || null, version: assigning.version })
-      if (currentProject.current !== projectId) return
-      message.success(uid ? '已指派处理人' : '已取消指派')
-      setAssigning(null); setDetailIssue(null)
-      await load()
-    } catch (e: any) {
-      if (currentProject.current !== projectId) return
-      message.error(e.response?.data?.detail ?? '指派失败')
-      if (e.response?.status === 409) {
-        const fresh = await load()
-        setAssigning(fresh?.find(issue => issue.id === assigning.id) ?? null)
-      }
-    } finally { statusLock.release(); setStatusSaving(false) }
   }
 
   const download = async (id: string, name: string) => {
@@ -206,7 +172,6 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
 
   useEffect(() => {
     load()
-    void loadUsers()
     let active = true
     // 任务列表（上报表单的「关联任务」选择）
     api.get(`/projects/${projectId}/tree`).then((r) => {
@@ -219,7 +184,7 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
       }
       setTasks(flat)
     }).catch(() => {})
-    return () => { active = false; peopleRequest.current++; loadRequest.current++ }
+    return () => { active = false; loadRequest.current++ }
   }, [projectId])
 
   // 支持从项目头部“上报问题”带 report=1 直达弹窗
@@ -298,7 +263,7 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
   }
   // One next step per row: start → resolve → confirm close. Everything else is in the detail drawer.
   const nextAction = (issue: Issue) => {
-    if (detailIssue || assigning || editing) return null
+    if (detailIssue || editing) return null
     if (canHandle(issue) && issue.status === 'open') return <Button size="small" loading={statusSaving} onClick={() => updateStatus(issue, 'processing')}>开始处理</Button>
     if (canHandle(issue) && issue.status === 'processing') return <Button size="small" type="primary" disabled={statusSaving} onClick={() => openResolution(issue)}>解决</Button>
     if (canClose(issue) && issue.status === 'resolved') return <Button size="small" type="primary" loading={statusSaving} onClick={() => updateStatus(issue, 'closed')}>确认关闭</Button>
@@ -331,7 +296,7 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
       <span className="issue-row-severity" title={`严重程度：${SEVERITY_MAP[issue.severity]?.label}`} aria-hidden />
       <div className="issue-row-main">
         <button type="button" className="issue-row-title" onClick={() => setDetailIssue(issue)}>{issue.title}</button>
-        <span className="issue-row-meta">{type && <span>{type}</span>}{summary && <span className="issue-row-summary">{summary}</span>}<span>{issue.reporter_name} 上报 {shortTime(issue.created_at)} · {issue.assignee_name ? `处理人 ${issue.assignee_name}` : '未指派'}</span></span>
+        <span className="issue-row-meta">{type && <span>{type}</span>}{summary && <span className="issue-row-summary">{summary}</span>}<span>{issue.reporter_name} 上报 {shortTime(issue.created_at)}{issue.assignee_name ? ` · ${issue.assignee_name} 处理` : ''}</span></span>
       </div>
       <span className="issue-row-tags">
         {issue.nature && issue.nature !== 'normal' && <Tag color={issue.nature === 'accident' ? 'red' : issue.nature === 'quality' ? 'orange' : undefined}>{ISSUE_NATURES.find(item => item.value === issue.nature)?.label}</Tag>}
@@ -346,7 +311,7 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
   const closingCount = issues.filter(i => i.status === 'resolved').length
   return (
     <div className="field-work-page">
-      <WorkPageHeader title="现场问题" description="上报 → 开始处理 → 解决 → 确认关闭。每行右侧是下一步；点标题看详情、指派、导出或作废。车辆问题在车辆记录里处理。"
+      <WorkPageHeader title="现场问题" description="上报 → 开始处理 → 解决 → 确认关闭。不用指派，谁处理谁点“开始处理”。每行右侧是下一步；点标题看详情、导出或作废。车辆问题在车辆记录里处理。"
         primary={!writeBlocked && <Button type="primary" aria-label="上报问题" icon={<PlusOutlined />} onClick={()=>setModalOpen(true)}>上报问题</Button>}
         meta={`${activeCount} 项待解决 · ${closingCount} 项待关闭`}
         tools={<Space wrap><RefreshAction onClick={load} loading={loading} />{!writeBlocked && <Popover trigger="click" content={<Upload disabled={importing} showUploadList={false} accept=".xlsx" beforeUpload={file=>importQualityForm(file as File)}><Button loading={importing} icon={<UploadOutlined />}>导入质量问题反馈单</Button></Upload>}><IconAction bordered label="导入问题" icon={<ImportOutlined />} /></Popover>}</Space>} />
@@ -426,30 +391,6 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
         </fieldset>
       </Modal>
 
-      {/* 指派处理人 */}
-      <Modal className="field-work-modal"
-        title={`指派处理人：${assigning?.title ?? ''}`}
-        open={!!assigning}
-        onCancel={() => { if (!statusSaving) setAssigning(null) }}
-        closable={!statusSaving}
-        maskClosable={!statusSaving}
-        footer={null}
-        width={420}
-      >
-        {usersError && <Alert type="error" showIcon message="可处理人员加载失败，请重试" action={<Button onClick={loadUsers}>重试</Button>} />}
-        <Select
-          aria-label="问题处理人"
-          loading={usersLoading || statusSaving}
-          disabled={usersLoading || usersError || statusSaving}
-          style={{ width: '100%' }}
-          placeholder="选择处理人（清空则取消指派）"
-          allowClear
-          value={assigning?.assignee_id ?? undefined}
-          onChange={(v) => doAssign(v)}
-          options={users.map((u) => ({ label: u.display_name, value: u.id }))}
-        />
-      </Modal>
-
       <Drawer className="field-work-modal" title={vehicleDetail ? `${vehicleDetail.asset_code} · ${vehicleDetail.title}` : ''} open={!!vehicleDetail} onClose={() => setVehicleDetail(null)} width={isMobile ? '100%' : 520}>
         {vehicleDetail && <Space direction="vertical" size={12} style={{ width: '100%' }}>
           <Space wrap><Tag color="blue">车辆问题</Tag><Tag color={vehicleDetail.status === 'resolved' ? 'green' : 'red'}>{vehicleDetail.status === 'resolved' ? '已解决' : '未解决'}</Tag><Typography.Text type="secondary">{vehicleDetail.event_date}</Typography.Text></Space>
@@ -527,7 +468,7 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
             <Space direction="vertical" size={10} style={{ width: '100%', marginTop: 8 }}>
               {[
                 { icon: <FileTextOutlined />, label: '上报', desc: `${detailIssue.reporter_name} · ${detailIssue.created_at ? parseDateTime(detailIssue.created_at).format('MM-DD HH:mm') : ''}`, done: true },
-                { icon: <UserSwitchOutlined />, label: '指派处理', desc: detailIssue.assignee_name ? `${detailIssue.assignee_name} 接手` : '未指派', done: !!detailIssue.assignee_name },
+                { icon: <UserSwitchOutlined />, label: '开始处理', desc: detailIssue.assignee_name ? `${detailIssue.assignee_name} 接手` : '还没人开始', done: !!detailIssue.assignee_name },
                 { icon: <CheckCircleOutlined />, label: '解决', desc: detailIssue.resolved_at ? parseDateTime(detailIssue.resolved_at).format('MM-DD HH:mm') : '待解决', done: !!detailIssue.resolved_at },
                 { icon: <StopOutlined />, label: '关闭/作废', desc: detailIssue.status === 'cancelled' ? '已作废' : detailIssue.status === 'closed' ? '已关闭' : '待关闭', done: detailIssue.status === 'cancelled' || detailIssue.status === 'closed' },
               ].map((s) => (
@@ -582,9 +523,6 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
               <Button size="small" type="primary" loading={statusSaving} onClick={async () => { if (await updateStatus(detailIssue, 'closed')) setDetailIssue(null) }}>关闭</Button>
             )}
             <Button size="small" icon={<FileExcelOutlined />} onClick={()=>downloadQualityForm(detailIssue)}>导出单据</Button>
-            {canEdit && (
-              <Button size="small" icon={<UserSwitchOutlined />} onClick={() => setAssigning(detailIssue)}>指派</Button>
-            )}
             {canClose(detailIssue) && ['open', 'processing'].includes(detailIssue.status) && (
               <Button size="small" danger icon={<DeleteOutlined />} onClick={() => {
                 setResolutionAction('cancelled')

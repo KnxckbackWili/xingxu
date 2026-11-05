@@ -1,3 +1,4 @@
+import pytest
 """Real HTTP/MCP protocol checks for external agents, project isolation and revocation."""
 import json
 from concurrent.futures import ThreadPoolExecutor
@@ -56,6 +57,7 @@ def test_new_tools_return_real_project_data_and_pagination(client, admin_headers
     assert call(client, headers, 'project_activity', project_id=pid, limit=-1).json()['ok'] is False
 
 
+@pytest.mark.member_rules
 def test_every_new_project_tool_hides_other_projects(client, admin_headers, pm_headers):
     pid, _ = setup_project(client, pm_headers)
     _, headers = token(client, admin_headers, user='user-worker-001')
@@ -88,6 +90,7 @@ def test_inactive_user_expiry_and_last_used_write_coalescing(client, admin_heade
     assert call(client, headers, 'projects_list').status_code == 401
 
 
+@pytest.mark.member_rules
 def test_concurrent_requests_keep_token_identity_separate(client, admin_headers, pm_headers):
     pid, _ = setup_project(client, pm_headers)
     _, allowed = token(client, admin_headers, scopes=['projects:read'])

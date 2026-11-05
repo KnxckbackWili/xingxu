@@ -21,9 +21,9 @@ import { RefreshAction } from '../../components/IconAction'
 export default function WeekPage({ projectId = '' }: { projectId?: string }) {
   const { user } = useAuth(); const identity = `${user?.id}:${projectId}`; const active = useRef(identity); active.current = identity
   const generation = useRef(0); const [data, setData] = useState<Week>(); const [error, setError] = useState(''); const [loading, setLoading] = useState(false)
-  const [week, setWeek] = useState<string>(); const [revision, setRevision] = useState(0); const [target, setTarget] = useState<FieldTarget>(); const [showAssist, setShowAssist] = useState(false)
-  const [claiming, setClaiming] = useState<string>(); const [uploading, setUploading] = useState<Week['this_week_documents'][number]>(); const [file, setFile] = useState<File>(); const [uploadError, setUploadError] = useState(''); const [uploadBusy, setUploadBusy] = useState(false); const [eventDate, setEventDate] = useState('')
-  const lock = useRef(false); const uploadLock = useRef(false)
+  const [week, setWeek] = useState<string>(); const [revision, setRevision] = useState(0); const [target, setTarget] = useState<FieldTarget>()
+  const [uploading, setUploading] = useState<Week['this_week_documents'][number]>(); const [file, setFile] = useState<File>(); const [uploadError, setUploadError] = useState(''); const [uploadBusy, setUploadBusy] = useState(false); const [eventDate, setEventDate] = useState('')
+  const uploadLock = useRef(false)
   const { online, pendingCount, rejected, syncVersion, flush, retry, remove } = useOfflineSync()
   const canRecord = !!data?.permissions.record && hasSystemPermission(user, 'worker.report')
   const load = () => setRevision(value => value + 1)
@@ -32,11 +32,6 @@ export default function WeekPage({ projectId = '' }: { projectId?: string }) {
     fieldWeekApi.week({ ...(week ? { week_start: week } : {}), ...(projectId ? { project_id: projectId } : {}) }, user?.id).then(value => { if (active.current === owner && request === generation.current) setData(value) }).catch(e => { if (active.current === owner && request === generation.current) setError(errMsg(e)) }).finally(() => { if (active.current === owner && request === generation.current) setLoading(false) })
     return () => { generation.current++ }
   }, [identity, week, revision, syncVersion])
-  const claim = async (plan: Plan) => {
-    if (lock.current) return
-    lock.current = true; setClaiming(plan.id); const owner = identity
-    try { ensureVerifiedAccount(user?.id); await fieldWeekApi.claim(plan, user!.id); if (active.current === owner) load() } catch (e) { if (active.current === owner) setError(errMsg(e)) } finally { lock.current = false; if (active.current === owner) setClaiming(undefined) }
-  }
   const open = (plan: Plan, kind: FieldTarget['kind'], id: string, version: number, isDone: boolean, name: string, step = '', assist = false) => setTarget({ project_id: plan.project_id, kind, target_id: id, version, is_done: isDone, name, step_key: step, weekly_cell_id: plan.id, window: plan.date_window, ...(assist ? { assisted: plan.assignees } : {}) })
   const blockedReason = (plan: Plan) => canRecord && plan.can_record !== false ? '' : !canRecord ? '当前账号没有登记实际完成的权限，可联系项目负责人。'
     : !['executing', 'acceptance'].includes(String((plan as { project_status?: string }).project_status ?? '')) ? '项目进入「现场实施」后才能登记完成和检查；进场前可以提交资料、上报问题。'
@@ -79,41 +74,30 @@ export default function WeekPage({ projectId = '' }: { projectId?: string }) {
       else setUploadError(errMsg(e))
     } finally { uploadLock.current = false; if (active.current === owner) setUploadBusy(false) }
   }
-  // Documents I own (or nobody owns yet) come first; the rest of the project's due list stays folded.
+  // No owners: every document due this week is listed for everyone.
   const documents = data?.this_week_documents ?? []
-  const myDocuments = documents.filter(doc => !doc.effective_owner_id || doc.effective_owner_id === user?.id)
-  const otherDocuments = documents.filter(doc => !myDocuments.includes(doc))
-  const documentLine = (doc: Week['this_week_documents'][number]) => <p key={doc.document_id}><Link to={`/pm/projects/${doc.project_id}/documents?document=${doc.document_id}`}>{doc.project_name} · {doc.code} {doc.name}{doc.vehicle_label ? ` · ${doc.vehicle_label}` : ''}</Link><br /><Typography.Text type="secondary">{deadlineLabel(doc.due_at, doc.timezone || 'Asia/Shanghai')} · {doc.effective_owner_name || '负责人待核对'}</Typography.Text> {data?.permissions.upload && hasSystemPermission(user, 'worker.deliver') && <Button onClick={() => { setUploading(doc); setFile(undefined); setEventDate(''); setUploadError('') }}>上传当期资料</Button>}</p>
+  const documentLine = (doc: Week['this_week_documents'][number]) => <p key={doc.document_id}><Link to={`/pm/projects/${doc.project_id}/documents?document=${doc.document_id}`}>{doc.project_name} · {doc.code} {doc.name}{doc.vehicle_label ? ` · ${doc.vehicle_label}` : ''}</Link><br /><Typography.Text type="secondary">{deadlineLabel(doc.due_at, doc.timezone || 'Asia/Shanghai')}</Typography.Text> {data?.permissions.upload && hasSystemPermission(user, 'worker.deliver') && <Button onClick={() => { setUploading(doc); setFile(undefined); setEventDate(''); setUploadError('') }}>上传当期资料</Button>}</p>
   return <div className="worker-work-page">
-    <WorkPageHeader title={canAccessNav('/pm/dashboard', user) ? '我的本周' : '工作台'} description="这周要做的、可以认领的、要交的资料和自己的问题，都在这一页。" tools={<Space wrap><DatePicker picker="week" aria-label="计划周" value={week ? dayjs(week) : dayjs()} allowClear={false} onChange={value => setWeek(value?.subtract((value.day() + 6) % 7, 'day').format('YYYY-MM-DD'))} /><RefreshAction onClick={load} loading={loading} /></Space>} />
+    <WorkPageHeader title={canAccessNav('/pm/dashboard', user) ? '我的本周' : '工作台'} description="这周已发布的工作、要交的资料和未解决的问题。谁做完谁登记，不用认领。" tools={<Space wrap><DatePicker picker="week" aria-label="计划周" value={week ? dayjs(week) : dayjs()} allowClear={false} onChange={value => setWeek(value?.subtract((value.day() + 6) % 7, 'day').format('YYYY-MM-DD'))} /><RefreshAction onClick={load} loading={loading} /></Space>} />
     {error && <Alert type="error" message="本周信息未能读取" description={error} />}
     {warningGroups.size > 0 && <details className="week-notice week-notice-fold"><summary>{data!.warnings.length} 条计划提醒</summary>
       <ul className="week-notice-list">{[...warningGroups].map(([message, count]) => <li key={message}>{message}{count > 1 ? `（${count} 处）` : ''}</li>)}</ul></details>}
     {[...sharedBlocked].map(reason => <Alert key={reason} type="info" showIcon className="week-notice" message={`${[...blockedGroups.get(reason)!].join('、')}：${reason}`} />)}
     {!!pendingCount && <Alert type="info" message={`${pendingCount} 条操作仍在本机队列，未计作服务器完成`} action={<Button disabled={!online} onClick={() => void flush().then(load)}>同步原操作</Button>} />}
     {!!rejected.length && <Card size="small" title="需核对的离线操作">{rejected.map(row => <p key={row.client_uuid}>{row.reason} <Button onClick={() => retry(row.client_uuid)}>重试原操作</Button><Button onClick={() => remove(row.client_uuid)}>移除本机待核对项</Button></p>)}</Card>}
-    {/* One column, most important first: my work, work nobody has taken, my documents, my issues. */}
+    {/* One column: this week's work (anyone records it), documents due, open issues. */}
     <section className="week-section" aria-label="我这周要做的">
-      <h2>要做的工作{!!data?.plans.length && <span>{data.plans.length}</span>}</h2>
-      {loading && !data ? <Card loading bordered={false} /> : data?.plans.length ? data.plans.map(plan => planCard(plan)) : !error && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={data?.permissions.plan_read === false ? '本人周计划查看权限已关闭' : data?.state === 'unavailable' ? '周计划尚未读取' : '本周没有已发布给我的工作'} />}
+      <h2>本周要做的工作{!!data?.plans.length && <span>{data.plans.length}</span>}</h2>
+      {loading && !data ? <Card loading bordered={false} /> : data?.plans.length ? data.plans.map(plan => planCard(plan)) : !error && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={data?.permissions.plan_read === false ? '本人周计划查看权限已关闭' : data?.state === 'unavailable' ? '周计划尚未读取' : '本周没有已发布的工作'} />}
     </section>
-    {!!data?.unassigned.length && <section className="week-section" aria-label="没人负责的工作">
-      <h2>没人负责，可以认领<span>{data.unassigned.length}</span></h2>
-      <ul className="week-rows">{data.unassigned.map(plan => <li key={plan.id}><span><strong>{plan.work_item.name}</strong><small>{plan.project_name}</small></span><Button disabled={!canRecord || plan.permissions?.claim === false || !!claiming || !online} loading={claiming === plan.id} onClick={() => void claim(plan)}>认领</Button></li>)}</ul>
-    </section>}
     <section className="week-section" aria-label="要交的资料">
-      <h2>要交的资料{!!myDocuments.length && <span>{myDocuments.length}</span>}</h2>
-      {myDocuments.length ? myDocuments.map(documentLine) : <Typography.Paragraph type="secondary">{error ? '资料状态未知' : otherDocuments.length ? '本周没有我负责的待交资料' : '本周没有可见待交资料'}</Typography.Paragraph>}
-      {otherDocuments.length > 0 && <details className="week-other-documents"><summary>项目里其他人负责 {otherDocuments.length} 项</summary>{otherDocuments.map(documentLine)}</details>}
+      <h2>本周要交的资料{!!documents.length && <span>{documents.length}</span>}</h2>
+      {documents.length ? documents.map(documentLine) : <Typography.Paragraph type="secondary">{error ? '资料状态未知' : '本周没有要交的资料'}</Typography.Paragraph>}
     </section>
-    <section className="week-section" aria-label="我的问题">
-      <h2>我的问题{!!data?.my_issues.length && <span>{data.my_issues.length}</span>}{data?.permissions.issues && <Link to="/worker/issues">上报与处理问题</Link>}</h2>
-      {data?.my_issues.length ? <ul className="week-rows">{data.my_issues.map(issue => <li key={issue.id}><Link to={`/worker/issues?issue=${issue.id}`}>{issue.project_name} · {issue.title}</Link><Tag color={ISSUE_STATUS_MAP[issue.status]?.color}>{ISSUE_STATUS_MAP[issue.status]?.label ?? issue.status}</Tag></li>)}</ul> : <Typography.Paragraph type="secondary">暂无本人未闭环问题</Typography.Paragraph>}
+    <section className="week-section" aria-label="未解决的问题">
+      <h2>未解决的问题{!!data?.my_issues.length && <span>{data.my_issues.length}</span>}{data?.permissions.issues && <Link to="/worker/issues">上报与处理问题</Link>}</h2>
+      {data?.my_issues.length ? <ul className="week-rows">{data.my_issues.map(issue => <li key={issue.id}><Link to={`/worker/issues?issue=${issue.id}`}>{issue.project_name} · {issue.title}</Link><Tag color={ISSUE_STATUS_MAP[issue.status]?.color}>{ISSUE_STATUS_MAP[issue.status]?.label ?? issue.status}</Tag></li>)}</ul> : <Typography.Paragraph type="secondary">没有未解决的问题</Typography.Paragraph>}
     </section>
-    {!!data?.assistable.length && <section className="week-section" aria-label="协助同项目人员">
-      <h2>协助同事<Button size="small" type="link" onClick={() => setShowAssist(value => !value)}>{showAssist ? '收起' : `同项目有 ${data.assistable.length} 项可协助登记`}</Button></h2>
-      {showAssist && data.assistable.map(plan => planCard(plan, true))}
-    </section>}
     {target && <FieldOperationModal key={`${identity}:${target.kind}:${target.target_id}`} target={target} onClose={() => setTarget(undefined)} onSaved={load} />}
     <Modal open={!!uploading} title={`上传资料 · ${uploading?.name || ''}`} onCancel={() => !uploadBusy && setUploading(undefined)} onOk={() => void submitFile()} confirmLoading={uploadBusy} okButtonProps={{ disabled: !file || uploadBusy }} maskClosable={false} okText="保存上传任务">
       <Typography.Paragraph>使用原有断点上传队列。离线时文件及原期次保存在本机，联网后仍须通过当前权限和哈希核验。</Typography.Paragraph>{uploadError && <Alert type="error" message={uploadError} />}<Upload beforeUpload={value => { setFile(value); return false }} maxCount={1} fileList={file ? [{ uid: 'file', name: file.name, status: 'done' }] : []} onRemove={() => { setFile(undefined); return true }}><Button>选择文件</Button></Upload>

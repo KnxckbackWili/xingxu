@@ -23,7 +23,6 @@ const scopeText = (cell: PlanCell) => cell.scope.label || cell.scope.vehicle_typ
 
 // Only a narrowed scope is worth a word; "all vehicles" / "this work item" is the default.
 const narrowScope = (cell: PlanCell) => cell.scope.label || cell.scope.vehicle_type || (cell.scope.vehicle_unit_ids.length ? `指定 ${cell.scope.vehicle_unit_ids.length} 台` : '')
-const people = (cell: PlanCell) => cell.assignees.length ? cell.assignees.map(person => `${person.name}${person.active ? '' : '（已停用）'}`).join('、') : '未分配'
 const goal = (cell: PlanCell) => cell.intent_review_required ? '原计划意图待核对' : cell.mode === 'in_progress' ? '进行中' : cell.kind === 'other' ? '完成' : cell.target_count == null ? '计划台数待核对' : `完成 ${cell.target_count} 台`
 
 const restDays = (week: PlanWeek, settings: PlanSettings) => Array.from({ length: 7 }, (_, offset) => dayjs(week.week_start).add(offset, 'day')).filter(date => {
@@ -166,7 +165,7 @@ export default function SchedulePage({projectId,project,onProjectChange}: {proje
   // Rows are grouped under their work group, so each row only names its own work.
   const startsGroup=(index:number)=>index===0||rows[index-1].phase_name!==rows[index].phase_name
   return <section className="weekly-plan-page">
-    <WorkPageHeader title="周计划" description="行是工作项，列是周。点空格安排，点计划格修改；草稿发布后大家才看得到。"
+    <WorkPageHeader title="周计划" description="行是工作项，列是周，只写这周做什么、不写谁来做。点空格安排，点计划格修改；草稿发布后，谁做完谁在工作台登记。"
       meta={data&&<span>已发布 {published.length} 格{allowed?` · 草稿 ${drafts.length} 格`:''}</span>}
       primary={allowed&&<Space wrap>
         <Button type="primary" icon={<PlusOutlined/>} disabled={busy} onClick={()=>openNew()}>新增计划格</Button>
@@ -201,7 +200,7 @@ export default function SchedulePage({projectId,project,onProjectChange}: {proje
           const cells=visibleCells.filter(cell=>cell.task_id===item.id&&cell.week_start===week.week_start)
           return <td key={week.week_start} className={cells.length?'has-plan':'is-empty'}>{cells.map(cell=>{
             const state=cell.completion.overdue?'已逾期':cell.completion.is_complete?'已完成':''
-            const body=<><strong>{goal(cell)}{narrowScope(cell)&&<small> · {narrowScope(cell)}</small>}</strong><span>{people(cell)}</span></>
+            const body=<strong>{goal(cell)}{narrowScope(cell)&&<small> · {narrowScope(cell)}</small>}</strong>
             return <article key={cell.id} title={draftSource(cell)?`初稿依据：${draftBasis(cell.source_metadata)}`:undefined} className={`weekly-plan-cell${cell.is_cancelled?' is-cancelled':''}${cell.published?' is-published':' is-draft'}`}>
             {(!cell.published||cell.is_cancelled||state)&&<div className="weekly-plan-cell-head">{allowed&&!cell.published&&!cell.is_cancelled&&<Checkbox aria-label={`选择${cell.task_name} ${cell.week_start} ${scopeText(cell)}`} checked={selection.includes(cell.id)} onChange={event=>setSelection(current=>event.target.checked?[...current,cell.id]:current.filter(id=>id!==cell.id))}/>}
               {(cell.is_cancelled||!cell.published)&&<span className="weekly-plan-badge">{cell.is_cancelled?'已取消':'草稿'}</span>}
@@ -233,8 +232,6 @@ export default function SchedulePage({projectId,project,onProjectChange}: {proje
           {editor.scopeMode==='batch'&&<Select aria-label="计划车辆批次" mode="multiple" value={editor.input.scope.vehicle_unit_ids} disabled={busy} onChange={vehicle_unit_ids=>patch({scope:{vehicle_unit_ids}})} options={data?.vehicles.map(unit=>({value:unit.id,label:unit.label}))}/>}
           {editor.input.mode==='finish'&&<InputNumber aria-label="计划完成车辆台数" min={1} precision={0} value={editor.input.target_count} disabled={busy} onChange={value=>patch({target_count:value})} placeholder="填写正整数台数"/>}
         </>}
-        <Select aria-label="计划负责人" mode="multiple" allowClear value={editor.input.assignee_ids} disabled={busy} onChange={assignee_ids=>patch({assignee_ids})} options={data?.members.map(person=>({value:person.id,label:`${person.name}${person.active?'':'（已停用）'}`,disabled:!person.active&&!editor.input.assignee_ids.includes(person.id)}))}/>
-        <Typography.Text type="secondary">可分配多人；留空不会自动认领。计划负责人不代表实际完成人。</Typography.Text>
         <Input.TextArea aria-label="周计划备注" value={editor.input.notes} disabled={busy} onChange={event=>patch({notes:event.target.value})} maxLength={2000}/>
         {editor.cell&&<Button danger={!editor.cell.is_cancelled} disabled={busy||editStale} onClick={()=>{setCancelCell(editor.cell);setCancelReason('')}}>{editor.cell.is_cancelled?'恢复此格':'取消此格'}</Button>}
       </Space>}
@@ -247,7 +244,7 @@ export default function SchedulePage({projectId,project,onProjectChange}: {proje
     <Modal title="发布选定周计划" open={publishOpen&&!!data} onCancel={()=>{if(!busy)setPublishOpen(false)}} okText="确认发布" confirmLoading={busy} okButtonProps={{disabled:!chosen.length||!allowed||editStale}} onOk={()=>void write(()=>weeklyPlansApi.publish(projectId,chosen.map(cell=>({id:cell.id,version:cell.version}))),()=>setPublishOpen(false))}>
       {actionError&&<Alert type="error" message={actionError}/>}
       {editStale&&<Button disabled={busy} onClick={()=>{setPublishOpen(false);void load()}}>重新读取周计划</Button>}
-      <p>仅发布下面 {chosen.length} 格；实际完成保持独立记录。</p><ul>{chosen.map(cell=><li key={cell.id}>{cell.task_name} · {cell.week_start} · {scopeText(cell)} · {cell.assignees.map(person=>person.name).join('、')||'未分配'}</li>)}</ul>
+      <p>仅发布下面 {chosen.length} 格；实际完成保持独立记录。</p><ul>{chosen.map(cell=><li key={cell.id}>{cell.task_name} · {cell.week_start} · {scopeText(cell)}</li>)}</ul>
     </Modal>
     <Modal title="生成周计划初稿" open={draftOpen&&!!data} width={780} onCancel={()=>{if(!busy)setDraftOpen(false)}} okText="保存为草稿" confirmLoading={busy} okButtonProps={{disabled:!allowed||!preview||JSON.stringify(preview.body)!==JSON.stringify(draftBody)||!preview.value.proposals.length}} onOk={()=>preview&&void write(()=>weeklyPlansApi.draft(projectId,{...preview.body,preview_token:preview.value.preview_token}),()=>setDraftOpen(false))}>
       <p className="weekly-plan-draft-intro">按发车和全部到场的计划日期，把每个分组排到对应的周。生成的是草稿，已有的计划格不会被覆盖；核对后再发布。{busy&&<Spin size="small" aria-label="正在处理初稿"/>}</p>

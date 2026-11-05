@@ -16,9 +16,9 @@ const project={id:'p1',name:'现场项目',status:'executing',timezone:'Asia/Sha
 function page(p=project){return <MemoryRouter><ConfigProvider theme={{token:{motion:false}}}><SchedulePage projectId={p.id} project={p} onProjectChange={h.changed}/></ConfigProvider></MemoryRouter>}
 const show=()=>render(page())
 beforeEach(()=>{vi.clearAllMocks();h.user={id:'pm',role:'pm',permission_version:0,permission_overrides:{}};h.list.mockResolvedValue(fixture());h.create.mockResolvedValue(cell('new'));h.update.mockResolvedValue(cell());h.publish.mockResolvedValue({});h.draft.mockResolvedValue({});h.defaultRules.mockResolvedValue({rules:[],suggestions:[],warnings:[]});h.verify.mockImplementation(()=>undefined)})
-it('shows work by week and keeps planned people separate from actual completion',async()=>{
+it('shows work by week without naming who does it',async()=>{
  show();expect(await screen.findByRole('region',{name:'周计划表'})).toBeVisible()
- expect(screen.getByText('接线核对')).toBeVisible();expect(screen.getByText(/李工/)).toBeVisible();expect(screen.queryByText('已发布')).toBeNull()
+ expect(screen.getByText('接线核对')).toBeVisible();expect(screen.queryByText(/李工/)).toBeNull();expect(screen.queryByLabelText('计划负责人')).toBeNull();expect(screen.queryByText('已发布')).toBeNull()
  expect(screen.queryByText('计划 0 项')).toBeNull();fireEvent.click(screen.getByRole('button',{name:'更多周计划操作'}));expect(await screen.findByRole('link',{name:'排期设置'})).toHaveAttribute('href','/pm/projects/p1/edit?section=schedule')
 })
 it('allows a server-authorized field role and honors an explicit system denial',async()=>{

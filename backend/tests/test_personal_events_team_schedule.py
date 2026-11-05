@@ -1,3 +1,4 @@
+import pytest
 """旧个人事项只读归原所有者；新安排只来自已发布周计划。"""
 from datetime import date
 from sqlalchemy import text
@@ -25,6 +26,7 @@ def test_owner_history_get_preserves_original_and_excludes_other_users(client,pm
     assert admin.status_code==200 and identity not in {r['id'] for r in admin.json()}
 
 
+@pytest.mark.member_rules
 def test_history_does_not_disclose_current_name_of_invisible_project(client,pm_headers,admin_headers):
     identity,pid,_=old_event(client,admin_headers,owner='pm',name='HIDDEN-CURRENT-PROJECT',title='所有者原文仍可读',notes='所有者原备注')
     response=client.get('/api/dashboard/personal-events',headers=pm_headers);assert response.status_code==200,response.text

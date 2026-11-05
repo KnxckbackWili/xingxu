@@ -45,6 +45,7 @@ def test_old_grants_are_preserved_but_inert_and_new_tokens_cannot_request_them(c
     with SessionLocal() as db:assert 'schedule:preview' in db.get(AiApiToken,row['id']).scopes
 
 
+@pytest.mark.member_rules
 def test_three_reads_use_current_project_scope_and_t26_private_membership(client,pm_headers,admin_headers):
     pid,users=setup_project(client,pm_headers)
     private=requirement(client,pm_headers,pid,code='6.99',name='T54-PRIVATE')

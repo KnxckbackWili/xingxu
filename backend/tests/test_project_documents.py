@@ -344,6 +344,7 @@ def test_completed_document_gate_excludes_future_stages_and_requires_real_eviden
         assert _pending_required_documents(db,pid)==[]
 
 
+@pytest.mark.member_rules
 def test_agent_document_read_has_scope_and_project_isolation(client,admin_headers):
     from .test_agent_api import token,call
     pid=create(client,admin_headers)['id'];document=view(client,admin_headers,pid)['documents'][0]
