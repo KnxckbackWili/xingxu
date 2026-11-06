@@ -45,35 +45,6 @@ def test_old_grants_are_preserved_but_inert_and_new_tokens_cannot_request_them(c
     with SessionLocal() as db:assert 'schedule:preview' in db.get(AiApiToken,row['id']).scopes
 
 
-@pytest.mark.member_rules
-def test_three_reads_use_current_project_scope_and_t26_private_membership(client,pm_headers,admin_headers):
-    pid,users=setup_project(client,pm_headers)
-    private=requirement(client,pm_headers,pid,code='6.99',name='T54-PRIVATE')
-    submitted=upload_documents(client,pm_headers,pid,[private['id']],content=b'private content',name='T54-secret.txt')['documents'][0]
-    assert policy(client,pm_headers,pid,'document',submitted).status_code==200
-    _,admin=token(client,admin_headers)
-    _,owner=token(client,admin_headers,user=users['pm'])
-    _,hidden=token(client,admin_headers,user=users['worker1'])
-    # Another actual project is outside worker scope.
-    foreign=client.post('/api/projects',headers=pm_headers,json={'name':'Other','start_date':'2026-01-01','end_date':'2026-12-31'}).json()['id']
-    for name in NEW_TOOLS:
-        denied=call(client,hidden,name,project_id=foreign).json()
-        assert denied['ok'] is False and 'data' not in denied
-        assert call(client,owner,name,project_id=pid).json()['ok']
-    assert 'T54-PRIVATE' not in call(client,admin,'documents_read',project_id=pid).text
-    allowed=call(client,owner,'documents_read',project_id=pid)
-    assert 'T54-PRIVATE' in allowed.text and 'stored_name' not in allowed.text
-    assert 'source_metadata' not in allowed.text
-    with SessionLocal() as db:
-        assert db.query(ChangeLog).filter_by(project_id=pid,action='confidential_view').count()>0
-        before={model.__tablename__:db.query(model).count() for model in (Project,ProjectDocument,DocumentVersion,VehicleProgress,Task,CheckItem)}
-    for name in NEW_TOOLS:assert call(client,owner,name,project_id=pid).json()['ok']
-    with SessionLocal() as db:
-        assert {model.__tablename__:db.query(model).count() for model in (Project,ProjectDocument,DocumentVersion,VehicleProgress,Task,CheckItem)}==before
-    with SessionLocal() as db:db.get(User,users['pm']).permission_overrides={'project.read':False};db.commit()
-    for name in NEW_TOOLS:assert call(client,owner,name,project_id=pid).json()['ok'] is False
-
-
 def test_due_this_week_uses_project_sunday_and_never_generates_periods(client,pm_headers,admin_headers,monkeypatch):
     from app.services import document_deadlines as deadlines
     pid,users=setup_project(client,pm_headers)

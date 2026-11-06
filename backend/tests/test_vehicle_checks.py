@@ -115,25 +115,6 @@ def test_legacy_null_safety_still_gates_exact_step(client,pm_headers):
     with SessionLocal() as db:assert db.query(CheckItem).filter_by(task_id=tid,vehicle_unit_id=None).count()==1
 
 
-@pytest.mark.member_rules
-def test_permission_state_and_acceptance_scope(client,pm_headers,worker_headers):
-    from app.services.acceptance import acceptance_scope_fingerprint
-    pid,ids=setup_fleet(client,pm_headers,1);work(pid,ids)
-    row=checks(client,pm_headers,pid,ids[0])[0]
-    other,otherids=setup_fleet(client,pm_headers,1)
-    assert client.get(f'/api/projects/{pid}/vehicle-units/{otherids[0]}/checks',headers=pm_headers).status_code==404
-    assert mark(client,worker_headers,pid,row,is_done=True).status_code==404
-    with SessionLocal() as db:
-        fingerprint=acceptance_scope_fingerprint(db,pid);p=db.get(Project,pid);p.status='preparing';db.commit()
-    assert mark(client,pm_headers,pid,row,is_done=True).status_code==400
-    with SessionLocal() as db:p=db.get(Project,pid);p.status='executing';db.commit()
-    assert mark(client,pm_headers,pid,row,is_done=True).status_code==200
-    with SessionLocal() as db:
-        assert acceptance_scope_fingerprint(db,pid)==fingerprint
-        u=VehicleUnit(project_id=pid,asset_code='new-scoped-real');db.add(u);db.flush();generate_for_units(db,pid,[u]);db.commit()
-        assert acceptance_scope_fingerprint(db,pid)!=fingerprint
-
-
 def test_portable_and_clone_only_requirements_no_qualification(client,pm_headers):
     from app.services.import_export import project_to_json
     from app.services.project_retention import project_retention_snapshot

@@ -5,10 +5,8 @@ export interface WorkflowInput {
   infoComplete?: boolean
   vehicles: number
   tasks: number
-  members: number
   plans: number | null
   drafts: number | null
-  unassigned: number | null
   planWarnings?: number
   prepReady: boolean
   kickoffReady?: boolean

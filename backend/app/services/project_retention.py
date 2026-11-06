@@ -16,7 +16,7 @@ from app.config import UPLOAD_DIR
 # Explicit business allowlist prevents a new project-linked private/security
 # table from silently being copied into administrator-visible audit archives.
 RETAINED_MODELS = (
-    models.ProjectMember, models.ProjectEvent, models.Vehicle, models.VehicleUnit, models.VehicleLifecycleEvent,
+    models.ProjectEvent, models.Vehicle, models.VehicleUnit, models.VehicleLifecycleEvent,
     models.ProjectVehicleStep, models.VehicleProgress,
     models.ProjectInventoryItem, models.ProjectInventoryMovement, models.ItemApplication,
     models.Phase, models.Module, models.Task, models.VehicleCheckDefinition, models.CheckItem,
@@ -49,7 +49,7 @@ def project_retention_snapshot(db, project):
     records = {}
     task_ids = db.query(models.Task.id).filter(models.Task.project_id == project.id)
     phase_ids = db.query(models.Module.phase_id).filter(models.Module.project_id == project.id)
-    actor_ids = {project.created_by, project.manager, project.technical_manager, *(project.members or [])}
+    actor_ids = {project.created_by, project.manager, project.technical_manager}
     from app.services.file_retention import removal_record
     removed={}
     files = {}

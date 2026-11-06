@@ -1,6 +1,6 @@
 from typing import Literal, Optional, Annotated
 
-"""Project CRUD routes + vehicles + members."""
+"""Project CRUD routes + vehicles."""
 
 from datetime import date
 from app.services.system_permissions import route_permission, route_permission_contextual, route_permission_exempt
@@ -19,7 +19,6 @@ from app.models import (
     Vehicle,
     Phase,
     Module,
-    ProjectMember,
     AcceptanceRecord,
 )
 from app.services.change_log import log_change
@@ -127,20 +126,6 @@ class EntryPlan(BaseModel):
     notes: str = Field(default="", max_length=3000)
 
 
-class CoManagerGrant(BaseModel):
-    model_config = {"extra": "forbid"}
-
-    user_id: str
-    expires_at: Optional[date] = None
-
-
-class MemberPermissionGrant(BaseModel):
-    model_config = {"extra": "forbid"}
-
-    user_id: str
-    capabilities: list[str] = Field(max_length=8)
-
-
 class ProjectUpdate(EventPlanInput):
     name: Optional[str] = None
     abbreviation: Optional[str] = None
@@ -155,17 +140,11 @@ class ProjectUpdate(EventPlanInput):
     manager_id: Optional[str] = None
     technical_manager_id: Optional[str] = None
     dispatch_platform: DispatchPlatform | None = None
-    members: Optional[list[str]] = None
-    member_removal_confirmations: list[str]|None = Field(default=None,max_length=500)
-    member_permissions: Optional[list[MemberPermissionGrant]] = Field(
-        default=None, max_length=500
-    )
     rest_mode: Optional[str] = Field(default=None, pattern="^(none|one|two)$")
     rest_days: Optional[list[str]] = None
     skip_holidays: Optional[bool] = None
     client_contacts: Optional[list[ClientContact]] = None
     entry_plan: Optional[EntryPlan] = None
-    co_managers: Optional[list[CoManagerGrant]] = None
     version: Optional[int] = None  # 乐观锁版本号
 
 
@@ -207,7 +186,7 @@ def _valid_timezone(tz: str) -> str:
 PROJECT_FIELD_LABELS = {
     'name': '名称', 'abbreviation': '简称', 'contract_no': '合同号', 'client': '客户', 'location': '地点', 'timezone': '时区', 'description': '说明',
     'start_date': '开始日期', 'end_date': '计划结束日期', 'manager': '负责人', 'technical_manager': '技术负责人',
-    'co_managers': '协管', 'members': '成员', 'member_permissions': '成员权限', 'client_contacts': '联系人',
+    'client_contacts': '联系人',
     'entry_plan': '入场信息', 'rest_days': '休息日', 'rest_mode': '休息日规则',
     'skip_holidays': '节假日规则', 'staffing_notes': '人员说明',
 }
@@ -222,19 +201,6 @@ def _update_summary(name, old, new):
 
 def _project_dict(db: Session, p: Project, event_rows=None) -> dict:
     _mgr = db.get(User, p.manager) if p.manager else None
-    from app.services.scope import active_co_manager
-
-    co_managers = []
-    for grant in p.co_managers or []:
-        person = db.get(User, grant.get("user_id")) if grant.get("user_id") else None
-        co_managers.append(
-            {
-                **grant,
-                "display_name": person.display_name if person else "",
-                "role": person.role if person else "",
-                "is_active": active_co_manager(p, grant.get("user_id", "")),
-            }
-        )
     suspension = dict(p.suspension or {})
     if suspension:
         for key in ("suspended_by", "resumed_by"):
@@ -254,7 +220,6 @@ def _project_dict(db: Session, p: Project, event_rows=None) -> dict:
             if p.technical_manager and db.get(User, p.technical_manager)
             else ""
         ),
-        "co_managers": co_managers,
         "client": p.client,
         "location": p.location,
         "timezone": p.timezone or "Asia/Shanghai",
@@ -264,8 +229,6 @@ def _project_dict(db: Session, p: Project, event_rows=None) -> dict:
         "suspension": suspension,
         "description": p.description,
         "staffing_notes": p.staffing_notes or "",
-        "members": p.members or [],
-        "member_permissions": p.member_permissions or [],
         "rest_mode": p.rest_mode or "none",
         "rest_days": p.rest_days or [],
         "skip_holidays": bool(p.skip_holidays),
@@ -335,8 +298,6 @@ def list_projects(
         projects = [p for p in projects if p.status == status]
 
     projects.sort(key=lambda p: p.created_at or p.id, reverse=True)
-    from app.services.scope import active_co_manager
-
     from app.models import ProjectEvent
     event_projects = projects[(page - 1) * page_size:page * page_size] if page_size else projects
     events_by_project = {project.id: [] for project in event_projects}
@@ -349,15 +310,8 @@ def list_projects(
 
     def serialize(project):
         item = _project_dict(db, project, events_by_project.get(project.id, []))
-        item["is_co_manager"] = active_co_manager(project, user.id)
-        from app.services.permissions import (
-            project_capabilities,
-            grantable_project_capabilities,
-        )
+        from app.services.permissions import project_capabilities
 
-        item["grantable_capabilities"] = sorted(
-            grantable_project_capabilities(user, project)
-        )
         item["capabilities"] = sorted(project_capabilities(user, project))
         item["can_delete"] = "project.delete" in item["capabilities"]
         item.update(facts[project.id])
@@ -370,34 +324,6 @@ def list_projects(
         return {"items": items, "total": total, "page": page, "page_size": page_size}
 
     return [serialize(p) for p in projects]
-
-
-def _sync_project_members(db: Session, project: Project):
-    """把项目 JSON members/manager/technical/co_managers 同步到 project_members 表。"""
-    from app.services.open_access import include_everyone
-    include_everyone(db, project)
-    project.member_permissions = [
-        grant
-        for grant in project.member_permissions or []
-        if grant.get("user_id") in (project.members or [])
-    ]
-    rows = db.query(ProjectMember).filter(ProjectMember.project_id == project.id).all()
-    existing = {row.user_id: row for row in rows}
-    to_add = set(project.members or [])
-    if project.manager:
-        to_add.add(project.manager)
-    if project.technical_manager:
-        to_add.add(project.technical_manager)
-    for grant in project.co_managers or []:
-        if grant.get("user_id"):
-            to_add.add(grant["user_id"])
-    for uid, row in existing.items():
-        if uid not in to_add:
-            db.delete(row)
-    for uid in to_add:
-        if uid and uid not in existing:
-            db.add(ProjectMember(project_id=project.id, user_id=uid, role="member"))
-    db.flush()
 
 
 def _validate_user_ids(db: Session, ids, label="成员"):
@@ -507,9 +433,6 @@ def _create_project(data: ProjectCreate, user: User, db: Session):
         _validate_user_ids(db, [data.manager_id], label="项目经理")
     if data.technical_manager_id:
         _validate_user_ids(db, [data.technical_manager_id], label="技术负责人")
-    members = []
-    if data.manager_id:
-        members.append(data.manager_id)
     if data.technical_manager_id:
         technical = db.get(User, data.technical_manager_id)
         if technical is None or technical.role not in (
@@ -521,7 +444,6 @@ def _create_project(data: ProjectCreate, user: User, db: Session):
             raise HTTPException(
                 status_code=400, detail="技术负责人必须是项目经理或实施工程师"
             )
-        members.append(data.technical_manager_id)
     from app.models import Template
 
     template = (
@@ -551,13 +473,11 @@ def _create_project(data: ProjectCreate, user: User, db: Session):
         end_date=data.end_date,
         description=data.description,
         status=data.status,
-        members=members,
         created_by=user.id,
         dispatch_platform=data.dispatch_platform,
     )
     db.add(p)
     db.flush()
-    _sync_project_members(db, p)
     from app.services.vehicle_progress import initialize_project
     initialize_project(db, p, data.template_id)
     update_plans(db, p, data.event_plans, user.id)
@@ -679,15 +599,8 @@ def get_project(
     from app.services.project_templates import project_template_info
 
     result["source_template"] = project_template_info(db, p)
-    from app.services.scope import active_co_manager
+    from app.services.permissions import project_capabilities
 
-    result["is_co_manager"] = active_co_manager(p, user.id)
-    from app.services.permissions import (
-        project_capabilities,
-        grantable_project_capabilities,
-    )
-
-    result["grantable_capabilities"] = sorted(grantable_project_capabilities(user, p))
     result["capabilities"] = sorted(project_capabilities(user, p))
     result["can_delete"] = "project.delete" in result["capabilities"]
     # Include vehicles summary
@@ -717,18 +630,9 @@ def project_people(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Project-local people, with minimal directory candidates for member managers."""
+    """Every active account works on every project."""
     p = ensure_project_visible(db, project_id, user)
-    from app.services.permissions import authorize_project, C_MEMBERS
-
-    query = db.query(User)
-    if include_candidates:
-        authorize_project(user, p, C_MEMBERS)
-        query = query.filter(User.is_active == True)
-    else:
-        ids = set(p.members or []) | {p.manager, p.technical_manager}
-        ids.update((grant.get("user_id") for grant in p.co_managers or []))
-        query = query.filter(User.id.in_([uid for uid in ids if uid]))
+    query = db.query(User).filter(User.is_active == True)
     from app.services.permissions import inherited_project_capabilities
 
     return [
@@ -740,19 +644,6 @@ def project_people(
         }
         for person in query.order_by(User.display_name).all()
     ]
-
-
-@router.get('/{project_id}/members/removal-preview')
-@route_permission('project.manage_members')
-def preview_member_removal(project_id:str,removed_ids:list[str]=Query(default=[]),
-    user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-    from app.services.permissions import authorize_project,C_MEMBERS
-    from app.services.document_triggers import removal_preview
-    project=ensure_project_visible(db,project_id,user)
-    authorize_project(user,project,C_MEMBERS)
-    if len(removed_ids)>500 or len(set(removed_ids))!=len(removed_ids) or not set(removed_ids)<=(set(project.members or [])):
-        raise HTTPException(400,'待移出人员必须是当前项目中不重复的成员')
-    return removal_preview(db,project,set(removed_ids))
 
 
 class DirectTransfer(BaseModel):
@@ -787,7 +678,7 @@ def direct_transfer(project_id:str,body:DirectTransfer,user:User=Depends(get_cur
 
 
 @router.put("/{project_id}", response_model=dict)
-@route_permission_contextual('project.update', 'project.manage_members', reason='处理器按提交字段分别校验项目资料和成员权限')
+@route_permission('project.update')
 def update_project(
     project_id: str,
     data: ProjectUpdate,
@@ -807,22 +698,9 @@ def update_project(
     from app.services.project_lifecycle import ensure_project_writable
 
     ensure_project_writable(p)
-    from app.services.permissions import authorize_project, C_MEMBERS, C_UPDATE
+    from app.services.permissions import authorize_project, C_UPDATE
 
-    field_keys = set(data.model_dump(exclude_unset=True).keys())-{'member_removal_confirmations'}
-    from app.services.permissions import grantable_project_capabilities
-
-    grantable = grantable_project_capabilities(user, p)
-    if "member_permissions" in field_keys and (not grantable):
-        raise HTTPException(
-            status_code=403, detail="只有项目负责人或系统管理员可以设置成员操作权限"
-        )
-    if "co_managers" in field_keys and (
-        not (user.role == "admin" or (user.role == "pm" and p.manager == user.id))
-    ):
-        raise HTTPException(
-            status_code=403, detail="只有项目经理或系统管理员可以设置项目协管"
-        )
+    field_keys = set(data.model_dump(exclude_unset=True).keys())
     if "manager_id" in field_keys:
         raise HTTPException(status_code=400,detail="请使用项目设置的更换负责人入口，填写理由并核对版本与离场资料")
     if "technical_manager_id" in field_keys and (
@@ -833,19 +711,13 @@ def update_project(
         )
     if not field_keys - {"version"}:
         raise HTTPException(400, "请提供需要修改的项目字段")
-    if field_keys & {"members", "member_permissions"}:
-        authorize_project(user, p, C_MEMBERS)
-    if field_keys - {"members", "member_permissions", "version"}:
-        authorize_project(user, p, C_UPDATE)
+    authorize_project(user, p, C_UPDATE)
     from app.services.optimistic import bump_version, require_client_version
 
     bump_version(p, require_client_version(data.version), db=db)
-    if data.members is not None:
-        _validate_user_ids(db, data.members, label="成员")
     if data.technical_manager_id is not None:
         _validate_user_ids(db, [data.technical_manager_id], label="技术负责人")
     old = _project_dict(db, p)
-    old_members = set(p.members or [])
     fields = [
         "name",
         "abbreviation",
@@ -874,7 +746,6 @@ def update_project(
                 raise HTTPException(
                     status_code=400, detail="技术负责人必须是项目经理或实施工程师"
                 )
-            p.members = list(set((p.members or []) + [data.technical_manager_id]))
         p.technical_manager = data.technical_manager_id
     if "dispatch_platform" in data.model_fields_set:
         p.dispatch_platform = data.dispatch_platform
@@ -887,8 +758,6 @@ def update_project(
         materialize_static(db, p)
     from app.services.document_deadlines import refresh_project
     refresh_project(db,p,actor_id=user.id)
-    if data.members is not None:
-        p.members = data.members
     if data.rest_mode is not None:
         p.rest_mode = data.rest_mode
     if data.rest_days is not None:
@@ -911,82 +780,9 @@ def update_project(
             if data.entry_plan is not None
             else ({"entry_date": p.entry_plan["entry_date"]} if "entry_date" in (p.entry_plan or {}) else {})
         )
-    if "co_managers" in data.model_fields_set:
-        grants = data.co_managers or []
-        if len(grants) > 5:
-            raise HTTPException(status_code=400, detail="一个项目最多设置 5 名协管")
-        seen = set()
-        normalized = []
-        for grant in grants:
-            person = db.get(User, grant.user_id)
-            if (
-                person is None
-                or not person.is_active
-                or person.role not in ("pm", "technician", "worker")
-            ):
-                raise HTTPException(
-                    status_code=400,
-                    detail="协管必须是启用的项目经理、技术工程师或实施工程师",
-                )
-            if grant.user_id in seen or grant.user_id == p.manager:
-                continue
-            seen.add(grant.user_id)
-            normalized.append(grant.model_dump(mode="json"))
-        p.co_managers = normalized
-        p.members = list(set((p.members or []) + list(seen)))
-    if "member_permissions" in data.model_fields_set:
-        grants = data.member_permissions or []
-        _validate_user_ids(db, [grant.user_id for grant in grants], label="授权成员")
-        seen = set()
-        normalized = []
-        for grant in grants:
-            if grant.user_id not in (p.members or []):
-                raise HTTPException(400, "只能为当前项目成员设置操作权限")
-            target = db.get(User, grant.user_id)
-            if target.role == "readonly" and set(grant.capabilities) - {"project.export"}:
-                raise HTTPException(400, "只读预设不能授予项目写权限，请先在账号设置调整角色")
-            if grant.user_id in seen:
-                raise HTTPException(400, "成员操作权限不能重复设置")
-            seen.add(grant.user_id)
-            if set(grant.capabilities) - grantable:
-                raise HTTPException(403, "不能授予非项目操作权限或超出自身范围的权限")
-            if grant.capabilities:
-                normalized.append(
-                    {
-                        "user_id": grant.user_id,
-                        "capabilities": sorted(set(grant.capabilities)),
-                    }
-                )
-        p.member_permissions = normalized
     if p.end_date < p.start_date:
         raise HTTPException(status_code=400, detail="结束日期不能早于开始日期")
     db.flush()
-    _sync_project_members(db, p)
-    removed = old_members - set(p.members or [])
-    from app.services.document_triggers import confirm_removals,member_events
-    confirm_removals(db,p,removed,data.member_removal_confirmations)
-    if removed:
-        from app.services.member_handover import ensure_member_handover
-
-        ensure_member_handover(db, p, removed)
-        member_events(db,p,removed,user.id)
-        from app.routers.notifications import notify
-
-        for uid in removed:
-            if uid == user.id:
-                continue
-            person = db.get(User, uid)
-            if person and person.is_active:
-                notify(
-                    db,
-                    uid,
-                    f"你已被移出项目「{p.name}」",
-                    f"操作人：{user.display_name}；若为误操作请联系项目负责人",
-                    ntype="project_membership",
-                    project_id=p.id,
-                )
-        # Original daily assignment identities are immutable historical sources.
-        # Published weekly obligations were checked above; drafts are not auto-reassigned.
     log_change(
         db,
         p.id,

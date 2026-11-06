@@ -105,7 +105,6 @@ class Project(Base):
     contract_no = Column(String(100), default="")  # 项目合同号（生命周期表等公司表单使用）
     manager = Column(String(100), default="")  # PM user_id
     technical_manager = Column(String(36), nullable=True)  # 技术负责人（技术经理或技术工程师）
-    co_managers = Column(JSON, default=list)  # 项目协管 [{user_id, expires_at}]，仅项目内临时生效
     client = Column(String(200), default="")
     location = Column(String(200), default="")
     timezone = Column(String(64), default="Asia/Shanghai")  # 项目现场时区（俄/越等海外现场按当地日历取"今天"）
@@ -114,8 +113,6 @@ class Project(Base):
     status = Column(String(20), nullable=False, default="preparing")
     description = Column(Text, default="")
     staffing_notes = Column(Text, default="")  # 资料中的人员姓名/建议，不自动绑定系统账号
-    members = Column(JSON, default=list)  # [user_id, ...]
-    member_permissions = Column(JSON, default=list)  # [{user_id, capabilities}]，仅当前成员的项目操作授权
     rest_mode = Column(String(10), default="none")  # none=不休息 one=休周日 two=休周六日
     rest_days = Column(JSON, default=list)  # 手动补充休息日 ["2026-10-01", ...]
     skip_holidays = Column(Boolean, default=False)  # 是否跳过法定节假日（默认不跳过，现场赶工照常排）
@@ -157,19 +154,6 @@ class ProjectEvent(Base):
     actual_source = Column(JSON, nullable=True)  # explicit manual/signature/legacy audit provenance
     recorded_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     note = Column(Text, nullable=True)
-
-
-class ProjectMember(Base):
-    """项目成员关系表：替代 JSON members/co_managers 的查询主路径。"""
-
-    __tablename__ = "project_members"
-    __table_args__ = (UniqueConstraint("project_id", "user_id", name="uq_project_member"),)
-
-    id = Column(String(36), primary_key=True, default=gen_uuid)
-    project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    role = Column(String(30), default="member")  # member / manager / technical / co_manager
-    created_at = Column(DateTime, default=utcnow)
 
 
 # ===== Vehicle =====
@@ -526,7 +510,6 @@ class WeeklyPlanCell(Base):
     mode = Column(String(20), nullable=False, default="in_progress")
     target_count = Column(Integer, nullable=True)
     intent_review_required = Column(Boolean, nullable=False, default=False)
-    assignee_ids = Column(JSON, nullable=False, default=list)
     published = Column(Boolean, nullable=False, default=False)
     published_at = Column(DateTime, nullable=True)
     published_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
@@ -566,7 +549,6 @@ class Issue(Base):
     severity = Column(String(20), default="medium")  # critical / high / medium / low
     status = Column(String(20), default="open")  # open / processing / resolved / closed
     reporter_id = Column(String(36), ForeignKey("users.id"), nullable=False)
-    assignee_id = Column(String(36), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=utcnow)
     resolved_at = Column(DateTime, nullable=True)
     resolution = Column(Text, default="")

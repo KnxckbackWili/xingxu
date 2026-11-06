@@ -13,9 +13,6 @@ def prepared(client,pm_headers):
     pid,units=setup_fleet(client,pm_headers,1)
     with SessionLocal() as db:
         people={u.username:u.id for u in db.query(User)}
-        p=db.get(Project,pid);p.members=list(set(p.members or [])|{people['worker1'],people['worker2']})
-        from app.routers.projects import _sync_project_members
-        _sync_project_members(db,p);db.commit()
     return pid,units[0],people
 
 
@@ -245,64 +242,20 @@ def test_work_annotation_revision_never_refreshes_an_old_failed_check_override(c
         assert db.get(CheckItem,cid).version==2
 
 
-@pytest.mark.member_rules
-def test_intern_with_explicit_record_permission_uses_same_member_and_check_guards(client,pm_headers):
-    from tests.test_work_items_t34 import phase,create
-    pid,_,people=prepared(client,pm_headers)
-    work=create(client,pm_headers,pid,phase(client,pm_headers,pid),checks=[{'name':'现场检查一'},{'name':'现场检查二'}])
-    with SessionLocal() as db:
-        worker=db.get(User,people['worker1'])
-        intern=User(username='isolated-intern',display_name='现场实习账号',password_hash=worker.password_hash,role='intern',is_active=True,
-                    permission_overrides={'worker.report':True})
-        db.add(intern);db.flush();identity=intern.id
-        project=db.get(Project,pid);project.members=[*(project.members or []),identity]
-        from app.routers.projects import _sync_project_members
-        _sync_project_members(db,project);db.commit()
-    login=client.post('/api/auth/login',json={'username':'isolated-intern','password':'worker123'})
-    assert login.status_code==200
-    headers={'Authorization':'Bearer '+login.json()['access_token']}
-    first,second=[row['id'] for row in work['check_items']]
-    assert save(client,headers,operation(pid,first,kind='check',step_key='')).status_code==200
-    direct=client.put(f'/api/projects/{pid}/check-items/{second}',headers=headers,json={'version':0,'is_done':True})
-    assert direct.status_code==200,direct.text
-    with SessionLocal() as db:assert db.query(FieldOperation).filter_by(project_id=pid,actor_id=identity).count()==2
-    other,units=setup_fleet(client,pm_headers,1)
-    assert save(client,headers,operation(other,units[0])).status_code==404
-
-
 def weekly_work(client,headers,*,vehicle=False,assignees=None,scope=None,published=True):
     from tests.test_weekly_plans import create_cell,publish
     from tests.test_work_items_t34 import phase,create
     pid,units=setup_fleet(client,headers,2)
     with SessionLocal() as db:
         people={u.username:u.id for u in db.query(User)}
-        p=db.get(Project,pid);p.members=[people['worker1'],people['worker2']];db.commit()
+        db.commit()
     task=create(client,headers,pid,phase(client,headers,pid),**({'kind':'vehicle','vehicle_step_key':'arrival_inspection'} if vehicle else {}))
     today=project_today('Asia/Shanghai');start=today-timedelta(days=today.weekday())
-    row=create_cell(client,headers,pid,task,week_start=start.isoformat(),assignee_ids=assignees or [],scope=scope or {})
+    row=create_cell(client,headers,pid,task,week_start=start.isoformat(),scope=scope or {})
     if published:
         result=publish(client,headers,pid,row);assert result.status_code==200,result.text
         row=client.get(f'/api/projects/{pid}/weekly-plans',headers=headers,params={'week_start':start.isoformat(),'weeks':1}).json()['cells'][0]
     return pid,units,people,task,row
-
-
-@pytest.mark.member_rules
-@pytest.mark.parametrize('change',['cancel','reassign','draft'])
-def test_stale_field_cell_cannot_complete_cancelled_reassigned_or_unpublished_plan(client,pm_headers,worker_headers,change):
-    pid,units,people,task,cell=weekly_work(client,pm_headers,published=change!='draft')
-    if change!='draft':
-        update={'version':cell['version'],'assignee_ids':[people['worker1']]}
-        response=client.put(f"/api/projects/{pid}/weekly-plans/{cell['id']}",headers=pm_headers,json=update)
-        assert response.status_code==200,response.text
-        cell=response.json()
-        update={'version':cell['version'],'is_cancelled':True,'reason':'负责人明确取消'} if change=='cancel' else {'version':cell['version'],'assignee_ids':[people['worker2']]}
-        response=client.put(f"/api/projects/{pid}/weekly-plans/{cell['id']}",headers=pm_headers,json=update);assert response.status_code==200,response.text
-    result=save(client,worker_headers,operation(pid,task['id'],kind='work',step_key='',weekly_cell_id=cell['id']))
-    assert result.status_code==(403 if change=='reassign' else 404),result.text
-    view=client.get('/api/worker/week',headers=worker_headers).json();assert not view['plans'] and not view['unassigned']
-    with SessionLocal() as db:
-        from app.models import Task
-        assert not db.get(Task,task['id']).manually_completed and not db.query(FieldOperation).filter_by(project_id=pid).count()
 
 
 @pytest.mark.parametrize('scope_kind',['batch','type'])
@@ -315,7 +268,7 @@ def test_plan_scope_applies_to_both_vehicle_and_exact_vehicle_check(client,pm_he
         db.get(VehicleUnit,units[1]).vehicle_id=second.id
         db.commit()
     scope={'vehicle_unit_ids':[units[0]]} if scope_kind=='batch' else {'vehicle_type':'潜伏式'}
-    response=client.put(f"/api/projects/{pid}/weekly-plans/{cell['id']}",headers=pm_headers,json={'version':cell['version'],'scope':scope,'assignee_ids':[people['worker1']]})
+    response=client.put(f"/api/projects/{pid}/weekly-plans/{cell['id']}",headers=pm_headers,json={'version':cell['version'],'scope':scope})
     assert response.status_code==200,response.text
     targets=units
     if kind=='check':

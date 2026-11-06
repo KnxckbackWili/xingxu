@@ -12,7 +12,6 @@ def project_work(client, headers):
     tid = tasks[0]['id']
     with SessionLocal() as db:
         project = db.get(Project, pid); project.status = 'executing'
-        project.members = ['user-worker-001', 'user-worker-002']
         checks = db.query(CheckItem).filter_by(task_id=tid).all()
         for check in checks:
             check.is_safety_critical = False; check.is_done = True; check.failed = False
@@ -99,20 +98,6 @@ def test_resolved_issue_and_open_vehicle_fault_are_independent_blockers_and_prev
         assert not ({'issues','vehicle_faults'} & {row.type for row in check_transition(db,db.get(Project,pid),'completed')})
 
 
-def test_assigned_handler_cannot_close_or_cancel_but_reporter_can(client,admin_headers,worker_headers):
-    pid,_,_=project_work(client,admin_headers)
-    handler_login=client.post('/api/auth/login',json={'username':'worker2','password':'worker123'})
-    handler={'Authorization':'Bearer '+handler_login.json()['access_token']}
-    with SessionLocal() as db:
-        issue=Issue(project_id=pid,title='等待报告人确认',status='resolved',reporter_id='user-worker-001',assignee_id='user-worker-002');db.add(issue);db.commit();iid=issue.id
-    for status in ('closed','cancelled'):
-        result=client.put(f'/api/issues/{iid}',headers=handler,json=versioned(iid, {'status':status,'resolution':'处理人试图自己闭环'}, 'Issue'))
-        assert result.status_code==403,result.text
-    result=client.put(f'/api/issues/{iid}',headers=worker_headers,json=versioned(iid, {'status':'closed'}, 'Issue'))
-    assert result.status_code==200,result.text
-    with SessionLocal() as db:assert db.get(Issue,iid).status=='closed'
-
-
 def test_selected_package_contains_only_selected_latest_files_and_exact_hashes(client,admin_headers):
     import hashlib,io,json
     from zipfile import ZipFile
@@ -153,7 +138,7 @@ def test_readonly_export_remains_available_but_confidential_selection_is_denied(
     pid=create(client,admin_headers)['id'];row=view(client,admin_headers,pid)['documents'][0]
     result=upload(client,admin_headers,pid,[row['id']]);assert result.status_code==200
     with SessionLocal() as db:
-        db.get(User,'user-worker-001').role='readonly';db.get(Project,pid).members=['user-worker-001'];db.commit()
+        db.get(User,'user-worker-001').role='readonly';db.commit()
     path=f'/api/projects/{pid}/documents/package'
     assert client.post(path,headers=worker_headers,json={'document_ids':[row['id']]}).status_code==200
     with SessionLocal() as db:

@@ -77,13 +77,7 @@ def dispatch_history(project_id: str, user: User = Depends(get_current_user), db
 
 
 class ProjectRequirementInput(RequirementInput):
-    owner_id:str|None=Field(default=None,max_length=36)
-
-
-class OwnerChange(BaseModel):
-    model_config={'extra':'forbid'}
-    owner_id:str|None=Field(...,max_length=36)
-    version:int|None=Field(default=None,ge=1)
+    pass
 
 
 class Selection(BaseModel):
@@ -302,22 +296,6 @@ def change_state(project_id:str,document_id:str,body:StateChange,user:User=Depen
     project=docs.writable(db,project_id,user,'worker.deliver')
     row=docs.owned_document(db,project_id,document_id)
     docs.update_state(db,project,row,user,body.status,body.reason,require_client_version(body.version))
-    db.commit();return one_document(db,project,user,row.id)
-
-
-@router.put('/{project_id}/documents/{document_id}/owner')
-@route_permission('project.manage_plan')
-def assign_owner(project_id:str,document_id:str,body:OwnerChange,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-    from app.services.document_deadlines import validate_owner
-    from app.services.optimistic import bump_version, require_client_version
-    project=docs.writable(db,project_id,user,C_PLAN)
-    row=docs.owned_document(db,project_id,document_id)
-    if not docs.can_read_document(user,project,row):raise HTTPException(403,'无权指派该保密资料')
-    validate_owner(db,project,body.owner_id)
-    before=row.owner_id
-    bump_version(row,require_client_version(body.version),db=db)
-    row.owner_id=body.owner_id
-    log_change(db,project.id,'project_document',row.id,'assign_owner',user.id,'指派资料负责人',{'owner_id':before},{'owner_id':body.owner_id})
     db.commit();return one_document(db,project,user,row.id)
 
 

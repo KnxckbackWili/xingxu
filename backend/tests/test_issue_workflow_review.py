@@ -15,22 +15,6 @@ def setup_issue(client, headers, **fields):
     return pid, r.json()
 
 
-def test_clear_assignee_and_preserve_omitted_field(client, pm_headers):
-    uid = client.get('/api/auth/me', headers=pm_headers).json()['id']
-    pid, issue = setup_issue(client, pm_headers, assignee_id=uid)
-    r = client.put(f"/api/issues/{issue['id']}", headers=pm_headers,
-                   json={'description': '补充描述', 'version': issue['version']})
-    assert r.json()['assignee_id'] == uid
-    r = client.put(f"/api/issues/{issue['id']}", headers=pm_headers,
-                   json={'assignee_id': None, 'version': r.json()['version']})
-    assert r.status_code == 200, r.text
-    assert r.json()['assignee_id'] is None
-    assert client.get(f'/api/projects/{pid}/issues', headers=pm_headers).json()[0]['assignee_id'] is None
-    stale = client.put(f"/api/issues/{issue['id']}", headers=pm_headers,
-                       json={'assignee_id': uid, 'version': issue['version']})
-    assert stale.status_code == 409
-
-
 def test_import_recovers_from_flush_conflict(client, pm_headers, monkeypatch):
     from app.models import Issue
     pid, _ = setup_issue(client, pm_headers)

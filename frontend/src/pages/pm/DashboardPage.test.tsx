@@ -13,7 +13,7 @@ const overview={projects:[{id:'p1',name:'项目甲',status:'executing',percent:7
 const statistics={projects:1,active_projects:1,completed_projects:0,status_distribution:[],vehicle_progress:{target:125,completed:50,quantity_unknown:false,percent:40},documents:{this_week_count:1,overdue_count:1},issues:{open:0,critical:0}}
 const show=()=>render(<MemoryRouter><DashboardPage/></MemoryRouter>)
 beforeEach(()=>{vi.resetAllMocks();h.user={id:'a',role:'pm',permission_version:1,permission_overrides:{}};h.overview.mockResolvedValue(overview);h.statistics.mockResolvedValue(statistics)
- w.issues.mockResolvedValue({data:{items:[]}});w.week.mockResolvedValue({state:'available',plans:[],unassigned:[],assistable:[],vehicle_matrices:{},this_week_documents:[],my_issues:[],windows:{},warnings:[],permissions:{record:true,upload:true,issues:true}})})
+ w.issues.mockResolvedValue({data:{items:[]}});w.week.mockResolvedValue({state:'available',plans:[],vehicle_matrices:{},this_week_documents:[],my_issues:[],windows:{},warnings:[],permissions:{record:true,upload:true,issues:true}})})
 it('shows current document, vehicle and next-signoff facts with safe deep links',async()=>{
  show();expect(await screen.findByText('50/125 个车辆环节')).toBeVisible()
  expect(screen.getByText('现场实施')).toBeVisible();expect(screen.getByText(/本周计划暂不可读取/)).toBeVisible()
@@ -58,11 +58,10 @@ it('shows an empty weekly attention state instead of an error when nothing is ov
 })
 
 it('merges documents, weekly plan, issues and signoffs into one filterable list, with my week beside it',async()=>{
- w.issues.mockResolvedValue({data:{items:[{id:'i1',title:'急停后无法复位',project_id:'p1',project_name:'项目甲',status:'open',severity:'high',assignee_id:null,assignee_name:''},{id:'i2',title:'他人处理中',project_id:'p1',project_name:'项目甲',status:'open',severity:'low',assignee_id:'other',assignee_name:'乙'}]}})
- w.week.mockResolvedValue({state:'available',plans:[{id:'cell',project_id:'p1',project_name:'项目甲',mode:'finish',work_item:{name:'场地勘测',phase_name:'进场准备',check_items:[{id:'c'}]}}],unassigned:[],assistable:[],vehicle_matrices:{},this_week_documents:[],my_issues:[],windows:{},warnings:[],permissions:{record:true,upload:true,issues:true}})
+ w.issues.mockResolvedValue({data:{items:[{id:'i1',title:'急停后无法复位',project_id:'p1',project_name:'项目甲',status:'open',severity:'high'}]}})
+ w.week.mockResolvedValue({state:'available',plans:[{id:'cell',project_id:'p1',project_name:'项目甲',mode:'finish',work_item:{name:'场地勘测',phase_name:'进场准备',check_items:[{id:'c'}]}}],vehicle_matrices:{},this_week_documents:[],my_issues:[],windows:{},warnings:[],permissions:{record:true,upload:true,issues:true}})
  show()
  expect(await screen.findByRole('link',{name:'急停后无法复位'})).toHaveAttribute('href','/pm/projects/p1/issues')
- expect(screen.queryByText('他人处理中')).toBeNull()
  expect(screen.getByRole('button',{name:'全部 3'})).toHaveAttribute('aria-pressed','true')
  fireEvent.click(screen.getByRole('button',{name:'问题 1'}))
  expect(screen.queryByRole('link',{name:'6.2 本周生命周期表'})).toBeNull();expect(screen.getByRole('link',{name:'急停后无法复位'})).toBeVisible()

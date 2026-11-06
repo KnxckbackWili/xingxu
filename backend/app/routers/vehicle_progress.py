@@ -38,9 +38,7 @@ def get_matrix(project_id:str,user:User=Depends(get_current_user),db:Session=Dep
 
 
 def _has_record_authority(db,project,user):
-    return has_permission(user,'worker.report',default=True) and user.role!='readonly' and (
-        C_PLAN in project_capabilities(user,project) or user.id in (project.members or [])
-        or user.id in (project.manager,project.technical_manager))
+    return has_permission(user,'worker.report',default=True) and user.role not in ('readonly','external')
 
 
 class CellChange(BaseModel):
@@ -136,7 +134,7 @@ def get_vehicle_checks(project_id:str,unit_id:str,step_key:str|None=None,
     if step_key and step_key not in {s.key for s in service.project_steps(db,project_id)}:
         raise HTTPException(404,'环节不属于当前项目')
     return {'items':checks_for_unit(db,project_id,unit_id,step_key),
-            'can_record':has_permission(user,'worker.report',default=True) and (C_PLAN in project_capabilities(user,project) or user.role=='worker' and user.id in (project.members or [])) and project.status in service.WRITE_STATUSES}
+            'can_record':_has_record_authority(db,project,user) and project.status in service.WRITE_STATUSES}
 
 
 class GenerateChecks(BaseModel):

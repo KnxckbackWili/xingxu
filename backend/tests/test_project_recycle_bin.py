@@ -14,16 +14,10 @@ from app.time_utils import utcnow
 
 
 def _project(client, headers, **extra):
-    members = extra.pop('members', None)
     r = client.post('/api/projects', headers=headers, json={
         'name': '可恢复项目', 'start_date': '2026-09-01', 'end_date': '2026-12-31', **extra})
     assert r.status_code == 200, r.text
-    result = r.json()
-    if members is not None:
-        changed = client.put(f"/api/projects/{result['id']}", headers=headers, json={'members': members, 'version': result['version']})
-        assert changed.status_code == 200, changed.text
-        result = changed.json()
-    return result
+    return r.json()
 
 
 def _policy(client, headers, uid, overrides):
@@ -63,25 +57,6 @@ def test_owner_delete_restore_redelete_original_identity_and_independent_backups
         assert len(cycles) == 2 and sum(x.restored_at is not None for x in cycles) == 1
         assert db.query(ChangeLog).filter_by(project_id=p['id'], action='delete').count() == 2
         assert db.query(ChangeLog).filter_by(project_id=p['id'], action='restore').count() == 1
-
-
-@pytest.mark.member_rules
-def test_explicit_grant_scope_and_deny_override_owner_and_admin(client, admin_headers, pm_headers, worker_headers):
-    owned = _project(client, pm_headers, members=['user-worker-001'])
-    unrelated = _project(client, admin_headers)
-    assert _delete(client, worker_headers, owned).status_code == 403
-    _policy(client, admin_headers, 'user-worker-001', {'project.delete': True})
-    assert _delete(client, worker_headers, unrelated).status_code == 404
-    assert _delete(client, worker_headers, owned).status_code == 200
-    assert client.get(f"/api/project-recycle-bin/projects/{owned['id']}", headers=worker_headers).status_code == 200
-    _policy(client, admin_headers, 'user-worker-001', {'project.delete': True, 'projects.view_all': True})
-    assert _delete(client, worker_headers, unrelated).status_code == 200
-    _policy(client, admin_headers, 'user-pm-001', {'project.delete': False})
-    other = _project(client, admin_headers, manager_id='user-pm-001')
-    assert not client.get(f"/api/projects/{other['id']}", headers=pm_headers).json()['can_delete']
-    assert _delete(client, pm_headers, other).status_code == 403
-    _policy(client, admin_headers, 'user-admin-001', {'project.delete': False})
-    assert _delete(client, admin_headers, other).status_code == 403
 
 
 @pytest.mark.parametrize('failure', ['write', 'missing', 'traversal', 'symlink'])

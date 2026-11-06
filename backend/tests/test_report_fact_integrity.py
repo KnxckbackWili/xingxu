@@ -18,7 +18,6 @@ def test_report_keeps_different_people_with_same_name_separate(client, pm_header
         people = db.query(User).filter(User.username.in_(['worker1', 'worker2'])).all()
         for person in people:
             person.display_name = '同名人员'
-        db.get(Project, pid).members = [person.id for person in people]
         checks = [(c.id, c.version or 0) for c in db.query(CheckItem).filter_by(project_id=pid).order_by(CheckItem.id).limit(2)]
         db.commit()
     for headers, (cid, version) in zip((worker_headers, second_headers), checks):

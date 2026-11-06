@@ -30,7 +30,6 @@ class IssueCreate(BaseModel):
     nature: str = Field(default='normal',pattern='^(normal|accident|quality)$')
     severity: str = Field(default="medium", pattern="^(critical|high|medium|low)$")
     task_id: Optional[str] = None
-    assignee_id: Optional[str] = None
     extra: Optional[dict] = None  # 分类专属字段：hardware 设备/部位、software 模块版本、process 部门接口人
     client_uuid: Optional[str] = Field(default=None, min_length=8, max_length=64)  # C5-5：离线幂等键
 
@@ -42,7 +41,6 @@ class IssueUpdate(BaseModel):
     nature: str|None = Field(default=None,pattern='^(normal|accident|quality)$')
     severity: Optional[str] = Field(default=None, pattern="^(critical|high|medium|low)$")
     status: Optional[str] = Field(default=None, pattern=_STATUS_RE)
-    assignee_id: Optional[str] = None
     resolution: Optional[str] = None
     extra: Optional[dict] = None
     version: Optional[int] = None  # 乐观锁版本号
@@ -51,23 +49,6 @@ class IssueUpdate(BaseModel):
 class IssueBulkImport(BaseModel):
     items: list[IssueCreate] = Field(min_length=1, max_length=100)
 
-
-def _validate_assignee(db: Session, project, assignee_id: str, label="处理人"):
-    """处理人必须存在且启用（C6-5）：坏 ID 直接 400，避免脏数据/通知落空。"""
-    u = db.get(User, assignee_id)
-    if u is None:
-        raise HTTPException(status_code=400, detail=f"{label}不存在：{assignee_id[:8]}")
-    if not u.is_active:
-        raise HTTPException(status_code=400, detail=f"{label}已停用：{u.display_name or assignee_id[:8]}")
-    try:
-        ensure_project_visible(db, project.id, u)
-    except HTTPException as exc:
-        if exc.status_code != 404:
-            raise
-        raise HTTPException(400, f"{label}无法访问当前项目，请先添加为项目成员") from None
-    from app.services.permissions import project_capabilities
-    if u.id not in (project.members or []) and C_ISSUES not in project_capabilities(u, project):
-        raise HTTPException(400, f"{label}没有当前项目的问题处理权限，请先添加为项目成员")
 
 
 def _validate_issue_task(db: Session, project_id: str, task_id: Optional[str]) -> None:
@@ -88,7 +69,6 @@ def _issue_dict(db: Session, i: Issue, actor: User | None = None,events=None) ->
         and has_permission(actor, 'project.manage_issues', default=True)
         and (actor.role == 'admin' or actor.id in {project.manager, i.reporter_id}))
     reporter = db.get(User, i.reporter_id)
-    assignee = db.get(User, i.assignee_id) if i.assignee_id else None
     task = db.get(Task, i.task_id) if i.task_id else None
     from app.services.document_triggers import issue_sla_fields
     return {
@@ -102,8 +82,6 @@ def _issue_dict(db: Session, i: Issue, actor: User | None = None,events=None) ->
         "reporter_id": i.reporter_id,
         "can_close": can_close,
         "reporter_name": reporter.display_name if reporter else "",
-        "assignee_id": i.assignee_id,
-        "assignee_name": assignee.display_name if assignee else "",
         "task_id": i.task_id,
         "task_name": task.name if task else "",
         "extra": i.extra or {},
@@ -129,27 +107,6 @@ def list_issues(project_id: str, user: User = Depends(get_current_user), db: Ses
     return [_issue_dict(db, i, user,events) for i in issues]
 
 
-@router.get("/projects/{project_id}/issue-assignees")
-@route_permission('project.read')
-def issue_assignees(project_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Only offer people who can open and handle the issue they receive."""
-    p = ensure_project_visible(db, project_id, user)
-    ids = set(p.members or []) | {p.manager, p.technical_manager}
-    ids.update(grant.get("user_id") for grant in p.co_managers or [])
-    from sqlalchemy import or_
-    candidates = db.query(User).filter(User.is_active.is_(True),
-        or_(User.id.in_([uid for uid in ids if uid]), User.role.in_(("admin", "director"))))        .order_by(User.display_name, User.id).all()
-    eligible = []
-    for candidate in candidates:
-        try:
-            _validate_assignee(db, p, candidate.id)
-        except HTTPException as exc:
-            if exc.status_code != 400:
-                raise
-            continue
-        eligible.append({"id": candidate.id, "username": candidate.username,
-                         "display_name": candidate.display_name, "role": candidate.role})
-    return eligible
 
 
 @router.get("/projects/{project_id}/vehicle-issues")
@@ -200,13 +157,8 @@ def create_issue(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    # 任何人可上报，但必须是该项目成员（或 PM/admin）——防止污染任意项目台账
     p = ensure_project_visible(db, project_id, user)
     lock_writable_project(db, p, user)
-    if user.role not in ("admin", "pm", "director", "lead") and user.id not in (p.members or []):
-        raise HTTPException(status_code=403, detail="仅项目成员可上报问题")
-    if data.assignee_id:
-        _validate_assignee(db, p, data.assignee_id)
     # HYPE-99：关联任务必须属于本项目（离线/在线同一入口）
     _validate_issue_task(db, project_id, data.task_id)
     # C5-5：离线幂等——同一 client_uuid 已存在则直接返回（不重复建、不重复通知）
@@ -226,7 +178,6 @@ def create_issue(
         severity=data.severity,
         task_id=data.task_id,
         reporter_id=user.id,
-        assignee_id=data.assignee_id,
         extra=data.extra or {},
         client_uuid=data.client_uuid,
     )
@@ -237,16 +188,8 @@ def create_issue(
         issue_event(db,p,i,user.id)
         log_change(db, project_id, "issue", i.id, "create", user.id,
                    f"上报问题：{data.title}（{data.severity}）")
-        # Notify assignee if specified
-        if data.assignee_id:
-            from app.routers.notifications import notify
-            assignee = db.get(User, data.assignee_id)
-            if assignee:
-                notify(db, assignee.id, f"新问题指派给你：{data.title}",
-                       f"严重程度：{_SEVERITY_LABELS.get(data.severity, data.severity)} · 上报人：{user.display_name}",
-                       ntype="issue_assigned", project_id=project_id, entity_id=i.id)
-        # No assignee → notify the project manager (问题不指定处理人时不能无人知晓)
-        elif p.manager and p.manager != user.id:
+        # The project manager hears about every new issue.
+        if p.manager and p.manager != user.id:
             from app.routers.notifications import notify
             manager = db.get(User, p.manager)
             if manager:
@@ -283,8 +226,6 @@ def import_issues(
     """Import AI-reviewed issue candidates as ordinary auditable issue records."""
     p = ensure_project_visible(db, project_id, user)
     lock_writable_project(db, p, user)
-    if user.role not in ("admin", "pm", "director", "lead") and user.id not in (p.members or []):
-        raise HTTPException(status_code=403, detail="仅项目成员可导入问题")
     # HYPE-99 复审（REJECT 修复）：审计/经理通知必须与问题台账同事务提交。此前先 commit
     # 台账、再 add log_change/notify 且无第二次 commit，而 get_db 请求结束仅 close()，
     # 导致 ChangeLog(action="import")/Notification/NotificationOutbox 全被回滚丢失。
@@ -297,8 +238,6 @@ def import_issues(
         seen_client_uuids = set()  # 批内去重：同一请求多次出现同一 client_uuid 只建一条
         pending_rows = []  # 本轮待新建的行（已存在的行在此被滤掉）
         for row in data.items:
-            if row.assignee_id:
-                _validate_assignee(db, p, row.assignee_id)
             # HYPE-99：关联任务必须属于该项目
             _validate_issue_task(db, project_id, row.task_id)
             if row.client_uuid:
@@ -324,7 +263,7 @@ def import_issues(
                     project_id=project_id, title=row.title, description=row.description,
                     issue_type=row.issue_type, severity=row.severity, task_id=row.task_id,
                     nature=row.nature,
-                    reporter_id=user.id, assignee_id=row.assignee_id, extra=row.extra or {},
+                    reporter_id=user.id, extra=row.extra or {},
                     client_uuid=row.client_uuid,
                 )
                 db.add(issue)
@@ -380,26 +319,21 @@ def update_issue(
     if is_closure and not may_close:
         raise HTTPException(403, "仅项目经理或报告人可关闭或作废问题")
     personal_fields = {"status", "resolution", "version"}
-    from app.services.open_access import enabled as open_access
     from app.services.system_permissions import has_permission as _has
-    # 所有账号都能记录时，不用指派：项目成员都可以开始处理、提交解决结果（关闭仍由报告人或项目经理确认）。
-    member_update = open_access() and user.role != 'readonly' and user.id in (p.members or []) and _has(user, 'worker.issues', default=True)
-    assigned_update = (i.assignee_id == user.id or member_update) and not is_closure
+    # 谁都可以开始处理、提交解决结果；关闭仍由报告人或项目经理确认。
+    member_update = user.role != 'readonly' and _has(user, 'worker.issues', default=True) and not is_closure
     reporter_closure = i.reporter_id == user.id and is_closure
-    if not ((assigned_update or reporter_closure) and not (fields_requested - personal_fields)):
+    if not ((member_update or reporter_closure) and not (fields_requested - personal_fields)):
         authorize_project(user, p, C_ISSUES)
     if data.status == 'cancelled' and not (data.resolution or '').strip():
         raise HTTPException(400, "作废问题必须填写理由")
     from app.services.optimistic import bump_version, require_client_version
     bump_version(i, require_client_version(data.version))
-    if data.assignee_id is not None:
-        _validate_assignee(db, p, data.assignee_id)
-    old_assignee = i.assignee_id
     old_status = i.status
     old_nature = i.nature
     # C6-6：记录字段级变更（old/new）供审计留痕
     old_values = {
-        f: getattr(i, f) for f in ["title", "description", "issue_type", "nature", "severity", "status", "assignee_id", "resolution"]
+        f: getattr(i, f) for f in ["title", "description", "issue_type", "nature", "severity", "status", "resolution"]
     }
     old_extra = dict(i.extra or {})
     # 状态机守卫：禁止任意跳转（resolved→processing / closed→resolved 等）
@@ -413,15 +347,13 @@ def update_issue(
         }
         if data.status not in ALLOWED_TRANSITIONS.get(old_status, set()):
             raise HTTPException(status_code=400, detail=f"不允许的问题状态流转：{old_status} → {data.status}")
-    fields = ["title", "description", "issue_type", "nature", "severity", "status", "assignee_id", "resolution"]
+    fields = ["title", "description", "issue_type", "nature", "severity", "status", "resolution"]
     for f in fields:
         v = getattr(data, f)
-        if v is not None or (f == "assignee_id" and f in data.model_fields_set):
+        if v is not None:
             setattr(i, f, v)
     if data.extra is not None:
         i.extra = data.extra or {}
-    if data.status == "processing" and not i.assignee_id:
-        i.assignee_id = user.id  # 开始处理的人即处理人（无需手动指派）
     if data.status == "resolved" or data.status == "closed":
         if i.resolved_at is None:
             i.resolved_at = utcnow()
@@ -454,15 +386,6 @@ def update_issue(
         notify(db, i.reporter_id, f"问题已作废：{i.title}",
                f"作废原因：{data.resolution or '（未填写）'} · 操作人：{user.display_name}",
                ntype="issue_cancelled", project_id=i.project_id, entity_id=i.id)
-    # Notify new assignee on reassignment
-    if data.assignee_id is not None and data.assignee_id != old_assignee and data.assignee_id != user.id:
-        from app.routers.notifications import notify
-        new_assignee = db.get(User, data.assignee_id)
-        if new_assignee:
-            reporter = db.get(User, i.reporter_id)
-            notify(db, new_assignee.id, f"新问题指派给你：{i.title}",
-                   f"严重程度：{_SEVERITY_LABELS.get(i.severity, i.severity)} · 上报人：{reporter.display_name if reporter else '已删除用户'}",
-                   ntype="issue_assigned", project_id=i.project_id, entity_id=i.id)
     db.commit()
     db.refresh(i)
     from app.services.cache import cache_clear
@@ -487,9 +410,8 @@ def reopen_issue(
         raise HTTPException(status_code=404, detail="问题不存在")
     p = ensure_project_visible(db, i.project_id, user)
     lock_writable_project(db, p, user)
-    # 报告人/被指派人可重开（所有账号可记录时项目成员也可）；否则需 C_ISSUES
-    from app.services.open_access import enabled as open_access
-    if not (i.reporter_id == user.id or i.assignee_id == user.id or (open_access() and user.role != 'readonly' and user.id in (p.members or []))):
+    # 报告人和其他非只读账号都可重开；只读账号需 C_ISSUES
+    if not (i.reporter_id == user.id or user.role != 'readonly'):
         authorize_project(user, p, C_ISSUES)
     if i.status not in ("resolved", "closed", "cancelled"):
         raise HTTPException(status_code=400, detail=f"仅可重开已解决/已作废的问题（当前 {i.status}）")
@@ -501,12 +423,7 @@ def reopen_issue(
     db.flush()
     log_change(db, i.project_id, "issue", i.id, "update", user.id,
                f"报告人重开问题：{i.title}")
-    # 重开 → 通知当前处理人（若存在）与新上报人
     from app.routers.notifications import notify
-    if i.assignee_id and i.assignee_id != user.id:
-        notify(db, i.assignee_id, f"问题被重开：{i.title}",
-               f"报告人要求继续跟进 · 操作人：{user.display_name}",
-               ntype="issue_reopened", project_id=i.project_id, entity_id=i.id)
     if p.status == "completed" and p.manager:
         notify(db, p.manager, f"已完成项目的问题被重开：{i.title}",
                "请确认是否需要返工；如需执行安排或报工，请先将项目从已完成恢复到验收中。",

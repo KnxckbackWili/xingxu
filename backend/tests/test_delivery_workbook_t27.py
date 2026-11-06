@@ -17,11 +17,11 @@ from app.services.report_forms import LIFECYCLE_HEADERS
 
 
 def create_project(client, headers):
-    result = client.post('/api/projects', headers=headers, json={'name':'交付核对项目','start_date':'2026-01-01','end_date':'2026-12-31','members':['user-worker-001']})
+    result = client.post('/api/projects', headers=headers, json={'name':'交付核对项目','start_date':'2026-01-01','end_date':'2026-12-31'})
     assert result.status_code == 200, result.text
     project = result.json()
     with SessionLocal() as db:
-        row = db.get(models.Project,project['id']);row.members=['user-worker-001'];db.commit()
+        row = db.get(models.Project,project['id']);db.commit()
     return project['id']
 
 

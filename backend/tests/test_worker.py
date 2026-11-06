@@ -14,8 +14,6 @@ def _setup(client, pm_headers, worker_id="user-worker-001"):
     pid = r.json()["id"]
     generated = client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers, json={"work_item_ids": default_work("mod-01")})
     assert generated.status_code == 200, generated.text
-    r = client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": [worker_id]}))
-    assert r.status_code == 200, r.text
     from app.db import SessionLocal
     from app.models import Project
     with SessionLocal() as db:
@@ -219,8 +217,6 @@ def _project_with_worker(client, pm_headers, name, worker_id="user-worker-001"):
         "end_date": "2026-09-30"})
     assert r.status_code == 200, r.text
     pid = r.json()["id"]
-    r = client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": [worker_id]}))
-    assert r.status_code == 200, r.text
     return pid
 
 

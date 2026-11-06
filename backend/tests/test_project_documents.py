@@ -206,7 +206,7 @@ def test_readonly_project_member_can_read_documents_without_writing(client,admin
     result=client.post('/api/users',headers=admin_headers,json={'username':'reader','display_name':'只读成员','password':'Review123!','role':'readonly'})
     assert result.status_code==200,result.text
     with SessionLocal() as db:
-        reader=db.query(User).filter_by(username='reader').one();p=db.get(Project,pid);p.members=[*(p.members or []),reader.id];db.commit()
+        reader=db.query(User).filter_by(username='reader').one()
     token=client.post('/api/auth/login',json={'username':'reader','password':'Review123!'}).json()['access_token'];headers={'Authorization':'Bearer '+token}
     state=view(client,headers,pid);assert not state['permissions']['submit'] and not state['permissions']['manage']
     submitted=next(row for row in state['documents'] if row['id']==document['id'])
@@ -255,23 +255,6 @@ def test_completed_document_gate_excludes_future_stages_and_requires_real_eviden
         missing=next(row for row in rows if row.stage_key=='4')
         missing.status='submitted';missing.waived_reason='';db.commit()
         assert any(missing.code in text for text in _pending_required_documents(db,pid))
-
-
-@pytest.mark.member_rules
-def test_agent_document_read_has_scope_and_project_isolation(client,admin_headers):
-    from .test_agent_api import token,call
-    pid=create(client,admin_headers)['id'];document=view(client,admin_headers,pid)['documents'][0]
-    assert upload(client,admin_headers,pid,[document['id']]).status_code==200
-    _,headers=token(client,admin_headers,scopes=['projects:read','files:read'])
-    response=call(client,headers,'documents_read',project_id=pid)
-    assert response.status_code==200 and response.json()['ok'],response.text
-    rows=response.json()['data']['documents']
-    assert next(row for row in rows if row['id']==document['id'])['latest_version']['sha256']==hashlib.sha256(b'evidence').hexdigest()
-    _,limited=token(client,admin_headers,scopes=['projects:read'])
-    denied=call(client,limited,'documents_read',project_id=pid)
-    assert denied.status_code==403 or denied.json().get('ok') is False
-    _,other=token(client,admin_headers,user='user-worker-001',scopes=['projects:read','files:read'])
-    assert call(client,other,'documents_read',project_id=pid).json()['ok'] is False
 
 
 def test_concurrent_real_submissions_keep_every_accepted_version_and_file(client,admin_headers):

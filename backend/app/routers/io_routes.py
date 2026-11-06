@@ -89,7 +89,7 @@ def _validate_quick_import(payload: dict) -> dict:
         parse_snapshot(payload)
     except (ValueError,TypeError) as error:
         errors.append(f"资料定义格式错误：{error}")
-    forbidden = [key for key in ("members", "member_permissions", "manager_id", "technical_manager_id", "co_managers") if key in project]
+    forbidden = [key for key in ("manager_id", "technical_manager_id") if key in project]
     if forbidden:
         errors.append(f"不得通过导入绑定系统账号：{', '.join(forbidden)}")
     if not str(project.get("name", "")).strip():
@@ -500,8 +500,6 @@ def import_project_json(
     p.prep_conditions = [key for key in ("need_wms", "need_charging", "client_server", "new_vehicles", "overseas") if conditions.get(key)]
     db.add(p)
     db.flush()
-    from app.routers.projects import _sync_project_members
-    _sync_project_members(db, p)
     from app.models import ProjectEvent
     from app.services.project_events import normalize_actual, sync_arrival_all, update_plans
     declared_arrival = None
@@ -720,8 +718,6 @@ def clone_project(
     )
     db.add(p)
     db.flush()
-    from app.routers.projects import _sync_project_members
-    _sync_project_members(db, p)
     from app.services.project_events import update_plans
     update_plans(db, p, {event["event_key"]: _parse_date(event.get("planned_date"))
                         for event in snapshot.get("project_events", [])}, user.id)

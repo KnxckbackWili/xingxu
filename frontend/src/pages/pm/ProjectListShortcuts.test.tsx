@@ -23,8 +23,7 @@ const account = (id: string): User => ({
 })
 const project = (id: string, name: string): Project => ({
   id, name, abbreviation: '', manager: 'manager', client: 'QA客户', location: 'QA地点',
-  start_date: '2026-10-01', end_date: '2026-12-31', status: 'preparing', description: '',
-  members: [], capabilities: [], can_delete: false, created_at: '2026-10-01T00:00:00Z',
+  start_date: '2026-10-01', end_date: '2026-12-31', status: 'preparing', description: '', capabilities: [], can_delete: false, created_at: '2026-10-01T00:00:00Z',
 })
 function seedShortcuts(id: string, favorites: string[], recent: Array<{ id: string; section: string }> = []) {
   localStorage.setItem(`agvpm.project-shortcuts.v1:${id}`, JSON.stringify({ favorites, recent }))

@@ -18,7 +18,7 @@ const WorkspaceStatistics = lazy(() => import('../../components/WorkspaceStatist
 
 type Kind = '资料' | '周计划' | '问题' | '签单'
 type TodoRow = { key: string; kind: Kind; title: ReactNode; meta: string; due: string; urgent?: boolean }
-type IssueRow = { id: string; title: string; project_id: string; project_name: string; status: string; severity: string; assignee_id: string | null; assignee_name: string; sla_due_at?: string | null }
+type IssueRow = { id: string; title: string; project_id: string; project_name: string; status: string; severity: string; sla_due_at?: string | null }
 const KINDS: Kind[] = ['资料', '周计划', '问题', '签单']
 const PAGE = 8
 
@@ -91,7 +91,7 @@ export default function DashboardPage() {
   if (planReadable) {
     for (const row of plan!.items ?? []) todos.push({ key: `plan:${row.id}`, kind: '周计划', title: <Link to={row.url}>{row.name}</Link>, meta: `${row.project_name} · 计划周 ${row.week_start}`, due: '已逾期未完成', urgent: true })
   }
-  for (const row of current?.issues ?? []) if (!row.assignee_id || row.assignee_id === user?.id) {
+  for (const row of current?.issues ?? []) {
     todos.push({ key: `issue:${row.id}`, kind: '问题', title: <Link to={`/pm/projects/${encodeURIComponent(row.project_id)}/issues`}>{row.title}</Link>,
       meta: row.project_name, due: row.sla_due_at ? `截止 ${dayjs(row.sla_due_at).format('MM-DD HH:mm')}` : '待处理', urgent: !!row.sla_due_at && dayjs(row.sla_due_at).isBefore(dayjs()) })
   }

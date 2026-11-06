@@ -34,9 +34,8 @@ def week_view(db,user,*,week_start=None,project_id=None):
     projects=visible_projects(db,user)
     if project_id:projects=[ensure_project_visible(db,project_id,user)]
     by_id={p.id:p for p in projects};users={u.id:u for u in db.query(User).filter_by(is_active=True)}
-    planned=[];unassigned=[];assistable=[];warnings=[];matrices={};windows={}
-    # 所有账号都能记录时，本周已发布的工作都列在“要做的工作”里，不分认领、协助。
-    from app.services.open_access import enabled as open_access_enabled
+    planned=[];warnings=[];matrices={};windows={}
+    # 本周已发布的工作都列在“要做的工作”里，谁做完谁登记。
     can_read_plan=has_permission(user,'personal.schedule.read',default=True)
     if not can_read_plan:warnings.append({'project_id':'','message':'本人周计划查看权限已关闭'})
     for project in projects:
@@ -46,7 +45,7 @@ def week_view(db,user,*,week_start=None,project_id=None):
         if cells is None:
             warnings.append({'project_id':project.id,'message':'周计划服务尚未就绪，当前安排未知'});continue
         cache={}
-        from app.services.weekly_plans import can_claim,project_warnings
+        from app.services.weekly_plans import project_warnings
         warnings.extend(project_warnings(db,project,cells,user))
         for cell in cells:
             if not cell.published:continue
@@ -54,10 +53,8 @@ def week_view(db,user,*,week_start=None,project_id=None):
             if not work:continue
             from app.services.project_lifecycle import EXECUTION_PROJECT_STATUSES
             row={**cell_dict(db,cell,project,user,cache=cache),'work_item':work,'date_window':windows[project.id],
-                 'can_record':has_permission(user,'worker.report',default=True) and project.status in EXECUTION_PROJECT_STATUSES and (user.id in set(project.members or [])|{project.manager,project.technical_manager} or C_PLAN in project_capabilities(user,project))}
-            if open_access_enabled() or user.id in (cell.assignee_ids or []):planned.append(row)
-            elif not cell.assignee_ids and can_claim(project,user):unassigned.append(row)
-            else:assistable.append(row)
+                 'can_record':has_permission(user,'worker.report',default=True) and project.status in EXECUTION_PROJECT_STATUSES and user.role not in ('readonly','external')}
+            planned.append(row)
         from app.services.vehicle_progress import matrix
         matrices[project.id]=matrix(db,project.id)
         from app.services.holidays import calendar_in_range
@@ -68,13 +65,12 @@ def week_view(db,user,*,week_start=None,project_id=None):
     documents=[item for facts in facts.values() for item in facts['document_attention']['this_week']]
     for item in documents:
         rule=db.get(ProjectDocument,item['document_id']);item['timing_event']=rule.timing_event if rule else None
-    issue_scope=Issue.project_id.in_(by_id) if open_access_enabled() else or_(Issue.reporter_id==user.id,Issue.assignee_id==user.id)
-    issues=db.query(Issue).filter(Issue.project_id.in_(by_id),issue_scope,
+    issues=db.query(Issue).filter(Issue.project_id.in_(by_id),
         Issue.status.notin_(('closed','cancelled'))).order_by(Issue.created_at.desc()).limit(100).all()
     return {'state':'unavailable' if any('尚未就绪' in w['message'] for w in warnings) else 'ready','plans':planned,
-        'unassigned':unassigned,'assistable':assistable,'vehicle_matrices':matrices,'this_week_documents':documents,
+        'vehicle_matrices':matrices,'this_week_documents':documents,
         'my_issues':[{'id':i.id,'project_id':i.project_id,'project_name':by_id[i.project_id].name,'title':i.title,'status':i.status,
-            'severity':i.severity,'reporter_id':i.reporter_id,'assignee_id':i.assignee_id} for i in issues],
+            'severity':i.severity,'reporter_id':i.reporter_id} for i in issues],
         'windows':windows,'warnings':warnings,'permissions':{'record':has_permission(user,'worker.report',default=True),
             'upload':has_permission(user,'worker.deliver',default=True),'issues':has_permission(user,'worker.issues',default=True),'plan_read':can_read_plan}}
 

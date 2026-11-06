@@ -11,7 +11,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.db import SessionLocal
-from app.models import Project, ProjectMember, User
+from app.models import Project, User
 from app.services.ai_tools import execute_ai_tool
 
 
@@ -31,7 +31,7 @@ def _create_user(client, admin_headers, username, role):
     return me["id"], headers
 
 
-def _seed_project(db, *, manager=None, technical_manager=None, members=None):
+def _seed_project(db, *, manager=None, technical_manager=None):
     """直接种一个项目（含 project_members 关系行），便于精确控制负责人/技术负责人。"""
     project = Project(
         name="AI 权限测试项目",
@@ -43,17 +43,10 @@ def _seed_project(db, *, manager=None, technical_manager=None, members=None):
         status="preparing",
         manager=manager or "user-admin-001",
         technical_manager=technical_manager,
-        members=list(members or []),
         version=0,
     )
     db.add(project)
     db.flush()
-    seen = set()
-    for uid in list(members or []) + ([manager] if manager else []):
-        if uid and uid not in seen:
-            seen.add(uid)
-            if not db.query(ProjectMember).filter_by(project_id=project.id, user_id=uid).first():
-                db.add(ProjectMember(project_id=project.id, user_id=uid, role="member"))
     db.commit()
     db.refresh(project)
     return project
@@ -103,7 +96,7 @@ def test_capabilities_lead_manager_full(client, admin_headers):
     lead_id, lead_headers = _create_user(client, admin_headers, "lead2", "lead")
     db = SessionLocal()
     try:
-        project = _seed_project(db, manager=lead_id, members=[lead_id])
+        project = _seed_project(db, manager=lead_id)
         project_id = project.id
     finally:
         db.close()
@@ -120,7 +113,7 @@ def test_technician_technical_manager_has_schedule_but_not_update(client, admin_
     tech_id, _ = _create_user(client, admin_headers, "tech2", "technician")
     db = SessionLocal()
     try:
-        project = _seed_project(db, manager="user-admin-001", technical_manager=tech_id, members=[tech_id])
+        project = _seed_project(db, manager="user-admin-001", technical_manager=tech_id)
         tech = db.get(User, tech_id)
         progress = execute_ai_tool("get_vehicle_progress", {}, project.id, tech, db)
         assert "units" in progress
@@ -131,7 +124,7 @@ def test_technician_technical_manager_has_schedule_but_not_update(client, admin_
 def test_worker_member_read_ok_write_403(client, admin_headers):
     db = SessionLocal()
     try:
-        project = _seed_project(db, manager="user-admin-001", members=["user-worker-001"])
+        project = _seed_project(db, manager="user-admin-001")
         worker = db.get(User, "user-worker-001")
         summary = execute_ai_tool("get_project_summary", {}, project.id, worker, db)
         assert summary["name"] == "AI 权限测试项目"
@@ -203,7 +196,7 @@ def test_execute_ai_tool_lead_can_read_and_preview_without_writing(client, admin
     lead_id, _ = _create_user(client, admin_headers, "lead3", "lead")
     db = SessionLocal()
     try:
-        project = _seed_project(db, manager=lead_id, members=[lead_id])
+        project = _seed_project(db, manager=lead_id)
         project_id = project.id
         lead = db.get(User, lead_id)
         summary = execute_ai_tool("get_project_summary", {}, project_id, lead, db)

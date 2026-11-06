@@ -26,28 +26,6 @@ def publish(client, headers, pid, *cells):
         json={'cells':[{'id':row['id'],'version':row['version']} for row in cells]})
 
 
-def test_multi_people_scoped_publish_edit_cas_and_no_autoassign(client, pm_headers, worker_headers):
-    pid, units, ph, task = setup(client, pm_headers)
-    with SessionLocal() as db:
-        worker = db.query(User).filter_by(username='worker1').one(); wid=worker.id
-        manager=db.get(Project,pid).manager;p=db.get(Project,pid);p.members=[wid];db.commit()
-    row=create_cell(client,pm_headers,pid,task,assignee_ids=[wid,manager],mode='finish')
-    draft=create_cell(client,pm_headers,pid,task,week_start='2001-01-08')
-    assert row['assignee_ids']==sorted([wid,manager]) and not row['published']
-    assert client.get('/api/worker/weekly-plans?week_start=2001-01-01',headers=worker_headers).json()['cells']==[]
-    assert publish(client,pm_headers,pid,row).status_code==200
-    result=client.get('/api/worker/weekly-plans?week_start=2001-01-01&weeks=2',headers=worker_headers).json()
-    assert [cell['id'] for cell in result['cells']]==[row['id']]
-    url=f"/api/projects/{pid}/weekly-plans/{row['id']}"
-    changed=client.put(url,headers=pm_headers,json={'version':1,'week_start':'2001-01-15','notes':'直接调整已发布计划'})
-    assert changed.status_code==200 and changed.json()['published'],changed.text
-    assert client.put(url,headers=pm_headers,json={'version':1,'notes':'迟到旧表单'}).status_code==409
-    with SessionLocal() as db:
-        assert not db.get(WeeklyPlanCell,draft['id']).published
-        assert db.query(Notification).filter_by(user_id=wid,project_id=pid,ntype='schedule_confirmed').count()==2
-        assert not db.get(Task,task['id']).manually_completed
-
-
 def test_finish_and_in_progress_have_distinct_overdue_and_other_work_is_boolean(client,pm_headers,monkeypatch):
     pid, units, ph, task=setup(client,pm_headers)
     pending=create_cell(client,pm_headers,pid,task)
@@ -81,22 +59,6 @@ def test_vehicle_finish_counts_are_cumulative_not_reused_for_two_weeks(client,pm
     with SessionLocal() as db:assert db.query(VehicleProgress).filter_by(project_id=pid,is_done=True).count()==1
 
 
-def test_explicit_claim_has_one_cas_winner_and_never_claims_somebody_elses_cell(client,pm_headers,worker_headers):
-    pid, units, ph, task=setup(client,pm_headers)
-    with SessionLocal() as db:
-        person=db.query(User).filter_by(username='worker1').one();wid=person.id
-        db.get(Project,pid).members=[wid];db.commit()
-    row=create_cell(client,pm_headers,pid,task)
-    assert publish(client,pm_headers,pid,row).status_code==200
-    result=client.get('/api/worker/weekly-plans?week_start=2001-01-01',headers=worker_headers).json()
-    assert not result['cells'] and [cell['id'] for cell in result['unassigned']]==[row['id']]
-    url=f"/api/projects/{pid}/weekly-plans/{row['id']}/claim"
-    accepted=client.post(url,headers=worker_headers,json={'version':1})
-    assert accepted.status_code==200 and accepted.json()['assignee_ids']==[wid],accepted.text
-    assert client.post(url,headers=pm_headers,json={'version':1}).status_code==409
-    assert client.get('/api/worker/weekly-plans?week_start=2001-01-01',headers=worker_headers).json()['cells'][0]['id']==row['id']
-
-
 def test_target_scope_and_publication_are_atomic_and_do_not_create_zero_goals(client,pm_headers):
     pid, units, ph, task=setup(client,pm_headers,vehicle=True)
     for values in [{'mode':'finish','target_count':0},{'mode':'finish','target_count':1.5},{'mode':'in_progress','target_count':1}]:
@@ -120,6 +82,31 @@ def test_holiday_missing_year_and_known_workday_are_explicit(client,pm_headers):
     assert '2026-02-14' in known['weeks'][0]['makeup_workdays']
 
 
+def test_missing_event_no_guessed_dates_and_no_zero_goal(client,pm_headers):
+    pid,units,ph,task=setup(client,pm_headers)
+    body={'phase_rules':[{'phase_id':ph,'anchor':'after_arrival','offset_weeks':0}]}
+    preview=client.post(f'/api/projects/{pid}/weekly-plans/draft/preview',headers=pm_headers,json=body).json()
+    assert not preview['proposals'] and preview['warnings'][0]['code']=='missing_anchor'
+    result=client.post(f'/api/projects/{pid}/weekly-plans/draft',headers=pm_headers,json={**body,'preview_token':preview['preview_token']})
+    assert result.status_code==200 and result.json()['count']==0
+
+
+def test_cancelled_rows_are_reviewable_and_restore_requires_reason_and_fresh_version(client,pm_headers,worker_headers):
+    pid,units,ph,task=setup(client,pm_headers)
+    with SessionLocal() as db:
+        worker=db.query(User).filter_by(username='worker1').one();p=db.get(Project,pid);db.commit()
+    row=create_cell(client,pm_headers,pid,task)
+    url=f"/api/projects/{pid}/weekly-plans/{row['id']}"
+    assert client.put(url,headers=pm_headers,json={'version':0,'is_cancelled':True}).status_code==400
+    cancelled=client.put(url,headers=pm_headers,json={'version':0,'is_cancelled':True,'reason':'本周范围取消'})
+    assert cancelled.status_code==200,cancelled.text
+    assert not client.get(f'/api/projects/{pid}/weekly-plans?week_start=2001-01-01',headers=pm_headers).json()['cells']
+    assert client.get(f'/api/projects/{pid}/weekly-plans?week_start=2001-01-01&include_cancelled=true',headers=pm_headers).json()['cells'][0]['is_cancelled']
+    assert client.get(f'/api/projects/{pid}/weekly-plans?week_start=2001-01-01&include_cancelled=true',headers=worker_headers).status_code==403
+    assert client.post(f'/api/projects/{pid}/weekly-plans',headers=pm_headers,json={'task_id':task['id'],'week_start':'2001-01-01'}).status_code==409
+    assert client.put(url,headers=pm_headers,json={'version':1,'is_cancelled':False,'reason':'已明确恢复本周安排'}).status_code==200
+
+
 def test_draft_preview_is_readonly_exact_events_and_stale_scope_requires_repreview(client,pm_headers):
     from datetime import datetime
     from app.models import ProjectEvent
@@ -133,7 +120,7 @@ def test_draft_preview_is_readonly_exact_events_and_stale_scope_requires_reprevi
     preview=client.post(base+'/preview',headers=pm_headers,json=body)
     assert preview.status_code==200,preview.text
     item=preview.json()['proposals'][0]
-    assert item['week_start']=='2001-01-01' and item['target_count']==2 and not item['assignee_ids']
+    assert item['week_start']=='2001-01-01' and item['target_count']==2
     with SessionLocal() as db:assert db.query(WeeklyPlanCell).filter_by(project_id=pid).count()==0
     with SessionLocal() as db:
         event=db.query(ProjectEvent).filter_by(project_id=pid,event_key='ship').one();event.actual_at=datetime(2001,1,9,5);db.commit()
@@ -143,31 +130,5 @@ def test_draft_preview_is_readonly_exact_events_and_stale_scope_requires_reprevi
     saved=client.post(base,headers=pm_headers,json={**body,'preview_token':fresh['preview_token']})
     assert saved.status_code==200 and saved.json()['count']==1,saved.text
     with SessionLocal() as db:
-        row=db.query(WeeklyPlanCell).filter_by(project_id=pid).one();assert row.target_count==2 and not row.published and not row.assignee_ids
+        row=db.query(WeeklyPlanCell).filter_by(project_id=pid).one();assert row.target_count==2 and not row.published
     assert not client.post(base+'/preview',headers=pm_headers,json=body).json()['proposals']
-
-
-def test_missing_event_no_guessed_dates_and_no_zero_goal(client,pm_headers):
-    pid,units,ph,task=setup(client,pm_headers)
-    body={'phase_rules':[{'phase_id':ph,'anchor':'after_arrival','offset_weeks':0}]}
-    preview=client.post(f'/api/projects/{pid}/weekly-plans/draft/preview',headers=pm_headers,json=body).json()
-    assert not preview['proposals'] and preview['warnings'][0]['code']=='missing_anchor'
-    result=client.post(f'/api/projects/{pid}/weekly-plans/draft',headers=pm_headers,json={**body,'preview_token':preview['preview_token']})
-    assert result.status_code==200 and result.json()['count']==0
-
-
-def test_cancelled_rows_are_reviewable_and_restore_requires_reason_and_fresh_version(client,pm_headers,worker_headers):
-    pid,units,ph,task=setup(client,pm_headers)
-    with SessionLocal() as db:
-        worker=db.query(User).filter_by(username='worker1').one();p=db.get(Project,pid);p.members=[worker.id];db.commit()
-    row=create_cell(client,pm_headers,pid,task)
-    url=f"/api/projects/{pid}/weekly-plans/{row['id']}"
-    assert client.put(url,headers=pm_headers,json={'version':0,'is_cancelled':True}).status_code==400
-    cancelled=client.put(url,headers=pm_headers,json={'version':0,'is_cancelled':True,'reason':'本周范围取消'})
-    assert cancelled.status_code==200,cancelled.text
-    assert not client.get(f'/api/projects/{pid}/weekly-plans?week_start=2001-01-01',headers=pm_headers).json()['cells']
-    assert client.get(f'/api/projects/{pid}/weekly-plans?week_start=2001-01-01&include_cancelled=true',headers=pm_headers).json()['cells'][0]['is_cancelled']
-    assert client.get(f'/api/projects/{pid}/weekly-plans?week_start=2001-01-01&include_cancelled=true',headers=worker_headers).status_code==403
-    assert client.post(f'/api/projects/{pid}/weekly-plans',headers=pm_headers,json={'task_id':task['id'],'week_start':'2001-01-01'}).status_code==409
-    assert client.put(url,headers=pm_headers,json={'version':1,'is_cancelled':False,'reason':'已明确恢复本周安排'}).status_code==200
-

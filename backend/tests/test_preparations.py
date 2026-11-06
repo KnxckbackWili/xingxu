@@ -128,22 +128,6 @@ def test_status_warning_preview_does_not_change_status(client, pm_headers):
     assert client.get(f"/api/projects/{pid}", headers=pm_headers).json()["status"] == "executing"
 
 
-@pytest.mark.member_rules
-def test_worker_read_only(client, pm_headers, worker_headers):
-    pid = _project(client, pm_headers)
-    # worker 非成员不可见
-    r = client.get(f"/api/projects/{pid}/procurements", headers=worker_headers)
-    assert r.status_code == 404
-    # 加为成员后可读
-    client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": ["user-worker-001"]}))
-    r = client.get(f"/api/projects/{pid}/procurements", headers=worker_headers)
-    assert r.status_code == 200
-    # 写被拒（无 manage_plan 能力）
-    r = client.post(f"/api/projects/{pid}/procurements", headers=worker_headers,
-                    json={"category": "scope", "name": "x"})
-    assert r.status_code == 403
-
-
 # ===== 模板采购清单（v1.3 采购项模板化） =====
 
 

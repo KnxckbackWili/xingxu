@@ -30,8 +30,6 @@ def test_end_to_end_closure(client, pm_headers, worker_headers):
         json={"vehicle_type": "潜伏式", "model_name": "AGV-500", "quantity": 2}).status_code == 200
     assert client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers, json={"work_item_ids": default_work("mod-01")}).status_code == 200
     wid = client.get("/api/auth/me", headers=worker_headers).json()["id"]
-    members = client.get(f"/api/projects/{pid}", headers=pm_headers).json()["members"]
-    assert client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": [*members, wid]})).status_code == 200
 
     # 2. 筹备资料 → 待进场 → 风险批准 → 现场实施
     enter_execution(client, pm_headers, pid)

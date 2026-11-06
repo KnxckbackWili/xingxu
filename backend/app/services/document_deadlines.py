@@ -126,44 +126,28 @@ def _calculate(document, project, events, units):
     return Deadline(anchor + timedelta(hours=-hours if kind == 'before_event' else hours), estimated, basis)
 
 
-def validate_owner(db, project, owner_id):
-    if owner_id is None:
-        return
-    person = db.get(User, owner_id, populate_existing=True)
-    members = {project.manager, project.technical_manager, *(project.members or [])}
-    if person is None or not person.is_active or owner_id not in members or not has_permission(person,'project.read',default=True):
-        raise HTTPException(400, '资料负责人必须是可查看本项目的活跃成员或负责人')
-
-
 def owner_details(project, document, users):
-    """Invalid explicit assignments remain visible while fallback keeps alerts actionable."""
-    members = {project.manager, project.technical_manager, *(project.members or [])}
-    requested = getattr(document, 'owner_id', None)
+    """The technical lead follows a document, else the project manager; inactive people are skipped."""
     manager=users.get(project.manager)
     manager_warning='' if manager and manager.is_active and has_permission(manager,'project.read',default=True) else '项目经理未设置或已停用，逾期升级提醒需管理员接手'
     warning = manager_warning
-    for candidate in dict.fromkeys([requested, project.technical_manager, project.manager]):
+    for candidate in dict.fromkeys([project.technical_manager, project.manager]):
         person = users.get(candidate)
-        eligible=person and person.is_active and candidate in members and has_permission(person,'project.read',default=True)
+        eligible=person and person.is_active and has_permission(person,'project.read',default=True)
         if eligible and isinstance(document,ProjectDocument):
             from app.services.project_documents import can_read_document
             if not can_read_document(person,project,document):
-                warning='指定负责人未获保密资料查看权限，提醒暂由有权人员接收'
+                warning='负责人未获保密资料查看权限，提醒暂由有权人员接收'
                 continue
         if eligible:
-            return {'owner_id': requested, 'owner_name': users[requested].display_name if requested in users else '',
-                    'effective_owner_id': person.id, 'effective_owner_name': person.display_name,
-                    'owner_warning': warning, 'owner_is_default': not requested}
+            return {'effective_owner_id': person.id, 'effective_owner_name': person.display_name, 'owner_warning': warning}
         if candidate:
-            warning = '指定负责人或默认技术负责人已停用或离开项目，暂由当前项目负责人接收提醒'+('；'+manager_warning if manager_warning else '')
-    return {'owner_id': requested, 'owner_name': users[requested].display_name if requested in users else '',
-            'effective_owner_id': None, 'effective_owner_name': '', 'owner_warning': '尚无活跃资料负责人，请项目经理或管理员指派',
-            'owner_is_default': not requested}
+            warning = '技术负责人已停用或无权查看，暂由项目经理接收提醒'+('；'+manager_warning if manager_warning else '')
+    return {'effective_owner_id': None, 'effective_owner_name': '', 'owner_warning': '尚无活跃负责人，请管理员设置项目经理或技术负责人'}
 
 
 def _users(db, project, documents):
-    ids = {project.manager, project.technical_manager, *(project.members or []),
-           *(getattr(row, 'owner_id', None) for row in documents)}
+    ids = {project.manager, project.technical_manager}
     return {row.id: row for row in db.query(User).filter(User.id.in_(ids))}
 
 
@@ -226,7 +210,6 @@ def generate_weekly(db, project, now=None, actor_id=None):
                 if existing:
                     continue
                 row = instantiate(db, project, definition, vehicle=unit, period_key=key)
-                row.owner_id = definition.owner_id
                 log_change(db, project.id, 'project_document', row.id, 'generate', actor_id,
                            f'生成{key}资料：{row.code} {row.name}', None,
                            {'period_key': key, 'definition_id': definition.id, 'vehicle_unit_id': row.vehicle_unit_id})
@@ -308,8 +291,7 @@ def attention_for_projects(db, projects, user, now=None):
     by_project = defaultdict(list)
     for row in db.query(ProjectDocument).filter(ProjectDocument.project_id.in_([p.id for p in projects])):
         by_project[row.project_id].append(row)
-    owner_ids = {row.owner_id for rows in by_project.values() for row in rows}
-    owner_ids.update(value for p in projects for value in (p.manager, p.technical_manager))
+    owner_ids = {value for p in projects for value in (p.manager, p.technical_manager)}
     users = {row.id: row for row in db.query(User).filter(User.id.in_(owner_ids))}
     return {p.id: action_summary(db, p, user, now, by_project[p.id], users) for p in projects}
 

@@ -16,7 +16,7 @@ from app.services.change_log import log_change
 from app.services.project_events import sync_arrival_all
 from app.services.permissions import authorize_project, project_capabilities, C_PLAN, C_ISSUES
 from app.services.record_lock import lock_writable_project
-from app.services.scope import active_co_manager, ensure_project_visible
+from app.services.scope import ensure_project_visible
 
 router = APIRouter(tags=["车辆生命周期"])
 
@@ -113,10 +113,8 @@ def _weekly_event_assignments(db, events, viewer=None):
         Task.project_id==project.id,WeeklyPlanCell.project_id==project.id,Task.source_vehicle_event_id.in_([event.id for event in events]))
     if viewer is None or not can_edit(project,viewer):query=query.filter(WeeklyPlanCell.published.is_(True))
     rows=query.order_by(WeeklyPlanCell.week_start,WeeklyPlanCell.id).all()
-    people={person.id:person.display_name for person in db.query(User).filter(User.id.in_({identity for _,cell in rows for identity in cell.assignee_ids or []}))}
     for event_id,cell in rows:
         grouped.setdefault(event_id,[]).append({'id':cell.id,'task_id':cell.task_id,'week_start':cell.week_start.isoformat(),
-            'assignees':[{'id':identity,'name':people.get(identity,'原负责人未记录')} for identity in cell.assignee_ids or []],
             'published':cell.published,'is_cancelled':cell.is_cancelled})
     return grouped
 
@@ -220,11 +218,9 @@ def _can_record(db: Session, project_id: str, user: User):
         raise HTTPException(403, "现场问题记录权限已被系统管理员撤销")
     project = ensure_project_visible(db, project_id, user)
     lock_writable_project(db, project, user)
-    if user.role in ("admin", "director") or project.manager == user.id or project.technical_manager == user.id:
-        return project
-    if user.id in (project.members or []):
-        return project
-    raise HTTPException(status_code=403, detail="只有项目成员可以记录车辆现场问题")
+    if user.role in ("readonly", "external"):
+        raise HTTPException(status_code=403, detail="只读账号不能记录车辆现场问题")
+    return project
 
 
 @router.get("/projects/{project_id}/vehicle-units")
@@ -348,7 +344,6 @@ def update_event(
         user.role in ("admin", "director")
         or project.manager == user.id
         or project.technical_manager == user.id
-        or active_co_manager(project, user.id)
         or C_ISSUES in project_capabilities(user, project)
     )
     if event.operator_id != user.id and not can_manage:
@@ -372,7 +367,6 @@ def update_event(
 class RepairWeeklyBody(BaseModel):
     model_config={'extra':'forbid'}
     week_start: date
-    assignee_ids: list[str] = Field(default_factory=list,max_length=100)
     mode: Literal['finish','in_progress'] = 'in_progress'
     notes: str = Field(default='',max_length=4000)
 
@@ -384,7 +378,7 @@ def plan_repair_week(project_id: str, unit_id: str, event_id: str, body: RepairW
     from app.services import weekly_plans
     from app.services.work_assignment import create_repair_work
     from sqlalchemy.exc import IntegrityError
-    project=weekly_plans.lock_authority(db,ensure_project_visible(db,project_id,user),user,assignees=body.assignee_ids)
+    project=weekly_plans.lock_authority(db,ensure_project_visible(db,project_id,user),user)
     event=db.get(VehicleLifecycleEvent,event_id,populate_existing=True)
     unit=db.get(VehicleUnit,unit_id,populate_existing=True)
     if not event or not unit or event.project_id!=project_id or unit.project_id!=project_id or event.vehicle_unit_id!=unit_id:
@@ -393,7 +387,7 @@ def plan_repair_week(project_id: str, unit_id: str, event_id: str, body: RepairW
     try:
         task,created=create_repair_work(db,project,user,event,unit,body.notes)
         cell=weekly_plans.create(db,project,user,{'task_id':task.id,'week_start':body.week_start,'mode':body.mode,
-            'assignee_ids':body.assignee_ids,'notes':body.notes},already_locked=True)
+            'notes':body.notes},already_locked=True)
         db.commit()
     except IntegrityError:
         db.rollback();raise HTTPException(409,'维修工作或周计划已由其他操作更新，请刷新核对') from None

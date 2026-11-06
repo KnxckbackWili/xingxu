@@ -16,8 +16,6 @@ def _project(client, pm_headers, retrospective, member=False):
         project = db.get(Project, project_id)
         project.status = 'archived'
         project.retrospective = retrospective
-        if member:
-            project.members = [db.query(User).filter_by(username='worker1').one().id]
         db.commit()
     return project_id
 
@@ -38,14 +36,6 @@ def test_detail_returns_full_retrospective_to_owner_and_member_without_listing_i
     assert 'retrospective' not in next(row for row in rows if row['id'] == pid)
     with SessionLocal() as db:
         assert db.get(Project, pid).retrospective == original  # Read does not rewrite historical data.
-
-
-@pytest.mark.member_rules
-def test_unrelated_worker_cannot_read_retrospective(client, pm_headers, worker_headers):
-    pid = _project(client, pm_headers, {'content': '只有本项目成员可见的复盘'})
-    response = client.get(f'/api/projects/{pid}', headers=worker_headers)
-    assert response.status_code == 404  # Existing project scope conceals unrelated projects.
-    assert '只有本项目成员可见的复盘' not in response.text
 
 
 @pytest.mark.parametrize('original, expected', [

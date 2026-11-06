@@ -16,22 +16,6 @@ def _project(client, pm_headers, technical_id):
     return response.json()['id']
 
 
-@pytest.mark.parametrize('co_manager', [False, True])
-def test_technical_member_or_co_manager_cannot_clear_formal_duty(client, pm_headers, worker_headers, co_manager):
-    uid = client.get('/api/auth/me', headers=worker_headers).json()['id']
-    pid = _project(client, pm_headers, uid)
-    if co_manager:
-        grant = client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {
-            'co_managers': [{'user_id': uid, 'expires_at': '2099-12-31'}],
-        }))
-        assert grant.status_code == 200, grant.text
-        assert client.put(f'/api/projects/{pid}', headers=worker_headers,
-                          json=versioned(pid, {'description': '协管可更新普通说明'})).status_code == 200
-    denied = client.put(f'/api/projects/{pid}', headers=worker_headers, json=versioned(pid, {'technical_manager_id': None}))
-    assert denied.status_code == 403
-    assert client.get(f'/api/projects/{pid}', headers=pm_headers).json()['technical_manager'] == uid
-
-
 @pytest.mark.parametrize('replacement', ['missing-user', 'user-admin-001'])
 def test_invalid_replacement_does_not_clear_existing_duty(client, pm_headers, worker_headers, replacement):
     uid = client.get('/api/auth/me', headers=worker_headers).json()['id']

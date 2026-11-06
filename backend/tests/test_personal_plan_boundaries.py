@@ -32,15 +32,3 @@ def test_terminal_project_cannot_be_changed_through_week_or_actual_entry(client,
         assert not db.query(FieldOperation).filter_by(project_id=pid).count()
         assert db.get(WeeklyPlanCell,row['id']).notes==''
 
-
-def test_weekly_clear_assignees_requires_fresh_version_and_keeps_actuals(client,pm_headers):
-    from app.models import User
-    pid,_,_,task=setup(client,pm_headers)
-    with SessionLocal() as db:uid=db.get(Project,pid).manager
-    cell=create_cell(client,pm_headers,pid,task,assignee_ids=[uid]);assert publish(client,pm_headers,pid,cell).status_code==200
-    url=f"/api/projects/{pid}/weekly-plans/{cell['id']}"
-    response=client.put(url,headers=pm_headers,json={'version':1,'assignee_ids':[]})
-    assert response.status_code==200 and response.json()['assignee_ids']==[]
-    assert client.put(url,headers=pm_headers,json={'version':1,'assignee_ids':[uid]}).status_code==409
-    with SessionLocal() as db:
-        assert not db.get(Task,task['id']).manually_completed and not db.query(FieldOperation).filter_by(project_id=pid).count()

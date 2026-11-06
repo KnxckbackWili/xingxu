@@ -66,5 +66,4 @@ def test_empty_checklist_is_shown_as_missing_and_requires_explanation(client, pm
 def test_worker_cannot_force_confirmation(client, pm_headers, worker_headers):
     pid, _ = scope(client, pm_headers)
     token=preview(client, pm_headers, pid)['review_token']
-    client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members':['user-worker-001']}))
     assert confirm(client, worker_headers, pid, token=token).status_code == 403

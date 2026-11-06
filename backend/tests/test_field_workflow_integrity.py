@@ -53,7 +53,7 @@ def test_vehicle_event_attachment_must_be_current_project_evidence(client, pm_he
 @pytest.mark.parametrize('operation', ['create', 'edit'])
 @pytest.mark.parametrize('transition', ['completed', 'archived', 'revoked'])
 def test_task_plan_rechecks_lifecycle_and_permission_after_waiting(client, pm_headers, monkeypatch, operation, transition):
-    from app.models import ProjectMember, Phase
+    from app.models import Phase
     from app.services import record_lock
     pid, tid, _ = _execution(client, status='preparing')
     with SessionLocal() as db:
@@ -69,7 +69,6 @@ def test_task_plan_rechecks_lifecycle_and_permission_after_waiting(client, pm_he
                 project = other.get(Project, pid)
                 if transition == 'revoked':
                     project.manager = 'user-admin-001'
-                    other.query(ProjectMember).filter_by(project_id=pid, user_id='user-pm-001').delete()
                 else:
                     project.status = transition
                 other.commit()

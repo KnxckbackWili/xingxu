@@ -11,7 +11,6 @@ def _project_with_member(client, pm_headers, worker_headers):
     client.post(f'/api/projects/{pid}/tasks/generate', headers=pm_headers, json={'work_item_ids': default_work('mod-03')})
     wid = client.get('/api/auth/me', headers=worker_headers).json()['id']
     r = client.get(f'/api/projects/{pid}', headers=pm_headers)
-    client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': [*r.json()['members'], wid]}))
     return pid
 
 def test_generate_preserves_project_snapshot_no_duplicate(client, pm_headers):

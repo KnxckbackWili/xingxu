@@ -22,7 +22,7 @@ def test_owner_export_denial_blocks_backup_but_keeps_delete_and_restore(client, 
 
 
 def test_worker_delete_grant_does_not_grant_backup_download(client, admin_headers, pm_headers, worker_headers):
-    project = _project(client, pm_headers, members=['user-worker-001'])
+    project = _project(client, pm_headers)
     _policy(client, admin_headers, 'user-worker-001', {'project.delete': True})
     deleted = _delete(client, worker_headers, project)
     assert deleted.status_code == 200, deleted.text

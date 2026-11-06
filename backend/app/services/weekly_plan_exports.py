@@ -30,8 +30,7 @@ def cell_text(cell):
     facts = cell['completion']
     goal = '进行中' if cell['mode'] == 'in_progress' else f"完成 {cell['target_count']} 台" if cell['kind'] == 'vehicle' and cell['target_count'] is not None else '完成台数待核对' if cell['kind'] == 'vehicle' else '完成工作'
     status = {'unknown':'范围待核对','completed':'已完成','overdue':'已逾期','in_progress':'进行中','planned':'计划中'}[facts['state']]
-    people = '、'.join(person['name'] for person in cell['assignees']) or '负责人待认领/指派'
-    detail = f'{goal} · {"已发布" if cell["published"] else "未发布"}\n{people}\n{status}'
+    detail = f'{goal} · {"已发布" if cell["published"] else "未发布"}\n{status}'
     if cell['kind'] == 'vehicle' and facts.get('required_count') is not None:
         detail += f'（当前有效 {facts.get("completed_count", 0)} / 累计目标 {facts["required_count"]}）'
     if cell.get('notes'):
@@ -91,21 +90,4 @@ def excel(project, data, *, phase_id=None):
             if text:
                 row = warnings.max_row + 1; _text(warnings, row, 1, name); _text(warnings, row, 2, text)
     warnings.column_dimensions['A'].width = 28; warnings.column_dimensions['B'].width = 95
-    source = workbook.create_sheet('原日程来源')
-    fields = [('id','原记录ID'),('task_id','原工作ID'),('work_date','原日期'),('assignee_id','原负责人ID'),
-              ('planned_quantity','原计划量'),('is_confirmed','原发布状态'),('status','原状态'),('notes','原备注')]
-    for col, (_, title) in enumerate(fields, 1):
-        _text(source, 1, col, title).font = Font(bold=True)
-    seen = set()
-    for cell in data['cells']:
-        if phase_id and cell['phase_id'] != phase_id:
-            continue
-        for original in (cell.get('source_metadata') or {}).get('original_entries', []):
-            if original['id'] in seen:
-                continue
-            seen.add(original['id']); row = source.max_row + 1
-            for col, (key, _) in enumerate(fields, 1):
-                _text(source, row, col, original.get(key))
-    source.freeze_panes='A2'
-    for col in range(1,len(fields)+1):source.column_dimensions[get_column_letter(col)].width=28
     stream = BytesIO(); workbook.save(stream); return stream.getvalue()

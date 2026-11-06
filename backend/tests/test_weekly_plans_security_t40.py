@@ -46,22 +46,6 @@ def test_plan_completion_rechecks_exact_required_and_safety_checks(client,pm_hea
     facts=client.get(path,headers=pm_headers).json()['cells'][0]['completion'];assert facts['completed_count']==2 and facts['is_complete']
 
 
-def test_retention_keeps_full_weekly_row_and_publish_retry_is_idempotent(client,pm_headers,worker_headers):
-    from app.services.project_retention import project_retention_snapshot
-    pid,units,ph,task=setup(client,pm_headers)
-    with SessionLocal() as db:
-        worker=db.query(User).filter_by(username='worker1').one();wid=worker.id
-        db.get(Project,pid).members=[wid];db.commit()
-    row=create_cell(client,pm_headers,pid,task,assignee_ids=[wid],notes='原周计划完整说明')
-    assert publish(client,pm_headers,pid,row).json()['count']==1
-    assert publish(client,pm_headers,pid,{**row,'version':1}).json()['count']==0
-    with SessionLocal() as db:
-        assert db.query(Notification).filter_by(user_id=wid,project_id=pid,ntype='schedule_confirmed').count()==1
-        retained=project_retention_snapshot(db,db.get(Project,pid))['records']['weekly_plan_cells'][0]
-        assert retained['notes']=='原周计划完整说明' and retained['assignee_ids']==[wid] and retained['published'] and retained['version']==1
-        assert set(retained)=={column.name for column in WeeklyPlanCell.__table__.columns}
-
-
 def test_extreme_date_is_a_clear_validation_error(client,pm_headers):
     pid,units,ph,task=setup(client,pm_headers)
     assert client.get(f'/api/projects/{pid}/weekly-plans?week_start=9999-12-31',headers=pm_headers).status_code==400
@@ -86,27 +70,6 @@ def test_pg_stale_actor_revocation_is_rechecked_after_project_lock(client,pm_hea
     with SessionLocal() as db:assert db.query(WeeklyPlanCell).filter_by(project_id=pid).count()==0
 
 
-def test_pg_concurrent_explicit_claim_has_exactly_one_winner(client,pm_headers):
-    if engine.dialect.name!='postgresql':pytest.skip('真实PG双会话认领CAS探针')
-    from app.services import weekly_plans
-    pid,units,ph,task=setup(client,pm_headers)
-    with SessionLocal() as db:
-        worker=db.query(User).filter_by(username='worker1').one();db.get(Project,pid).members=[worker.id];db.commit()
-    row=create_cell(client,pm_headers,pid,task);assert publish(client,pm_headers,pid,row).status_code==200
-    barrier=Barrier(2)
-    def attempt(username):
-        with SessionLocal() as db:
-            actor=db.query(User).filter_by(username=username).one();p=db.get(Project,pid);barrier.wait(timeout=5)
-            try:weekly_plans.claim(db,p,actor,row['id'],1)
-            except HTTPException as exc:db.rollback();return exc.status_code
-            db.commit();return 200
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        futures=[pool.submit(attempt,username) for username in ['worker1','pm']]
-        assert sorted(f.result(timeout=15) for f in futures)==[200,409]
-    with SessionLocal() as db:
-        result=db.get(WeeklyPlanCell,row['id']);assert result.version==2 and len(result.assignee_ids)==1
-
-
 def test_excel_phase_filter_does_not_include_other_phase_warning_text(client,pm_headers):
     from io import BytesIO
     from openpyxl import load_workbook
@@ -123,57 +86,14 @@ def test_excel_phase_filter_does_not_include_other_phase_warning_text(client,pm_
     assert 'UNSELECTED-WORK-PRIVATE-TEXT' not in text and task['name'] in text
 
 
-@pytest.mark.parametrize('vehicle',[False,True])
-def test_unknown_legacy_intent_cannot_be_completed_overdue_or_silently_cleared(client,pm_headers,vehicle):
-    from copy import deepcopy
-    from app.models import ChangeLog
-    from tests.test_vehicle_progress import write
-    pid,units,ph,task=setup(client,pm_headers,vehicle=vehicle)
-    if vehicle:assert write(client,pm_headers,pid,units).status_code==200
-    with SessionLocal() as db:
-        if not vehicle:db.get(Task,task['id']).manually_completed=True
-        source={'kind':'t40_legacy_daily_rollup','original_entries':[{'id':'unknown-original','planned_quantity':None}],
-            'original_entry_ids':['unknown-original'],'original_planned_sum':None,'known_planned_sum':'1.0',
-            'unknown_quantity_count':1,'null_quantity_count':1,'invalid_quantity_count':0,'migration_review_required':True}
-        row=WeeklyPlanCell(project_id=pid,task_id=task['id'],scope_key='all:legacy:published:active',scope={'vehicle_unit_ids':[]},
-            vehicle_step_key=task['vehicle_step_key'],week_start=date(2001,1,1),mode='finish',target_count=None,
-            assignee_ids=[],published=True,source_metadata=source,intent_review_required=True)
-        db.add(row);db.commit();cid=row.id
-    path=f'/api/projects/{pid}/weekly-plans'
-    initial=next(c for c in client.get(path+'?week_start=2001-01-01&weeks=1',headers=pm_headers).json()['cells'] if c['id']==cid)
-    assert initial['intent_review_required'] and initial['completion']['state']=='unknown'
-    assert not initial['completion']['is_complete'] and not initial['completion']['overdue']
-    assert initial['completion']['completed_count']==(2 if vehicle else 1)
-    notes=client.put(path+'/'+cid,headers=pm_headers,json={'version':0,'notes':'仅补说明不核对计划'})
-    assert notes.status_code==200 and notes.json()['intent_review_required']
-    target={'mode':'finish','target_count':2 if vehicle else None}
-    assert client.put(path+'/'+cid,headers=pm_headers,json={'version':1,**target}).status_code==400
-    assert client.put(path+'/'+cid,headers=pm_headers,json={'version':1,'confirm_intent':True,**target}).status_code==400
-    assert client.put(path+'/'+cid,headers=pm_headers,json={'version':1,'confirm_intent':'true','reason':'不能用字符串确认',**target}).status_code==422
-    changed=client.put(path+'/'+cid,headers=pm_headers,json={'version':1,'confirm_intent':True,'reason':'已核对原计划：本周明确完成当前工作',**target})
-    assert changed.status_code==200,changed.text
-    assert not changed.json()['intent_review_required'] and changed.json()['completion']['is_complete']
-    assert changed.json()['source_metadata']==source
-    assert client.put(path+'/'+cid,headers=pm_headers,json={'version':1,'confirm_intent':True,'reason':'迟到旧表单',**target}).status_code==409
-    with SessionLocal() as db:
-        audit=db.query(ChangeLog).filter_by(entity_id=cid,action='update').order_by(ChangeLog.created_at.desc()).first()
-        assert audit.old_value['intent_review_required'] and not audit.new_value['intent_review_required']
-        assert '已核对原计划' in audit.detail
-        assert db.get(Task,task['id']).manually_completed is (not vehicle)
 
-
-def test_unknown_draft_requires_review_to_publish_and_can_choose_no_quota(client,pm_headers):
+def test_retention_keeps_full_weekly_row_and_publish_retry_is_idempotent(client,pm_headers):
+    from app.services.project_retention import project_retention_snapshot
     pid,units,ph,task=setup(client,pm_headers)
+    row=create_cell(client,pm_headers,pid,task,notes='原周计划完整说明')
+    assert publish(client,pm_headers,pid,row).json()['count']==1
+    assert publish(client,pm_headers,pid,{**row,'version':1}).json()['count']==0
     with SessionLocal() as db:
-        row=WeeklyPlanCell(project_id=pid,task_id=task['id'],scope_key='all:legacy:draft:active',scope={'vehicle_unit_ids':[]},
-            week_start=date(2001,1,1),mode='finish',target_count=None,assignee_ids=[],published=False,
-            source_metadata={'kind':'t40_legacy_daily_rollup','unknown_quantity_count':1},intent_review_required=True)
-        db.add(row);db.commit();cid=row.id
-    assert publish(client,pm_headers,pid,{'id':cid,'version':0}).status_code==400
-    response=client.put(f'/api/projects/{pid}/weekly-plans/{cid}',headers=pm_headers,
-        json={'version':0,'mode':'in_progress','target_count':None,'confirm_intent':True,'reason':'原量未知，现明确只跟进不设完成承诺'})
-    assert response.status_code==200,response.text
-    assert response.json()['mode']=='in_progress' and not response.json()['intent_review_required']
-    assert publish(client,pm_headers,pid,response.json()).status_code==200
-    row=client.get(f'/api/projects/{pid}/weekly-plans?week_start=2001-01-01&weeks=1',headers=pm_headers).json()['cells'][0]
-    assert not row['completion']['overdue'] and row['target_count'] is None
+        retained=project_retention_snapshot(db,db.get(Project,pid))['records']['weekly_plan_cells'][0]
+        assert retained['notes']=='原周计划完整说明' and retained['published'] and retained['version']==1
+        assert set(retained)=={column.name for column in WeeklyPlanCell.__table__.columns}

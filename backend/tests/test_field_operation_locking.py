@@ -3,7 +3,7 @@ from datetime import date
 from uuid import uuid4
 import pytest
 from app.db import SessionLocal
-from app.models import FieldOperation, Project, ProjectMember, Task, VehicleProgress
+from app.models import FieldOperation, Project, Task, VehicleProgress
 from app.time_utils import project_today, utcnow
 from tests.test_field_week_t33 import prepared, operation as vehicle_operation, save
 
@@ -83,20 +83,3 @@ def test_field_write_rechecks_project_state_after_lock(client, pm_headers, worke
         current = db.get(Project, pid)
         assert current.deleted_at is not None if state == 'deleted' else current.status == state
 
-
-@pytest.mark.parametrize('action', ['vehicle', 'retract', 'complete', 'reopen'])
-def test_field_write_rechecks_actor_after_lock(client, pm_headers, worker_headers, monkeypatch, action):
-    pid, unit, tid, people = _context(client, pm_headers)
-    method, url, body, headers = _request(client, pm_headers, worker_headers, pid, unit, tid, action)
-    actor = people['worker1'] if action in ('vehicle', 'retract') else people['pm']
-    before = _snapshot(pid, unit, tid)
-    def revoke(db, project):
-        project.members = [member for member in project.members or [] if member != actor]
-        if project.manager == actor:
-            project.manager = people['admin']
-        db.query(ProjectMember).filter_by(project_id=pid, user_id=actor).delete()
-    calls = _interleave(monkeypatch, pid, revoke)
-    response = client.request(method, url, headers=headers, json=body)
-    assert calls == [pid]
-    assert response.status_code in (403, 404), response.text
-    assert _snapshot(pid, unit, tid) == before

@@ -128,16 +128,13 @@ export default function VehicleLifecyclePage({ project, onReload, configurationO
   const writeBlocked = useProjectWriteBlocked(project.status)
   const hasManagePermission = hasProjectCapability(project.capabilities, 'project.manage_plan', user?.role === 'admin'
     || (user?.role === 'pm' && project.manager === user.id)
-    || (['lead', 'technician'].includes(user?.role ?? '') && project.technical_manager === user?.id)
-    || !!project.is_co_manager)
+    || (['lead', 'technician'].includes(user?.role ?? '') && project.technical_manager === user?.id))
   const canManage = !writeBlocked && hasManagePermission
   const canExport = hasProjectCapability(project.capabilities, 'project.export', hasManagePermission)
   const canSchedule = !writeBlocked && hasProjectCapability(project.capabilities, 'project.manage_schedule', hasManagePermission)
-  const canManageEvents = !writeBlocked && (hasProjectCapability(project.capabilities, 'project.manage_issues', false) || user?.role === 'admin' || user?.role === 'director' || project.manager === user?.id || project.technical_manager === user?.id || !!project.is_co_manager)
+  const canManageEvents = !writeBlocked && (hasProjectCapability(project.capabilities, 'project.manage_issues', false) || user?.role === 'admin' || user?.role === 'director' || project.manager === user?.id || project.technical_manager === user?.id)
   const canConfigure = !writeBlocked && hasProjectCapability(project.capabilities, 'project.update', hasManagePermission)
-  const canRecord = !writeBlocked && (user?.role === 'admin' || user?.role === 'director'
-    || project.manager === user?.id || project.technical_manager === user?.id
-    || (project.members ?? []).includes(user?.id ?? ''))
+  const canRecord = !writeBlocked && !['readonly', 'external'].includes(user?.role ?? '')
   // 车型字典（HYPE-63）：可选车型来自后端字典；已停用/字典外的历史值以「（历史）」保留显示。
   // 字典加载失败时暴露 error/reload：配置区显示错误提示 + 重试按钮，历史车型不受影响。
   const { options: dictOptions, loading: dictLoading, error: dictError, reload: reloadDict } = useVehicleTypes()

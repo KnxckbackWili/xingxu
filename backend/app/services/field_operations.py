@@ -44,8 +44,6 @@ def authority(db,project_id,user,assisted=None):
     if not user.is_active or (user.token_version or 0)!=version:raise HTTPException(401,'账号或会话已变化，请重新登录')
     if required(user) and (not was_required or not user.mfa_enabled):raise HTTPException(401,'账号验证要求已变化，请重新登录')
     if user.role in ('readonly','external') or not has_permission(user,'worker.report',default=True):raise HTTPException(403,'没有现场登记权限')
-    member=user.id in (project.members or []) or user.id in (project.manager,project.technical_manager)
-    if not member and C_PLAN not in project_capabilities(user,project):raise HTTPException(403,'仅当前项目成员可登记现场事实')
     return project
 
 
@@ -147,19 +145,14 @@ def _assignment(db,project,user,data):
     assisted=data.get('assisted_user_id')
     if assisted:
         person=db.get(User,assisted,populate_existing=True)
-        if assisted==user.id or not person or not person.is_active or (assisted not in (project.members or []) and assisted not in (project.manager,project.technical_manager)):
-            raise HTTPException(400,'被协助人必须是当前启用的项目成员，且不能是自己')
+        if assisted==user.id or not person or not person.is_active or person.role in ('readonly','external'):
+            raise HTTPException(400,'被协助人必须是启用的内部账号，且不能是自己')
     cell_id=data.get('weekly_cell_id')
     if not cell_id:return
     from app.models import WeeklyPlanCell
     cell=db.get(WeeklyPlanCell,cell_id,populate_existing=True)
     if not cell or cell.project_id!=project.id or not cell.published or getattr(cell,'is_cancelled',False):raise HTTPException(404,'已发布周计划不存在')
-    from app.services.open_access import enabled as open_access
-    # 所有账号都能记录时，周计划只说“这周做什么”，谁做完谁登记，不再要求认领或负责人本人。
-    if not open_access():
-        assignees=cell.assignee_ids or []
-        if not assignees:raise HTTPException(409,'此工作尚未分配，请先使用认领按钮')
-        if (assisted or user.id) not in assignees:raise HTTPException(403,'实际记录与当前周计划负责人不匹配')
+    # 周计划只说“这周做什么”，谁做完谁登记。
     task_id=data['target_id'] if data['kind']=='work' else db.get(CheckItem,data['target_id']).task_id if data['kind']=='check' and db.get(CheckItem,data['target_id']) else None
     if task_id and task_id!=cell.task_id:raise HTTPException(404,'工作不属于该周计划')
     task=db.get(Task,cell.task_id)

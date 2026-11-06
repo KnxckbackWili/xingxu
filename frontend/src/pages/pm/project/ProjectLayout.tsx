@@ -180,9 +180,9 @@ export default function ProjectLayout() {
 
   const st = projectStatusMeta(project.status)
   const daysLeft = dayjs(project.end_date).diff(dayjs(), 'day')
-  const legacyEditSettings = user?.role === 'admin' || (['pm', 'lead'].includes(user?.role ?? '') && project.manager === user?.id) || !!project.is_co_manager
+  const legacyEditSettings = user?.role === 'admin' || (['pm', 'lead'].includes(user?.role ?? '') && project.manager === user?.id)
   const legacyManageInventory = legacyEditSettings || (project.technical_manager === user?.id && ['lead', 'technician'].includes(user?.role ?? ''))
-  const legacyManageIssues = ['admin', 'director'].includes(user?.role ?? '') || !!project.is_co_manager
+  const legacyManageIssues = ['admin', 'director'].includes(user?.role ?? '')
     || (project.manager === user?.id && ['pm', 'lead'].includes(user?.role ?? ''))
     || (project.technical_manager === user?.id && ['lead', 'technician', 'pm', 'worker'].includes(user?.role ?? ''))
   const can = (capability: string, fallback = false) => user?.permission_overrides?.[capability] !== false && hasProjectCapability(effectiveCapabilities, capability, fallback)
@@ -244,9 +244,9 @@ export default function ProjectLayout() {
           <Suspense key={project.id} fallback={<div style={{ textAlign: 'center', padding: 64 }}><Spin /></div>}>
             {rawTab === 'edit' && <EditPage project={project} onReload={load} />}
             {rawTab === 'export' && <ExportPage projectId={project.id} projectName={project.name} />}
-            {!specialView && activeTab === 'overview' && <OverviewPage projectId={project.id} projectStatus={project.status} projectSuspension={project.suspension ?? null} infoComplete={!!(project.client?.trim() && project.location?.trim())} vehicleTotal={project.vehicle_total ?? 0} memberCount={project.members?.length ?? 0} canManageStatus={canManageStatus} canArchive={user?.permission_overrides?.['project.archive'] !== false} onStatusChange={load} />}
+            {!specialView && activeTab === 'overview' && <OverviewPage projectId={project.id} projectStatus={project.status} projectSuspension={project.suspension ?? null} infoComplete={!!(project.client?.trim() && project.location?.trim())} vehicleTotal={project.vehicle_total ?? 0} canManageStatus={canManageStatus} canArchive={user?.permission_overrides?.['project.archive'] !== false} onStatusChange={load} />}
             {!specialView && activeTab === 'plan' && <Tabs activeKey={rawTab==='schedule'||new URLSearchParams(location.search).get('view')==='weeks'?'weeks':'work'} onChange={view=>navigateSafely(`/pm/projects/${project.id}/plan?view=${view}`)} items={[
-              { key:'work',label:'工作项',children:(rawTab!=='schedule'&&new URLSearchParams(location.search).get('view')!=='weeks') ? <TaskPlanPage focusTaskId={new URLSearchParams(location.search).get('task') ?? ''} focusTab={new URLSearchParams(location.search).get('tab') === 'reference' ? 'reference' : 'checks'} sourceTemplate={project.source_template} vehicles={project.vehicles ?? []} projectId={project.id} canManage={!!project.is_co_manager} projectStatus={project.status} focusTargets={new URLSearchParams(location.search).get('focus') === 'targets'} /> : null },
+              { key:'work',label:'工作项',children:(rawTab!=='schedule'&&new URLSearchParams(location.search).get('view')!=='weeks') ? <TaskPlanPage focusTaskId={new URLSearchParams(location.search).get('task') ?? ''} focusTab={new URLSearchParams(location.search).get('tab') === 'reference' ? 'reference' : 'checks'} sourceTemplate={project.source_template} vehicles={project.vehicles ?? []} projectId={project.id} canManage={canEditSettings} projectStatus={project.status} focusTargets={new URLSearchParams(location.search).get('focus') === 'targets'} /> : null },
               { key:'weeks',label:'周计划',children:(rawTab==='schedule'||new URLSearchParams(location.search).get('view')==='weeks') ? <SchedulePage projectId={project.id} project={project} onProjectChange={load} /> : null },
             ]} />}
             {!specialView && (activeTab==='vehicles'||activeTab==='field') && <SiteInformationPage standalone project={project} canManageInventory={canManageInventory} sub={activeTab==='vehicles'?'vehicles':(activeChild??'inventory') as 'inventory'|'handover'} onSubChange={subNav('field')} onReload={load} />}

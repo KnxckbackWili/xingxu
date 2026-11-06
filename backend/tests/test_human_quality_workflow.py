@@ -11,7 +11,6 @@ def test_completed_issue_reopen_keeps_state_and_notifies_manager(client, pm_head
     from app.models import Notification, Issue
     pid = project(client, pm_headers)
     uid = client.get('/api/auth/me', headers=worker_headers).json()['id']
-    client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': [uid]}))
     issue = client.post(f'/api/projects/{pid}/issues', headers=worker_headers, json={'title': '复发'}).json()
     client.put(f"/api/issues/{issue['id']}", headers=pm_headers, json=versioned(issue['id'], {'status': 'resolved'}, 'Issue'))
     with SessionLocal() as db:

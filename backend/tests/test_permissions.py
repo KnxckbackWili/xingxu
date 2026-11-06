@@ -27,16 +27,6 @@ def _project(client, headers, name, **extra):
     return response.json()["id"]
 
 
-@pytest.mark.member_rules
-def test_pm_and_worker_scope_is_explicit(client, admin_headers, pm_headers, worker_headers):
-    other_pm = _user(client, admin_headers, "pm2", "pm")
-    other = _project(client, admin_headers, "其他项目", manager_id=other_pm)
-    assert client.get(f"/api/projects/{other}", headers=pm_headers).status_code == 404
-    assert client.get(f"/api/projects/{other}/vehicles", headers=worker_headers).status_code == 404
-    assert client.post(f"/api/projects/{other}/documents/files", headers=worker_headers,
-                       files={"file": ("x.txt", b"x", "text/plain")}).status_code == 404
-
-
 def test_designated_technical_manager_capabilities(client, admin_headers, pm_headers):
     lead_id = _user(client, admin_headers, "lead1", "lead")
     lead_headers = _login(client, "lead1")
@@ -47,7 +37,6 @@ def test_designated_technical_manager_capabilities(client, admin_headers, pm_hea
     assert generated.status_code == 200, generated.text
     assert client.get(f"/api/projects/{project_id}/export/excel", headers=lead_headers).status_code == 200
     assert client.put(f"/api/projects/{project_id}", headers=lead_headers, json=versioned(project_id, {"name": "越权"})).status_code == 403
-    assert client.put(f"/api/projects/{project_id}", headers=lead_headers, json=versioned(project_id, {"members": []})).status_code == 403
     assert client.delete(f"/api/projects/{project_id}", headers=lead_headers).status_code == 403
 
 
@@ -55,7 +44,6 @@ def test_ordinary_technician_is_read_only_until_designated(client, admin_headers
     tech_id = _user(client, admin_headers, "tech1", "technician")
     tech_headers = _login(client, "tech1")
     project_id = _project(client, pm_headers, "技术项目")
-    client.put(f"/api/projects/{project_id}", headers=pm_headers, json=versioned(project_id, {"members": [tech_id]}))
     assert client.get(f"/api/projects/{project_id}", headers=tech_headers).status_code == 200
     assert client.post(f"/api/projects/{project_id}/tasks/generate", headers=tech_headers,
                        json={"work_item_ids": default_work("mod-01")}).status_code == 403
@@ -83,7 +71,6 @@ def test_owner_and_admin_can_directly_delete_with_project_backup(client, admin_h
 
 def test_all_active_is_minimal(client, pm_headers, worker_headers):
     project_id = _project(client, pm_headers, "成员项目")
-    client.put(f"/api/projects/{project_id}", headers=pm_headers, json=versioned(project_id, {"members": ["user-worker-001"]}))
     rows = client.get("/api/users/all-active", headers=worker_headers).json()
     assert {"user-worker-001", "user-pm-001"} <= {row["id"] for row in rows}
     assert all(key not in row for row in rows for key in ("username", "phone", "email"))
@@ -95,40 +82,4 @@ def test_documents_get_is_read_only(client, pm_headers):
     second = client.get(f"/api/projects/{project_id}/documents", headers=pm_headers).json()["documents"]
     assert [row["id"] for row in first] == [row["id"] for row in second]
     assert all(row["status"] == "pending" and not row["versions"] for row in second)
-
-
-def test_worker_project_co_manager_grant_is_scoped_and_expires(client, pm_headers, worker_headers):
-    project_id = _project(client, pm_headers, "实施协管项目")
-    grant = client.put(f"/api/projects/{project_id}", headers=pm_headers, json=versioned(project_id, {
-        "co_managers": [{"user_id": "user-worker-001", "expires_at": "2099-12-31"}],
-    }))
-    assert grant.status_code == 200, grant.text
-
-    detail = client.get(f"/api/projects/{project_id}", headers=worker_headers)
-    assert detail.status_code == 200
-    assert detail.json()["is_co_manager"] is True
-    assert client.get("/api/auth/me", headers=worker_headers).json()["has_co_manager_projects"] is True
-    assert client.put(f"/api/projects/{project_id}", headers=worker_headers,
-                      json=versioned(project_id, {"description": "由实施工程师协管"})).status_code == 200
-
-    # 协管不能转移负责人，也不能继续委派其他协管。
-    via_edit = client.put(f"/api/projects/{project_id}", headers=worker_headers,
-                          json=versioned(project_id, {"manager_id": "user-worker-001"}))
-    assert via_edit.status_code == 400 and "更换负责人入口" in via_edit.json()["detail"]
-    from tests.lifecycle_helpers import project_version
-    transfer = client.post(f"/api/projects/{project_id}/transfer", headers=worker_headers, json={
-        "target_manager_id": "user-worker-001", "reason": "协管尝试转移负责人", "version": project_version(client, pm_headers, project_id)})
-    assert transfer.status_code == 403, transfer.text
-    assert client.put(f"/api/projects/{project_id}", headers=worker_headers,
-                      json=versioned(project_id, {"co_managers": []})).status_code == 403
-
-    expired = client.put(f"/api/projects/{project_id}", headers=pm_headers, json=versioned(project_id, {
-        "co_managers": [{"user_id": "user-worker-001", "expires_at": "2000-01-01"}],
-    }))
-    assert expired.status_code == 200, expired.text
-    assert client.get(f"/api/projects/{project_id}", headers=worker_headers).json()["is_co_manager"] is False
-    assert client.get("/api/auth/me", headers=worker_headers).json()["has_co_manager_projects"] is False
-    assert client.put(f"/api/projects/{project_id}", headers=worker_headers,
-                      json=versioned(project_id, {"description": "过期后不可管理"})).status_code == 403
-
 

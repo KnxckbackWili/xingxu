@@ -10,18 +10,16 @@ def _project(client, pm_headers):
     })
     assert r.status_code == 200, r.text
     pid = r.json()["id"]
-    # Pagination/read tests require real assignment recipients with project access.
-    membership = client.put(f"/api/projects/{pid}", headers=pm_headers,
-                            json=versioned(pid, {"members": ["user-worker-001", "user-worker-002"]}))
-    assert membership.status_code == 200, membership.text
     return pid
 
 
 def _notify_worker(client, pm_headers, pid, worker_id, title):
-    """Create an issue assigned to a worker (triggers a notification)."""
-    r = client.post(f"/api/projects/{pid}/issues", headers=pm_headers, json={
-        "title": title, "assignee_id": worker_id})
-    assert r.status_code == 200, r.json()
+    """Send the worker one project notification."""
+    from app.db import SessionLocal
+    from app.services.notify import notify
+    with SessionLocal() as db:
+        notify(db, worker_id, title, "测试通知", ntype="system", project_id=pid)
+        db.commit()
 
 
 def test_notifications_offset_pagination(client, pm_headers, worker_headers):
@@ -53,7 +51,7 @@ def test_notifications_no_params_backward_compat(client, pm_headers, worker_head
     assert r.status_code == 200
     notifs = r.json()
     assert len(notifs) == 1
-    assert notifs[0]["title"].startswith("新问题指派给你")
+    assert notifs[0]["title"] == "兼容问题"
 
 
 def test_notifications_batch_read_only_own(client, pm_headers, worker_headers):
@@ -104,24 +102,3 @@ def test_notifications_batch_read_all_clears_count(client, pm_headers, worker_he
     r = client.get("/api/notifications", headers=worker_headers)
     assert all(n["is_read"] for n in r.json())
 
-
-def test_legacy_issue_notification_resolves_reporter_without_rewriting_user_content(client, pm_headers, worker_headers):
-    from app.db import SessionLocal
-    from app.models import Notification
-
-    pid = _project(client, pm_headers)
-    created = client.post(f"/api/projects/{pid}/issues", headers=pm_headers,
-                          json={"title": "历史文案", "assignee_id": "user-worker-001"}).json()
-    reporter = client.get("/api/auth/me", headers=pm_headers).json()
-    with SessionLocal() as db:
-        notice = db.query(Notification).filter(Notification.entity_id == created["id"]).one()
-        notice.content = f"严重程度：medium · 上报人：{reporter['id']}"
-        db.commit()
-    content = client.get("/api/notifications", headers=worker_headers).json()[0]["content"]
-    assert content == f"严重程度：medium · 上报人：{reporter['display_name']}"
-    with SessionLocal() as db:
-        notice = db.query(Notification).filter(Notification.entity_id == created["id"]).one()
-        notice.content = f"用户备注含 medium 和上报人：{reporter['id']}"
-        db.commit()
-    content = client.get("/api/notifications", headers=worker_headers).json()[0]["content"]
-    assert content == f"用户备注含 medium 和上报人：{reporter['id']}"

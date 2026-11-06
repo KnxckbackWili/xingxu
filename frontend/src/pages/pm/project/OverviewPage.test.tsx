@@ -13,7 +13,7 @@ beforeEach(() => { vi.clearAllMocks(); role.value = 'pm'; apiGet.mockResolvedVal
 describe('项目总览按需展开', () => {
   it('keeps the next-step reason and permitted status controls with the current action, and links unbound vehicle work directly', async () => {
     apiGet.mockResolvedValue({ data: { ...overview, tree: [{ work_items: [{ kind: 'vehicle', vehicle_step_key: null }] }] } })
-    render(<OverviewPage projectId="p1" projectStatus="preparing" vehicleTotal={1} memberCount={1} canManageStatus />)
+    render(<OverviewPage projectId="p1" projectStatus="preparing" vehicleTotal={1} canManageStatus />)
     const current = within(await screen.findByRole('region', { name: '当前行动' }))
     expect(screen.getByRole('list', { name: '准备清单' })).toBeVisible()
     expect(current.getByRole('button', { name: /调整项目状态/ })).toBeVisible()
@@ -29,7 +29,7 @@ describe('项目总览按需展开', () => {
       weekly_plans: {state:'available',total:89,published_count:0,draft_count:89,overdue_count:0,unknown_count:0,warning_count:0,unassigned_count:0,warnings:[]},
       progress: { ...overview.progress, quantities_by_unit: [{ unit: '台', completed: 1, target: 2 }, { unit: '米', completed: 2, target: 10 }] },
     } })
-    render(<OverviewPage projectId="p1" projectStatus="preparing" vehicleTotal={1} memberCount={1} />)
+    render(<OverviewPage projectId="p1" projectStatus="preparing" vehicleTotal={1} />)
     const details = await screen.findByRole('button', { name: '进度与记录' }); expect(details).toHaveAttribute('aria-expanded', 'false'); fireEvent.click(details)
     const current = within(screen.getByRole('region', { name: '当前行动' }))
     expect(current.getByRole('button', { name: /^资料清单$/ })).toBeVisible()
@@ -310,7 +310,7 @@ describe('项目总览按需展开', () => {
 
   it('stale readiness approval points startup back to current entry review', async () => {
     apiGet.mockResolvedValue({ data: { ...overview, tree: [{ modules: [{ tasks: [{ target_quantity: 1 }] }] }], schedule: [{ is_confirmed: true, assignee_id: 'u1' }], preparations: { summary: { state_key: 'forced_ready', entry_confirmed: true, void: true } } } })
-    render(<OverviewPage projectId="p1" projectStatus="preparing" vehicleTotal={1} memberCount={1} canManageStatus />)
+    render(<OverviewPage projectId="p1" projectStatus="preparing" vehicleTotal={1} canManageStatus />)
     fireEvent.click(await screen.findByRole('button', { name: /发车前资料确认/ }))
     expect(navigate).toHaveBeenCalledWith('/pm/projects/p1/documents?review=1')
     expect(apiPost).not.toHaveBeenCalled()

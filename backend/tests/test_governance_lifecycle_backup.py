@@ -21,27 +21,6 @@ def _login(client, username):
 
 
 
-@pytest.mark.member_rules
-def test_project_transfer_and_delete_workflow(client, admin_headers, pm_headers):
-    target_id = _create_user(client, admin_headers, "targetpm")
-    project = client.post("/api/projects", headers=pm_headers, json={
-        "name": "待移交项目", "start_date": "2026-08-01", "end_date": "2026-09-01",
-    }).json()
-    view=client.get(f"/api/projects/{project['id']}/transfer-preview",headers=pm_headers).json()
-    transferred=client.post(f"/api/projects/{project['id']}/transfer",headers=pm_headers,json={
-        'target_manager_id':target_id,'reason':'岗位调整，已完成风险交底','version':view['version'],
-        'member_removal_confirmations':[row['user_id'] for row in view['removed']]})
-    assert transferred.status_code==200,transferred.text
-    assert client.get(f"/api/projects/{project['id']}", headers=pm_headers).status_code == 404
-    assert client.get(f"/api/projects/{project['id']}", headers=_login(client, "targetpm")).status_code == 200
-
-    fresh = client.get(f"/api/projects/{project['id']}", headers=_login(client, "targetpm")).json()
-    deletion = client.delete(f"/api/projects/{project['id']}", headers=_login(client, "targetpm"), params={"version": fresh["version"]})
-    assert deletion.status_code == 200, deletion.text
-    assert deletion.json()["backup"]["available"] is True
-    assert client.get(f"/api/projects/{project['id']}", headers=admin_headers).status_code == 404
-
-
 def test_vehicle_lifecycle_and_json_roundtrip_data(client, admin_headers, pm_headers):
     project = client.post("/api/projects", headers=pm_headers, json={
         "name": "生命周期项目", "start_date": "2026-08-01", "end_date": "2026-09-01",

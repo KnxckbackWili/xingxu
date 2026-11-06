@@ -18,12 +18,12 @@ import './WeeklyPlan.css'
 import { IconAction, RefreshAction } from '../../../components/IconAction'
 
 const monday = (value: string) => { const d = dayjs(value); return d.subtract((d.day() + 6) % 7, 'day').format('YYYY-MM-DD') }
-type Edit = { cell?: PlanCell; input: PlanInput; scopeMode: 'all'|'type'|'batch'; confirmIntent: boolean; intentReason: string }
+type Edit = { cell?: PlanCell; input: PlanInput; scopeMode: 'all'|'type'|'batch' }
 const scopeText = (cell: PlanCell) => cell.scope.label || cell.scope.vehicle_type || (cell.scope.vehicle_unit_ids.length ? `指定 ${cell.scope.vehicle_unit_ids.length} 台` : cell.kind === 'vehicle' ? '全部适用车辆' : '本工作项')
 
 // Only a narrowed scope is worth a word; "all vehicles" / "this work item" is the default.
 const narrowScope = (cell: PlanCell) => cell.scope.label || cell.scope.vehicle_type || (cell.scope.vehicle_unit_ids.length ? `指定 ${cell.scope.vehicle_unit_ids.length} 台` : '')
-const goal = (cell: PlanCell) => cell.intent_review_required ? '原计划意图待核对' : cell.mode === 'in_progress' ? '进行中' : cell.kind === 'other' ? '完成' : cell.target_count == null ? '计划台数待核对' : `完成 ${cell.target_count} 台`
+const goal = (cell: PlanCell) => cell.mode === 'in_progress' ? '进行中' : cell.kind === 'other' ? '完成' : cell.target_count == null ? '计划台数待核对' : `完成 ${cell.target_count} 台`
 
 const restDays = (week: PlanWeek, settings: PlanSettings) => Array.from({ length: 7 }, (_, offset) => dayjs(week.week_start).add(offset, 'day')).filter(date => {
   const value = date.format('YYYY-MM-DD')
@@ -94,15 +94,15 @@ export default function SchedulePage({projectId,project,onProjectChange}: {proje
   const visibleCells=data?.cells.filter(cell=>!phaseId||cell.phase_id===phaseId)??[]
   const chosen=visibleCells.filter(cell=>selection.includes(cell.id)&&!cell.published&&!cell.is_cancelled)
   const work=works.find(item=>item.id===editor?.input.task_id)
-  const openNew=(item?:PlanWork,week=start)=>{setEditStale(false);setActionError('');setEditor({scopeMode:'all',confirmIntent:false,intentReason:'',input:{task_id:item?.id??'',scope:{vehicle_unit_ids:[]},week_start:week,mode:'finish',target_count:null,assignee_ids:[],notes:''}})}
-  const openCell=(cell:PlanCell)=>{setEditStale(false);setActionError('');setEditor({cell,confirmIntent:false,intentReason:'',scopeMode:cell.scope.vehicle_type?'type':cell.scope.vehicle_unit_ids.length?'batch':'all',input:{task_id:cell.task_id,scope:{...cell.scope,vehicle_unit_ids:[...cell.scope.vehicle_unit_ids]},week_start:cell.week_start,mode:cell.mode,target_count:cell.target_count,assignee_ids:[...cell.assignee_ids],notes:cell.notes}})}
+  const openNew=(item?:PlanWork,week=start)=>{setEditStale(false);setActionError('');setEditor({scopeMode:'all',input:{task_id:item?.id??'',scope:{vehicle_unit_ids:[]},week_start:week,mode:'finish',target_count:null,notes:''}})}
+  const openCell=(cell:PlanCell)=>{setEditStale(false);setActionError('');setEditor({cell,scopeMode:cell.scope.vehicle_type?'type':cell.scope.vehicle_unit_ids.length?'batch':'all',input:{task_id:cell.task_id,scope:{...cell.scope,vehicle_unit_ids:[...cell.scope.vehicle_unit_ids]},week_start:cell.week_start,mode:cell.mode,target_count:cell.target_count,notes:cell.notes}})}
   const patch=(change:Partial<PlanInput>)=>setEditor(current=>current?{...current,input:{...current.input,...change}}:current)
-  const valid=!!editor&&!!work&&!!editor.input.week_start&&(!editor.cell?.intent_review_required||editor.confirmIntent&&!!editor.intentReason.trim())&&(work.kind!=='vehicle'||editor.scopeMode==='all'||editor.scopeMode==='type'&&!!editor.input.scope.vehicle_type||editor.scopeMode==='batch'&&editor.input.scope.vehicle_unit_ids.length>0)&&(work.kind!=='vehicle'||editor.input.mode!=='finish'||Number.isInteger(editor.input.target_count)&&editor.input.target_count!>0)
+  const valid=!!editor&&!!work&&!!editor.input.week_start&&(work.kind!=='vehicle'||editor.scopeMode==='all'||editor.scopeMode==='type'&&!!editor.input.scope.vehicle_type||editor.scopeMode==='batch'&&editor.input.scope.vehicle_unit_ids.length>0)&&(work.kind!=='vehicle'||editor.input.mode!=='finish'||Number.isInteger(editor.input.target_count)&&editor.input.target_count!>0)
   const save=()=>{
     if(!editor||!valid||editStale)return
     const input={...editor.input,target_count:work?.kind==='vehicle'&&editor.input.mode==='finish'?editor.input.target_count:null,scope:work?.kind==='vehicle'?editor.input.scope:{vehicle_unit_ids:[]}}
     const { task_id, ...changes } = input
-    void write(()=>editor.cell?weeklyPlansApi.update(projectId,editor.cell.id,{...changes,version:editor.cell.version,...(editor.cell.intent_review_required?{confirm_intent:true,reason:editor.intentReason.trim()}:{})}):weeklyPlansApi.create(projectId,{...changes,task_id}),()=>setEditor(undefined))
+    void write(()=>editor.cell?weeklyPlansApi.update(projectId,editor.cell.id,{...changes,version:editor.cell.version}):weeklyPlansApi.create(projectId,{...changes,task_id}),()=>setEditor(undefined))
   }
   const readRecommendations=async()=>{
     if(!allowed||lock.current)return
@@ -216,11 +216,6 @@ export default function SchedulePage({projectId,project,onProjectChange}: {proje
     <Modal title={editor?.cell?'修改周计划格':'新增周计划格'} open={!!editor&&!!data} onCancel={()=>{if(!busy)setEditor(undefined)}} onOk={save} okText="保存计划" confirmLoading={busy} okButtonProps={{disabled:!allowed||!valid||editStale}} cancelButtonProps={{disabled:busy}} maskClosable={!busy}>
       {editor&&<Space direction="vertical" style={{width:'100%'}}>
         {actionError&&<Alert type="error" message={actionError}/>}{editStale&&<Alert type="warning" message="请重新读取最新计划后再保存" action={<Button disabled={busy} onClick={()=>{setEditor(undefined);void load()}}>重新读取周计划</Button>}/>}
-        {editor.cell?.intent_review_required&&<>
-          <Alert type="warning" message="旧计划的完成意图待核对" description="原数量包含未知量或无法直接转换的计划。请核对原始来源，明确本次计划方式和车辆台数；原日程保留只读。核对前不会判完成或逾期。"/>
-          <Checkbox checked={editor.confirmIntent} disabled={busy} onChange={event=>setEditor(current=>current?{...current,confirmIntent:event.target.checked}:current)}>已核对原始来源，按本次填写重新定义计划</Checkbox>
-          <Input.TextArea aria-label="旧计划意图核对理由" value={editor.intentReason} disabled={busy} maxLength={1000} placeholder="说明已核对的来源和本次计划依据" onChange={event=>setEditor(current=>current?{...current,intentReason:event.target.value}:current)}/>
-        </>}
         <label>工作项<Select aria-label="周计划工作项" value={editor.input.task_id||undefined} disabled={busy||!!editor.cell} style={{width:'100%'}} onChange={id=>patch({task_id:id,target_count:null,scope:{vehicle_unit_ids:[]}})} options={works.map(item=>({value:item.id,label:`${item.phase_name} · ${item.name}`}))}/></label>
         <label>计划周<DatePicker aria-label="计划完成周" picker="week" value={dayjs(editor.input.week_start)} allowClear={false} disabled={busy} onChange={value=>value&&patch({week_start:monday(value.format('YYYY-MM-DD'))})}/></label>
         <Select aria-label="计划方式" value={editor.input.mode} disabled={busy} onChange={mode=>patch({mode,target_count:null})} options={[{value:'finish',label:'本周完成'},{value:'in_progress',label:'本周进行中'}]}/>

@@ -135,13 +135,6 @@ def member_permission_reasons(project_id: str, user_id: str,
     project = ensure_project_visible(db, project_id, actor)
     if actor.id != user_id and actor.role != "admin":
         authorize_project(actor, project, C_MEMBERS)
-    from app.services.scope import active_co_manager
-    from app.services.permission_explanations import membership_reasons
-    related = user_id in (project.members or []) or user_id in {project.manager, project.technical_manager} or active_co_manager(project, user_id)
-    if actor.role != "admin" and actor.id != user_id and not related:
-        # Do not even resolve the outsider account: missing, disabled and
-        # forbidden accounts must produce the same project-local explanation.
-        return membership_reasons(project.id, user_id)
     target = db.get(User, user_id)
     if target is None:
         raise HTTPException(404, "成员不存在")

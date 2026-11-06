@@ -50,7 +50,7 @@
 
 ## 接口
 
-以下均以`/api/projects/{pid}/documents/{did}`开头。写动作沿用`worker.deliver`，资源可见性、项目成员资格、当前ACL及归档边界仍服务端检查。
+以下均以`/api/projects/{pid}/documents/{did}`开头。写动作沿用`worker.deliver`，资源可见性、当前ACL及归档边界仍服务端检查。
 
 | 方法 | 路径 | 请求与结果 |
 | --- | --- | --- |

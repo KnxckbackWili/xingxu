@@ -31,28 +31,6 @@ def test_report_generates_exact_rules_from_real_source_once(client,admin_headers
     with SessionLocal() as db:assert db.query(DocumentTriggerEvent).filter_by(project_id=pid).count()==1
 
 
-def test_nature_change_requires_management_and_records_change_time_without_rewriting_history(client,admin_headers,worker_headers,monkeypatch):
-    project=create(client,admin_headers);pid=project['id']
-    joined=client.put(f'/api/projects/{pid}',headers=admin_headers,json={'members':[*project['members'],'user-worker-001'],'version':project['version']})
-    assert joined.status_code==200,joined.text
-    issue=report(client,admin_headers,pid,assignee_id='user-worker-001')
-    assert client.put('/api/issues/'+issue['id'],headers=worker_headers,json={'nature':'accident'}).status_code==403
-    changed=datetime(2026,11,1,12,34,56)
-    monkeypatch.setattr('app.routers.issues.utcnow',lambda:changed)
-    result=client.put('/api/issues/'+issue['id'],headers=admin_headers,json={'nature':'accident','version':issue['version']})
-    assert result.status_code==200,result.text
-    row=next(row for row in view(client,admin_headers,pid)['documents'] if row['code']=='6.6')
-    assert row['triggered_at']=='2026-11-01T12:34:56+00:00'
-    assert row['trigger_event']['source_metadata']['basis']=='nature_changed'
-    assert row['trigger_event']['source_metadata']['reported_at']==issue['created_at']
-    assert '不代表事故实际发生日期' in row['trigger_event']['source_metadata']['note']
-    assert upload(client,admin_headers,pid,[row['id']]).status_code==200
-    newer=client.put('/api/issues/'+issue['id'],headers=admin_headers,json={'nature':'quality','version':result.json()['version']})
-    assert newer.status_code==200
-    retained=next(item for item in view(client,admin_headers,pid)['documents'] if item['id']==row['id'])
-    assert retained['due_at']==row['due_at'] and retained['status']=='submitted'
-
-
 def test_batch_and_offline_use_same_true_source_contract(client,admin_headers):
     pid=create(client,admin_headers)['id']
     batch=client.post(f'/api/projects/{pid}/issues/import',headers=admin_headers,json={'items':[
@@ -69,33 +47,6 @@ def test_batch_and_offline_use_same_true_source_contract(client,admin_headers):
         assert db.query(Issue).filter_by(project_id=pid).count()==3
         assert db.query(DocumentTriggerEvent).filter_by(project_id=pid).count()==2
         assert db.query(ProjectDocument).filter(ProjectDocument.project_id==pid,ProjectDocument.trigger_ref.isnot(None)).count()==3
-
-
-@pytest.mark.member_rules
-def test_removal_preview_and_exact_confirmation_create_one_source_per_person(client,admin_headers):
-    project=create(client,admin_headers);pid=project['id']
-    original=project['members'];members=original+['user-worker-001','user-worker-002']
-    added=client.put(f'/api/projects/{pid}',headers=admin_headers,json={'members':members,'version':project['version']})
-    assert added.status_code==200,added.text
-    with SessionLocal() as db:before=db.query(ChangeLog).count()
-    preview=client.get(f'/api/projects/{pid}/members/removal-preview',headers=admin_headers,
-        params=[('removed_ids','user-worker-001'),('removed_ids','user-worker-002')])
-    assert preview.status_code==200 and len(preview.json()['removed'])==2
-    assert all(any(row['code']=='6.7' for row in person['documents']) for person in preview.json()['removed'])
-    with SessionLocal() as db:assert db.query(ChangeLog).count()==before and db.query(DocumentTriggerEvent).count()==0
-    request={'members':original,'version':added.json()['version']}
-    assert client.put(f'/api/projects/{pid}',headers=admin_headers,json=versioned(pid, request)).status_code==409
-    assert client.put(f'/api/projects/{pid}',headers=admin_headers,json=versioned(pid, {**request,'member_removal_confirmations':['user-worker-001']})).status_code==409
-    removed=client.put(f'/api/projects/{pid}',headers=admin_headers,json=versioned(pid, {**request,
-        'member_removal_confirmations':['user-worker-001','user-worker-002']}))
-    assert removed.status_code==200,removed.text
-    rows=[row for row in view(client,admin_headers,pid)['documents'] if row['code']=='6.7']
-    assert len(rows)==2 and len({row['trigger_ref'] for row in rows})==2
-    assert {row['trigger_event']['source_id'] for row in rows}=={'user-worker-001','user-worker-002'}
-    assert all(row['due_at']==row['triggered_at'] and not row['due_is_estimated'] for row in rows)
-    again=client.put(f'/api/projects/{pid}',headers=admin_headers,json={'members':original,'version':removed.json()['version']})
-    assert again.status_code==200
-    assert len([row for row in view(client,admin_headers,pid)['documents'] if row['code']=='6.7'])==2
 
 
 def test_issue_trigger_audit_failure_rolls_back_source_documents_and_issue(client,admin_headers,monkeypatch):
@@ -153,30 +104,6 @@ def test_quality_excel_preserves_date_metadata_and_can_be_submitted_as_real_6_8_
     submitted=next(item for item in view(client,admin_headers,pid)['documents'] if item['id']==row['id'])
     assert submitted['status']=='submitted'
     assert client.get('/api'+submitted['latest_version']['download_url'],headers=admin_headers).content==exported.content
-
-
-@pytest.mark.member_rules
-def test_member_failure_rolls_back_confirmation_source_and_preserves_original_file(client,admin_headers,worker_headers,monkeypatch):
-    project=create(client,admin_headers);pid=project['id'];original=project['members']
-    added=client.put(f'/api/projects/{pid}',headers=admin_headers,json={'members':[*original,'user-worker-001'],'version':project['version']}).json()
-    did=view(client,admin_headers,pid)['documents'][0]['id']
-    assert upload(client,worker_headers,pid,[did],data=b'original member file').status_code==200
-    from app.services import document_triggers
-    real=document_triggers.member_events
-    def fail(*args,**kwargs):
-        real(*args,**kwargs)
-        raise RuntimeError('later membership audit failed')
-    monkeypatch.setattr(document_triggers,'member_events',fail)
-    with pytest.raises(RuntimeError,match='later membership audit failed'):
-        client.put(f'/api/projects/{pid}',headers=admin_headers,json={'members':original,'version':added['version'],
-            'member_removal_confirmations':['user-worker-001']})
-    with SessionLocal() as db:
-        assert 'user-worker-001' in db.get(Project,pid).members and db.get(Project,pid).version==added['version']
-        assert db.query(DocumentTriggerEvent).filter_by(project_id=pid).count()==0
-        assert db.query(ProjectDocument).filter_by(project_id=pid,code='6.7').count()==0
-    row=next(item for item in view(client,admin_headers,pid)['documents'] if item['id']==did)
-    assert row['latest_version']['uploaded_by']=='user-worker-001'
-    assert client.get('/api'+row['latest_version']['download_url'],headers=admin_headers).content==b'original member file'
 
 
 def test_instantiate_rejects_fake_cross_project_type_or_time_source(client,admin_headers):

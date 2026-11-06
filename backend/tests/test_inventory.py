@@ -10,50 +10,6 @@ def _project(client, headers, name="物品测试项目"):
     return response.json()["id"]
 
 
-@pytest.mark.member_rules
-def test_inventory_crud_movements_and_global_view(client, pm_headers, worker_headers):
-    project_id = _project(client, pm_headers)
-    company = client.post(f"/api/projects/{project_id}/inventory", headers=pm_headers, json={
-        "item_code": "TOOL-01", "name": "激光测距仪", "category": "tool",
-        "ownership": "company", "tracking_mode": "serial", "serial_number": "SN-01",
-        "quantity": 1, "unit": "台", "status": "on_site", "location": "工具柜 A", "custodian": "张工",
-    })
-    assert company.status_code == 200, company.text
-    client_item = client.post(f"/api/projects/{project_id}/inventory", headers=pm_headers, json={
-        "item_code": "CLIENT-KEY", "name": "甲方门禁钥匙", "category": "other",
-        "ownership": "client", "tracking_mode": "quantity", "quantity": 3,
-        "minimum_quantity": 1, "unit": "把", "status": "on_site", "location": "项目办公室",
-    })
-    assert client_item.status_code == 200, client_item.text
-
-    moved = client.post(
-        f"/api/projects/{project_id}/inventory/{client_item.json()['id']}/movements", headers=pm_headers,
-        json={"movement_type": "issue", "quantity": 2, "to_location": "施工区", "handler": "李工", "note": "发放施工人员"},
-    )
-    assert moved.status_code == 200, moved.text
-    assert moved.json()["item"]["quantity"] == 1
-    assert moved.json()["movement"]["balance_after"] == 1
-    assert client.post(
-        f"/api/projects/{project_id}/inventory/{client_item.json()['id']}/movements", headers=pm_headers,
-        json={"movement_type": "consume", "quantity": 2},
-    ).status_code == 400
-
-    listing = client.get(f"/api/projects/{project_id}/inventory?ownership=client", headers=pm_headers).json()
-    assert listing["total"] == 1
-    assert listing["items"][0]["low_stock"] is True
-    assert listing["summary"]["company_records"] == 1
-    assert listing["summary"]["client_records"] == 1
-    global_view = client.get("/api/inventory", headers=pm_headers).json()
-    assert global_view["total"] == 2
-    assert global_view["summary"]["project_count"] == 1
-
-    # Ordinary workers cannot discover or modify an unassigned project.
-    assert client.get(f"/api/projects/{project_id}/inventory", headers=worker_headers).status_code == 404
-    assert client.post(f"/api/projects/{project_id}/inventory", headers=worker_headers, json={
-        "name": "越权物品", "quantity": 1,
-    }).status_code == 404
-
-
 def test_inventory_movement_timezone_and_retry_share_one_instant(client, pm_headers):
     pid = _project(client, pm_headers)
     item = client.post(f"/api/projects/{pid}/inventory", headers=pm_headers,

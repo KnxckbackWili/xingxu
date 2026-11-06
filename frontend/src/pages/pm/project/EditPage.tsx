@@ -53,7 +53,7 @@ export default function EditPage({ project, onReload }: { project: Project; onRe
   const location = useLocation()
   const isOwner = user?.role === 'admin' || (user?.role === 'pm' && project.manager === user.id)
   const writeBlocked = useProjectWriteBlocked(project.status)
-  const hasEditPermission = useProjectCapability('project.update', isOwner || !!project.is_co_manager)
+  const hasEditPermission = useProjectCapability('project.update', isOwner)
   const canEdit = !writeBlocked && hasEditPermission
     && user?.permission_overrides?.['project.update'] !== false
     && user?.permission_overrides?.['project.read'] !== false
@@ -63,14 +63,8 @@ export default function EditPage({ project, onReload }: { project: Project; onRe
   const [infoDirty, setInfoDirty] = useState(false)
   const saveLock = useRef(false)
   const finishSave = () => { saveLock.current = false; setSaving(false) }
-  // Fewer tabs: permissions live with members; co-managers and the owner hand-over share one tab.
-  const [settingsTab, setSettingsTab] = useState(() => {
-    const section = new URLSearchParams(location.search).get('section') || 'info'
-    // 成员与负责人在同一个“人员”页签；旧链接照常落到这里。
-    // 人员页签已下线（所有账号都能看、都能记录）；旧链接落到基本信息，负责人在那里。
-    return ({ 'member-permissions': 'info', 'co-managers': 'info', members: 'info', owner: 'info', people: 'info' } as Record<string, string>)[section] ?? section
-  })
-  const [coDraftEpoch, setCoDraftEpoch] = useState(0)
+  const [settingsTab, setSettingsTab] = useState(() => new URLSearchParams(location.search).get('section') || 'info')
+  const [draftEpoch, setDraftEpoch] = useState(0)
   const tabDialog = useRef<ReturnType<typeof Modal.confirm> | null>(null)
   const tabDecision = useRef(0)
   const closeTabDialog = useCallback(() => {
@@ -80,8 +74,8 @@ export default function EditPage({ project, onReload }: { project: Project; onRe
   }, [])
   useEffect(() => closeTabDialog, [closeTabDialog])
   const [, setDirty] = useUnsavedNavigation({ title: '项目设置有未保存的修改', beforeConfirm: closeTabDialog })
-  const dirtyAreas = useRef({ info: false, coManagers: false, external: false, members: false, vehicles: false, owner: false, schedule: false })
-  const updateDirty = useCallback((area: 'info' | 'coManagers' | 'external' | 'members' | 'vehicles' | 'owner' | 'schedule', value: boolean) => {
+  const dirtyAreas = useRef({ info: false, external: false, vehicles: false, owner: false, schedule: false })
+  const updateDirty = useCallback((area: 'info' | 'external' | 'vehicles' | 'owner' | 'schedule', value: boolean) => {
     dirtyAreas.current[area] = value
     if (area === 'info') setInfoDirty(value)
     setDirty(Object.values(dirtyAreas.current).some(Boolean))
@@ -126,10 +120,10 @@ export default function EditPage({ project, onReload }: { project: Project; onRe
         infoForm.setFieldsValue(fields)
         infoBaseline.current = infoSnapshot(fields)
         infoBaselineVersion.current = project.version
-        dirtyAreas.current = { info: false, coManagers: false, external: false, members: false, vehicles: false, owner: false, schedule: false }
+        dirtyAreas.current = { info: false, external: false, vehicles: false, owner: false, schedule: false }
         setInfoDirty(false)
         setDirty(false)
-        setCoDraftEpoch(value => value + 1)
+        setDraftEpoch(value => value + 1)
         setSettingsTab(next)
       },
       onCancel: () => { if (decision === tabDecision.current) closeTabDialog() },
@@ -234,18 +228,18 @@ export default function EditPage({ project, onReload }: { project: Project; onRe
               </Form>
             </Card>
             <div className="project-settings-stack" style={{ maxWidth: 760, marginTop: 16 }}>
-              <ProjectOwnerPanel key={`${project.id}:${coDraftEpoch}`} project={project} onReload={onReload} onDirtyChange={ownerDirty} />
+              <ProjectOwnerPanel key={`${project.id}:${draftEpoch}`} project={project} onReload={onReload} onDirtyChange={ownerDirty} />
             </div>
             </>
           ),
         },
-        { key:'vehicles',label:'车型',disabled:saving,children:<VehicleLifecyclePage key={`${project.id}:${coDraftEpoch}`} project={project} onReload={onReload} configurationOnly onDirtyChange={vehiclesDirty} /> },
-        { key:'schedule',label:'工作日',disabled:saving,children:<WeeklyPlanSettings key={`${project.id}:${coDraftEpoch}`} project={project} onReload={onReload} onDirtyChange={scheduleDirty}/> },
+        { key:'vehicles',label:'车型',disabled:saving,children:<VehicleLifecyclePage key={`${project.id}:${draftEpoch}`} project={project} onReload={onReload} configurationOnly onDirtyChange={vehiclesDirty} /> },
+        { key:'schedule',label:'工作日',disabled:saving,children:<WeeklyPlanSettings key={`${project.id}:${draftEpoch}`} project={project} onReload={onReload} onDirtyChange={scheduleDirty}/> },
         {
           key: 'external',
           disabled: saving,
           label: '外部查看',
-          children: <ExternalSharePanel key={`${project.id}:${coDraftEpoch}`} projectId={project.id} enabled={user?.id === project.manager && hasEditPermission && user?.permission_overrides?.['project.read'] !== false} onDirtyChange={externalDirty} />,
+          children: <ExternalSharePanel key={`${project.id}:${draftEpoch}`} projectId={project.id} enabled={user?.id === project.manager && hasEditPermission && user?.permission_overrides?.['project.read'] !== false} onDirtyChange={externalDirty} />,
         },
       ]}
     />

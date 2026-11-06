@@ -234,8 +234,7 @@ def complete(db,project,user,task_id,data):
             actual.owner_guard(db,project,user,'work',task_id,'',actual_before)
     from app.services.project_lifecycle import EXECUTION_PROJECT_STATUSES
     project=lock_writable_project(db,project,user);db.refresh(user)
-    member=user.id in (project.members or []) or user.id in (project.manager,project.technical_manager) or C_PLAN in project_capabilities(user,project)
-    if not has_permission(user,'worker.report',default=True) or not member:raise HTTPException(403,'仅有填报权限的项目成员可登记工作完成')
+    if not has_permission(user,'worker.report',default=True) or user.role in ('readonly','external'):raise HTTPException(403,'没有登记工作完成的权限')
     if project.status not in EXECUTION_PROJECT_STATUSES:raise HTTPException(400,'现场实施前或项目结束后不能登记工作完成')
     task=lock_work(db,project,user,task_id,data['version'])
     phase=phase_of(db,task)

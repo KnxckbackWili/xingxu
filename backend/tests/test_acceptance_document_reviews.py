@@ -28,14 +28,7 @@ def test_acceptance_record_endpoint(client, pm_headers):
     assert records[0]['conclusion'] == 'accepted'
 
 def _add_worker(client, pm_headers, worker_headers, pid):
-    wid = client.get('/api/auth/me', headers=worker_headers).json()['id']
-    r = client.get(f'/api/projects/{pid}', headers=pm_headers)
-    members = list(r.json()['members'])
-    if wid not in members:
-        members.append(wid)
-    r = client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': members}))
-    assert r.status_code == 200, r.json()
-    return wid
+    return client.get('/api/auth/me', headers=worker_headers).json()['id']
 
 def test_completed_gate_requires_acceptance_record(client, pm_headers, worker_headers):
     """实车环节与资料齐备仍需真实验收记录，登记工作不自动推进人工阶段。"""
@@ -54,7 +47,10 @@ def test_completed_gate_requires_acceptance_record(client, pm_headers, worker_he
     # This test begins at acceptance; separate lifecycle tests cover the signed
     # transition into acceptance. No former quantity or daily-plan write is used.
     with SessionLocal() as db:
-        db.get(Project, pid).status = 'acceptance'; db.commit()
+        from app.services.document_deadlines import refresh_project
+        project = db.get(Project, pid); project.status = 'acceptance'
+        refresh_project(db, project, actor_id=None); db.commit()
+    complete_documents(client, pm_headers, pid)
     result = client.post(f'/api/projects/{pid}/status', headers=pm_headers, json={'status': 'completed'})
     assert result.status_code == 400, result.text
     assert any(row['type'] == 'acceptance' for row in result.json()['detail']['blockers'])

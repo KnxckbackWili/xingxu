@@ -73,26 +73,13 @@ def transfer(db,project_id,user,body):
         if isinstance(exc.detail,dict) and exc.detail.get('code')=='member_removal_confirmation_required':
             raise HTTPException(409,{**exc.detail,**preview(db,project,user)}) from None
         raise
-    old={'manager':project.manager,'members':list(project.members or []),'co_managers':list(project.co_managers or []),
-         'member_permissions':list(project.member_permissions or [])}
+    old={'manager':project.manager}
     bump_version(project,body.version,db=db)
     previous=project.manager
-    members=set(project.members or []);members.add(target.id);members.difference_update(removed)
-    project.manager=target.id;project.members=sorted(members)
-    # Expired co-manager rows must not silently reinsert a truly departed owner
-    # into project_members during synchronization. The original grant is audited.
-    project.co_managers=[grant for grant in project.co_managers or [] if grant.get('user_id') not in removed]
-    from app.services.member_handover import ensure_member_handover
-    try:ensure_member_handover(db,project,removed)
-    except HTTPException as exc:
-        if isinstance(exc.detail,str):raise HTTPException(exc.status_code,docs.redact_document_text(db,project,user,exc.detail)) from None
-        raise
+    project.manager=target.id
     member_events(db,project,removed,user.id)
-    from app.routers.projects import _sync_project_members
-    _sync_project_members(db,project)
     log_change(db,project.id,'project',project.id,'transfer',user.id,'直接更换项目负责人：'+body.reason.strip(),
-        old,{'manager':target.id,'members':list(project.members),'co_managers':list(project.co_managers or []),
-             'member_permissions':list(project.member_permissions or []),'reason':body.reason.strip(),'removed_user_ids':sorted(removed)})
+        old,{'manager':target.id,'reason':body.reason.strip(),'removed_user_ids':sorted(removed)})
     from app.routers.notifications import notify
     notify(db,target.id,'你已成为项目「'+project.name+'」的负责人','请核对项目资料并接手后续工作',ntype='project_membership',project_id=project.id)
     old_person=db.get(User,previous) if previous else None

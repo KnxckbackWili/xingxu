@@ -62,7 +62,6 @@ services:
       - COOKIE_SAMESITE=${COOKIE_SAMESITE:-lax}
       - MAX_BACKUP_UPLOAD_MB=${MAX_BACKUP_UPLOAD_MB:-2048}
       - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-0}
-      - OPEN_PROJECT_ACCESS=${OPEN_PROJECT_ACCESS:-1}
       - MAX_BACKUP_EXPANDED_MB=${MAX_BACKUP_EXPANDED_MB:-8192}
       # 调度器由独立 scheduler 进程承担（supervisord 内 web 已显式关闭）。
       - SCHEDULER_ENABLED=1

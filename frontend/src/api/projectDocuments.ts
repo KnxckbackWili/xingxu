@@ -70,8 +70,6 @@ export interface ProjectDocument extends ProjectDocumentRule {
   due_is_estimated: boolean
   due_basis?: DocumentDueBasis | null
   due_state?: string
-  owner_id?: string | null
-  owner_name?: string
   effective_owner_id?: string | null
   effective_owner_name?: string
   owner_warning?: string
@@ -94,7 +92,6 @@ export interface DocumentTriggerEvent {
 }
 export interface ProjectDocumentDefinition extends ProjectDocumentRule {
   source_key: string
-  owner_id?: string | null
   effective_owner_name?: string
   owner_warning?: string
   confidential_default: boolean
@@ -132,7 +129,6 @@ export interface ProjectDocumentsResponse {
   definitions: ProjectDocumentDefinition[]
   unclassified_files: ProjectFile[]
   document_actions?: DocumentAttention
-  owner_options?: { id: string; name: string }[]
   permissions: { manage: boolean; submit: boolean; manage_confidentiality?: boolean }
   timezone: string
   version: number
@@ -141,7 +137,6 @@ export type ProjectRequirementBody = Pick<ProjectDocumentRule,
   'stage_key' | 'code' | 'name' | 'template_no' | 'required' | 'scope' | 'platform' |
   'timing_type' | 'timing_event' | 'timing_offset_hours' | 'timing_weekday' |
   'trigger_type' | 'sort_order' | 'note'> & {
-  owner_id?: string | null
   confidential_default: boolean; external_visible_default: boolean; external_never_visible: boolean
 }
 export interface DocumentUploadOptions {
@@ -165,8 +160,6 @@ export const projectDocumentsApi = {
     (await api.put(`${base(projectId)}/${kind === 'file' ? 'files/' : kind === 'definition' ? 'requirements/' : ''}${segment(id)}/confidentiality`, body)).data,
   list: async (projectId: string, filter?: { vehicle_unit_id: string }, expectedAccount?: string): Promise<ProjectDocumentsResponse> =>
     (await api.get(base(projectId), { params: filter, headers: expectedAccount ? { 'X-AGV-Expected-Account': expectedAccount } : {} })).data,
-  assignOwner: async (projectId: string, id: string, ownerId: string | null, version?: number): Promise<ProjectDocument> =>
-    (await api.put(`${base(projectId)}/${segment(id)}/owner`, { owner_id: ownerId, version })).data,
   files: async (projectId: string, params?: { entity_type?: string; entity_id?: string }): Promise<ProjectFile[]> =>
     (await api.get(`${base(projectId)}/files`, { params })).data,
   createRequirement: async (projectId: string, body: ProjectRequirementBody): Promise<ProjectDocumentDefinition> =>

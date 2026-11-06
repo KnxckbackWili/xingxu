@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { projectStageGuidance, projectWorkflow, type WorkflowInput } from './projectWorkflow'
-const ready: WorkflowInput = { status: 'preparing', vehicles: 2, tasks: 12, members: 2, plans: 12, drafts: 0, unassigned: 0, kickoffReady: true, prepReady: true, severeIssues: 0, progress: 0 }
+const ready: WorkflowInput = { status: 'preparing', vehicles: 2, tasks: 12, plans: 12, drafts: 0, kickoffReady: true, prepReady: true, severeIssues: 0, progress: 0 }
 describe('人工推进和概况准备清单', () => {
   it('uses the ordered setup areas and moves only to the adjacent execution state', () => {
     expect(projectWorkflow(ready).checklist.map(row=>row.title)).toEqual(['车型','资料清单','周计划','发车前资料确认'])
@@ -9,9 +9,9 @@ describe('人工推进和概况准备清单', () => {
     expect(projectWorkflow(ready).action.status).toBe('executing')
     expect(projectWorkflow({...ready,vehicles:0}).action.path).toBe('/edit?section=vehicles')
     // 不再安排人：没有成员、周计划没写谁来做，都不挡进场。
-    expect(projectWorkflow({...ready,members:0}).action.status).toBe('executing')
+    expect(projectWorkflow({...ready}).action.status).toBe('executing')
     expect(projectWorkflow({...ready,kickoffReady:false}).action.path).toBe('/documents?stage=4')
-    expect(projectWorkflow({...ready,unassigned:1}).action.status).toBe('executing')
+    expect(projectWorkflow({...ready}).action.status).toBe('executing')
     expect(projectWorkflow({...ready,prepReady:false}).action.path).toBe('/documents?review=1')
   })
   it('describes signoffs and milestones without retired project states', () => {

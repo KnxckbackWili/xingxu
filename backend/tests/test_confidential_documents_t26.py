@@ -12,11 +12,7 @@ def setup_project(client, pm_headers):
     response=client.post('/api/projects',headers=pm_headers,json={'name':'T26隔离项目','start_date':'2026-01-01','end_date':'2026-12-31',
         'technical_manager_id':people['worker2']})
     assert response.status_code==200,response.text
-    created=response.json()
-    added=client.put('/api/projects/'+created['id'],headers=pm_headers,json={
-        'members':[people['pm'],people['worker1'],people['worker2']], 'version':created['version']})
-    assert added.status_code==200,added.text
-    return created['id'],people
+    return response.json()['id'],people
 
 
 def policy(client,headers,pid,kind,row,people=(),confidential=True):

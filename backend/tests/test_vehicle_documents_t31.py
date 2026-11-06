@@ -8,7 +8,6 @@ from tests.test_project_events import unit
 
 def fleet(client,headers):
     pid=create(client,headers,dispatch_platform='NDC',timezone='Asia/Shanghai')['id']
-    assert client.put(f'/api/projects/{pid}',headers=headers,json=versioned(pid, {'members':['user-worker-001']})).status_code==200
     with SessionLocal() as db:
         db.get(Project,pid).status='executing';db.commit()
     result=client.post(f'/api/projects/{pid}/vehicles',headers=headers,json={'vehicle_type':'潜伏式','model_name':'T31实车','quantity':2})

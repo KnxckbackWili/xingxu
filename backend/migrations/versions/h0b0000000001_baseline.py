@@ -329,7 +329,6 @@ def upgrade():
     sa.Column('contract_no', sa.String(length=100), nullable=True),
     sa.Column('manager', sa.String(length=100), nullable=True),
     sa.Column('technical_manager', sa.String(length=36), nullable=True),
-    sa.Column('co_managers', sa.JSON(), nullable=True),
     sa.Column('client', sa.String(length=200), nullable=True),
     sa.Column('location', sa.String(length=200), nullable=True),
     sa.Column('timezone', sa.String(length=64), nullable=True),
@@ -338,8 +337,6 @@ def upgrade():
     sa.Column('status', sa.String(length=20), nullable=False),
     sa.Column('description', sa.Text(), nullable=True),
     sa.Column('staffing_notes', sa.Text(), nullable=True),
-    sa.Column('members', sa.JSON(), nullable=True),
-    sa.Column('member_permissions', sa.JSON(), nullable=True),
     sa.Column('rest_mode', sa.String(length=10), nullable=True),
     sa.Column('rest_days', sa.JSON(), nullable=True),
     sa.Column('skip_holidays', sa.Boolean(), nullable=True),
@@ -657,19 +654,6 @@ def upgrade():
     op.create_index(op.f('ix_project_inventory_items_item_code'), 'project_inventory_items', ['item_code'], unique=False)
     op.create_index(op.f('ix_project_inventory_items_name'), 'project_inventory_items', ['name'], unique=False)
     op.create_index(op.f('ix_project_inventory_items_project_id'), 'project_inventory_items', ['project_id'], unique=False)
-    op.create_table('project_members',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('project_id', sa.String(length=36), nullable=False),
-    sa.Column('user_id', sa.String(length=36), nullable=False),
-    sa.Column('role', sa.String(length=30), nullable=True),
-    sa.Column('created_at', sa.DateTime(), nullable=True),
-    sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('project_id', 'user_id', name='uq_project_member')
-    )
-    op.create_index(op.f('ix_project_members_project_id'), 'project_members', ['project_id'], unique=False)
-    op.create_index(op.f('ix_project_members_user_id'), 'project_members', ['user_id'], unique=False)
     op.create_table('project_preparation_items',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('project_id', sa.String(length=36), nullable=False),
@@ -850,10 +834,8 @@ def upgrade():
     sa.Column('sort_order', sa.Integer(), nullable=False),
     sa.Column('note', sa.Text(), nullable=True),
     sa.Column('source_metadata', sa.JSON(), nullable=True),
-    sa.Column('owner_id', sa.String(length=36), nullable=True),
     sa.ForeignKeyConstraint(['blank_file_id'], ['document_template_files.id'], ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['created_by'], ['users.id'], ondelete='SET NULL'),
-    sa.ForeignKeyConstraint(['owner_id'], ['users.id'], ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['requirement_id'], ['document_requirements.id'], ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('id'),
@@ -977,11 +959,9 @@ def upgrade():
     sa.Column('sort_order', sa.Integer(), nullable=False),
     sa.Column('note', sa.Text(), nullable=True),
     sa.Column('source_metadata', sa.JSON(), nullable=True),
-    sa.Column('owner_id', sa.String(length=36), nullable=True),
     sa.CheckConstraint("status IN ('pending','submitted','waived')", name='ck_project_document_status'),
     sa.ForeignKeyConstraint(['blank_file_id'], ['document_template_files.id'], ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['definition_id'], ['project_document_definitions.id'], ondelete='SET NULL'),
-    sa.ForeignKeyConstraint(['owner_id'], ['users.id'], ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['requirement_id'], ['document_requirements.id'], ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['submitted_by'], ['users.id'], ondelete='SET NULL'),
@@ -1139,14 +1119,12 @@ def upgrade():
     sa.Column('severity', sa.String(length=20), nullable=True),
     sa.Column('status', sa.String(length=20), nullable=True),
     sa.Column('reporter_id', sa.String(length=36), nullable=False),
-    sa.Column('assignee_id', sa.String(length=36), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=True),
     sa.Column('resolved_at', sa.DateTime(), nullable=True),
     sa.Column('resolution', sa.Text(), nullable=True),
     sa.Column('extra', sa.JSON(), nullable=True),
     sa.Column('version', sa.Integer(), nullable=True),
     sa.Column('client_uuid', sa.String(length=64), nullable=True),
-    sa.ForeignKeyConstraint(['assignee_id'], ['users.id'], ),
     sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['reporter_id'], ['users.id'], ),
     sa.ForeignKeyConstraint(['task_id'], ['tasks.id'], ondelete='SET NULL'),
@@ -1198,7 +1176,6 @@ def upgrade():
     sa.Column('mode', sa.String(length=20), nullable=False),
     sa.Column('target_count', sa.Integer(), nullable=True),
     sa.Column('intent_review_required', sa.Boolean(), nullable=False),
-    sa.Column('assignee_ids', sa.JSON(), nullable=False),
     sa.Column('published', sa.Boolean(), nullable=False),
     sa.Column('published_at', sa.DateTime(), nullable=True),
     sa.Column('published_by', sa.String(length=36), nullable=True),
@@ -1350,9 +1327,6 @@ def downgrade():
     op.drop_table('project_readiness_reviews')
     op.drop_index(op.f('ix_project_preparation_items_project_id'), table_name='project_preparation_items')
     op.drop_table('project_preparation_items')
-    op.drop_index(op.f('ix_project_members_user_id'), table_name='project_members')
-    op.drop_index(op.f('ix_project_members_project_id'), table_name='project_members')
-    op.drop_table('project_members')
     op.drop_index(op.f('ix_project_inventory_items_project_id'), table_name='project_inventory_items')
     op.drop_index(op.f('ix_project_inventory_items_name'), table_name='project_inventory_items')
     op.drop_index(op.f('ix_project_inventory_items_item_code'), table_name='project_inventory_items')

@@ -35,16 +35,7 @@
 
 ## 负责人和提醒
 
-项目定义和实例均可指定 `owner_id`，默认为活跃技术负责人，再回退活跃 PM。显式指派只允许有读取权限的本项目活跃成员/负责人；停用、离项、缺失或没有保密查看权限的负责人会在资料页显示原因，并回退有权人员。指派本身不授予保密访问权。
-
-资料页和规则编辑器提供负责人选择。独立调整实例负责人使用：
-
-```text
-PUT /api/projects/{project_id}/documents/{document_id}/owner
-{"owner_id": "成员ID或null", "version": 当前实例版本}
-```
-
-路由要求 `project.manage_plan`，使用真实认证依赖、项目锁后权限复核、乐观版本和审计。未传 `owner_id` 的请求拒绝；`null` 明确恢复默认负责人。
+资料提醒发给活跃的技术负责人，没有或已停用时发给项目经理；没有保密查看权限的人不接收该资料提醒，资料页显示原因。
 
 截止前 24 小时提醒负责人；超过截止提醒负责人并升级 PM。预计项消息明确标“预计”。无有效接收人时保留待处理凭据和审计，不静默丢失；管理员的显式读取禁止仍有效。保密名称只在有权接收人的站内消息中出现，不进入外部通知渠道。
 
@@ -59,7 +50,7 @@ PUT /api/projects/{project_id}/documents/{document_id}/owner
 | document_notice_receipts | project_id → projects CASCADE；project_document_id → project_documents CASCADE；recipient_id → users SET NULL | 无新文件 |
 | project_report_receipts | project_id → projects CASCADE；recipient_id → users SET NULL | summary 是元数据，无新文件 |
 
-两个 owner_id → users SET NULL；新表加入 `project_retention.RETAINED_MODELS`。既有附件和项目空白模板原件继续遵循 UPLOAD_DIR 平级 stored_name 和已有 SHA manifest 契约。根集成 #85 永久删除时需覆盖上述两表。
+新表加入 `project_retention.RETAINED_MODELS`。既有附件和项目空白模板原件继续遵循 UPLOAD_DIR 平级 stored_name 和已有 SHA manifest 契约。根集成 #85 永久删除时需覆盖上述两表。
 
 ## 后续事件接缝
 

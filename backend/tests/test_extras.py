@@ -52,76 +52,7 @@ def test_upload_oversize_rejected(client, pm_headers):
     assert r.status_code == 413
 
 
-@pytest.mark.member_rules
-def test_worker_cannot_upload(client, pm_headers, worker_headers):
-    pid = _project(client, pm_headers)
-    r = client.post(f"/api/projects/{pid}/documents/files", headers=worker_headers,
-                    files={"file": ("x.txt", b"hello", "text/plain")})
-    assert r.status_code == 404  # 不可见项目统一返回 404，避免泄露项目存在性
-
-
 # ===== Notifications =====
-
-def test_issue_assignment_notifies_assignee(client, pm_headers, worker_headers):
-    pid = _project(client, pm_headers)
-    assert client.put(f"/api/projects/{pid}", headers=pm_headers,
-                      json=versioned(pid, {"members": ["user-worker-001"]})).status_code == 200
-    # Create issue assigned to worker1
-    r = client.post(f"/api/projects/{pid}/issues", headers=pm_headers, json={
-        "title": "地图建图失败",
-        "severity": "high",
-        "assignee_id": "user-worker-001",
-    })
-    assert r.status_code == 200
-
-    # Worker sees notification
-    r = client.get("/api/notifications", headers=worker_headers)
-    assert r.status_code == 200
-    notifs = r.json()
-    assert len(notifs) == 1
-    assert notifs[0]["title"].startswith("新问题指派给你")
-    assert notifs[0]["is_read"] is False
-
-    # Unread count
-    r = client.get("/api/notifications/unread-count", headers=worker_headers)
-    assert r.json()["count"] == 1
-
-    # Mark read
-    r = client.post(f"/api/notifications/{notifs[0]['id']}/read", headers=worker_headers)
-    assert r.status_code == 200
-    r = client.get("/api/notifications/unread-count", headers=worker_headers)
-    assert r.json()["count"] == 0
-
-
-def test_issue_resolve_notifies_reporter(client, pm_headers, worker_headers):
-    pid = _project(client, pm_headers)
-    # worker1 加入项目（上报需成员）
-    wid = client.get("/api/auth/me", headers=worker_headers).json()["id"]
-    members = [*client.get(f"/api/projects/{pid}", headers=pm_headers).json()["members"], wid]
-    client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": members}))
-    # Worker reports an issue (no assignee)
-    r = client.post(f"/api/projects/{pid}/issues", headers=worker_headers, json={
-        "title": "站点偏差超限",
-        "severity": "medium",
-    })
-    assert r.status_code == 200
-    iid = r.json()["id"]
-
-    # PM resolves it
-    r = client.put(f"/api/issues/{iid}", headers=pm_headers, json=versioned(iid, {
-        "status": "resolved",
-        "resolution": "重新标定站点坐标",
-    }, 'Issue'))
-    assert r.status_code == 200
-
-    # Worker gets notified
-    r = client.get("/api/notifications", headers=worker_headers)
-    notifs = r.json()
-    assert len(notifs) == 1
-    assert notifs[0]["title"].startswith("问题已解决")
-
-
-# ===== 附件挂载实体（v1.2）=====
 
 def test_upload_with_entity_and_filter(client, pm_headers):
     """上传可挂到 issue/task，列表可按 entity 过滤。"""
@@ -185,8 +116,6 @@ def test_worker_member_can_upload(client, pm_headers, worker_headers):
     r = client.get("/api/auth/me", headers=worker_headers)
     wid = r.json()["id"]
     r = client.get(f"/api/projects/{pid}", headers=pm_headers)
-    members = [*r.json()["members"], wid]
-    client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": members}))
 
     r = client.post(f"/api/projects/{pid}/documents/files", headers=worker_headers,
                     files={"file": ("现场照片.jpg", b"\xff\xd8photo", "image/jpeg")})
@@ -195,44 +124,45 @@ def test_worker_member_can_upload(client, pm_headers, worker_headers):
 
 # ===== 处理人自动记录（v1.2）=====
 
-@pytest.mark.member_rules
-def test_start_processing_sets_assignee(client, pm_headers, worker_headers):
-    """开始处理时自动把操作者记为处理人（上报不再选处理人）。"""
+# 按日日程确认通知已随按日排程退役；周计划发布通知见 test_weekly_plans。
+
+
+def test_issue_resolve_notifies_reporter(client, pm_headers, worker_headers):
     pid = _project(client, pm_headers)
-    # worker1 加入项目（上报需成员）
-    wid = client.get("/api/auth/me", headers=worker_headers).json()["id"]
-    members = [*client.get(f"/api/projects/{pid}", headers=pm_headers).json()["members"], wid]
-    client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": members}))
-    r = client.post(f"/api/projects/{pid}/issues", headers=worker_headers, json={"title": "自动处理人"})
+    # Worker reports an issue
+    r = client.post(f"/api/projects/{pid}/issues", headers=worker_headers, json={
+        "title": "站点偏差超限",
+        "severity": "medium",
+    })
+    assert r.status_code == 200
     iid = r.json()["id"]
 
-    # pm 开始处理 → 处理人自动记为 pm
-    r = client.put(f"/api/issues/{iid}", headers=pm_headers, json=versioned(iid, {"status": "processing"}, 'Issue'))
+    # PM resolves it
+    r = client.put(f"/api/issues/{iid}", headers=pm_headers, json=versioned(iid, {
+        "status": "resolved",
+        "resolution": "重新标定站点坐标",
+    }, 'Issue'))
     assert r.status_code == 200
-    r = client.get("/api/auth/me", headers=pm_headers)
-    pm_id = r.json()["id"]
-    r = client.get(f"/api/projects/{pid}/issues", headers=pm_headers)
-    assert r.json()[0]["assignee_id"] == pm_id
 
-    # worker 无权改问题状态（require_pm）
-    r = client.put(f"/api/issues/{iid}", headers=worker_headers, json=versioned(iid, {"status": "resolved"}, 'Issue'))
-    assert r.status_code == 403
+    # Worker gets notified
+    r = client.get("/api/notifications", headers=worker_headers)
+    notifs = r.json()
+    assert len(notifs) == 1
+    assert notifs[0]["title"].startswith("问题已解决")
 
 
-# 按日日程确认通知已随按日排程退役；周计划发布通知见 test_weekly_plans。
+# ===== 附件挂载实体（v1.2）=====
 
 
 def test_mark_all_read(client, pm_headers, worker_headers):
     pid = _project(client, pm_headers)
-    assert client.put(f"/api/projects/{pid}", headers=pm_headers,
-                      json=versioned(pid, {"members": ["user-worker-001"]})).status_code == 200
     for i in range(3):
-        client.post(f"/api/projects/{pid}/issues", headers=pm_headers, json={
-            "title": f"测试问题{i}", "assignee_id": "user-worker-001"})
-    r = client.get("/api/notifications/unread-count", headers=worker_headers)
+        client.post(f"/api/projects/{pid}/issues", headers=worker_headers, json={
+            "title": f"测试问题{i}"})
+    r = client.get("/api/notifications/unread-count", headers=pm_headers)
     assert r.json()["count"] == 3
 
-    r = client.post("/api/notifications/read-all", headers=worker_headers)
+    r = client.post("/api/notifications/read-all", headers=pm_headers)
     assert r.status_code == 200
-    r = client.get("/api/notifications/unread-count", headers=worker_headers)
+    r = client.get("/api/notifications/unread-count", headers=pm_headers)
     assert r.json()["count"] == 0

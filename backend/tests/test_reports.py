@@ -16,7 +16,6 @@ def _project_with_work(client, pm_headers, worker_headers):
     assert client.post(f"/api/projects/{pid}/vehicles", headers=pm_headers, json={
         "vehicle_type": "潜伏式", "model_name": "AGV-500", "quantity": 2}).status_code == 200
     assert client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers, json={"work_item_ids": default_work("mod-01")}).status_code == 200
-    assert client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": ["user-worker-001"]})).status_code == 200
     enter_execution(client, pm_headers, pid)
     with SessionLocal() as db:
         task = db.query(Task).filter_by(project_id=pid, name="场地勘测").one()

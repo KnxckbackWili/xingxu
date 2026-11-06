@@ -4,9 +4,8 @@ import { errMsg } from '../../../api/client'
 import { projectDocumentsApi, type ProjectDocumentDefinition, type ProjectRequirementBody } from '../../../api/projectDocuments'
 import { DOCUMENT_EVENTS, DOCUMENT_MILESTONES, DOCUMENT_RULE_EMPTY, DOCUMENT_STAGES, DOCUMENT_TIMINGS, DOCUMENT_TRIGGERS, DOCUMENT_WEEKDAYS } from '../../../constants/documentRules'
 
-const fields = ['stage_key', 'code', 'name', 'template_no', 'required', 'scope', 'platform', 'timing_type', 'timing_event', 'timing_offset_hours', 'timing_weekday', 'trigger_type', 'sort_order', 'note', 'confidential_default', 'external_visible_default', 'external_never_visible', 'owner_id'] as const
-export default function ProjectDocumentRequirementEditor({ projectId, editing, onClose, onSaved, onDirtyChange, canEdit = false, canSetConfidentiality = false, ownerOptions = [] }: {
-  ownerOptions?: { id: string; name: string }[]
+const fields = ['stage_key', 'code', 'name', 'template_no', 'required', 'scope', 'platform', 'timing_type', 'timing_event', 'timing_offset_hours', 'timing_weekday', 'trigger_type', 'sort_order', 'note', 'confidential_default', 'external_visible_default', 'external_never_visible'] as const
+export default function ProjectDocumentRequirementEditor({ projectId, editing, onClose, onSaved, onDirtyChange, canEdit = false, canSetConfidentiality = false }: {
   canEdit?: boolean
   canSetConfidentiality?: boolean
   projectId: string; editing: ProjectDocumentDefinition | 'new' | null
@@ -23,7 +22,7 @@ export default function ProjectDocumentRequirementEditor({ projectId, editing, o
     if (editing) form.setFieldsValue(editing === 'new' ? {
       ...DOCUMENT_RULE_EMPTY, stage_key: '6', name: '', code: '', template_no: '', required: true,
       scope: 'project', platform: null, timing_type: 'on_demand', sort_order: 0, note: '',
-      confidential_default: false, external_visible_default: false, external_never_visible: false, owner_id: null,
+      confidential_default: false, external_visible_default: false, external_never_visible: false,
     } : editing)
   }, [editing, projectId, form, onDirtyChange])
   const kind = Form.useWatch('timing_type', form)
@@ -42,7 +41,7 @@ export default function ProjectDocumentRequirementEditor({ projectId, editing, o
     if (lock.current || !editing || !canEdit) return
     try { await form.validateFields() } catch { return }
     const values = form.getFieldsValue(true)
-    const body = Object.fromEntries(fields.map(key => [key, values[key] ?? (['platform', 'timing_event', 'timing_offset_hours', 'timing_weekday', 'trigger_type', 'owner_id'].includes(key) ? null : values[key])])) as unknown as ProjectRequirementBody
+    const body = Object.fromEntries(fields.map(key => [key, values[key] ?? (['platform', 'timing_event', 'timing_offset_hours', 'timing_weekday', 'trigger_type'].includes(key) ? null : values[key])])) as unknown as ProjectRequirementBody
     lock.current = true; setBusy(true); setError('')
     try {
       if (editing === 'new') await projectDocumentsApi.createRequirement(projectId, body)
@@ -67,7 +66,6 @@ export default function ProjectDocumentRequirementEditor({ projectId, editing, o
         </Form.Item>
       </Space>
       {/* 资料不再指定负责人：提醒发给项目负责人；已有的指定保留不变。 */}
-      <Form.Item name="owner_id" hidden><Select options={ownerOptions.map(person => ({ value: person.id, label: person.name }))} /></Form.Item>
       <Space align="start" wrap size={24}>
         <Form.Item name="required" label="必须提交" valuePropName="checked"><Switch /></Form.Item>
         <Form.Item name="scope" label="每台车一份" rules={[{ required: true }]} getValueProps={value => ({ checked: value === 'vehicle' })} getValueFromEvent={checked => checked ? 'vehicle' : 'project'}>

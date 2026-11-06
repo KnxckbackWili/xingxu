@@ -121,7 +121,6 @@ def test_batch_does_not_write_foreign_vehicle_and_member_cannot_change_events(cl
                    json=versioned(pid, {'unit_ids': [own, foreign], 'arrived_at': '2026-10-01'}))
     assert r.status_code == 404
     assert client.get(f'/api/projects/{pid}/vehicle-units', headers=pm_headers).json()[0]['arrived_at'] is None
-    client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': ['user-worker-001']}))
     assert client.put(f'/api/projects/{pid}/events/ship', headers=worker_headers,
                       json=versioned(pid, {'actual_at': '2026-10-01T10:30:00Z'})).status_code == 403
     assert client.put(f'/api/projects/{pid}/vehicle-arrivals', headers=worker_headers,
@@ -152,20 +151,6 @@ def test_portable_json_and_excel_preserve_event_precision_and_vehicle_arrival(cl
     book = load_workbook(BytesIO(workbook.content))
     # T27: the delivery workbook is the simplified handover set; events travel in JSON.
     assert book.sheetnames == ['交付概览', '生命周期表', '问题清单', '物资清单', '收发流水', '交付资料']
-
-
-def test_plan_grant_can_record_arrival_without_receiving_event_update_authority(client, pm_headers, worker_headers):
-    p, vid = fleet(client, pm_headers, quantity=1); pid = p['id']
-    uid = unit(client, pm_headers, pid, vid, 'AGV-1')
-    grant = client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {
-        'members': ['user-worker-001'], 'member_permissions': [{'user_id': 'user-worker-001', 'capabilities': ['project.manage_plan']}]}))
-    assert grant.status_code == 200, grant.text
-    assert client.put(f'/api/projects/{pid}/vehicle-arrivals', headers=worker_headers,
-                      json=versioned(pid, {'unit_ids': [uid], 'arrived_at': '2026-10-03'})).status_code == 200
-    assert client.put(f'/api/projects/{pid}/events/ship', headers=worker_headers,
-                      json=versioned(pid, {'actual_at': '2026-10-01T10:30:00Z'})).status_code == 403
-    overview = client.get(f'/api/projects/{pid}/overview', headers=worker_headers).json()
-    assert overview['project_events']['events'] == list(events(client, worker_headers, pid).values())
 
 
 def test_postgres_concurrent_batches_keep_both_dates_and_derive_last_arrival(client, pm_headers):

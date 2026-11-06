@@ -11,22 +11,6 @@ def assigned_repair(client, headers):
     return p, unit, event, result.json()
 
 
-@pytest.mark.member_rules
-def test_detail_and_handover_cannot_leak_another_project(client, pm_headers, worker_headers):
-    p, _, _, ids = assigned_repair(client, pm_headers)
-    other = client.post('/api/projects',headers=pm_headers,json={'name':'不可见项目','start_date':'2026-09-01','end_date':'2026-12-31'}).json()['id']
-    assert client.get(f'/api/projects/{other}/handover-summary',headers=worker_headers).status_code in (403,404)
-    assert client.get(f'/api/projects/{other}/tasks/{ids["task_id"]}/workspace',headers=worker_headers).status_code in (403,404)
-    assert client.get(f'/api/projects/{other}/tasks/{ids["task_id"]}/workspace',headers=pm_headers).status_code == 404
-    assert client.get(f'/api/projects/{p}/tasks/missing/workspace',headers=pm_headers).status_code == 404
-    from app.db import SessionLocal
-    from app.models import Project
-    with SessionLocal() as db:
-        db.get(Project,p).status='suspended'; db.commit()
-    detail=client.get(f'/api/projects/{p}/tasks/{ids["task_id"]}/workspace',headers=pm_headers).json()
-    assert not any(detail[k] for k in ('can_schedule','can_report','can_check','can_update_repair'))
-
-
 def test_handover_counts_material_instances_without_copying_tasks(client, pm_headers):
     from tests.document_helpers import documents, upload_documents, requirement
     from app.db import SessionLocal

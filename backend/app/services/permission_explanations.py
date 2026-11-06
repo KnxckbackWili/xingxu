@@ -28,21 +28,13 @@ def project_permission_reasons(db, project, user):
         elif user.role == "readonly" and key not in READ_ONLY_ACTIONS:
             allowed, layer, reason = False, "preset", "只读预设不允许修改业务资料"
         elif not visible:
-            allowed, layer, reason = False, "membership", "不是项目成员，且未获项目查看权限"
+            allowed, layer, reason = False, "system", "未获项目查看权限"
         elif key == C_READ or key in caps:
             allowed, layer, reason = True, "allowed", "项目范围和操作权限均允许"
         else:
-            allowed, layer, reason = False, "project_role", "项目角色无此能力，且没有相应项目授权"
+            allowed, layer, reason = False, "project_role", "账号角色或项目职责没有此能力"
         items.append({"key": key, "name": PERMISSIONS[key]["name"], "allowed": allowed,
                       "layer": layer, "reason": reason})
     return {"user_id": user.id, "project_id": project.id, "items": items}
 
 
-def membership_reasons(project_id, user_id):
-    """Project-local inspectors learn no global account/policy state for outsiders."""
-    from app.services.permissions import ALL_PROJECT_CAPS, C_READ
-    return {"user_id": user_id, "project_id": project_id, "items": [
-        {"key": key, "name": PERMISSIONS[key]["name"], "allowed": False,
-         "layer": "membership", "reason": "不是项目成员，未在本项目分配职责或授权"}
-        for key in sorted({C_READ, *ALL_PROJECT_CAPS})
-    ]}

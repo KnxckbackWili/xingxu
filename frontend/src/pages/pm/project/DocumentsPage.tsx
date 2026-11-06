@@ -320,7 +320,7 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
         { title: '操作', render: (_, row) => <Space>{canManageConfidentiality && <Button size="small" disabled={busy} onClick={() => setConfidentialityTarget({ kind: 'file', row })}>附件保密范围</Button>}{canSubmit && <Button size="small" disabled={busy || loading} onClick={() => openUpload([], row)}>关联资料</Button>}{canDeleteFile && <Popconfirm title="删除此未引用文件？已被资料或其他记录引用的文件会被保留。" onConfirm={() => act(() => projectDocumentsApi.deleteFile(row.id), '未引用文件已删除')}><Button size="small" danger disabled={busy || loading}>删除</Button></Popconfirm>}</Space> },
       ]} />
     </WorkSection>}
-    <ProjectDocumentRequirementEditor canSetConfidentiality={canManageConfidentiality} ownerOptions={data?.owner_options} canEdit={canManage} key={projectId} projectId={projectId} editing={editing} onClose={() => setEditing(null)} onSaved={onDefinitionSaved} onDirtyChange={setRequirementDirty} />
+    <ProjectDocumentRequirementEditor canSetConfidentiality={canManageConfidentiality} canEdit={canManage} key={projectId} projectId={projectId} editing={editing} onClose={() => setEditing(null)} onSaved={onDefinitionSaved} onDirtyChange={setRequirementDirty} />
     <DocumentConfidentialityModal key={`confidentiality-${projectId}`} projectId={projectId} target={confidentialityTarget} disabled={!canManageConfidentiality || busy}
       onClose={() => { setConfidentialityTarget(null); setConfidentialityDirty(false) }} onDirtyChange={setConfidentialityDirty}
       onSaved={async () => { await load(); onProjectChange?.() }} />

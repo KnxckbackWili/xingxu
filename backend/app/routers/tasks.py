@@ -201,7 +201,6 @@ def task_workspace(project_id: str, task_id: str, user: User = Depends(get_curre
     from app.models import VehicleLifecycleEvent, VehicleUnit
     from app.services.permissions import project_capabilities, C_PLAN, C_SCHEDULE, C_ISSUES
     from app.services.project_lifecycle import EXECUTION_PROJECT_STATUSES
-    from app.services.scope import active_co_manager
     from app.services.progress import task_completed
     p = ensure_project_visible(db, project_id, user)
     task = db.get(Task, task_id)
@@ -222,8 +221,8 @@ def task_workspace(project_id: str, task_id: str, user: User = Depends(get_curre
         from app.routers.vehicle_lifecycle import _event_dict
         unit = db.get(VehicleUnit, event.vehicle_unit_id)
         repair = {**_event_dict(db, event,user), "unit_id": event.vehicle_unit_id, "asset_code": unit.asset_code if unit else "", "current_status": unit.current_status if unit else ""}
-    member = user.id in (p.members or []) or user.id in (p.manager,p.technical_manager)
-    recorder = user.role in ("admin", "director") or user.id in (p.manager, p.technical_manager) or member
+    member = user.role not in ("readonly", "external")
+    recorder = member
     return {
         "project": {"id": p.id, "name": p.name, "status": p.status, "timezone": p.timezone or "Asia/Shanghai", "capabilities": sorted(caps)},
         "work_item": work_item_dict(db,task,checks=True),
@@ -237,7 +236,7 @@ def task_workspace(project_id: str, task_id: str, user: User = Depends(get_curre
         "can_schedule": active and C_SCHEDULE in caps,
         "can_report": active and (member or user.role in ("pm", "admin")) and has_permission(user, "worker.report", default=True),
         "can_check": active and (C_PLAN in caps or (user.role == "worker" and member)) and has_permission(user, "worker.report", default=True),
-        "can_update_repair": bool(active and event and recorder and has_permission(user, "worker.issues", default=True) and (event.operator_id == user.id or user.role in ("admin", "director") or user.id in (p.manager, p.technical_manager) or active_co_manager(p, user.id) or C_ISSUES in caps)),
+        "can_update_repair": bool(active and event and recorder and has_permission(user, "worker.issues", default=True) and (event.operator_id == user.id or user.role in ("admin", "director") or user.id in (p.manager, p.technical_manager) or C_ISSUES in caps)),
     }
 
 
@@ -349,9 +348,8 @@ def _apply_check(project_id,cid,data,user,db):
     if data.is_done is not None or data.failed is not None or data.is_applicable is not None:
         from app.services.permissions import authorize_project, C_PLAN
         from app.services.permissions import project_capabilities
-        member=user.id in (p.members or []) or user.id in (p.manager,p.technical_manager)
-        if not member and C_PLAN not in project_capabilities(user,p):
-            raise HTTPException(status_code=403,detail='仅有检查登记权限的当前项目成员可操作')
+        if user.role in ('readonly','external') and C_PLAN not in project_capabilities(user,p):
+            raise HTTPException(status_code=403,detail='只读账号不能登记检查')
         if data.failed is True and not (data.failed_reason or "").strip():
             raise HTTPException(status_code=400, detail="设为不通过时必须填写原因")
         if ((data.failed is True and data.is_done is True)

@@ -101,47 +101,6 @@ def test_admin_rename_referenced_forbidden(client, admin_headers, pm_headers):
 
 # ===== 车辆写入的字典校验 =====
 
-@pytest.mark.member_rules
-def test_vehicle_write_validates_dictionary(client, admin_headers, pm_headers, worker_headers):
-    pid = _create_project(client, pm_headers)
-
-    # PM 添加启用字典项 → OK
-    r = client.post(f"/api/projects/{pid}/vehicles", headers=pm_headers, json={
-        "vehicle_type": "潜伏式", "model_name": "A", "quantity": 1})
-    assert r.status_code == 200
-    assert r.json()["vehicle_type"] == "潜伏式"
-
-    # PM 添加字典外值 → 400
-    r = client.post(f"/api/projects/{pid}/vehicles", headers=pm_headers, json={
-        "vehicle_type": "不存在的车型", "model_name": "B", "quantity": 1})
-    assert r.status_code == 400
-    assert "字典" in r.json()["detail"]
-
-    # PM 添加历史 custom → 归一化为「其他/定制」
-    r = client.post(f"/api/projects/{pid}/vehicles", headers=pm_headers, json={
-        "vehicle_type": "custom", "model_name": "C", "quantity": 1})
-    assert r.status_code == 200
-    assert r.json()["vehicle_type"] == "其他/定制"
-
-    # 管理员例外：可写入任意非空值
-    r = client.post(f"/api/projects/{pid}/vehicles", headers=admin_headers, json={
-        "vehicle_type": "特殊进口车", "model_name": "D", "quantity": 1})
-    assert r.status_code == 200
-    special_id = r.json()["id"]
-
-    # 编辑：保留当前值（字典外历史值）允许；改为字典外新值拒绝
-    r = client.put(f"/api/projects/{pid}/vehicles/{special_id}", headers=pm_headers, json={"model_name": "D2"})
-    assert r.status_code == 200
-    r = client.put(f"/api/projects/{pid}/vehicles/{special_id}", headers=pm_headers, json={"vehicle_type": "特殊进口车"})
-    assert r.status_code == 200
-    r = client.put(f"/api/projects/{pid}/vehicles/{special_id}", headers=pm_headers, json={"vehicle_type": "别的车"})
-    assert r.status_code == 400
-
-    # worker 无权管理项目车辆（项目不可见 → 404，不泄露项目存在性）
-    assert client.post(f"/api/projects/{pid}/vehicles", headers=worker_headers, json={
-        "vehicle_type": "潜伏式", "model_name": "E", "quantity": 1}).status_code == 404
-
-
 def test_vehicle_update_preserves_disabled_dictionary_value(client, admin_headers, pm_headers):
     pid = _create_project(client, pm_headers)
     added = client.post(f"/api/projects/{pid}/vehicles", headers=pm_headers, json={

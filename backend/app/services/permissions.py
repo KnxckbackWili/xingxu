@@ -1,6 +1,6 @@
 """项目级能力权限（v1.2.1）。
 
-权限模型 = 系统角色（users.role）+ 项目关系（project.manager / members）→ 操作能力。
+权限模型 = 系统角色（users.role）+ 项目负责人/技术负责人 → 操作能力。
 - 系统动作授权由 system_permissions 统一计算；项目权限仍受可见范围与生命周期约束。
 - 项目能力由 project_capabilities() 计算，写端点用 require_project_capability()
   或 authorize_project() 校验。
@@ -24,7 +24,6 @@ from app.db import get_db
 from app.deps import get_current_user
 from app.models import User, Project
 from app.services.scope import ensure_project_visible
-from app.services.scope import active_co_manager
 
 # ===== 项目能力常量 =====
 C_READ = "project.read"  # 查看（可见性，由 ensure_project_visible 覆盖）
@@ -51,28 +50,9 @@ ALL_PROJECT_CAPS = {
 }
 
 
-# Explicit member grants never include deletion, global roles, or delegation rights.
-GRANTABLE_PROJECT_CAPS = ALL_PROJECT_CAPS - {C_DELETE}
-
-
-def grantable_project_capabilities(user: User, project: Project) -> set:
-    """Only the administrator or project owner may delegate their own privileges."""
-    if user.role == "admin" or (
-        project.manager == user.id and user.role in ("pm", "lead")
-    ):
-        return project_capabilities(user, project) & GRANTABLE_PROJECT_CAPS
-    return set()
-
-
 def project_capabilities(user: User, project: Project) -> set:
-    """Combine existing relation permissions with bounded, project-local grants."""
+    """Role and project responsibility, adjusted by the account's system permission overrides."""
     caps = inherited_project_capabilities(user, project)
-    if user.id in (project.members or []):
-        for grant in project.member_permissions or []:
-            if grant.get("user_id") == user.id:
-                caps.update(
-                    set(grant.get("capabilities") or []) & GRANTABLE_PROJECT_CAPS
-                )
     from app.services.system_permissions import permission_override
 
     for capability in ALL_PROJECT_CAPS:
@@ -105,23 +85,6 @@ def inherited_project_capabilities(user: User, project: Project) -> set:
             C_ARCHIVE,
             C_INVENTORY,
             C_DELETE,
-        }
-    if active_co_manager(project, user.id) and user.role in (
-        "pm",
-        "technician",
-        "worker",
-        "lead",
-        "intern",
-    ):
-        return {
-            C_UPDATE,
-            C_MEMBERS,
-            C_PLAN,
-            C_SCHEDULE,
-            C_ISSUES,
-            C_EXPORT,
-            C_ARCHIVE,
-            C_INVENTORY,
         }
     if project.technical_manager == user.id and user.role in (
         "lead",

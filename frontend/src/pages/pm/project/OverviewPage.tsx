@@ -33,8 +33,8 @@ const STATUS_FLOW: Record<string, string[]> = {
 const SUSPENDABLE_STATUSES = ['preparing', 'executing', 'acceptance']
 
 /** Project status remains a management decision; the work tree organizes its readable evidence. */
-export default function OverviewPage({ projectId, projectStatus, projectSuspension = null, infoComplete, vehicleTotal = 0, memberCount = 0, canManageStatus = false, canArchive = true, onStatusChange }: {
-  projectId: string; projectStatus: string; projectSuspension?: any; infoComplete?: boolean; vehicleTotal?: number; memberCount?: number; canManageStatus?: boolean; canArchive?: boolean; onStatusChange?: () => void
+export default function OverviewPage({ projectId, projectStatus, projectSuspension = null, infoComplete, vehicleTotal = 0, canManageStatus = false, canArchive = true, onStatusChange }: {
+  projectId: string; projectStatus: string; projectSuspension?: any; infoComplete?: boolean; vehicleTotal?: number; canManageStatus?: boolean; canArchive?: boolean; onStatusChange?: () => void
 }) {
   const { user } = useAuth()
   const eventWriteBlocked = useProjectWriteBlocked(projectStatus)
@@ -170,8 +170,8 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
   const severeIssueCount = openIssues.filter((i) => i.severity === 'critical' || i.severity === 'high').length
   const workflow = projectWorkflow({
     status: projectStatus, infoComplete, vehicles: vehicleTotal, tasks: taskCount,
-    members: memberCount, plans: weeklyPlan?.total ?? null, drafts: draftPlans,
-    unassigned: weeklyPlan?.unassigned_count ?? null, planWarnings: weeklyPlan?.warning_count,
+    plans: weeklyPlan?.total ?? null, drafts: draftPlans,
+    planWarnings: weeklyPlan?.warning_count,
     kickoffReady: documentProgress?.phase4_ready, prepReady: entryReady(prep), severeIssues: severeIssueCount, progress: data?.percent ?? 0,
   })
   const nextAction = fieldStaff && workflow.setup && workflow.action.path !== '/issues'

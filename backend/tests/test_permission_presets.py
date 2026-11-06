@@ -33,32 +33,6 @@ def test_presets_create_the_selected_role_and_audit_resolved_role(client, admin_
     }).status_code == 422
 
 
-def test_readonly_ceiling_cannot_be_removed_by_system_or_member_grants(client, admin_headers, pm_headers):
-    reader, _ = account(client, admin_headers, 'readonly', 'ceiling-reader')
-    pid = _project(client, pm_headers, 'ceiling')
-    assert client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': [reader['id']]})).status_code == 200
-    version = client.get(f"/api/permissions/users/{reader['id']}", headers=admin_headers).json()['version']
-    assert client.put(f"/api/permissions/users/{reader['id']}", headers=admin_headers,
-                      json={'version': version, 'overrides': {'worker.report': True}}).status_code == 422
-    denied = client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {
-        'member_permissions': [{'user_id': reader['id'], 'capabilities': ['project.manage_plan']}],
-    }))
-    assert denied.status_code == 400 and '只读预设' in denied.text
-
-
-@pytest.mark.member_rules
-def test_readonly_can_change_own_password_and_remains_scoped(client, admin_headers, pm_headers):
-    reader, headers = account(client, admin_headers, 'readonly', 'self-reader')
-    pid = _project(client, pm_headers, 'private project')
-    assert client.get(f'/api/projects/{pid}', headers=headers).status_code == 404
-    changed = client.put('/api/auth/password', headers=headers, json={
-        'old_password': 'ReadOnly-test-123', 'new_password': 'changed-ReadOnly-123',
-    })
-    assert changed.status_code == 200, changed.text
-    assert client.get('/api/auth/me', headers=headers).status_code == 401
-    assert client.post('/api/auth/login', json={'username': reader['username'], 'password': 'changed-ReadOnly-123'}).status_code == 200
-
-
 def test_delegated_creator_cannot_choose_manager_or_admin_through_preset(client, admin_headers, worker_headers):
     policy(client, admin_headers, 'user-worker-001', {'system.users.manage': True})
     for preset in ('pm', 'admin'):
@@ -68,31 +42,6 @@ def test_delegated_creator_cannot_choose_manager_or_admin_through_preset(client,
         assert result.status_code in (403, 422)
     user, _ = account(client, worker_headers, 'readonly', 'delegated-reader')
     assert user['role'] == 'readonly'
-
-
-@pytest.mark.member_rules
-def test_project_reasons_distinguish_layers_and_enforce_inspector_scope(client, admin_headers, pm_headers, worker_headers):
-    reader, _ = account(client, admin_headers, 'readonly', 'reasons-reader')
-    pid = _project(client, pm_headers, 'reasons')
-    path = f"/api/permissions/projects/{pid}/users/{reader['id']}/reasons"
-    data = client.get(path, headers=pm_headers)
-    assert data.status_code == 200, data.text
-    reasons = {x['key']: x for x in data.json()['items']}
-    assert reasons['project.read']['layer'] == 'membership'
-    assert reasons['project.update']['layer'] == 'membership'
-    assert client.put(f'/api/projects/{pid}', headers=pm_headers,
-                      json=versioned(pid, {'members': [reader['id'], 'user-worker-001']})).status_code == 200
-    joined = client.get(path, headers=pm_headers).json()
-    assert next(x for x in joined['items'] if x['key'] == 'project.update')['layer'] == 'preset'
-    assert client.get(path, headers=worker_headers).status_code == 403
-    own = client.get(f'/api/permissions/projects/{pid}/users/user-worker-001/reasons', headers=worker_headers)
-    assert own.status_code == 200
-    assert next(x for x in own.json()['items'] if x['key'] == 'project.update')['layer'] == 'project_role'
-    policy(client, admin_headers, 'user-worker-001', {'project.update': False})
-    own = client.get(f'/api/permissions/projects/{pid}/users/user-worker-001/reasons', headers=worker_headers)
-    assert next(x for x in own.json()['items'] if x['key'] == 'project.update')['layer'] == 'system'
-    denied = client.put(f'/api/projects/{pid}', headers=worker_headers, json=versioned(pid, {'description': 'denied'}))
-    assert denied.status_code == 403 and '系统禁止' in denied.text
 
 
 def test_future_action_is_denied_by_readonly_ceiling(monkeypatch):
@@ -105,8 +54,6 @@ def test_future_action_is_denied_by_readonly_ceiling(monkeypatch):
 
 def test_project_read_denial_reports_system_layer_on_mixed_field_writes(client, admin_headers, pm_headers, worker_headers):
     pid = _project(client, pm_headers, 'system read denial')
-    assert client.put(f'/api/projects/{pid}', headers=pm_headers,
-                      json=versioned(pid, {'members': ['user-worker-001']})).status_code == 200
     policy(client, admin_headers, 'user-worker-001', {'project.read': False})
     denied = client.put(f'/api/projects/{pid}', headers=worker_headers, json=versioned(pid, {'description': 'denied'}))
     assert denied.status_code == 403 and '系统禁止' in denied.text
@@ -132,31 +79,3 @@ def test_get_action_cannot_bypass_readonly_ceiling_with_an_explicit_grant():
     response = TestClient(app).get('/future-action', headers={'Authorization': 'Bearer ' + create_token(reader)})
     assert response.status_code == 403 and '只读预设' in response.text
 
-
-def test_project_inspectors_get_identical_membership_reason_for_all_outsiders(client, admin_headers, pm_headers):
-    from app.db import SessionLocal
-    from app.models import User
-    outsider, _ = account(client, admin_headers, 'worker', 'outside-policy')
-    with SessionLocal() as db:
-        user = db.get(User, outsider['id'])
-        user.is_active = False
-        user.permission_overrides = {'project.manage_plan': False}
-        db.commit()
-    pid = _project(client, pm_headers, 'outside privacy')
-    results = []
-    for user_id in (outsider['id'], 'missing-account'):
-        response = client.get(f'/api/permissions/projects/{pid}/users/{user_id}/reasons', headers=pm_headers)
-        assert response.status_code == 200
-        results.append(response.json()['items'])
-    assert results[0] == results[1]
-    assert {row['layer'] for row in results[0]} == {'membership'}
-
-
-def test_member_permission_write_respects_system_membership_denial(client, admin_headers, pm_headers):
-    pid = _project(client, pm_headers, 'delegation deny')
-    assert client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': ['user-worker-001']})).status_code == 200
-    policy(client, admin_headers, 'user-pm-001', {'project.manage_members': False})
-    response = client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {
-        'member_permissions': [{'user_id': 'user-worker-001', 'capabilities': ['project.manage_plan']}],
-    }))
-    assert response.status_code == 403 and '系统禁止' in response.text

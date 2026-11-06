@@ -115,16 +115,6 @@ def test_vehicle_flow(client, pm_headers):
     assert len(r.json()) == 1
 
 
-@pytest.mark.member_rules
-def test_worker_visibility(client, worker_headers, pm_headers):
-    """Worker not in project members cannot view it."""
-    pid = client.post("/api/projects", headers=pm_headers, json={
-        "name": "可见性测试项目",
-        "start_date": "2026-08-10", "new_vehicles": False, "end_date": "2026-09-30"}).json()["id"]
-    r = client.get(f"/api/projects/{pid}", headers=worker_headers)
-    assert r.status_code == 404
-
-
 def test_ship_plan_edit_keeps_explicit_preparation_dates(client, pm_headers):
     pid = client.post('/api/projects', headers=pm_headers, json={
         'name': '延期', 'start_date': '2026-09-01', 'end_date': '2026-10-31', 'event_plans': {'ship': '2026-09-15'},

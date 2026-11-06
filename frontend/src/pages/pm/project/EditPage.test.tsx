@@ -144,18 +144,6 @@ it('persists the technical manager clear as null and keeps it clear after reload
   expect(confirm).not.toHaveBeenCalled()
 })
 
-it('omits technical manager changes when a co-manager saves other project information', async () => {
-  listActive.mockResolvedValue([{ id: 'tech', display_name: '正式技术负责人', role: 'worker' }])
-  const onReload = vi.fn()
-  show({ ...editableProject, manager: 'another-owner', is_co_manager: true, technical_manager: 'tech' }, onReload)
-  expect(await screen.findByRole('combobox', { name: '技术负责人' })).toBeDisabled()
-  fireEvent.change(screen.getByLabelText('说明'), { target: { value: '协管更新说明' } })
-  fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }))
-  await waitFor(() => expect(onReload).toHaveBeenCalledOnce())
-  expect(update).toHaveBeenCalledWith('p1', expect.objectContaining({ description: '协管更新说明' }))
-  expect(update.mock.calls[0][1]).not.toHaveProperty('technical_manager_id')
-})
-
 it('keeps dirty information on a cancelled tab switch and restores saved values on explicit discard', async () => {
   const confirm = watchConfirm()
   show()

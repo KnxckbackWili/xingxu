@@ -75,7 +75,6 @@ def test_overview_handles_one_hundred_projects(client, pm_headers):
                 start_date=date(2026, 8, 1),
                 end_date=date(2026, 12, 31),
                 status="preparing",
-                members=[],
             ))
         db.commit()
     finally:

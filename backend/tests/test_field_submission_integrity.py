@@ -122,9 +122,9 @@ def test_check_switching_from_na_restores_applicability(client, worker_headers, 
 
 
 @pytest.mark.parametrize('operation', ['check', 'delivery', 'issue_create', 'issue_update', 'vehicle_event', 'inventory_create', 'inventory_movement', 'attachment_upload', 'attachment_delete'])
-@pytest.mark.parametrize('transition', ['archived', 'removed'])
+@pytest.mark.parametrize('transition', ['archived'])
 def test_field_mutations_recheck_project_after_waiting_for_lock(client, pm_headers, monkeypatch, operation, transition):
-    from app.models import Project, ProjectMember
+    from app.models import Project
     from app.services import record_lock
     pid, tid, cid = _execution(client)
     extra_id = None
@@ -146,11 +146,7 @@ def test_field_mutations_recheck_project_after_waiting_for_lock(client, pm_heade
         if isinstance(entity, Project) and entity.id == pid and not interleaved:
             with SessionLocal() as other:
                 project = other.get(Project, pid)
-                if transition == 'archived':
-                    project.status = 'archived'
-                else:
-                    project.manager = 'user-admin-001'
-                    other.query(ProjectMember).filter_by(project_id=pid, user_id='user-pm-001').delete()
+                project.status = 'archived'
                 other.commit()
             interleaved.append(True)
         return original(db, entity, **kwargs)

@@ -72,8 +72,6 @@ def test_unassigned_issue_notifies_manager(client, pm_headers, worker_headers):
     pid = _project(client, pm_headers)
     # worker1 加入项目（上报需成员）
     wid = client.get("/api/auth/me", headers=worker_headers).json()["id"]
-    members = [*client.get(f"/api/projects/{pid}", headers=pm_headers).json()["members"], wid]
-    client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": members}))
     # worker 上报（不指定处理人）→ 项目负责人（pm）收到"新问题上报"
     r = client.post(f"/api/projects/{pid}/issues", headers=worker_headers, json={
         "title": "现场缺物料", "severity": "high"})
@@ -94,29 +92,6 @@ def test_unassigned_issue_no_self_notify(client, pm_headers):
 
     r = client.get("/api/notifications", headers=pm_headers)
     assert all(not n["title"].startswith("新问题上报") for n in r.json())
-
-
-def test_assignee_change_notifies_new_assignee(client, pm_headers, worker_headers):
-    pid = _project(client, pm_headers)
-    # Both assignees must be able to open the issue, not merely receive a notice.
-    membership = client.put(f"/api/projects/{pid}", headers=pm_headers,
-                            json=versioned(pid, {"members": ["user-worker-001", "user-worker-002"]}))
-    assert membership.status_code == 200, membership.text
-    r = client.post(f"/api/projects/{pid}/issues", headers=pm_headers, json={
-        "title": "联调失败", "assignee_id": "user-worker-001"})
-    assert r.status_code == 200
-    iid = r.json()["id"]
-
-    # 改派给 worker2 → worker2 收到指派通知（seed id: user-worker-002）
-    r = client.put(f"/api/issues/{iid}", headers=pm_headers, json=versioned(iid, {"assignee_id": "user-worker-002"}, 'Issue'))
-    assert r.status_code == 200
-
-    r = client.post("/api/auth/login", json={"username": "worker2", "password": "worker123"})
-    w2_headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
-    r = client.get("/api/notifications", headers=w2_headers)
-    assert any(n["title"].startswith("新问题指派给你") for n in r.json())
-    notice = next(n for n in r.json() if n["title"].startswith("新问题指派给你"))
-    assert notice["content"] == "严重程度：中 · 上报人：项目经理"
 
 
 # ===== 老库迁移：issues 表缺 extra 列 =====

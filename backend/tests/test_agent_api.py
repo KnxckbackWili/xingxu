@@ -57,18 +57,6 @@ def test_new_tools_return_real_project_data_and_pagination(client, admin_headers
     assert call(client, headers, 'project_activity', project_id=pid, limit=-1).json()['ok'] is False
 
 
-@pytest.mark.member_rules
-def test_every_new_project_tool_hides_other_projects(client, admin_headers, pm_headers):
-    pid, _ = setup_project(client, pm_headers)
-    _, headers = token(client, admin_headers, user='user-worker-001')
-    for name in ['documents_read', 'vehicle_progress_read', 'documents_due_this_week', 'project_members', 'project_vehicles', 'project_files', 'project_activity']:
-        result = call(client, headers, name, project_id=pid).json()
-        assert result['ok'] is False, (name, result)
-        assert 'data' not in result
-
-
-
-
 def test_inactive_user_expiry_and_last_used_write_coalescing(client, admin_headers):
     from datetime import timedelta
     from app.time_utils import utcnow
@@ -88,21 +76,6 @@ def test_inactive_user_expiry_and_last_used_write_coalescing(client, admin_heade
         db.get(User, 'user-admin-001').is_active = False
         db.commit()
     assert call(client, headers, 'projects_list').status_code == 401
-
-
-@pytest.mark.member_rules
-def test_concurrent_requests_keep_token_identity_separate(client, admin_headers, pm_headers):
-    pid, _ = setup_project(client, pm_headers)
-    _, allowed = token(client, admin_headers, scopes=['projects:read'])
-    _, denied = token(client, admin_headers, user='user-worker-001', scopes=['projects:read'])
-    # Warm last-used timestamps so the actual race checks read identity, not SQLite writers.
-    call(client, allowed, 'projects_list'); call(client, denied, 'projects_list')
-    def run(index):
-        result = call(client, allowed if index % 2 == 0 else denied, 'project_get', project_id=pid).json()
-        return index, result['ok']
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        for index, ok in pool.map(run, range(12)):
-            assert ok == (index % 2 == 0)
 
 
 def test_http_catalog_scope_and_parameter_validation(client, admin_headers):

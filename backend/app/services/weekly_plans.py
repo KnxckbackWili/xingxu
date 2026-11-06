@@ -44,7 +44,7 @@ def local_today(project):
     return datetime.now(ZoneInfo(project.timezone or 'Asia/Shanghai')).date()
 
 
-def select_cells(db, project_ids, week_start, weeks, *, published_only=True, user=None):
+def select_cells(db, project_ids, week_start, weeks, *, published_only=True):
     """Bounded read seam; caller supplies already-authorized project IDs."""
     if not project_ids:
         return []
@@ -56,15 +56,7 @@ def select_cells(db, project_ids, week_start, weeks, *, published_only=True, use
     if published_only:
         rows = rows.filter(WeeklyPlanCell.published.is_(True))
     result = rows.order_by(WeeklyPlanCell.week_start, WeeklyPlanCell.task_id, WeeklyPlanCell.id).all()
-    return [cell for cell in result if user is None or user.id in (cell.assignee_ids or [])]
-
-
-def select_unassigned_cells(db, project_ids, week_start, weeks):
-    return [cell for cell in select_cells(db, project_ids, week_start, weeks) if not cell.assignee_ids]
-
-
-def member_ids(project):
-    return set(project.members or []) | {v for v in (project.manager, project.technical_manager) if v}
+    return result
 
 
 def can_edit(project, actor):
@@ -73,31 +65,23 @@ def can_edit(project, actor):
             C_SCHEDULE in project_capabilities(actor, project))
 
 
-def can_claim(project, actor):
-    return project.status in ACTIVE_PROJECT_STATUSES and actor.id in member_ids(project) and has_permission(actor, 'worker.report', default=True)
-
-
-def lock_authority(db, project, actor, *, assignees=(), claim=False):
+def lock_authority(db, project, actor):
     old_token = actor.token_version or 0
     project = lock_writable_project(db, project, actor)
     anchor = db.query(User).filter_by(username='admin').first() or db.query(User).order_by(User.id).first()
     if anchor:
         lock_record(db, anchor, conflict_detail='人员授权正在变化，请刷新后重试')
-    identities = sorted(({actor.id} | set(assignees)) - ({anchor.id} if anchor else set()))
+    identities = sorted({actor.id} - ({anchor.id} if anchor else set()))
     if identities:
         db.execute(select(User.id).where(User.id.in_(identities)).order_by(User.id).with_for_update()).all()
     db.refresh(actor)
     if not actor.is_active or (actor.token_version or 0) != old_token:
         raise HTTPException(401, '账号或会话已变化，请重新登录')
-    if claim:
-        if not can_claim(project, actor):
-            raise HTTPException(403, '仅有填报权限的当前项目成员可明确认领')
-    else:
-        if not has_permission(actor, 'project.manage_schedule', default=True):
-            raise HTTPException(403, '周计划维护权限已变化')
-        authorize_project(actor, project, C_SCHEDULE)
-        if project.status not in ACTIVE_PROJECT_STATUSES:
-            raise HTTPException(400, '项目暂停或结束后不能维护周计划，请先明确恢复状态')
+    if not has_permission(actor, 'project.manage_schedule', default=True):
+        raise HTTPException(403, '周计划维护权限已变化')
+    authorize_project(actor, project, C_SCHEDULE)
+    if project.status not in ACTIVE_PROJECT_STATUSES:
+        raise HTTPException(400, '项目暂停或结束后不能维护周计划，请先明确恢复状态')
     return project
 
 
@@ -147,24 +131,12 @@ def scope_identity(cell):
                        'vehicle_type': scope.get('vehicle_type') or None}, sort_keys=True, separators=(',', ':'))
 
 
-def validate_assignees(db, project, identities):
-    identities = sorted(set(identities))
-    if set(identities) - member_ids(project):
-        raise HTTPException(400, '周计划负责人须是当前项目成员或负责人，请先在成员设置中添加')
-    rows = db.query(User).filter(User.id.in_(identities)).populate_existing().all() if identities else []
-    if {row.id for row in rows if row.is_active and row.role not in ('external', 'readonly')} != set(identities):
-        raise HTTPException(400, '负责人账号已停用或没有现场成员资格，请核对后重新选择')
-    return identities
-
-
-def _target(task, mode, count, *, legacy=False):
+def _target(task, mode, count):
     if mode == 'in_progress':
         if count is not None:
             raise HTTPException(400, '进行中的安排不填写完成台数')
         return None
     if work.is_vehicle(task):
-        if count is None and legacy:
-            return None  # Original fractional quantity remains explicitly unreviewed.
         if isinstance(count, bool) or not isinstance(count, int) or not 0 < count <= 2147483647:
             raise HTTPException(400, '车辆完成目标须填写正整数台数')
         if not task.vehicle_step_key:
@@ -181,36 +153,23 @@ def _duplicate(db, cell):
     return any(other.id != cell.id and scope_identity(other) == scope_identity(cell) for other in others)
 
 
-def _notify(db, project, cell, actor, people, title):
-    from app.services.notify import notify
-    task = db.get(Task, cell.task_id)
-    for identity in sorted(set(people) - {actor.id}):
-        person = db.get(User, identity)
-        if person and person.is_active:
-            notify(db, identity, f'{title} · {project.name}',
-                   f'{cell.week_start} 起的一周：{task.name if task else "原工作"}。请核对最新周计划。',
-                   ntype='schedule_confirmed', project_id=project.id, entity_id=cell.id)
-
-
 def _raw(cell):
     return {'week_start': cell.week_start.isoformat(), 'scope': cell.scope, 'mode': cell.mode,
-            'target_count': cell.target_count, 'assignee_ids': cell.assignee_ids,
-            'intent_review_required': bool(cell.intent_review_required),
+            'target_count': cell.target_count,
             'published': cell.published, 'is_cancelled': cell.is_cancelled,
             'notes': cell.notes, 'vehicle_step_key': cell.vehicle_step_key}
 
 
 def create(db, project, actor, values, *, already_locked=False):
     if not already_locked:
-        project = lock_authority(db, project, actor, assignees=values.get('assignee_ids') or [])
+        project = lock_authority(db, project, actor)
     task = task_for(db, project, values['task_id'])
     scope, key = normalize_scope(db, project, task, values.get('scope'))
-    identities = validate_assignees(db, project, values.get('assignee_ids') or [])
     mode = values.get('mode', 'in_progress')
     count = _target(task, mode, values.get('target_count'))
     row = WeeklyPlanCell(project_id=project.id, task_id=task.id, scope=scope, scope_key=key,
         vehicle_step_key=task.vehicle_step_key, week_start=monday(values['week_start']), mode=mode,
-        target_count=count, assignee_ids=identities, notes=values.get('notes') or '', published=False,
+        target_count=count, notes=values.get('notes') or '', published=False,
         is_cancelled=False, source_metadata=values.get('_draft_source'), created_by=actor.id, updated_by=actor.id, version=0)
     cancelled = db.query(WeeklyPlanCell.id).filter_by(project_id=project.id,task_id=task.id,scope_key=key,week_start=row.week_start,is_cancelled=True).first()
     if cancelled:
@@ -223,8 +182,7 @@ def create(db, project, actor, values, *, already_locked=False):
 
 
 def update(db, project, actor, cell_id, values):
-    identities = values.get('assignee_ids') or []
-    project = lock_authority(db, project, actor, assignees=identities)
+    project = lock_authority(db, project, actor)
     row = db.get(WeeklyPlanCell, cell_id)
     if row is None or row.project_id != project.id:
         raise HTTPException(404, '周计划不存在')
@@ -232,14 +190,10 @@ def update(db, project, actor, cell_id, values):
     bump_version(row, values['version'])
     task = task_for(db, project, row.task_id)
     old = _raw(row)
-    if row.intent_review_required and {'mode', 'target_count'} & values.keys() and not values.get('confirm_intent'):
-        raise HTTPException(400, '原计划量或意图仍未知；修改目标须明确确认并填写核对理由')
     if 'week_start' in values:
         row.week_start = monday(values['week_start'])
     if 'scope' in values:
         row.scope, row.scope_key = normalize_scope(db, project, task, values['scope'])
-    if 'assignee_ids' in values:
-        row.assignee_ids = validate_assignees(db, project, values['assignee_ids'])
     if 'notes' in values:
         row.notes = values['notes']
     mode = values.get('mode', row.mode)
@@ -247,11 +201,7 @@ def update(db, project, actor, cell_id, values):
     if mode == 'in_progress' and 'target_count' not in values:
         count = None
     row.mode = mode
-    row.target_count = _target(task, mode, count, legacy=(row.source_metadata or {}).get('kind') == 't40_legacy_daily_rollup' and 'target_count' not in values and 'mode' not in values)
-    if values.get('confirm_intent'):
-        if 'mode' not in values or not (values.get('reason') or '').strip():
-            raise HTTPException(400, '明确核对历史计划意图须选择进行中或完成目标，并填写核对理由')
-        row.intent_review_required = False
+    row.target_count = _target(task, mode, count)
     row.vehicle_step_key = task.vehicle_step_key
     if 'is_cancelled' in values and values['is_cancelled'] != row.is_cancelled:
         if not (values.get('reason') or '').strip():
@@ -260,8 +210,6 @@ def update(db, project, actor, cell_id, values):
     if not row.is_cancelled and ('scope' in values or 'week_start' in values or 'is_cancelled' in values) and _duplicate(db, row):
         raise HTTPException(409, '该周已有同一工作与范围的计划；原格子保持不变')
     row.updated_by = actor.id; row.updated_at = utcnow()
-    if row.published and old != _raw(row):
-        _notify(db, project, row, actor, set(old['assignee_ids'] or []) | set(row.assignee_ids or []), '周计划已修改')
     log_change(db, project.id, 'weekly_plan', row.id, 'update', actor.id,
                '修改周计划' + (f'；{values["reason"]}' if values.get('reason') else ''), old, _raw(row))
     db.flush()
@@ -289,36 +237,16 @@ def publish(db, project, actor, selected, *, phase_id=None):
             raise HTTPException(409, '周计划版本已变化，请重新核对发布范围')
         if row.published:
             continue
-        if row.intent_review_required:
-            raise HTTPException(400, '历史计划量或意图仍待核对，请先明确确认本周计划再发布')
-        validate_assignees(db, project, row.assignee_ids or [])
         _target(task, row.mode, row.target_count)
         if row.vehicle_step_key != task.vehicle_step_key:
             raise HTTPException(409, '车辆工作环节已变化，请先明确更新该格子')
         bump_version(row, versions[row.id])
         row.published = True; row.published_at = utcnow(); row.published_by = actor.id
         row.updated_by = actor.id; row.updated_at = utcnow()
-        _notify(db, project, row, actor, row.assignee_ids or [], '周计划已发布')
         log_change(db, project.id, 'weekly_plan', row.id, 'publish', actor.id, '发布明确选定的周计划', None, _raw(row))
         changed.append(row.id)
     db.flush()
     return changed
-
-
-def claim(db, project, actor, cell_id, version):
-    project = lock_authority(db, project, actor, claim=True)
-    row = db.get(WeeklyPlanCell, cell_id)
-    if row is None or row.project_id != project.id:
-        raise HTTPException(404, '周计划不存在')
-    lock_record(db, row, conflict_detail='该计划已由其他成员更新，请刷新核对')
-    bump_version(row, version)
-    if not row.published or row.is_cancelled or row.assignee_ids:
-        raise HTTPException(409, '仅可明确认领已发布且尚无负责人的周计划')
-    task_for(db, project, row.task_id)
-    row.assignee_ids = [actor.id]; row.updated_by = actor.id; row.updated_at = utcnow()
-    log_change(db, project.id, 'weekly_plan', row.id, 'claim', actor.id, '成员明确认领周计划', {'assignee_ids': []}, {'assignee_ids': [actor.id]})
-    db.flush()
-    return row
 
 
 def _unit_scope(db, project, task, scope, step):
@@ -397,7 +325,7 @@ def completion_fact(db, project, cell, *, cache=None):
         complete = not actual['quantity_unknown'] and actual.get('expected_count', 0) > 0 and (actual.get('completed_count') or 0) >= actual['expected_count']
     elif work.is_vehicle(task):
         identity = scope_identity(cell)
-        targets = [None if row.intent_review_required else row.target_count for row in db.query(WeeklyPlanCell).filter(
+        targets = [row.target_count for row in db.query(WeeklyPlanCell).filter(
             WeeklyPlanCell.project_id == project.id, WeeklyPlanCell.task_id == task.id,
             WeeklyPlanCell.week_start <= cell.week_start, WeeklyPlanCell.mode == 'finish',
             WeeklyPlanCell.vehicle_step_key == cell.vehicle_step_key,
@@ -409,23 +337,18 @@ def completion_fact(db, project, cell, *, cache=None):
     else:
         required = 1
         complete = actual.get('completed_count') == 1
-    intent_unknown = bool(cell.intent_review_required)
-    unknown = intent_unknown or actual['quantity_unknown'] or cell.mode == 'finish' and required is None
-    if intent_unknown:
-        complete = False
-        actual['warnings'] = [*actual.get('warnings', []), '原计划含未知量或不能确定的车辆目标，须明确核对本周计划意图；未按0或部分已知量判完成']
+    unknown = actual['quantity_unknown'] or cell.mode == 'finish' and required is None
     overdue = bool(not unknown and cell.published and not cell.is_cancelled and cell.mode == 'finish' and
                    cell.week_start + timedelta(days=6) < local_today(project) and not complete)
     return {**actual, 'required_count': required, 'is_complete': complete,
             'state': 'unknown' if unknown else 'completed' if complete else 'overdue' if overdue else 'in_progress' if cell.mode == 'in_progress' else 'planned',
-            'overdue': overdue, 'intent_review_required': intent_unknown,
-            'target_review_required': intent_unknown or cell.mode == 'finish' and work.is_vehicle(task) and cell.target_count is None}
+            'overdue': overdue,
+            'target_review_required': cell.mode == 'finish' and work.is_vehicle(task) and cell.target_count is None}
 
 
 def serialize_cell(db, project, cell, actor=None, *, cache=None):
     task = db.get(Task, cell.task_id)
     phase = work.phase_of(db, task) if task else None
-    assignees = [db.get(User, identity) for identity in cell.assignee_ids or []]
     facts = completion_fact(db, project, cell, cache=cache)
     return {'id': cell.id, 'project_id': project.id, 'project_name': project.name, 'timezone': project.timezone or 'Asia/Shanghai',
         'project_status': project.status, 'task_id': cell.task_id, 'task_name': task.name if task else '原工作待核对',
@@ -433,14 +356,11 @@ def serialize_cell(db, project, cell, actor=None, *, cache=None):
         'phase_id': phase.id if phase else None, 'phase_name': work.stage_label(phase.name) if phase else '',
         'group_label': work.group_of(db, task) if task else '', 'vehicle_step_key': cell.vehicle_step_key,
         **_raw(cell), 'week_end': (cell.week_start + timedelta(days=6)).isoformat(),
-        'assignees': [{'id': identity, 'name': person.display_name if person else '原负责人未记录', 'active': bool(person and person.is_active)}
-                      for identity, person in zip(cell.assignee_ids or [], assignees)],
         'version': cell.version or 0, 'source_metadata': cell.source_metadata, 'completion': facts,
         'created_at': cell.created_at.isoformat() + 'Z' if cell.created_at else None,
         'updated_at': cell.updated_at.isoformat() + 'Z' if cell.updated_at else None, 'updated_by': cell.updated_by,
         'published_at': cell.published_at.isoformat() + 'Z' if cell.published_at else None, 'published_by': cell.published_by,
-        'permissions': {'edit': bool(actor and can_edit(project, actor)),
-            'claim': bool(actor and can_claim(project, actor) and cell.published and not cell.assignee_ids and not cell.is_cancelled)}}
+        'permissions': {'edit': bool(actor and can_edit(project, actor))}}
 
 
 def weeks_metadata(db, start, weeks):
@@ -466,7 +386,7 @@ def attention(db, projects, actor):
     for project in projects:
         cache = {}
         for cell in db.query(WeeklyPlanCell).filter_by(project_id=project.id, published=True, is_cancelled=False):
-            if actor.id not in (cell.assignee_ids or []) and not can_edit(project, actor):
+            if not can_edit(project, actor):
                 continue
             facts = completion_fact(db, project, cell, cache=cache)
             item = {'id': cell.id, 'project_id': project.id, 'project_name': project.name,
@@ -487,10 +407,6 @@ def project_warnings(db, project, cells, actor):
         facts = completion_fact(db, project, cell, cache=cache)
         for message in facts.get('warnings', []):
             result.append({'code': 'completion_scope', 'cell_id': cell.id, 'task_id': cell.task_id, 'message': message})
-        if facts.get('target_review_required'):
-            result.append({'code': 'legacy_target_review', 'cell_id': cell.id, 'message': '原计划量含未知值、小数或超出可用台数范围，原值已保留，请明确核对本周计划意图和目标'})
-        if any(identity not in member_ids(project) or (person := db.get(User, identity)) is None or not person.is_active for identity in cell.assignee_ids or []):
-            result.append({'code': 'assignee_changed', 'cell_id': cell.id, 'message': '原负责人已离开或账号停用，请明确交接；系统未自动改派'})
     query = db.query(WeeklyPlanCell).filter_by(project_id=project.id, is_cancelled=False)
     if not can_edit(project, actor):
         query = query.filter(WeeklyPlanCell.published.is_(True))
@@ -533,25 +449,6 @@ def project_warnings(db, project, cells, actor):
         if task and work.is_vehicle(task) and any(overlaps(a, b) for index, a in enumerate(rows) for b in rows[index+1:]):
             result.append({'code': 'scope_overlap', 'task_id': task_id,
                 'message': f'「{task.name}」存在重叠选车范围，请人工核对各周目标；同一实车完成不能据此当作两份新增事实'})
-    if cells:
-        start = min(cell.week_start for cell in cells)
-        end = max(cell.week_start for cell in cells) + timedelta(days=6)
-        # Dates/counts may be shared, private project names and task text may not.
-        other_rows = db.query(WeeklyPlanCell, Project).join(Project, Project.id == WeeklyPlanCell.project_id).filter(
-            WeeklyPlanCell.project_id != project.id, WeeklyPlanCell.week_start >= start,
-            WeeklyPlanCell.week_start <= end, WeeklyPlanCell.published.is_(True),
-            WeeklyPlanCell.is_cancelled.is_(False), Project.deleted_at.is_(None), Project.status.in_(ACTIVE_PROJECT_STATUSES)).all()
-        from app.services.scope import visible_project_ids
-        visible = set(visible_project_ids(db, actor))
-        for cell in cells:
-            for identity in cell.assignee_ids or []:
-                conflicts = {(row.project_id, p.name if row.project_id in visible else None)
-                             for row, p in other_rows if row.week_start == cell.week_start and identity in (row.assignee_ids or [])}
-                if conflicts:
-                    person = db.get(User, identity)
-                    result.append({'code': 'cross_project', 'cell_id': cell.id, 'user_id': identity,
-                        'other_project_count': len(conflicts), 'visible_project_names': [name for _, name in sorted(conflicts) if name],
-                        'message': f'{person.display_name if person else "原负责人"}同周还被安排到 {len(conflicts)} 个项目，请人工确认；不会自动负载均衡'})
     unique = {json.dumps(item, sort_keys=True, ensure_ascii=False): item for item in result}
     return list(unique.values())
 
@@ -579,20 +476,18 @@ def project_view(db, project, actor, start, weeks, *, include_cancelled=False):
     missing = sorted({year for week in metadata for year in week['missing_holiday_years']})
     if missing:
         warnings.append({'code': 'missing_holiday_years', 'years': missing, 'message': f'缺少 {"、".join(map(str, missing))} 年已核对节假日数据，请在设置维护，不能视为全年无节假日'})
-    members = db.query(User).filter(User.id.in_(member_ids(project))).order_by(User.display_name, User.id).all()
     from app.services.template_stages import stage_order
     return {'cells': data, 'work_items': sorted(phases.values(), key=lambda row: (stage_order(row['stage_key']), row['sort_order'], row['id'])),
         'weeks': metadata, 'warnings': warnings, 'timezone': project.timezone or 'Asia/Shanghai',
         'permissions': {'read': True, 'edit': editing, 'publish': editing,
-            'claim': can_claim(project, actor), 'export': has_permission(actor, 'project.export', default=True) and 'project.export' in project_capabilities(actor, project)},
-        'members': [{'id': person.id, 'name': person.display_name, 'active': person.is_active} for person in members],
+            'export': has_permission(actor, 'project.export', default=True) and 'project.export' in project_capabilities(actor, project)},
         'vehicles': [{'id': unit.id, 'label': unit.fleet_no or unit.asset_code, 'vehicle_id': unit.vehicle_id} for unit in db.query(VehicleUnit).filter_by(project_id=project.id).order_by(VehicleUnit.asset_code)],
         'vehicle_types': sorted({row.vehicle_type for row in db.query(Vehicle).filter_by(project_id=project.id)}),
         'settings': {'rest_mode': project.rest_mode, 'rest_days': project.rest_days or [], 'skip_holidays': bool(project.skip_holidays)},
         'summary': {'state': 'available', 'published_count': sum(row['published'] and not row['is_cancelled'] for row in data),
             'draft_count': sum(not row['published'] and not row['is_cancelled'] for row in data) if editing else None, 'cancelled_count':sum(row['is_cancelled'] for row in data),
             'overdue_count': sum(row['completion']['overdue'] for row in data),
-            'in_progress_count': sum(row['mode'] == 'in_progress' and not row['is_cancelled'] for row in data), 'unassigned_count':sum(not row['assignee_ids'] and not row['is_cancelled'] for row in data), 'warning_count': len(warnings)}}
+            'in_progress_count': sum(row['mode'] == 'in_progress' and not row['is_cancelled'] for row in data), 'warning_count': len(warnings)}}
 
 
 def draft_preview(db, project, actor, rules, *, first_week=None):
@@ -645,7 +540,7 @@ def draft_preview(db, project, actor, rules, *, first_week=None):
                 'phase_name': work.stage_label(phase.name), 'kind': 'vehicle' if work.is_vehicle(task) else 'other',
                 'scope': {'vehicle_unit_ids': []}, 'vehicle_step_key': task.vehicle_step_key,
                 'week_start': begin.isoformat(), 'week_end': (begin + timedelta(days=6)).isoformat(),
-                'mode': mode, 'target_count': count, 'assignee_ids': [], 'published': False,
+                'mode': mode, 'target_count': count, 'published': False,
                 'notes': f'初稿：按{work.stage_label(phase.name)}阶段与关键事件规则生成',
                 'anchor': anchor, 'anchor_date': anchor_date.isoformat(), 'offset_weeks': offset})
     tasks = work.tasks_query(db, [project.id]).order_by(Task.id).all()
@@ -668,7 +563,7 @@ def draft(db, project, actor, rules, *, first_week=None, preview_token):
     created = []
     for proposal in preview['proposals']:
         # The rule that produced the cell lives in its source; notes stay free for the person planning the week.
-        values = {key: proposal[key] for key in ('task_id', 'scope', 'mode', 'target_count', 'assignee_ids')}
+        values = {key: proposal[key] for key in ('task_id', 'scope', 'mode', 'target_count')}
         values['notes'] = ''
         values['week_start'] = date.fromisoformat(proposal['week_start'])
         values['_draft_source'] = {'kind': 't40_event_draft', 'anchor': proposal['anchor'], 'anchor_date': proposal['anchor_date'],
@@ -719,9 +614,9 @@ def project_summary(db, project, actor):
         overdue+=int(fact['overdue']);unknown+=int(fact['state']=='unknown')
     return {'state':'available','total':len(rows),'published_count':sum(row.published for row in rows),
         'draft_count':sum(not row.published for row in rows) if editing else None,
-        'overdue_count':overdue,'unknown_count':unknown,'unassigned_count':sum(not row.assignee_ids for row in rows),
+        'overdue_count':overdue,'unknown_count':unknown,
         'warning_count':len(warnings),'warnings':warnings,
-        'meaning':'真实周计划；原按日日程只读来源不计入当前安排'}
+        'meaning':'真实周计划'}
 
 
 STANDARD_PHASE_ORIGINS = {

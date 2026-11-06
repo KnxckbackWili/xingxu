@@ -37,7 +37,6 @@ class CreateCell(BaseModel):
     week_start: date
     mode: Literal['finish', 'in_progress'] = 'in_progress'
     target_count: int | None = Field(default=None, gt=0, le=2147483647, strict=True)
-    assignee_ids: list[str] = Field(default_factory=list, max_length=100)
     notes: str = Field(default='', max_length=4000)
 
 
@@ -48,16 +47,14 @@ class UpdateCell(BaseModel):
     week_start: date | None = None
     mode: Literal['finish', 'in_progress'] | None = None
     target_count: int | None = Field(default=None, gt=0, le=2147483647, strict=True)
-    assignee_ids: list[str] | None = Field(default=None, max_length=100)
     notes: str | None = Field(default=None, max_length=4000)
     is_cancelled: bool | None = None
-    confirm_intent: bool = Field(default=False, strict=True)
     reason: str = Field(default='', max_length=4000)
 
     @model_validator(mode='after')
     def reject_null_definition(self):
-        if any(getattr(self, key) is None for key in self.model_fields_set & {'scope','week_start','mode','assignee_ids','notes','is_cancelled'}):
-            raise ValueError('周计划定义字段不能置空；清空负责人请提交空列表')
+        if any(getattr(self, key) is None for key in self.model_fields_set & {'scope','week_start','mode','notes','is_cancelled'}):
+            raise ValueError('周计划定义字段不能置空')
         return self
 
 
@@ -72,10 +69,6 @@ class PublishCells(BaseModel):
     cells: list[CellVersion] = Field(min_length=1, max_length=2000)
     phase_id: str | None = None
 
-
-class ClaimCell(BaseModel):
-    model_config = {'extra': 'forbid'}
-    version: int = Field(ge=0)
 
 
 class PhaseRule(BaseModel):
@@ -133,17 +126,15 @@ def personal_weekly(week_start: date | None = None, weeks: int = Query(1, ge=1, 
         projects = [project for project in projects if C_SCHEDULE in project_capabilities(user, project)]
         if not projects and user.role not in ('admin','director','pm','lead','technician'):
             raise HTTPException(403, '仅可查看本人已发布周计划')
-    cells, unassigned, warnings = [], [], []
+    cells, warnings = [], []
     for project in projects:
         begin = week_start or service.local_today(project)
-        selected = service.select_cells(db, [project.id], begin, weeks, published_only=True, user=None if scope == 'team' else user)
+        selected = service.select_cells(db, [project.id], begin, weeks, published_only=True)
         cache = {}
         cells.extend(service.serialize_cell(db, project, cell, user, cache=cache) for cell in selected)
-        if service.can_claim(project, user):
-            unassigned.extend(service.serialize_cell(db, project, cell, user, cache=cache) for cell in service.select_unassigned_cells(db, [project.id], begin, weeks))
         warnings.extend(service.project_warnings(db, project, selected, user))
     begin = week_start or (service.local_today(projects[0]) if projects else date.today())
-    return {'cells': cells, 'unassigned': unassigned, 'weeks': service.weeks_metadata(db, begin, weeks),
+    return {'cells': cells, 'weeks': service.weeks_metadata(db, begin, weeks),
             'warnings': warnings, 'permissions': {'team': scope == 'team'}, 'scope': scope}
 
 
@@ -221,12 +212,4 @@ def weekly_excel(project_id: str, week_start: date | None = None, weeks: int = Q
 def update_cell(project_id: str, cell_id: str, body: UpdateCell, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     project = ensure_project_visible(db, project_id, user)
     row = committed(db, lambda: service.update(db, project, user, cell_id, body.model_dump(exclude_unset=True)))
-    return service.serialize_cell(db, project, row, user)
-
-
-@router.post('/projects/{project_id}/weekly-plans/{cell_id}/claim')
-@route_permission('worker.report')
-def claim_cell(project_id: str, cell_id: str, body: ClaimCell, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    project = ensure_project_visible(db, project_id, user)
-    row = committed(db, lambda: service.claim(db, project, user, cell_id, body.version))
     return service.serialize_cell(db, project, row, user)

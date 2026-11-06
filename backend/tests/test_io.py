@@ -96,8 +96,6 @@ def test_project_export_excel_sheets(client, pm_headers, worker_headers):
     r = client.get("/api/auth/me", headers=worker_headers)
     wid = r.json()["id"]
     r = client.get(f"/api/projects/{pid}", headers=pm_headers)
-    client.put(f"/api/projects/{pid}", headers=pm_headers,
-               json=versioned(pid, {"members": [*r.json()["members"], wid]}))
 
     # 一个问题（含分类专属字段）
     client.post(f"/api/projects/{pid}/issues", headers=pm_headers, json={
@@ -113,7 +111,7 @@ def test_project_export_excel_sheets(client, pm_headers, worker_headers):
     from app.services.report_forms import LIFECYCLE_HEADERS
     assert [cell.value for cell in wb['生命周期表'][2]][:len(LIFECYCLE_HEADERS)] == LIFECYCLE_HEADERS
     headers = [cell.value for cell in wb['问题清单'][2]]
-    assert '负责人' in headers and '解决方案/关闭或作废说明' in headers and '扩展字段' in headers
+    assert '解决方案/关闭或作废说明' in headers and '扩展字段' in headers
     assert any('AGV-03' in str(cell.value) for row in wb['问题清单'].iter_rows(min_row=3) for cell in row if cell.value)
     assert '更换配件' in [cell.value for cell in wb['生命周期表'][2]]
     assert [cell.value for cell in wb['物资清单'][1]][:10] == ['物品编码','名称','规格','序列号','归属','现存数量','单位','位置','保管人','说明']
@@ -176,8 +174,6 @@ def test_project_export_package_zip(client, pm_headers, worker_headers):
     # worker 加入项目（可见）但无 project.export 能力 → 403
     me = client.get("/api/auth/me", headers=worker_headers).json()
     detail = client.get(f"/api/projects/{pid}", headers=pm_headers).json()
-    client.put(f"/api/projects/{pid}", headers=pm_headers,
-               json=versioned(pid, {"members": [*detail["members"], me["id"]]}))
     assert client.get(f"/api/projects/{pid}/export/package", headers=worker_headers).status_code == 403
 
 

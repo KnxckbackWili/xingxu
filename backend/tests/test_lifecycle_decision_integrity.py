@@ -285,7 +285,7 @@ def test_stage_requires_authorized_human_action_not_percentage(client, pm_header
     pid = _project(client, pm_headers, stage)
     worker = client.get("/api/auth/me", headers=worker_headers).json()["id"]
     with SessionLocal() as db:
-        p = db.get(Project, pid); p.members = [worker]; db.commit()
+        p = db.get(Project, pid); db.commit()
     denied = _status(client, worker_headers, pid, target)
     assert denied.status_code == 403, denied.text
     _assert_status(pid, stage)
@@ -379,41 +379,6 @@ def test_stale_loaded_scope_does_not_survive_current_status_gate(client, pm_head
     _assert_status(pid, "acceptance")
 
 
-def test_stale_actor_loses_stage_authority_after_grant_revocation(client, pm_headers, worker_headers):
-    from app.routers.projects import ProjectStatusChange, change_status
-    pid = _project(client, pm_headers, "executing")
-    wid = client.get("/api/auth/me", headers=worker_headers).json()["id"]
-    with SessionLocal() as setup:
-        p = setup.get(Project, pid)
-        p.members = [wid]
-        p.member_permissions = [{"user_id": wid, "capabilities": ["project.update"]}]
-        setup.commit()
-    with SessionLocal() as stale:
-        p = stale.get(Project, pid)
-        actor = stale.get(User, wid)
-        with SessionLocal() as newer:
-            newer.get(Project, pid).member_permissions = []
-            newer.commit()
-        with pytest.raises(HTTPException) as error:
-            change_status(pid, ProjectStatusChange(status="preparing"), actor, p, stale)
-        assert error.value.status_code == 403
-        stale.rollback()
-    _assert_status(pid, "executing")
-
-
-def test_explicit_member_stage_authority_is_honored(client, pm_headers, worker_headers):
-    pid = _project(client, pm_headers, "executing")
-    wid = client.get("/api/auth/me", headers=worker_headers).json()["id"]
-    from tests.lifecycle_helpers import project_version
-    response = client.put(f"/api/projects/{pid}", headers=pm_headers, json={
-        "members": [wid], "member_permissions": [{"user_id": wid, "capabilities": ["project.update"]}],
-        "version": project_version(client, pm_headers, pid),
-    })
-    assert response.status_code == 200, response.text
-    allowed = _status(client, worker_headers, pid, "preparing")
-    assert allowed.status_code == 200, allowed.text
-
-
 def test_same_clock_acceptance_recordings_preserve_correction_order(client, pm_headers, monkeypatch):
     pid, _ = _completion_fixture(client, pm_headers)
     monkeypatch.setattr("app.services.acceptance.utcnow", lambda: datetime(2026, 10, 1, 9, 0))
@@ -493,26 +458,3 @@ def test_agent_token_cannot_be_used_as_a_human_status_session(client, pm_headers
     assert denied.status_code == 404, denied.text
     _assert_status(pid, "executing")
 
-
-@pytest.mark.parametrize("stage", ["preparing", "archived"])
-def test_real_startup_preserves_stage_and_does_not_unlock_archived_edits(client, pm_headers, worker_headers, monkeypatch, stage):
-    from app.db import init_db
-    pid = _project(client, pm_headers, stage)
-    wid = client.get("/api/auth/me", headers=worker_headers).json()["id"]
-    with SessionLocal() as db:
-        p = db.get(Project, pid)
-        p.members = [wid]
-        p.member_permissions = [{"user_id": wid, "capabilities": ["project.update"]}]
-        db.commit()
-    for _ in range(2):
-        init_db()
-        project = client.get(f"/api/projects/{pid}", headers=worker_headers)
-        assert project.status_code == 200, project.text
-        assert project.json()["status"] == stage
-        assert "project.update" in project.json()["capabilities"]
-        changed = client.put(f"/api/projects/{pid}", headers=worker_headers,
-                             json={"description": "重启后合法权限仍然有效", "version": project.json()["version"]})
-        assert changed.status_code == (400 if stage == "archived" else 200), changed.text
-    if stage == "archived":
-        assert _status(client, worker_headers, pid, "completed").status_code == 200
-        assert _status(client, worker_headers, pid, "acceptance").status_code == 200

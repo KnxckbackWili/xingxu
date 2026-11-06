@@ -13,7 +13,7 @@ import './FieldWorkPages.css'
 
 export default function SiteHandoverPage({ project, onReload }: { project: Project; onReload: () => void }) {
   const { user } = useAuth()
-  const canEdit = useProjectCapability('project.update', user?.role === 'admin' || (user?.role === 'pm' && project.manager === user.id) || !!project.is_co_manager)
+  const canEdit = useProjectCapability('project.update', user?.role === 'admin' || (user?.role === 'pm' && project.manager === user.id))
   const [contacts, setContacts] = useState<any[]>(project.client_contacts ?? [])
   const [contactOpen, setContactOpen] = useState(false)
   const [contactSaving, setContactSaving] = useState(false)

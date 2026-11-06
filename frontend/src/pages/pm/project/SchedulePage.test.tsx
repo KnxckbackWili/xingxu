@@ -10,8 +10,8 @@ vi.mock('../../../utils/verifiedAccount',()=>({ensureVerifiedAccount:h.verify}))
 vi.mock('../../../api/client',()=>({errMsg:(e:any)=>e.response?.data?.detail||e.message||'读取失败'}))
 import SchedulePage from './SchedulePage'
 const start='2026-10-26'
-const cell=(id='c1',changes:Partial<PlanCell>={}):PlanCell=>({id,project_id:'p1',task_id:'w1',task_name:'接线核对',phase_id:'phase',phase_name:'现场工作',group_label:'电气',kind:'other',scope:{vehicle_unit_ids:[]},week_start:start,week_end:'2026-11-01',mode:'finish',target_count:null,assignee_ids:['worker'],assignees:[{id:'worker',name:'李工',active:true}],notes:'',intent_review_required:false,published:false,is_cancelled:false,version:4,permissions:{edit:true,claim:false},completion:{state:'planned',is_complete:false,overdue:false,completed_count:0,required_count:1,expected_count:1,quantity_unknown:false,target_review_required:false,warnings:[]},...changes})
-const fixture=(changes:Partial<WeeklyPlanView>={}):WeeklyPlanView=>({cells:[cell()],work_items:[{id:'phase',name:'现场工作',work_items:[{id:'w1',name:'接线核对',kind:'other',group_label:'电气',vehicle_step_key:null,applicable_vehicle_types:[],version:1},{id:'w2',name:'单车检查',kind:'vehicle',group_label:'',vehicle_step_key:'inspection',applicable_vehicle_types:[],version:1}]}],weeks:[{week_start:start,week_end:'2026-11-01',holiday_days:[],makeup_workdays:[],missing_holiday_years:[]}],warnings:[],timezone:'Asia/Shanghai',members:[{id:'worker',name:'李工',active:true}],vehicles:[{id:'real-u1',label:'AGV-01'}],vehicle_types:['潜伏式'],settings:{rest_mode:'two',rest_days:[],skip_holidays:true},permissions:{read:true,edit:true,publish:true,export:true,claim:false},summary:{state:'available',published_count:0,draft_count:1,overdue_count:0,in_progress_count:0},...changes})
+const cell=(id='c1',changes:Partial<PlanCell>={}):PlanCell=>({id,project_id:'p1',task_id:'w1',task_name:'接线核对',phase_id:'phase',phase_name:'现场工作',group_label:'电气',kind:'other',scope:{vehicle_unit_ids:[]},week_start:start,week_end:'2026-11-01',mode:'finish',target_count:null,notes:'',published:false,is_cancelled:false,version:4,permissions:{edit:true},completion:{state:'planned',is_complete:false,overdue:false,completed_count:0,required_count:1,expected_count:1,quantity_unknown:false,target_review_required:false,warnings:[]},...changes})
+const fixture=(changes:Partial<WeeklyPlanView>={}):WeeklyPlanView=>({cells:[cell()],work_items:[{id:'phase',name:'现场工作',work_items:[{id:'w1',name:'接线核对',kind:'other',group_label:'电气',vehicle_step_key:null,applicable_vehicle_types:[],version:1},{id:'w2',name:'单车检查',kind:'vehicle',group_label:'',vehicle_step_key:'inspection',applicable_vehicle_types:[],version:1}]}],weeks:[{week_start:start,week_end:'2026-11-01',holiday_days:[],makeup_workdays:[],missing_holiday_years:[]}],warnings:[],timezone:'Asia/Shanghai',vehicles:[{id:'real-u1',label:'AGV-01'}],vehicle_types:['潜伏式'],settings:{rest_mode:'two',rest_days:[],skip_holidays:true},permissions:{read:true,edit:true,publish:true,export:true},summary:{state:'available',published_count:0,draft_count:1,overdue_count:0,in_progress_count:0},...changes})
 const project={id:'p1',name:'现场项目',status:'executing',timezone:'Asia/Shanghai',capabilities:['project.manage_schedule'],version:2} as any
 function page(p=project){return <MemoryRouter><ConfigProvider theme={{token:{motion:false}}}><SchedulePage projectId={p.id} project={p} onProjectChange={h.changed}/></ConfigProvider></MemoryRouter>}
 const show=()=>render(page())
@@ -30,7 +30,7 @@ it('creates non-vehicle completion plans without a quantity and rejects duplicat
  let finish!:(v:any)=>void;h.create.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve}));show()
  fireEvent.click(await screen.findByRole('button',{name:'安排接线核对 '+start}));fireEvent.change(screen.getByLabelText('周计划备注'),{target:{value:'核对现场接线'}})
  const save=screen.getByRole('button',{name:'保存计划'});fireEvent.click(save);fireEvent.click(save)
- await waitFor(()=>expect(h.create).toHaveBeenCalledOnce());expect(h.create).toHaveBeenCalledWith('p1',expect.objectContaining({task_id:'w1',mode:'finish',target_count:null,assignee_ids:[],notes:'核对现场接线'}));expect(h.verify).toHaveBeenCalledWith('pm')
+ await waitFor(()=>expect(h.create).toHaveBeenCalledOnce());expect(h.create).toHaveBeenCalledWith('p1',expect.objectContaining({task_id:'w1',mode:'finish',target_count:null,notes:'核对现场接线'}));expect(h.verify).toHaveBeenCalledWith('pm')
  await act(async()=>finish(cell('new')))
 })
 it('requires positive vehicle targets and never invents a zero target',async()=>{
@@ -84,12 +84,6 @@ it('uses source-based default rules and still requires preview before draft crea
 })
 it('preserves manual generation when default-rule reads fail',async()=>{
  h.defaultRules.mockRejectedValueOnce(new Error('建议暂不可读取'));show();fireEvent.click(await screen.findByRole('button',{name:'生成初稿'}));await waitFor(()=>expect(screen.getByText(/默认初稿建议暂不可读取/)).toBeVisible());await waitFor(()=>expect(screen.getByRole('combobox',{name:'现场工作关键事件'})).toBeEnabled());expect(screen.getByRole('button',{name:'重新读取初稿建议'})).toBeEnabled();expect(screen.getByRole('button',{name:'保存为草稿'})).toBeDisabled()
-})
-
-it('requires an explicit source review and reason to resolve uncertain legacy plan intent',async()=>{
- h.list.mockResolvedValue(fixture({cells:[cell('legacy',{intent_review_required:true,published:true,completion:{...cell().completion,state:'unknown',is_complete:false,overdue:false}})]}));show();expect(await screen.findByText('原计划意图待核对')).toBeVisible();fireEvent.click(screen.getByRole('button',{name:'编辑接线核对 '+start+' 本工作项'}));await waitFor(()=>expect(screen.getByText('旧计划的完成意图待核对')).toBeVisible());expect(screen.getByRole('button',{name:'保存计划'})).toBeDisabled()
- fireEvent.click(screen.getByRole('checkbox',{name:'已核对原始来源，按本次填写重新定义计划'}));expect(screen.getByRole('button',{name:'保存计划'})).toBeDisabled();fireEvent.change(screen.getByLabelText('旧计划意图核对理由'),{target:{value:'按原始会议记录重新明确本周进行中'}});fireEvent.mouseDown(screen.getByRole('combobox',{name:'计划方式'}));fireEvent.click(await screen.findByText('本周进行中'));fireEvent.click(screen.getByRole('button',{name:'保存计划'}))
- await waitFor(()=>expect(h.update).toHaveBeenCalledWith('p1','legacy',expect.objectContaining({version:4,mode:'in_progress',target_count:null,confirm_intent:true,reason:'按原始会议记录重新明确本周进行中'})))
 })
 
 it('shows only arranged work by default and offers a draft when nothing is arranged yet',async()=>{

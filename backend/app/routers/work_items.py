@@ -121,7 +121,7 @@ def list_project_work(project_id:str,user:User=Depends(get_current_user),db:Sess
     project=ensure_project_visible(db,project_id,user)
     caps=project_capabilities(user,project)
     can_plan=C_PLAN in caps and project.status in ACTIVE_PROJECT_STATUSES
-    can_record=has_permission(user,'worker.report',default=True) and (C_PLAN in caps or user.id in (project.members or []) or user.id in (project.manager,project.technical_manager)) and project.status in EXECUTION_PROJECT_STATUSES
+    can_record=has_permission(user,'worker.report',default=True) and user.role not in ('readonly','external') and project.status in EXECUTION_PROJECT_STATUSES
     return {'phases':_catalog(db,project_id=project_id),'permissions':{'plan':can_plan,'record':can_record,'override':C_PLAN in caps},'project_status':project.status}
 
 

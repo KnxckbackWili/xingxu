@@ -88,7 +88,7 @@
 
    或写入 `.env`（与 `docker/docker-compose.multica.yml` 同目录），compose 自动读取。
 
-4. 验证：在系统里触发任意站内通知（如问题上报/指派、日程下达），钉钉群/JSON 接收端应收到
+4. 验证：在系统里触发任意站内通知（如问题上报、周计划发布），钉钉群/JSON 接收端应收到
    消息。无外部凭据时系统照常运行，仅不外发（`NOTIFY_CHANNELS` 为空，outbox 行直接 disabled）。
 
 ## 5. 外发消息形态

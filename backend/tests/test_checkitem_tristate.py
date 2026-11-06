@@ -9,7 +9,6 @@ def _project_with_check(client, pm_headers):
     pid = r.json()["id"]
     r = client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers,
                     json={"work_item_ids": default_work("mod-01")})
-    client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": ["user-worker-001"]}))
     enter_execution(client, pm_headers, pid)  # 检查项只在现场实施期间登记
     r = client.get(f"/api/projects/{pid}/tree", headers=pm_headers)
     ci = r.json()[0]["modules"][0]["tasks"][0]["check_items"][0]

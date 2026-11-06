@@ -26,11 +26,3 @@ def test_archive_material_requires_real_file(client, pm_headers):
     submitted = upload_documents(client, pm_headers, pid, [row['id']])['documents'][0]
     assert submitted['status'] == 'submitted' and submitted['versions'][0]['attachment_id']
 
-
-@pytest.mark.member_rules
-def test_nonmember_cannot_write_archive_material(client, pm_headers, worker_headers):
-    pid = project(client, pm_headers)
-    row = documents(client, pm_headers, pid)['documents'][0]
-    result = client.put(f'/api/projects/{pid}/documents/{row["id"]}', headers=worker_headers,
-        json={'status': 'waived', 'reason': '越权不适用', 'version': row['version']})
-    assert result.status_code == 404

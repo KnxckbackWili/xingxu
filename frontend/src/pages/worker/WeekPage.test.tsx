@@ -11,7 +11,7 @@ vi.mock('../../stores/auth', () => ({ useAuth: () => ({ user: { id: 'worker-1', 
 vi.mock('../../offline/useOfflineSync', () => ({ useOfflineSync: () => ({ online: navigator.onLine, pendingCount: 0, rejected: [], syncVersion: 0, flush: vi.fn(), retry: vi.fn(), remove: vi.fn() }) }))
 vi.mock('../../api/projectDocuments', () => ({ projectDocumentsApi: { upload: mocks.upload } }))
 const plan = { id: 'cell-1', project_id: 'project-1', project_name: '项目甲', task_id: 'work-1', version: 4, week_start: '2026-10-26', mode: 'finish', scope: {}, assignee_ids: ['worker-1'], assignees: [{ id: 'worker-1', name: '本人' }], date_window: { earliest: '2026-10-19', latest: '2026-10-27', timezone: 'Asia/Shanghai' }, work_item: { id: 'work-1', name: '现场网络核对', kind: 'other', version: 2, is_completed: false, phase_name: '现场工作', check_items: [] } }
-const base = { state: 'ready', plans: [plan], unassigned: [], assistable: [], vehicle_matrices: {}, this_week_documents: [], my_issues: [], windows: {}, warnings: [], permissions: { record: true, upload: true, issues: true } }
+const base = { state: 'ready', plans: [plan], vehicle_matrices: {}, this_week_documents: [], my_issues: [], windows: {}, warnings: [], permissions: { record: true, upload: true, issues: true } }
 const draw = () => render(<MemoryRouter><WeekPage /></MemoryRouter>)
 beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); setOfflineAccount('worker-1'); vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true); mocks.get.mockResolvedValue({ data: base }); mocks.post.mockResolvedValue({ data: {} }); mocks.upload.mockResolvedValue({}) })
 

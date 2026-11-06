@@ -94,11 +94,6 @@ def _setup_plan(client, pm_headers, pid):
 def _add_worker(client, pm_headers, worker_headers, pid):
     wid = client.get("/api/auth/me", headers=worker_headers).json()["id"]
     r = client.get(f"/api/projects/{pid}", headers=pm_headers)
-    members = list(r.json()["members"])
-    if wid not in members:
-        members.append(wid)
-        r = client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": members}))
-        assert r.status_code == 200, r.json()
     return wid
 
 

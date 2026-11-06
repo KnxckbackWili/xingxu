@@ -121,33 +121,6 @@ def test_custom_weekday_never_backfills_a_deadline_before_rule_activation(client
         assert row.period_key=='2026-W45' and row.due_at==datetime(2026,11,2,23,59,59,999999)
 
 
-def test_owner_assignment_and_durable_reminder_escalation(client,admin_headers,worker_headers,monkeypatch):
-    pid=create(client,admin_headers)['id'];did=next(row for row in view(client,admin_headers,pid)['documents'] if row['code']=='4.5')['id']
-    with SessionLocal() as db:
-        project=db.get(Project,pid);project.status='preparing';project.members=['user-worker-001'];project.technical_manager='user-worker-001'
-        # Isolate this one non-periodic reminder from the newly active company's
-        # current-week rules; their escalation is tested separately.
-        db.query(ProjectDocument).filter_by(project_id=pid,timing_type='weekly').delete(synchronize_session=False)
-        db.query(ProjectDocumentDefinition).filter_by(project_id=pid,timing_type='weekly').delete(synchronize_session=False)
-        row=db.get(ProjectDocument,did);row.due_at=datetime(2026,11,2,12);row.due_is_estimated=False;db.commit()
-        assert remind_project(db,project,datetime(2026,11,1,11,59))['notified']==0
-        assert remind_project(db,project,datetime(2026,11,1,12))['notified']==1;db.commit()
-        assert remind_project(db,project,datetime(2026,11,1,13))['notified']==0
-        assert remind_project(db,project,datetime(2026,11,2,12,1))['notified']==2;db.commit()
-        assert remind_project(db,project,datetime(2026,11,3))['notified']==0
-        assert db.query(DocumentNoticeReceipt).filter_by(project_document_id=did).count()==3
-        assert db.query(Notification).filter_by(entity_id=did,ntype='document_deadline').count()==3
-        assert db.query(NotificationOutbox).filter_by(ntype='document_deadline').count()==3
-    current=next(row for row in view(client,admin_headers,pid)['documents'] if row['id']==did)
-    assert current['effective_owner_id']=='user-worker-001'
-    with SessionLocal() as db:
-        db.get(User,'user-worker-001').permission_overrides={'project.manage_plan':False};db.commit()
-    assert client.put(f'/api/projects/{pid}/documents/{did}/owner',headers=worker_headers,json={'owner_id':None}).status_code==403
-    assert client.put(f'/api/projects/{pid}/documents/{did}/owner',headers=admin_headers,json={'owner_id':'user-worker-002'}).status_code==400
-    assigned=client.put(f'/api/projects/{pid}/documents/{did}/owner',headers=admin_headers,json={'owner_id':'user-worker-001','version':current['version']})
-    assert assigned.status_code==200 and assigned.json()['owner_id']=='user-worker-001',assigned.text
-
-
 def test_reports_run_on_local_sunday_once_and_scheduler_catchup_uses_real_db(client,admin_headers,monkeypatch):
     from app.services import report_scheduler as schedule
     from app.services import document_deadlines as deadlines
@@ -218,8 +191,8 @@ def test_new_version_follows_an_undated_legacy_original_on_both_databases(client
 def test_confidential_reminder_respects_visibility_and_owner_failure_is_visible(client,admin_headers):
     pid=create(client,admin_headers)['id'];did=view(client,admin_headers,pid)['documents'][0]['id']
     with SessionLocal() as db:
-        project=db.get(Project,pid);project.status='preparing';project.technical_manager='user-worker-001';project.members=['user-worker-001']
-        row=db.get(ProjectDocument,did);row.owner_id='user-worker-001';row.confidential=True;row.due_at=datetime(2026,11,1)
+        project=db.get(Project,pid);project.status='preparing';project.technical_manager='user-worker-001'
+        row=db.get(ProjectDocument,did);row.confidential=True;row.due_at=datetime(2026,11,1)
         remind_project(db,project,datetime(2026,10,31,12));db.commit()
         recipients={item.user_id for item in db.query(Notification).filter_by(entity_id=did,ntype='document_deadline')}
         assert recipients=={project.manager}
@@ -254,7 +227,7 @@ def test_two_scheduler_transactions_cannot_duplicate_reminder_receipts(client,ad
 def test_unassigned_reminder_never_bypasses_explicit_read_denial(client,admin_headers):
     pid=create(client,admin_headers)['id'];did=view(client,admin_headers,pid)['documents'][0]['id']
     with SessionLocal() as db:
-        project=db.get(Project,pid);project.status='preparing';project.manager=None;project.technical_manager=None;project.members=[]
+        project=db.get(Project,pid);project.status='preparing';project.manager=None;project.technical_manager=None
         row=db.get(ProjectDocument,did);row.owner_id=None;row.due_at=datetime(2026,11,1)
         db.get(User,'user-admin-001').permission_overrides={'project.read':False}
         db.flush()

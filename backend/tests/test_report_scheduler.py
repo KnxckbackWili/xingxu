@@ -35,8 +35,6 @@ def _project_with_work(client, pm_headers, worker_headers, name="调度测试项
     client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers, json={"work_item_ids": default_work("mod-01")})
     wid = client.get("/api/auth/me", headers=worker_headers).json()["id"]
     r = client.get(f"/api/projects/{pid}", headers=pm_headers)
-    client.put(f"/api/projects/{pid}", headers=pm_headers,
-               json=versioned(pid, {"members": [*r.json()["members"], wid]}))
     enter_execution(client, pm_headers, pid)
     with SessionLocal() as db:
         check = db.query(CheckItem).filter_by(project_id=pid).first()
@@ -55,8 +53,6 @@ def _project_full_progress(client, pm_headers, worker_headers, name="调度测�
     client.post(f"/api/projects/{pid}/tasks/generate", headers=pm_headers, json={"work_item_ids": default_work("mod-01")})
     wid = client.get("/api/auth/me", headers=worker_headers).json()["id"]
     r = client.get(f"/api/projects/{pid}", headers=pm_headers)
-    client.put(f"/api/projects/{pid}", headers=pm_headers,
-               json=versioned(pid, {"members": [*r.json()["members"], wid]}))
     enter_execution(client, pm_headers, pid)
     complete_all_work(client, pm_headers, pid, recorder_headers=worker_headers)
     return pid

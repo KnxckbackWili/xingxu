@@ -180,7 +180,7 @@ def _lifecycle(db, book, project, users, assets):
 
 def _issues(db, book, project, users):
     headers = ['项目 Project', '问题类型 Type', '反馈人 Name', '车型 Model', '车辆编号 No.', '问题来源 From', '问题部件 Parts',
-        '提交日期 Date', '问题简述（或现象）Description', '标题', '性质', '严重程度', '状态', '状态代码', '已闭环', '负责人',
+        '提交日期 Date', '问题简述（或现象）Description', '标题', '性质', '严重程度', '状态', '状态代码', '已闭环',
         '关联任务', '解决方案/关闭或作废说明', '上报时间（UTC）', '解决记录时间（UTC）', '问题ID', '扩展字段', '关联任务ID','原扩展性质']
     sheet, header = _sheet(book, SHEET_NAMES[2], headers, title=f'{project.name} · 问题清单')
     tasks = {row.id: row.name for row in db.query(models.Task).filter_by(project_id=project.id)}
@@ -190,8 +190,8 @@ def _issues(db, book, project, users):
             extra.get('vehicle_model', ''), extra.get('vehicle_no', ''), extra.get('source', ''), extra.get('part', ''),
             extra.get('feedback_date') or (_iso(row.created_at.date()) if row.created_at else ''), row.description, row.title,
             {'normal':'普通','accident':'事故','quality':'质量问题'}.get(row.nature,row.nature), {'critical':'严重','high':'高','medium':'中','low':'低'}.get(row.severity,row.severity),
-            _STATUS.get(row.status,row.status), row.status, '是' if row.status in {'closed','cancelled'} else '否', users.get(row.assignee_id,row.assignee_id or ''),
-            tasks.get(row.task_id, ''), row.resolution, _iso(row.created_at), _iso(row.resolved_at), row.id, extra, row.task_id or '',extra.get('nature',extra.get('issue_nature',''))], identities=(20,))
+            _STATUS.get(row.status,row.status), row.status, '是' if row.status in {'closed','cancelled'} else '否',
+            tasks.get(row.task_id, ''), row.resolution, _iso(row.created_at), _iso(row.resolved_at), row.id, extra, row.task_id or '',extra.get('nature',extra.get('issue_nature',''))], identities=(19,))
     return sheet, header
 
 

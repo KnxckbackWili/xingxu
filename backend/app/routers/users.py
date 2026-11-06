@@ -119,8 +119,6 @@ def create_user(
         None,
         _audit_fields(u),
     )
-    from app.services.open_access import join_all_projects
-    join_all_projects(db, u, admin.id)
     db.commit()
     db.refresh(u)
     return _user_dict(u)
@@ -208,9 +206,6 @@ def update_user(
     log_change(
         db, None, "user", u.id, "update", admin.id, detail, before, _audit_fields(u)
     )
-    if data.is_active is True and not before.get("is_active"):
-        from app.services.open_access import join_all_projects
-        join_all_projects(db, u, admin.id)
     db.commit()
     db.refresh(u)
     return _user_dict(u)
@@ -258,24 +253,9 @@ def list_active_users(
 ):
     """For project member assignment dropdowns（PM 添加成员/指派执行人需要）。
 
-    v1.2.1 收紧：
-    - 现场角色（worker/intern/technician）只返回同项目成员，避免拿到整个组织账号；
-    - 全部角色只返回最小字段（id/display_name/role），不下发手机号/邮箱/登录名。
+    只返回最小字段（id/display_name/role），不下发手机号/邮箱/登录名。
     """
-    from app.models import Project
-
     users = (
         db.query(User).filter(User.is_active == True).order_by(User.display_name).all()
     )
-    if user.role in ("worker", "intern", "technician"):
-        member_ids = set()
-        from app.services.scope import visible_projects
-
-        for p in visible_projects(db, user):
-            if user.id in (p.members or []):
-                member_ids.update(p.members or [])
-                if p.manager:
-                    member_ids.add(p.manager)
-        member_ids.add(user.id)
-        users = [u for u in users if u.id in member_ids]
     return [{"id": u.id, "display_name": u.display_name, "role": u.role} for u in users]

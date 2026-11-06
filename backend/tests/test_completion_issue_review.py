@@ -43,7 +43,6 @@ def test_archived_issue_mutations_rejected(client, pm_headers, operation):
 def test_worker_can_find_resolved_issues_for_reopen(client, pm_headers, worker_headers):
     pid = project(client, pm_headers)
     uid = client.get('/api/auth/me', headers=worker_headers).json()['id']
-    assert client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': [uid]})).status_code == 200
     issue = client.post(f'/api/projects/{pid}/issues', headers=worker_headers, json={'title': 'Verify fix'}).json()
     assert client.put(f"/api/issues/{issue['id']}", headers=pm_headers, json=versioned(issue['id'], {'status': 'resolved'}, 'Issue')).status_code == 200
     assert not client.get('/api/dashboard/issues', headers=worker_headers).json()['items']
@@ -69,7 +68,6 @@ def test_document_review_is_metadata_and_does_not_erase_submitted_file(client, p
     from tests.document_helpers import documents, upload_documents
     pid = project(client, pm_headers)
     worker = client.get('/api/auth/me', headers=worker_headers).json()['id']
-    assert client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': [worker]})).status_code == 200
     row = documents(client, pm_headers, pid)['documents'][0]
     submitted = upload_documents(client, worker_headers, pid, [row['id']])['documents'][0]
     version = submitted['versions'][0]

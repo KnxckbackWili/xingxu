@@ -9,8 +9,6 @@ from app.time_utils import project_today
 def setup_work(client,headers):
     from tests.test_vehicle_progress import setup_fleet
     pid,units=setup_fleet(client,headers,1)
-    with SessionLocal() as db:
-        p=db.get(Project,pid);p.members=[u.id for u in db.query(User).filter(User.username.in_(['worker1','worker2']))];db.commit()
     unit=units[0]
     response=client.post(f'/api/projects/{pid}/vehicle-units/{unit}/events',headers=headers,
         json={'event_type':'fault','event_date':'2026-09-16','title':'驱动轮故障','handler':'原实际处理人','is_closed':False,'status_after':'fault'})
@@ -21,7 +19,7 @@ def setup_work(client,headers):
 def repair(client,headers,pid,unit,event,assignees):
     today=project_today('Asia/Shanghai');start=today-timedelta(days=today.weekday())
     return client.post(f'/api/projects/{pid}/vehicle-units/{unit}/events/{event}/weekly-plans',headers=headers,
-        json={'week_start':start.isoformat(),'assignee_ids':assignees,'mode':'finish','notes':'携带驱动轮'})
+        json={'week_start':start.isoformat(),'mode':'finish','notes':'携带驱动轮'})
 
 
 def test_repair_shared_work_survives_weekly_publication_and_reassignment(client,pm_headers,worker_headers):
@@ -32,12 +30,12 @@ def test_repair_shared_work_survives_weekly_publication_and_reassignment(client,
     first=response.json();cell=first['cell'];assert first['created'] and not cell['published']
     assert publish(client,pm_headers,pid,cell).status_code==200
     url=f"/api/projects/{pid}/weekly-plans/{cell['id']}"
-    changed=client.put(url,headers=pm_headers,json={'version':1,'assignee_ids':[ids['worker2']]})
-    assert changed.status_code==200 and changed.json()['assignee_ids']==[ids['worker2']]
-    assert client.put(url,headers=pm_headers,json={'version':1,'assignee_ids':[ids['worker1']]}).status_code==409
+    changed=client.put(url,headers=pm_headers,json={'version':1,'notes':'改为周三更换'})
+    assert changed.status_code==200 and changed.json()['notes']=='改为周三更换'
+    assert client.put(url,headers=pm_headers,json={'version':1,'notes':'旧版本'}).status_code==409
     next_week=(project_today('Asia/Shanghai')+timedelta(weeks=1));next_week-=timedelta(days=next_week.weekday())
     another=client.post(f'/api/projects/{pid}/vehicle-units/{unit}/events/{event}/weekly-plans',headers=pm_headers,
-        json={'week_start':next_week.isoformat(),'assignee_ids':[ids['worker2']],'mode':'in_progress'})
+        json={'week_start':next_week.isoformat(),'mode':'in_progress'})
     assert another.status_code==200 and not another.json()['created'] and another.json()['task_id']==first['task_id']
     with SessionLocal() as db:
         assert db.get(Task,first['task_id']).source_vehicle_event_id==event
@@ -47,11 +45,10 @@ def test_repair_shared_work_survives_weekly_publication_and_reassignment(client,
         assert not db.query(FieldOperation).filter_by(project_id=pid).count()
 
 
-def test_repair_rejects_wrong_person_scope_and_closed_fault(client,pm_headers,worker_headers):
+def test_repair_rejects_wrong_scope_and_closed_fault(client,pm_headers,worker_headers):
     pid,unit,event=setup_work(client,pm_headers)
     with SessionLocal() as db:wid=db.query(User).filter_by(username='worker1').one().id
     assert repair(client,worker_headers,pid,unit,event,[wid]).status_code==403
-    assert repair(client,pm_headers,pid,unit,event,['missing']).status_code==400
     assert repair(client,pm_headers,pid,'missing',event,[wid]).status_code==404
     closed=client.put(f'/api/projects/{pid}/vehicle-units/{unit}/events/{event}',headers=pm_headers,
         json={'is_closed':True,'verification':'试运行正常','status_after':'normal'})

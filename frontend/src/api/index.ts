@@ -108,7 +108,6 @@ export interface User {
   is_active: boolean
   two_factor_enabled?: boolean
   two_factor_required?: boolean
-  has_co_manager_projects?: boolean
   system_permissions?: string[]
   permission_overrides?: Record<string, boolean>
   permission_version?: number
@@ -119,8 +118,6 @@ export interface Project {
   document_attention?: import('./projectDocuments').DocumentAttention
   next_signoff?: import('./workbench').WorkbenchAction | null
   can_delete?: boolean
-  member_permissions?: Array<{ user_id: string; capabilities: string[] }>
-  grantable_capabilities?: string[]
   member_details?: Array<{ id: string; display_name: string; role: string }>
   capabilities?: string[]
   id: string
@@ -131,8 +128,6 @@ export interface Project {
   manager_name?: string
   technical_manager?: string
   technical_manager_name?: string
-  co_managers?: Array<{ user_id: string; expires_at?: string; display_name?: string; role?: string; is_active?: boolean }>
-  is_co_manager?: boolean
   client: string
   location: string
   timezone?: string
@@ -147,7 +142,6 @@ export interface Project {
   staffing_notes?: string
   source_template?: { id: string | null; name: string; version: number | null; available: boolean }
   vehicles?: Array<{ vehicle_type: string; quantity: number }>
-  members: string[]
   version?: number
   rest_mode?: 'none' | 'one' | 'two'
   rest_days?: string[]

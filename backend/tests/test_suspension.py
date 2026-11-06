@@ -41,9 +41,6 @@ def _setup_active(client, pm_headers, worker_headers=None, name="突发停工测
     if worker_headers:
         me = client.get("/api/auth/me", headers=worker_headers).json()
         detail = client.get(f"/api/projects/{pid}", headers=pm_headers).json()
-        r = client.put(f"/api/projects/{pid}", headers=pm_headers,
-                       json=versioned(pid, {"members": [*detail["members"], me["id"]]}))
-        assert r.status_code == 200, r.json()
     _set_status_direct(pid, "executing")
     return pid
 

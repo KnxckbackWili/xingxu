@@ -4,7 +4,7 @@ from datetime import datetime,timedelta
 import json
 import pytest
 from app.db import SessionLocal
-from app.models import User, Project, ProjectMember, ProjectDocument, DocumentVersion, ChangeLog, DocumentTriggerEvent, Issue, Attachment, Notification, ProjectDocumentDefinition
+from app.models import User, Project, ProjectDocument, DocumentVersion, ChangeLog, DocumentTriggerEvent, Issue, Attachment, Notification, ProjectDocumentDefinition
 from app.time_utils import utcnow
 from tests.test_confidential_documents_t26 import setup_project,policy
 from tests.document_helpers import requirement,documents,upload_documents
@@ -150,27 +150,6 @@ def test_permission_and_recipient_changes_after_project_lock_cannot_be_cached(cl
     monkeypatch.setattr(service,'lock_record',changed)
     assert transfer(client,pm_headers,pid,target,view).status_code==expected
     with SessionLocal() as db:assert db.get(Project,pid).manager==people['pm']
-
-
-@pytest.mark.member_rules
-def test_statistics_known_matrix_counts_only_visible_real_vehicle_steps(client,pm_headers,admin_headers):
-    from tests.test_vehicle_progress import setup_fleet
-    from app.models import VehicleProgress,ProjectVehicleStep,Task,Phase,Module
-    from datetime import date
-    pid,units=setup_fleet(client,pm_headers,1)
-    with SessionLocal() as db:
-        step=db.query(ProjectVehicleStep).filter_by(project_id=pid).order_by(ProjectVehicleStep.sort_order).first()
-        db.add(VehicleProgress(project_id=pid,vehicle_unit_id=units[0],step_key=step.key,is_done=True,done_on=date.today()))
-        phase=Phase(project_id=pid,name='不应进入统计文本',sort_order=1);db.add(phase);db.flush()
-        module=Module(project_id=pid,phase_id=phase.id,name='旧混单位工作');db.add(module);db.flush()
-        db.add(Task(project_id=pid,module_id=module.id,name='1000米不应加权车辆百分比',quantity_type='fixed',manually_completed=True));db.commit()
-    hidden=client.post('/api/projects',headers=admin_headers,json={'name':'HIDDEN-PROJECT','start_date':'2026-01-01','end_date':'2026-12-31'})
-    assert hidden.status_code==200
-    response=client.get('/api/dashboard/statistics',headers=pm_headers,params={'project_id':hidden.json()['id']})
-    assert response.status_code==200,response.text
-    result=response.json();assert result['projects']==1
-    assert result['vehicle_progress']=={'target':4,'completed':1,'quantity_unknown':False,'percent':25.0}
-    assert 'HIDDEN-PROJECT' not in response.text and '1000米' not in response.text and 'person_days' not in response.text
 
 
 def test_overview_and_statistics_share_current_issue_and_vehicle_closure_facts(client,pm_headers):

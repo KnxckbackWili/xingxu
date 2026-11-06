@@ -113,7 +113,7 @@ def removal_preview(db,project,removed):
     return {'project_id':project.id,'version':project.version,
         'removed':[{'user_id':identity,'name':people[identity].display_name if identity in people else '原成员',
                     'documents':[{'code':row.code,'name':row.name,'required':row.required} for row in rules]} for identity in sorted(removed)],
-        'warning':'离开项目前请完成文档交接；确认移除会逐人建立6.7等留存资料，原文档与提交人信息继续保存。未完成的已发布周计划仍需明确交接；历史按日日程仅保留来源。',
+        'warning':'原负责人离开前请完成文档交接；确认后会建立6.7等留存资料，原文档与提交人信息继续保存。',
         'rule_warning':None if rules else '未匹配人员离开资料要求，请先核对项目资料规则'}
 
 
@@ -131,19 +131,14 @@ def member_events(db,project,removed,actor_id,now=None):
         record(db,project,trigger_type='member_leave',source_type='member_departure',source_id=identity,
             source_key=f'member:{project.version}:{identity}',occurred_at=now,actor_id=actor_id,
             metadata={'basis':'confirmed_member_removal','member_name':person.display_name if person else '原成员',
-                'member_id':identity,'project_version':project.version,'note':'已确认成员移出；离开前文档交接要求，截止为本次移除登记时刻'})
+                'member_id':identity,'project_version':project.version,'note':'已确认负责人更换；离开前文档交接要求，截止为本次更换登记时刻'})
 
 
 def transfer_departures(db,project):
-    """Preserve the existing governance rule for retained technical/co-manager roles."""
+    """The outgoing manager leaves unless they stay on as technical lead."""
     identity=project.manager
     if not identity:return set()
-    from app.services.scope import active_co_manager
-    if project.technical_manager==identity or active_co_manager(project,identity):return set()
-    person=db.get(User,identity)
-    if person and person.role in ('lead','technician') and identity in (project.members or []):return set()
-    # The manager may hold access solely through the manager field rather than
-    # the explicit execution-member list; transferring that role still leaves.
+    if project.technical_manager==identity:return set()
     return {identity}
 
 

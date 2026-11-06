@@ -108,20 +108,6 @@ def test_unregistered_quantity_does_not_fabricate_real_vehicles(client,pm_header
     assert matrix(client,pm_headers,p2['id'])['summary']['quantity_unknown'] is True
 
 
-@pytest.mark.member_rules
-def test_worker_membership_system_permission_and_hidden_project(client,pm_headers,worker_headers):
-    from app.db import SessionLocal
-    from app.models import Project,User
-    pid,ids=setup_fleet(client,pm_headers,1)
-    assert write(client,worker_headers,pid,ids).status_code==404
-    with SessionLocal() as db:
-        p=db.get(Project,pid);worker=db.query(User).filter_by(username='worker1').one();p.members=[worker.id];db.commit()
-    assert write(client,worker_headers,pid,ids).status_code==200
-    with SessionLocal() as db:
-        worker=db.query(User).filter_by(username='worker1').one();worker.permission_overrides={'worker.report':False};db.commit()
-    assert write(client,worker_headers,pid,ids,key='single_commissioning').status_code==403
-
-
 def test_portable_matrix_restores_real_vehicle_links_and_clone_has_no_actuals(client,pm_headers):
     from app.db import SessionLocal
     from app.models import Project,VehicleProgress

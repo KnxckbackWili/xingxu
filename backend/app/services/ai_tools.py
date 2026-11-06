@@ -31,7 +31,7 @@ def _project_brief(db,project):
 
 
 def _read_issues(db,project):
-    return [{key:getattr(row,key) for key in ('id','title','description','issue_type','nature','severity','status','assignee_id','created_at','resolved_at')}
+    return [{key:getattr(row,key) for key in ('id','title','description','issue_type','nature','severity','status','created_at','resolved_at')}
         for row in db.query(Issue).filter_by(project_id=project.id).order_by(Issue.created_at.desc(),Issue.id)]
 
 
@@ -43,7 +43,6 @@ def _read_inventory(db,project):
 def _read_project_documents(db,project,user):
     from app.services.project_documents import view
     result=view(db,project,user,audit=True)
-    result.pop('owner_options',None)
     result.pop('trigger_events',None)
     result.pop('permissions',None)
     # No frozen original/retirement payload is a text-assistance tool result.

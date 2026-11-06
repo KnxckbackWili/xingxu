@@ -42,8 +42,6 @@ _login_lock = threading.Lock()
 def _user_payload(db: Session, user: User) -> dict:
     from app.models import Project
     from app.services.system_permissions import effective_permissions
-    from app.services.scope import active_co_manager
-    has_co_manager_projects = any(active_co_manager(project, user.id) for project in db.query(Project).filter(Project.deleted_at.is_(None)).all())  # C8-4：软删除项目不算协管
     return {
         "id": user.id,
         "username": user.username,
@@ -52,7 +50,6 @@ def _user_payload(db: Session, user: User) -> dict:
         "phone": user.phone or "",
         "email": user.email or "",
         "is_active": user.is_active,
-        "has_co_manager_projects": has_co_manager_projects,
         "system_permissions": effective_permissions(user),
         "permission_overrides": dict(user.permission_overrides or {}),
         "permission_version": user.permission_version or 0,

@@ -308,27 +308,16 @@ def template_get(template_id: str) -> str:
 
 @agent_tool("team:read")
 def project_members(project_id: str) -> str:
-    """读取项目成员与项目角色；不返回密码、私人联系方式或其他项目的成员。"""
+    """读取项目经理和技术负责人；不返回密码或私人联系方式。"""
 
     def read(db, user, project):
-        from app.models import ProjectMember
-
-        rows = (
-            db.query(ProjectMember, User)
-            .join(User, User.id == ProjectMember.user_id)
-            .filter(ProjectMember.project_id == project.id)
-            .order_by(User.display_name)
-            .all()
-        )
-        return [
-            {
-                "user_id": member.user_id,
-                "name": person.display_name,
-                "project_role": member.role,
-                "is_active": person.is_active,
-            }
-            for member, person in rows
-        ]
+        result = []
+        for role, identity in (("manager", project.manager), ("technical", project.technical_manager)):
+            person = db.get(User, identity) if identity else None
+            if person:
+                result.append({"user_id": person.id, "name": person.display_name,
+                               "project_role": role, "is_active": person.is_active})
+        return result
 
     return _project_read(project_id, "team:read", read)
 

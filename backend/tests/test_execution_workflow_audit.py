@@ -5,13 +5,11 @@ import pytest
 
 def _execution(client, *, manager='user-pm-001', status='executing'):
     from app.db import SessionLocal
-    from app.models import Project, ProjectMember, Phase, Module, Task, CheckItem
+    from app.models import Project, Phase, Module, Task, CheckItem
     with SessionLocal() as db:
-        p = Project(name='执行回归', manager=manager, members=['user-worker-001'],
+        p = Project(name='执行回归', manager=manager,
                     status=status, start_date=date.today(), end_date=date.today())
         db.add(p); db.flush()
-        db.add_all([ProjectMember(project_id=p.id, user_id=manager, role='manager'),
-                    ProjectMember(project_id=p.id, user_id='user-worker-001')])
         phase = Phase(project_id=p.id, name='现场实施'); db.add(phase); db.flush()
         mod = Module(project_id=p.id, phase_id=phase.id, name='实施'); db.add(mod); db.flush()
         task = Task(project_id=p.id, module_id=mod.id, name='调试', quantity_type='fixed')
@@ -19,22 +17,6 @@ def _execution(client, *, manager='user-pm-001', status='executing'):
         ci = CheckItem(project_id=p.id, task_id=task.id, name='普通检查')
         db.add(ci); db.commit()
         return p.id, task.id, ci.id
-
-
-@pytest.mark.parametrize('operation', ['check', 'complete'])
-def test_unrelated_pm_cannot_mutate_execution(client, pm_headers, operation):
-    pid, tid, cid = _execution(client, manager='user-admin-001')
-    from app.db import SessionLocal
-    from app.models import Phase, Task
-    with SessionLocal() as db:
-        db.get(Task, tid).phase_id = db.query(Phase).filter_by(project_id=pid).first().id; db.commit()
-    assert client.get(f'/api/projects/{pid}', headers=pm_headers).status_code == 404
-    if operation == 'check':
-        response = client.put(f'/api/projects/{pid}/check-items/{cid}', headers=pm_headers, json={'is_done': True, 'version': 0})
-    else:
-        response = client.put(f'/api/projects/{pid}/work-items/{tid}/completion', headers=pm_headers,
-                              json={'version': 0, 'is_completed': True, 'reason': '无关项目经理'})
-    assert response.status_code == 404, response.text
 
 
 def test_worker_can_mark_non_safety_check_not_applicable(client, worker_headers):

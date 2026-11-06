@@ -221,37 +221,6 @@ def test_legacy_archive_can_reopen_for_correction_without_recertifying_completio
         assert db.query(AcceptanceRecord).filter_by(project_id=pid).count() == 0
 
 
-@pytest.mark.parametrize('kind', ['preparation', 'documents', 'acceptance'])
-def test_evidence_write_rechecks_revoked_capability_after_preload(client, admin_headers, worker_headers, kind):
-    from app.routers import preparations as prep
-    from app.routers.project_documents import create_requirement, RequirementInput
-    from app.routers.projects import create_acceptance, AcceptanceCreate
-    pid = project(client, admin_headers)
-    worker = client.get('/api/auth/me', headers=worker_headers).json()['id']
-    capability = {'preparation': 'project.manage_plan', 'documents': 'project.manage_plan', 'acceptance': 'project.update'}[kind]
-    with SessionLocal() as db:
-        p = db.get(Project, pid)
-        p.status = 'preparing'
-        p.members = [*p.members, worker]
-        p.member_permissions = [{'user_id': worker, 'capabilities': [capability]}]
-        db.commit()
-    with SessionLocal() as stale:
-        p = stale.get(Project, pid)
-        actor = stale.get(User, worker)
-        with SessionLocal() as newer:
-            newer.get(Project, pid).member_permissions = []
-            newer.commit()
-        with pytest.raises(HTTPException) as error:
-            if kind == 'preparation':
-                prep.create_item(pid, prep.PrepItemCreate(name='被撤销权限后新增'), actor, stale)
-            elif kind == 'documents':
-                create_requirement(pid, RequirementInput(stage_key='6', code='6.99', name='被撤销后新增资料', scope='project', timing_type='on_demand'), actor, stale)
-            else:
-                create_acceptance(pid, AcceptanceCreate(accepted_by_name='客户', accepted_at=date(2026, 9, 30)), actor, p, stale)
-        assert error.value.status_code == 403
-        stale.rollback()
-
-
 def test_archive_rechecks_required_document_withdrawn_after_completion(client, pm_headers):
     from tests.document_helpers import documents
     pid, _, _ = completeable_project(client, pm_headers)

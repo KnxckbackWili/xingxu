@@ -27,7 +27,6 @@ class DocumentRuleFields:
     sort_order = Column(Integer, nullable=False, default=0)
     note = Column(Text, default="")
     source_metadata = Column(JSON, nullable=True)
-    owner_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
 
 class ProjectDocumentDefinition(DocumentRuleFields, Base):

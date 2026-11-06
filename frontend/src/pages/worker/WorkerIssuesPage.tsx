@@ -24,10 +24,8 @@ interface MyIssue {
   severity: string
   status: string
   reporter_id: string
-  assignee_id?: string
   version?: number
   project_status?: string
-  assignee_name: string
   project_name: string
   created_at: string
   resolution: string
@@ -70,8 +68,7 @@ export default function WorkerIssuesPage() {
   const [reportForm] = Form.useForm()
   const { user } = useAuth()
   const canRaiseIssue = hasSystemPermission(user, 'worker.issues')
-  // Issue handling is contextual: assignees may inherit access even though the
-  // global effective list cannot describe each project's assigned work.
+  // Anyone with issue handling allowed may start or resolve an issue.
   const canHandleIssue = !!user && user.permission_overrides?.['project.manage_issues'] !== false
   const permissions = useRef({ raise: canRaiseIssue, handle: canHandleIssue })
   permissions.current = { raise: canRaiseIssue, handle: canHandleIssue }
@@ -221,7 +218,7 @@ export default function WorkerIssuesPage() {
           <span className={`issue-row-severity${i.source === 'vehicle' ? ' is-vehicle' : ''}`} title={`严重程度：${SEV[i.severity]?.label ?? ''}`} aria-hidden />
           <div className="issue-row-main">
             <button type="button" className="issue-row-title" onClick={() => openIssue(i)}>{i.title}</button>
-            <span className="issue-row-meta"><span>{i.project_name}</span><span>{i.source === 'vehicle' ? `${i.asset_code || '车辆'}故障` : `${formatDateTime(i.created_at).split(' ')[0]} 上报`}</span>{i.assignee_name && <span>{i.assignee_id === user?.id ? '我在处理' : `${i.assignee_name} 处理`}</span>}</span>
+            <span className="issue-row-meta"><span>{i.project_name}</span><span>{i.source === 'vehicle' ? `${i.asset_code || '车辆'}故障` : `${formatDateTime(i.created_at).split(' ')[0]} 上报`}</span></span>
           </div>
           <span className="issue-row-tags">{['critical', 'high'].includes(i.severity) && <Tag color={SEV[i.severity]?.color}>{SEV[i.severity]?.label}</Tag>}<Tag color={ISSUE_STATUS_MAP[i.status]?.color}>{ISSUE_STATUS_MAP[i.status]?.label}</Tag></span>
           <span className="issue-row-action">{!detail && canWork(i) && i.status === 'open' && <Button size="small" loading={handling} onClick={() => void handleIssue('processing', undefined, i)}>开始处理</Button>}</span>
@@ -291,7 +288,7 @@ export default function WorkerIssuesPage() {
               {detail.source === 'vehicle' && <Tag color="blue">车辆 {detail.asset_code}</Tag>}
             </Space>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {detail.project_name}{detail.assignee_name ? ` · ${detail.assignee_name} 处理` : ''} · 上报 {detail.source === 'vehicle' ? formatDate(detail.created_at) : formatDateTime(detail.created_at)}
+              {detail.project_name} · 上报 {detail.source === 'vehicle' ? formatDate(detail.created_at) : formatDateTime(detail.created_at)}
             </Typography.Text>
             {extraSummary(detail.extra) && <Typography.Text type="secondary" style={{ fontSize: 12 }}>{extraSummary(detail.extra)}</Typography.Text>}
             {detail.sla_due_at && <Typography.Paragraph type="secondary">处理时限 {detail.sla_hours} 小时 · 截止 {formatDateTime(detail.sla_due_at)}；仅关闭或作废算闭环。</Typography.Paragraph>}
@@ -304,7 +301,7 @@ export default function WorkerIssuesPage() {
             {conflict && !resolutionOpen && <Button onClick={() => { setResolutionOpen(true) }}>查看更新并继续处理</Button>}
             <Typography.Paragraph type="secondary" style={{ fontSize: 13 }}>
               {detail.status === 'open' && '问题待处理，处理人接手后会开始处理。'}
-              {detail.status === 'processing' && `${detail.assignee_name || '处理人'} 正在处理中，可在消息通知页查看进度。`}
+              {detail.status === 'processing' && '正在处理中，可在消息通知页查看进度。'}
               {detail.status === 'resolved' && `已解决：${detail.resolution || '处理人已提交解决方案'}`}
               {(detail.status === 'closed' || detail.status === 'cancelled') && (detail.status === 'cancelled' ? '问题已作废。' : '问题已关闭。')}
             </Typography.Paragraph>

@@ -64,21 +64,6 @@ def test_creation_rejects_partially_invalid_module_selection(client, pm_headers)
     assert '模板' in r.json()['detail']
 
 
-@pytest.mark.member_rules
-def test_project_read_routes_do_not_expose_other_projects(client, pm_headers, worker_headers):
-    data = body(client, pm_headers)
-    pid = client.post('/api/projects', json=data, headers=pm_headers).json()['id']
-    failures = []
-    for path, methods in client.get('/openapi.json').json()['paths'].items():
-        if '{project_id}' not in path or 'get' not in methods:
-            continue
-        url = re.sub(r'\{[^}]+\}', 'audit-missing-id', path.replace('{project_id}', pid))
-        response = client.get(url, headers=worker_headers)
-        if response.status_code not in {403, 404, 410, 422}:  # 410: retired route, no project data
-            failures.append((path, response.status_code))
-    assert failures == []
-
-
 @pytest.mark.parametrize('fields', [{'status': []}, {'status': 'suspended', 'reason': 123}, {'status': 'archived', 'retrospective': []}])
 def test_status_rejects_bad_parameter_types(client, pm_headers, fields):
     pid = client.post('/api/projects', json=body(client, pm_headers), headers=pm_headers).json()['id']

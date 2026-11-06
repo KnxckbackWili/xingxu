@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Button, Form, Input, Modal, Select, Space, Tag, Typography, message } from 'antd'
+import { Alert, Button, Form, Input, Modal, Select, Space, Typography, message } from 'antd'
 import { Link } from 'react-router-dom'
 import { api, errMsg } from '../api/client'
 import { ensureVerifiedAccount } from '../utils/verifiedAccount'
@@ -52,7 +52,6 @@ export default function WorkContextPanel({ data, onRefresh }: { data: any; entry
     <Space wrap>{work && <WorkCompletionAction projectId={data.project.id} item={work} canRecord={canRecord} canOverride={!!data.can_override} onSaved={onRefresh} />}<Link to={`/pm/projects/${data.project.id}/plan?view=weeks`}>查看周计划</Link><Link to={`/pm/projects/${data.project.id}/documents`}>项目资料清单</Link></Space>
     {/* Old day-by-day arrangements stay readable; new work is not assigned to people. */}
     {(data.entries || []).some((entry: any) => entry.status !== 'skipped') && <h3>历史安排</h3>}
-    {(data.entries || []).filter((entry: any) => entry.status !== 'skipped').map((entry: any) => <p key={entry.id}>{entry.work_date} · {entry.assignee_name}<Tag>{entry.is_confirmed ? '已发布' : '未发布'}</Tag>{entry.notes}</p>)}
     {data.repair && <><h3>维修与验证</h3><p>{data.repair.asset_code} · {data.repair.title} · {data.repair.is_closed ? '已关闭' : '待处理'}</p><p>{data.repair.action_taken}</p><p>{data.repair.verification}</p>{canRepair && <Button onClick={() => { form.setFieldsValue(draft.repair || { ...data.repair, status_after: undefined }); setRepairing(true) }}>记录维修与验证</Button>}</>}
     {repairing && <Form form={form} layout="vertical" disabled={busy || !canRepair} onFinish={saveRepair} onValuesChange={(_, value) => setDraft((d: any) => ({ ...d, repair: value }))}>
       <Form.Item name="action_taken" label="处理过程"><Input.TextArea rows={3} /></Form.Item><Form.Item name="verification" label="验证结果"><Input.TextArea rows={3} /></Form.Item>

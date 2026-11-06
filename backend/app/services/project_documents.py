@@ -44,7 +44,7 @@ def applicable(project, rule):
 
 
 def can_submit(user, project):
-    return _internal_actor(user) and has_permission(user, 'worker.deliver', default=True) and (user.role == 'admin' or user.id in {project.manager, project.technical_manager, *(project.members or [])})
+    return _internal_actor(user) and has_permission(user, 'worker.deliver', default=True)
 
 
 def writable(db, project_id, user, capability):
@@ -333,7 +333,7 @@ def instantiate(db, project, definition, *, vehicle=None, period_key=None, trigg
         period_key=period_key,trigger_ref=trigger_ref,triggered_at=triggered_at.astimezone(timezone.utc).replace(tzinfo=None) if triggered_at and triggered_at.tzinfo else triggered_at,confidential=definition.confidential_default,
         confidential_user_ids=deepcopy(definition.confidential_user_ids or []),
         external_visible=definition.external_visible_default and not definition.confidential_default and not definition.external_never_visible,
-        external_never_visible=definition.external_never_visible, owner_id=definition.owner_id, **{key:deepcopy(getattr(definition,key)) for key in RULE_FIELDS})
+        external_never_visible=definition.external_never_visible, **{key:deepcopy(getattr(definition,key)) for key in RULE_FIELDS})
     db.add(row);db.flush()
     return row
 
@@ -462,7 +462,6 @@ def view(db, project, user, *, vehicle_unit_id=None, audit=False):
         'storage_warnings':storage_warnings(db,project,user,vehicle_unit_id=vehicle_unit_id),
         'trigger_events':[event_dict(row) for row in triggers.values()],
         'document_actions':deadlines.action_summary(db,project,user,documents=documents,users=owner_users),
-        'owner_options':[{'id':person.id,'name':person.display_name} for person in sorted(owner_users.values(),key=lambda person:(person.display_name,person.id)) if person.is_active and has_permission(person,'project.read',default=True) and person.id in {project.manager,project.technical_manager,*(project.members or [])}] if can_manage else [],
         'permissions':{'manage':can_manage,'submit':can_submit(user,project),'manage_confidentiality':user.id==project.manager and can_manage},'timezone':project.timezone,'version':project.version}
 
 
@@ -476,12 +475,10 @@ def save_definition(db, project, body, user, definition_id=None):
     if not definition_id and user.id!=project.manager and body.confidential_default:
         raise HTTPException(403,'仅项目负责人可设置保密资料要求')
     before={column.key:(iso(getattr(row,column.key)) if isinstance(getattr(row,column.key),datetime) else deepcopy(getattr(row,column.key))) for column in row.__table__.columns} if row.id else None
-    from app.services.document_deadlines import validate_owner
-    if 'owner_id' in body.model_fields_set:validate_owner(db,project,body.owner_id)
     previous_identity=tuple(getattr(row,key) for key in IDENTITY_FIELDS)
     duplicate=db.query(ProjectDocumentDefinition).filter(ProjectDocumentDefinition.project_id==project.id,ProjectDocumentDefinition.code==body.code).first()
     if duplicate and duplicate.id!=row.id:raise HTTPException(409,'当前项目已有相同编号的资料要求')
-    excluded={'is_group','parent_id'} | ({'owner_id'} if 'owner_id' not in body.model_fields_set else set())
+    excluded={'is_group','parent_id'}
     for key,value in body.model_dump(exclude=excluded).items():
         setattr(row,key,value)
     db.add(row);db.flush()
@@ -491,14 +488,13 @@ def save_definition(db, project, body, user, definition_id=None):
                 continue
             for key in RULE_FIELDS:
                 if key not in {'source_metadata','blank_file_id'}:setattr(document,key,deepcopy(getattr(row,key)))
-            if 'owner_id' in body.model_fields_set:document.owner_id=body.owner_id
             document.confidential=row.confidential_default
             document.external_never_visible=row.external_never_visible
             document.external_visible=row.external_visible_default and not row.confidential_default and not row.external_never_visible
             bump_version(document,None,db=db)
     materialize_static(db,project,actor_id=user.id)
     log_change(db,project.id,'project_document_definition',row.id,'update' if before else 'create',user.id,
-        f'资料要求：{row.code} {row.name}',before,{**{key:getattr(row,key) for key in RULE_FIELDS+DEFAULT_FIELDS},'owner_id':row.owner_id})
+        f'资料要求：{row.code} {row.name}',before,{key:getattr(row,key) for key in RULE_FIELDS+DEFAULT_FIELDS})
     db.flush();return row
 
 

@@ -41,8 +41,6 @@ interface Issue {
   severity: 'critical' | 'high' | 'medium' | 'low'
   status: 'open' | 'processing' | 'resolved' | 'closed' | 'cancelled'
   reporter_name: string
-  assignee_id: string | null
-  assignee_name: string
   task_name: string
   created_at: string
   resolved_at: string | null
@@ -200,7 +198,7 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
     return (!term || `${title} ${description} ${context}`.toLocaleLowerCase().includes(term))
       && (statusFilter === 'all' || (statusFilter === 'active' ? ['open', 'processing'].includes(status) : status === statusFilter))
   }
-  const filtered = issues.filter((i) => matches(i.title, i.description, i.status, `${i.assignee_name} ${i.reporter_name}`))
+  const filtered = issues.filter((i) => matches(i.title, i.description, i.status, i.reporter_name))
   const filteredVehicles = vehicleIssues.filter((i) => (statusFilter !== 'resolved') && matches(i.title, i.description, i.status, i.asset_code))
   const openProjectCount = issues.filter((i) => i.status === 'open' || i.status === 'processing').length
   const openVehicleCount = vehicleIssues.filter((i) => i.status === 'open').length
@@ -297,7 +295,7 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
       <span className="issue-row-severity" title={`严重程度：${SEVERITY_MAP[issue.severity]?.label}`} aria-hidden />
       <div className="issue-row-main">
         <button type="button" className="issue-row-title" onClick={() => setDetailIssue(issue)}>{issue.title}</button>
-        <span className="issue-row-meta">{type && <span>{type}</span>}{summary && <span className="issue-row-summary">{summary}</span>}<span>{issue.reporter_name} 上报 {shortTime(issue.created_at)}{issue.assignee_name ? ` · ${issue.assignee_name} 处理` : ''}</span></span>
+        <span className="issue-row-meta">{type && <span>{type}</span>}{summary && <span className="issue-row-summary">{summary}</span>}<span>{issue.reporter_name} 上报 {shortTime(issue.created_at)}</span></span>
       </div>
       <span className="issue-row-tags">
         {issue.nature && issue.nature !== 'normal' && <Tag color={issue.nature === 'accident' ? 'red' : issue.nature === 'quality' ? 'orange' : undefined}>{ISSUE_NATURES.find(item => item.value === issue.nature)?.label}</Tag>}
@@ -472,7 +470,7 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
             <Space direction="vertical" size={10} style={{ width: '100%', marginTop: 8 }}>
               {[
                 { icon: <FileTextOutlined />, label: '上报', desc: `${detailIssue.reporter_name} · ${detailIssue.created_at ? parseDateTime(detailIssue.created_at).format('MM-DD HH:mm') : ''}`, done: true },
-                { icon: <UserSwitchOutlined />, label: '开始处理', desc: detailIssue.assignee_name ? `${detailIssue.assignee_name} 接手` : '还没人开始', done: !!detailIssue.assignee_name },
+                { icon: <UserSwitchOutlined />, label: '开始处理', desc: detailIssue.status === 'open' ? '还没人开始' : '已开始处理', done: detailIssue.status !== 'open' },
                 { icon: <CheckCircleOutlined />, label: '解决', desc: detailIssue.resolved_at ? parseDateTime(detailIssue.resolved_at).format('MM-DD HH:mm') : '待解决', done: !!detailIssue.resolved_at },
                 { icon: <StopOutlined />, label: '关闭/作废', desc: detailIssue.status === 'cancelled' ? '已作废' : detailIssue.status === 'closed' ? '已关闭' : '待关闭', done: detailIssue.status === 'cancelled' || detailIssue.status === 'closed' },
               ].map((s) => (
@@ -512,7 +510,7 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
               </Button>
             )}
             {!writeBlocked && ['resolved', 'closed', 'cancelled'].includes(detailIssue.status)
-              && (canEdit || detailIssue.reporter_id === user?.id || detailIssue.assignee_id === user?.id) && (
+              && (canEdit || detailIssue.reporter_id === user?.id || user?.role !== 'readonly') && (
               <Button size="small" loading={statusSaving} onClick={async () => {
                 if (!statusLock.tryAcquire()) return
                 setStatusSaving(true)

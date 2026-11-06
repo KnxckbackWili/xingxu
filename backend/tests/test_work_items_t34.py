@@ -45,7 +45,7 @@ def test_member_boolean_completion_and_same_failed_version_override(client,pm_he
     from app.models import User
     pid,ids=setup_fleet(client,pm_headers,1);ph=phase(client,pm_headers,pid)
     with SessionLocal() as db:
-        worker=db.query(User).filter_by(username='worker1').one();p=db.get(Project,pid);p.members=[worker.id];db.commit()
+        worker=db.query(User).filter_by(username='worker1').one();p=db.get(Project,pid);db.commit()
     row=create(client,pm_headers,pid,ph,checks=[{'name':'普通必检'}]);cid=row['check_items'][0]['id']
     url=f"/api/projects/{pid}/work-items/{row['id']}/completion"
     assert client.put(url,headers=worker_headers,json={'version':0,'is_completed':True,'reason':'尚未检查'}).status_code==400

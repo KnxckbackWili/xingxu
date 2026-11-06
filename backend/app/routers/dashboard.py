@@ -47,9 +47,8 @@ def scope_issues(
     db: Session = Depends(get_db),
 ):
     """Open issues across the user's visible projects (per role scope)."""
-    from app.services.scope import visible_projects, active_co_manager
+    from app.services.scope import visible_projects
     from app.models import VehicleLifecycleEvent, VehicleUnit
-    from app.services.open_access import enabled as open_access_enabled
 
     projects = visible_projects(db, user)
     pids = [p.id for p in projects]
@@ -84,23 +83,13 @@ def scope_issues(
             "project_name": pname,
             "created_at": i.created_at.isoformat() if i.created_at else "",
             "reporter_id": i.reporter_id,
-            "assignee_id": i.assignee_id,
             "project_status": project_by_id[i.project_id].status,
-            "assignee_name": (
-                db.get(User, i.assignee_id).display_name
-                if i.assignee_id and db.get(User, i.assignee_id)
-                else ""
-            ),
             "description": i.description or "",
             "resolution": i.resolution or "",
             "issue_type": i.issue_type,
             "extra": i.extra or {},
         }
         for i, pname in rows
-        if open_access_enabled() or user.role not in ("worker", "intern")
-        or i.reporter_id == user.id
-        or i.assignee_id == user.id
-        or active_co_manager(project_by_id[i.project_id], user.id)
     ]
     project_names = {project.id: project.name for project in projects}
     vehicle_rows = (
@@ -117,11 +106,6 @@ def scope_issues(
         .all()
     )
     for event, unit in vehicle_rows:
-        project = project_by_id.get(event.project_id)
-        if event.operator_id != user.id and (
-            not (project and active_co_manager(project, user.id))
-        ):
-            continue
         items.append(
             {
                 "id": event.id,

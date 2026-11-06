@@ -70,11 +70,8 @@ def project_overview(project_id: str, user: User = Depends(get_current_user), db
     task_names = {t.id: t.name for t in db.query(Task).filter(Task.project_id == project_id).all()}
 
     reporter_ids = {i.reporter_id for i in issues}
-    assignee_ids = {i.assignee_id for i in issues if i.assignee_id}
-    user_ids = reporter_ids | assignee_ids | {l.operator_id for l in logs if l.operator_id}
+    user_ids = reporter_ids | {l.operator_id for l in logs if l.operator_id}
     user_names = {u.id: u.display_name for u in db.query(UserModel).filter(UserModel.id.in_(user_ids)).all()}
-    for item in overdue:
-        item['assignee_name'] = user_names.get(item.get('assignee_id'), '')
 
     issue_dicts = []
     for i in issues:
@@ -87,8 +84,6 @@ def project_overview(project_id: str, user: User = Depends(get_current_user), db
             "severity": i.severity,
             "status": i.status,
             "reporter_name": user_names.get(i.reporter_id, ''),
-            "assignee_id": i.assignee_id,
-            "assignee_name": user_names.get(i.assignee_id, ''),
             "created_at": i.created_at.isoformat() if i.created_at else None,
             "resolved_at": i.resolved_at.isoformat() if i.resolved_at else None,
             "resolution": i.resolution,

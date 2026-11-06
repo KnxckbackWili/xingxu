@@ -37,7 +37,7 @@ export default function WorkAssignmentModal({context,onClose,onSaved}:{context:C
     const current=epoch.current;lock.current=true;setSaving(true);setError('')
     try{
       ensureVerifiedAccount(user?.id)
-      const result=await api.post(`/projects/${pid}/vehicle-units/${context.repair.unitId}/events/${context.repair.eventId}/weekly-plans`,{week_start:week,assignee_ids:[],mode,notes})
+      const result=await api.post(`/projects/${pid}/vehicle-units/${context.repair.unitId}/events/${context.repair.eventId}/weekly-plans`,{week_start:week,mode,notes})
       if(current!==epoch.current)return
       if(result.data?.created===false){setExists(true);return}
       message.success('维修周计划草稿已保存，请到周计划核对并发布');onClose();onSaved()
