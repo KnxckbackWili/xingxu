@@ -178,7 +178,7 @@ def test_import_normalizes_legacy_and_keeps_arbitrary_types(client, pm_headers):
             {"vehicle_type": "进口叉车", "model_name": "Z", "quantity": 1},
         ],
         "modules": [], "vehicle_units": [], "issues": [], "schedule": [], "progress": [],
-        "preparations": [], "inventory_items": [], "archive_checklist": [],
+        "preparations": [], "inventory_items": [],
     }
     r = client.post("/api/projects/import/json", headers=pm_headers, json=payload)
     assert r.status_code == 200

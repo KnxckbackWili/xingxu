@@ -65,28 +65,6 @@ def test_document_submitter_cannot_be_forged_to_self_approve(client, pm_headers,
     assert response.status_code == 400 and '不能自己审核' in response.json()['detail']
 
 
-def test_vehicle_notes_edit_preserves_manual_target(client, pm_headers):
-    from app.db import SessionLocal
-    from app.models import Task
-    pid = project(client, pm_headers)
-    vehicle = client.post(f'/api/projects/{pid}/vehicles', headers=pm_headers, json={
-        'vehicle_type': '潜伏式', 'model_name': 'A', 'quantity': 2,
-    }).json()
-    assert client.post(f'/api/projects/{pid}/tasks/generate', headers=pm_headers, json={'work_item_ids': default_work('mod-03')}).status_code == 200
-    with SessionLocal() as db:
-        task = db.query(Task).filter_by(project_id=pid, quantity_type='per_vehicle').first()
-        task.target_quantity = 17
-        db.commit(); tid = task.id
-    path = f"/api/projects/{pid}/vehicles/{vehicle['id']}"
-    assert client.put(path, headers=pm_headers, json={'notes': 'updated', 'quantity': 2}).status_code == 200
-    with SessionLocal() as db:
-        assert db.get(Task, tid).target_quantity == 17
-    # v3：工作项的旧数量只读保留，车型数量变化不再回写目标。
-    assert client.put(path, headers=pm_headers, json={'quantity': 3}).status_code == 200
-    with SessionLocal() as db:
-        assert db.get(Task, tid).target_quantity == 17
-
-
 def test_document_review_is_metadata_and_does_not_erase_submitted_file(client, pm_headers, worker_headers):
     from tests.document_helpers import documents, upload_documents
     pid = project(client, pm_headers)

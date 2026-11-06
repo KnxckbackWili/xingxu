@@ -11,7 +11,7 @@ const generatedBody = (options: GeneratedFormOptions) => ({ note: options.note ?
 export interface ProjectDocumentRule {
   id: string
   requirement_id: string | null
-  stage_key: '4' | '5' | '6' | '7' | '8' | '9' | 'legacy'
+  stage_key: '4' | '5' | '6' | '7' | '8' | '9'
   code: string
   name: string
   template_no: string

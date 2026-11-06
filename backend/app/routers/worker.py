@@ -1,4 +1,4 @@
-"""Account-bound offline dispatch and read-only reconciliation of legacy UUIDs."""
+"""Account-bound offline dispatch."""
 
 import uuid
 from datetime import date
@@ -22,7 +22,7 @@ class OfflineOp(BaseModel):
 
     payload: 对应端点所需字段（不含 client_uuid，它单独存放）
     """
-    type: str = Field(..., pattern="^(checkitem|deliverable|issue|field)$")
+    type: str = Field(..., pattern="^(checkitem|issue|field)$")
     client_uuid: str = Field(..., min_length=8, max_length=64)
     payload: dict
 
@@ -32,7 +32,7 @@ class BatchSync(BaseModel):
 
 
 @router.post("/worker/sync")
-@route_permission_contextual('worker.report', 'worker.deliver', 'worker.issues', reason='混合离线操作逐条重新认证并校验对应动作，失败不丢弃其他操作')
+@route_permission_contextual('worker.report', 'worker.issues', reason='混合离线操作逐条重新认证并校验对应动作，失败不丢弃其他操作')
 def batch_sync(
     data: BatchSync,
     user: User = Depends(get_current_user),
@@ -40,7 +40,7 @@ def batch_sync(
 ):
     """Batch submit from offline queue. Returns accepted/rejected uuids.
 
-    支持 checkitem / deliverable / issue / field 四种离线操作；
+    支持 checkitem / issue / field 三种离线操作；
     C5-6：返回每条的拒绝原因（rejected_detail: {uuid: detail}），前端被拒列表可查看。
     HYPE-99：逐项独立会话 + 幂等凭证——任一被拒项不留下可被后续成功项提交的脏状态/
     版本变更；缺字段/类型错误等单项进入 rejected_detail 而非整批 500；并发重试（多
@@ -73,8 +73,6 @@ def batch_sync(
             apply=_apply_field
         elif op.type == "checkitem":
             apply = _apply_offline_checkitem(op, user)
-        elif op.type == "deliverable":
-            apply = _apply_offline_deliverable(op, user)
         elif op.type == "issue":
             apply = _apply_offline_issue(op, user)
         else:  # schema 已限定，兜底防御
@@ -111,7 +109,7 @@ def _apply_offline_with_receipt(
     try:
         from app.services.system_permissions import has_permission
         current = op_db.get(User, user.id)
-        action = {"checkitem": "worker.report", "deliverable": "worker.deliver", "issue": "worker.issues", "field":"worker.report"}.get(op_type)
+        action = {"checkitem": "worker.report", "issue": "worker.issues", "field":"worker.report"}.get(op_type)
         if current is None or not current.is_active or (action and not has_permission(current, action, default=True)):
             raise HTTPException(403, "该离线操作权限已被系统管理员撤销")
         # Do not let an already-authorized batch retain an old policy snapshot.
@@ -173,56 +171,6 @@ def _apply_offline_checkitem(op: OfflineOp, user: User) -> Callable[[Session], N
             db=db,
         )
     return _do
-
-
-def _apply_offline_deliverable(op: OfflineOp, user: User) -> Callable[[Session], None]:
-    """Translate only an unambiguous pre-T22 draft; never recreate task JSON writes."""
-    def apply(db: Session):
-        from app.models import ProjectDocument, DocumentVersion
-        from app.services import project_documents as docs
-        from app.services.change_log import log_change
-        payload=op.payload
-        project_id,task_id=payload.get('project_id'),payload.get('task_id')
-        if not isinstance(project_id,str) or not isinstance(task_id,str) or not isinstance(payload.get('deliverables'),list):
-            raise HTTPException(409,'旧离线资料草稿格式待核对，请保留原UUID和完整草稿')
-        actor=db.get(User,user.id)
-        project=docs.writable(db,project_id,actor,'worker.deliver')
-        source={}
-        for document in db.query(ProjectDocument).filter_by(project_id=project_id):
-            metadata=document.source_metadata or {}
-            if metadata.get('kind')!='task_deliverable' or (metadata.get('task') or {}).get('id')!=task_id:continue
-            original=metadata.get('original')
-            name=original.get('name') if isinstance(original,dict) else str(original)
-            if name in source:raise HTTPException(409,'旧资料同名来源无法安全对应，请保留草稿人工核对')
-            source[name]=document
-        planned=[];seen=set()
-        for item in payload['deliverables']:
-            if not isinstance(item,dict) or not isinstance(item.get('name'),str) or item['name'] in seen or item['name'] not in source:
-                raise HTTPException(409,'旧离线资料未能对应迁移清单，请保留原UUID和完整草稿')
-            seen.add(item['name']);document=source[item['name']]
-            metadata=document.source_metadata or {};old=metadata.get('original') or {}
-            requested_status=item.get('status')
-            if requested_status in ('approved','rejected') and (not isinstance(old,dict) or old.get('status')!=requested_status):
-                raise HTTPException(409,'旧离线草稿含审核变更，请保留草稿并在资料页重新核对')
-            target='submitted' if item.get('done') or requested_status in ('submitted','approved') else 'pending'
-            attachment=item.get('attachment_id') or (old.get('attachment_id') if isinstance(old,dict) else None)
-            current=db.query(DocumentVersion).filter_by(project_document_id=document.id).order_by(DocumentVersion.uploaded_at.desc().nullslast(),DocumentVersion.id.desc()).first()
-            same=target==document.status and (target!='submitted' or current and current.attachment_id==attachment)
-            if document.version!=1 and not same:
-                raise HTTPException(409,'资料已在新清单中更新，请保留旧草稿核对差异，未覆盖新记录')
-            if payload.get('version') is not None and payload['version']!=(metadata.get('task') or {}).get('version'):
-                raise HTTPException(409,'旧任务版本与迁移来源不符，请保留草稿人工核对')
-            if target=='submitted' and (not isinstance(attachment,str) or not attachment):
-                raise HTTPException(409,'旧草稿缺少真实附件，请保留草稿并在资料页补交')
-            planned.append((document,target,attachment,same))
-        for document,target,attachment,same in planned:
-            if same:continue
-            if target=='submitted':docs.submit(db,project,[document.id],attachment,actor,'从旧离线草稿迁移，原UUID：'+op.client_uuid)
-            else:docs.update_state(db,project,document,actor,'pending','旧离线草稿请求撤回，原UUID：'+op.client_uuid)
-        log_change(db,project_id,'legacy_offline_document',task_id,'translate',actor.id,'旧离线资料已明确对应新清单',None,
-            {'client_uuid':op.client_uuid,'original_payload':payload,'document_ids':[row[0].id for row in planned]})
-        db.commit()
-    return apply
 
 
 def _apply_offline_issue(op: OfflineOp, user: User) -> Callable[[Session], None]:

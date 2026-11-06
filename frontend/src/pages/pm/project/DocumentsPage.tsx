@@ -28,7 +28,7 @@ import GeneratedFormControl from './GeneratedFormControl'
 import './FieldWorkPages.css'
 import './DocumentsPage.css'
 
-const stageName = (key: string) => DOCUMENT_STAGES.find(stage => stage.value === key)?.label ?? '历史待分类'
+const stageName = (key: string) => DOCUMENT_STAGES.find(stage => stage.value === key)?.label ?? key
 const sizeLabel = (bytes: number) => bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.ceil(bytes / 1024))} KB`
 const statusName = { pending: '待提交', submitted: '已提交', waived: '不适用' }
 const reviewName: Record<string, string> = { approved: '审核通过', rejected: '已退回', submitted: '原记录已提交', pending: '待核对' }
@@ -192,17 +192,17 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
   const triggerFilter = new URLSearchParams(location.search).get('trigger')
   const stageFiltered = useMemo(() => documents.filter(row => (!vehicle || row.vehicle_unit_id === vehicle)
     && (!triggerFilter || row.trigger_ref===triggerFilter)
-    && (status === 'all' || (status === 'overdue' ? late(row) : status === 'week' ? !!data?.document_actions?.this_week.some(item => item.id === row.id) : status === 'on_demand' ? row.timing_type === 'on_demand' && row.status === 'pending' && row.stage_key !== 'legacy' : row.status === status))
+    && (status === 'all' || (status === 'overdue' ? late(row) : status === 'week' ? !!data?.document_actions?.this_week.some(item => item.id === row.id) : status === 'on_demand' ? row.timing_type === 'on_demand' && row.status === 'pending' : row.status === status))
     && `${row.code} ${row.name} ${row.vehicle_label} ${row.period_key ?? ''}`.toLocaleLowerCase().includes(query)), [data, vehicle, status, query,triggerFilter])
   // One stage at a time: default to the first stage that still has pending items; any search or filter shows all stages.
-  const stageGroups = useMemo(() => [...DOCUMENT_STAGES.map(item => item.value), 'legacy'].map(key => ({ key, rows: stageFiltered.filter(row => row.stage_key === key) })).filter(group => group.rows.length), [stageFiltered])
+  const stageGroups = useMemo(() => DOCUMENT_STAGES.map(item => item.value).map(key => ({ key, rows: stageFiltered.filter(row => row.stage_key === key) })).filter(group => group.rows.length), [stageFiltered])
   const narrowed = !!query || status !== 'all' || !!vehicle || !!triggerFilter
   const activeStage = stage && (stage === 'all' || stageGroups.some(group => group.key === stage)) ? stage
     : narrowed ? 'all' : stageGroups.find(group => group.rows.some(row => row.status === 'pending' && row.applicable !== false))?.key ?? stageGroups[0]?.key ?? 'all'
   const visible = activeStage === 'all' ? stageFiltered : stageFiltered.filter(row => row.stage_key === activeStage)
   const grouped = activeStage === 'all' ? stageGroups : stageGroups.filter(group => group.key === activeStage)
   const history = documents.find(row => row.id === historyId)
-  const current = documents.filter(row => row.applicable !== false && row.stage_key !== 'legacy')
+  const current = documents.filter(row => row.applicable !== false)
   const waiting = definitions.filter(row => row.waiting_reason)
   const vehicleOptions = [...new Map(documents.filter(row => row.vehicle_unit_id).map(row => [row.vehicle_unit_id!, { value: row.vehicle_unit_id!, label: row.vehicle_label || '车号待补录' }])).values()]
   const renderActions = (row: ProjectDocument) => {
@@ -217,7 +217,7 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
     ]
     return <Space size={4} wrap className="documents-row-actions">
       {canSubmit && row.applicable !== false && <Button size="small" type={row.status === 'submitted' ? 'default' : 'primary'} ghost={row.status !== 'submitted'} disabled={busy || loading} onClick={() => openUpload([row.id])}>{row.status === 'submitted' ? '提交新版本' : '提交文件'}</Button>}
-    {canSubmit && row.applicable !== false && row.scope === 'project' && row.stage_key !== 'legacy' && <>
+    {canSubmit && row.applicable !== false && row.scope === 'project' && <>
       {row.code === '6.2' && row.timing_type === 'weekly' && row.period_key === data?.document_actions?.period_key && <GeneratedFormControl projectId={projectId} documentId={row.id} kind="lifecycle" busy={busy || loading} canManageConfidentiality={canManageConfidentiality} generationError={actionError}
         onGenerate={options => act(() => projectDocumentsApi.generateLifecycle(projectId, row.id, options), '本周生命周期表已生成并提交')} />}
       {row.code === '6.9.3' && row.timing_type === 'on_demand' && <GeneratedFormControl projectId={projectId} documentId={row.id} kind="contact" busy={busy || loading} canManageConfidentiality={canManageConfidentiality} generationError={actionError}
@@ -242,7 +242,6 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
     else finish()
   }
   const renderGroup = (group: { key: string; rows: ProjectDocument[] }) => <>
-        {group.key === 'legacy' && <Alert type="info" showIcon message="旧资料与原审核信息保留，尚未猜配到新阶段" description="负责人可在下方资料要求中明确分类；未分类资料不冒充已满足新阶段门禁。" style={{ marginBottom: 12 }} />}
         {mobile ? <div className="field-card-list documents-cards">{group.rows.map(row => <article className="field-record-card documents-card" key={row.id}>
           {/* Two lines: what and its state; when, for which vehicle, who. The deadline basis is one tap away. */}
           <div className="documents-card-head"><strong>{row.code} {row.name}</strong><span>{renderState(row)}</span></div>
@@ -297,7 +296,7 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
         { key: 'all', label: `全部 ${stageFiltered.length}` },
       ]} />}
       {activeStage === 'all'
-        ? <Collapse className="documents-stages" bordered={false} defaultActiveKey={['4', '5', '6', '7', '8', '9', 'legacy']} items={grouped.map(group => ({ key: group.key, label: `${stageName(group.key)} · ${group.rows.length} 项`, children: renderGroup(group) }))} />
+        ? <Collapse className="documents-stages" bordered={false} defaultActiveKey={['4', '5', '6', '7', '8', '9']} items={grouped.map(group => ({ key: group.key, label: `${stageName(group.key)} · ${group.rows.length} 项`, children: renderGroup(group) }))} />
         : grouped.map(group => <div key={group.key} className="documents-stage-body">{renderGroup(group)}</div>)}
     </WorkSection>
     <Drawer title="资料要求与等待条件" open={panel === 'requirements'} onClose={() => setPanel(null)} width="min(860px, calc(100vw - 16px))">
@@ -305,8 +304,8 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
       extra={canManage && <Button icon={<PlusOutlined />} disabled={busy || loading} onClick={() => setEditing('new')}>新增资料要求</Button>}>
       <Typography.Paragraph type="secondary">{definitions.length} 项资料要求{waiting.length ? ` · ${waiting.length} 项等待条件` : ''}</Typography.Paragraph><Table<ProjectDocumentDefinition> rowKey="id" dataSource={definitions} size="small" pagination={{ pageSize: 15 }} scroll={{ x: 650 }} columns={[
         { title: '资料要求', render: (_, row) => <><Typography.Text strong>{row.code} {row.name}</Typography.Text><div className="documents-note">{stageName(row.stage_key)} · {row.scope === 'vehicle' ? '每台车' : '项目一份'}</div></> },
-        { title: '生成与输出时机', render: (_, row) => <>{documentRuleLabel(row)}{row.waiting_reason && <div><Tag color="blue">{row.waiting_reason}</Tag></div>}{row.source_metadata && <div className="documents-note">原始来源与审核记录保留</div>}</> },
-        { title: '操作', render: (_, row) => <Space wrap>{row.blank_file_id && <Button size="small" onClick={() => void download(`/projects/${encodeURIComponent(projectId)}/documents/requirements/${encodeURIComponent(row.id)}/blank-file`, `${row.name}空白模板`)}>下载模板</Button>}{canManageConfidentiality && <Button size="small" disabled={busy} onClick={() => setConfidentialityTarget({ kind: 'definition', row })}>保密范围</Button>}{canManage && <Button size="small" disabled={busy || loading} onClick={() => setEditing(row)}>{row.stage_key === 'legacy' ? '明确分类' : '编辑要求'}</Button>}</Space> },
+        { title: '生成与输出时机', render: (_, row) => <>{documentRuleLabel(row)}{row.waiting_reason && <div><Tag color="blue">{row.waiting_reason}</Tag></div>}</> },
+        { title: '操作', render: (_, row) => <Space wrap>{row.blank_file_id && <Button size="small" onClick={() => void download(`/projects/${encodeURIComponent(projectId)}/documents/requirements/${encodeURIComponent(row.id)}/blank-file`, `${row.name}空白模板`)}>下载模板</Button>}{canManageConfidentiality && <Button size="small" disabled={busy} onClick={() => setConfidentialityTarget({ kind: 'definition', row })}>保密范围</Button>}{canManage && <Button size="small" disabled={busy || loading} onClick={() => setEditing(row)}>编辑要求</Button>}</Space> },
       ]} />
     </WorkSection>
     </Drawer>
@@ -357,7 +356,6 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
     <Drawer title={history ? `${history.code} ${history.name} · 版本记录` : '版本记录'} open={historyId !== null} onClose={() => !busy && setHistoryId(null)} width={mobile ? '100%' : 580} destroyOnHidden>
       {history ? <>
         <div>{renderState(history)}</div>{history.note && <Typography.Paragraph>{history.note}</Typography.Paragraph>}
-        {history.source_metadata && <Alert type="info" showIcon message="原始资料与审核事实已保留" description="没有真实附件的旧完成记录仍需补充文件，才能成为已提交资料。" />}
         {!history.versions.length && <Empty description="尚无提交版本" />}
         {history.versions.slice().reverse().map((version: ProjectDocumentVersion, index) => <article className="field-record-card" key={version.id}>
           <Space wrap><Typography.Text strong>{version.filename}</Typography.Text>{version.id === history.latest_version?.id && <Tag color="blue">最近版本</Tag>}<Tag>第 {history.versions.length - index} 版</Tag></Space>

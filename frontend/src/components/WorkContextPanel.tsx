@@ -49,7 +49,7 @@ export default function WorkContextPanel({ data, onRefresh }: { data: any; entry
     {draft.pending && <Alert type="warning" message="有历史数量操作待核对，原 UUID 和填写内容已保留" description="当前工作记录完成状态；历史数量不会自动改写或重报。" />}
     {receipt && <Alert type="success" message={receipt} />}
     {error && <Alert type="error" message={error} action={<Button onClick={() => void onRefresh().then(() => setError('')).catch(() => {})}>刷新核对</Button>} />}
-    <Space wrap>{work && <WorkCompletionAction projectId={data.project.id} item={work} canRecord={canRecord} canOverride={!!data.can_override} onSaved={onRefresh} />}<Link to={`/pm/projects/${data.project.id}/schedule`}>查看周计划</Link><Link to={`/pm/projects/${data.project.id}/documents`}>项目资料清单</Link></Space>
+    <Space wrap>{work && <WorkCompletionAction projectId={data.project.id} item={work} canRecord={canRecord} canOverride={!!data.can_override} onSaved={onRefresh} />}<Link to={`/pm/projects/${data.project.id}/plan?view=weeks`}>查看周计划</Link><Link to={`/pm/projects/${data.project.id}/documents`}>项目资料清单</Link></Space>
     {/* Old day-by-day arrangements stay readable; new work is not assigned to people. */}
     {(data.entries || []).some((entry: any) => entry.status !== 'skipped') && <h3>历史安排</h3>}
     {(data.entries || []).filter((entry: any) => entry.status !== 'skipped').map((entry: any) => <p key={entry.id}>{entry.work_date} · {entry.assignee_name}<Tag>{entry.is_confirmed ? '已发布' : '未发布'}</Tag>{entry.notes}</p>)}

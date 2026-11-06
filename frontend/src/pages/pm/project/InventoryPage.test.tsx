@@ -194,27 +194,6 @@ it('从整批转移切到收发动作时默认单次1件，不继承整批库存
 })
 
 
-it('旧手工墙钟与新UTC流水按显示时间排序并明确来源，初始盘点按UTC显示', async () => {
-  const item = { id: 'item1', name: '历史工具', quantity: 2, unit: '台' }
-  // Fix the intended local display order, then encode server timestamps as UTC.
-  // This exercises UTC-naive normalization without assuming the runner is in Shanghai.
-  const utcNaive = (hour: number, minute: number) => new Date(2026, 9, 5, hour, minute).toISOString().replace(/Z$/, '')
-  const history = [
-    { id: 'old', movement_type: 'transfer', occurred_at: '2026-10-05T03:10:00', time_basis: 'legacy_local', balance_after: 2, note: '旧手工墙钟' },
-    { id: 'new', movement_type: 'transfer', occurred_at: utcNaive(4, 24), time_basis: 'utc', balance_after: 2, note: '新UTC记录' },
-    { id: 'initial', movement_type: 'inventory', occurred_at: utcNaive(3, 0), time_basis: 'utc', balance_after: 2, note: '初始盘点' },
-  ]
-  apiGet.mockImplementation(async (url: string) => ({ data: url.endsWith('/movements') ? history : url.endsWith('/item-applications') ? [] : { items: [item], summary: {}, total: 1 } }))
-  renderPage()
-  fireEvent.click(await screen.findByRole('button', { name: '收发记录' }))
-  await screen.findByText('旧手工墙钟')
-  expect(screen.getByText(/旧记录未注明时区/)).toHaveTextContent('2026-10-05 03:10')
-  expect(screen.getByText(/2026-10-05 04:24/)).not.toHaveTextContent('旧记录未注明时区')
-  expect(screen.getByText(/2026-10-05 03:00/)).not.toHaveTextContent('旧记录未注明时区')
-  const notes = [...document.querySelectorAll('.inventory-movement p')].map(element => element.textContent)
-  expect(notes).toEqual(['新UTC记录', '旧手工墙钟', '初始盘点'])
-})
-
 it('shows full application information to a reader without a save or status mutation control', async () => {
   apiGet.mockImplementation(async (url:string)=>({data:url.endsWith('/item-applications')?[{id:'app-read',title:'现场吊车申请',item_name:'吊车',requirement:'停机窗口吊装',reason:'更换重件',status:'pending'}]:{items:[],summary:{},total:0}}))
   render(<InventoryPage projectId="p1" canManage={false} />)

@@ -33,7 +33,7 @@ MAX_BUNDLE_FILES = 100
 
 class RequirementInput(BaseModel):
     model_config = {"extra": "forbid"}
-    stage_key: Literal["4", "5", "6", "7", "8", "9", "legacy"]
+    stage_key: Literal["4", "5", "6", "7", "8", "9"]
     code: str = Field(min_length=3, max_length=40)
     name: str = Field(min_length=1, max_length=300)
     template_no: str = Field(default="", max_length=100)
@@ -60,7 +60,7 @@ class RequirementInput(BaseModel):
             self.confidential_default=True
         # Codes follow the company numbering (6.11.1a) or a template's own; the stage comes from where the
         # document sits, so a 6.x sign-off may be due in the acceptance stage.
-        valid_code = bool(re.fullmatch(r"legacy\.[a-f0-9]{32}", self.code)) if self.stage_key == "legacy" else bool(re.fullmatch(r"[A-Za-z0-9]+(?:[.\-][A-Za-z0-9]+)*", self.code))
+        valid_code = bool(re.fullmatch(r"[A-Za-z0-9]+(?:[.\-][A-Za-z0-9]+)*", self.code))
         if not self.name or not valid_code:
             raise ValueError("名称不能为空；编号只能用字母、数字、点和短横线（如6.11.1a）")
         if self.is_group:
@@ -76,7 +76,7 @@ class RequirementInput(BaseModel):
 
 
 def check_rule(self):
-    """Visibility and output-timing rules of one document; shared by template items and legacy rows."""
+    """Visibility and output-timing rules of one document; shared by template items and project documents."""
     if self.code in {"6.11.6", "6.11.6a", "6.11.6b", "6.11.6c"}:
         if self.external_visible_default:
             raise ValueError("保密资料或禁止外部查看的资料不能默认对外可见")
@@ -195,55 +195,6 @@ def draft(db, template_id):
         db.get(Template, tid).status = "draft"
 
 
-def save_requirement(db, template_id, body, actor_id, requirement_id=None):
-    if body.stage_key == "legacy":
-        raise HTTPException(400, "历史来源只读，请明确分类到第4–9阶段后保存")
-    lock_templates(db, template_id)
-    recheck_authority(db, actor_id)
-    tid = template_key(db, template_id)
-    row = owned_requirement(db, template_id, requirement_id) if requirement_id else DocumentRequirement(template_id=tid)
-    existing = db.query(DocumentRequirement).filter_by(template_id=tid, code=body.code).first()
-    if existing and existing.id != row.id:
-        raise HTTPException(409, "当前模板已有相同编号的资料要求")
-    if row.id and row.is_group and not body.is_group and db.query(DocumentRequirement.id).filter_by(parent_id=row.id).first():
-        raise HTTPException(400, "该分组仍有子项，不能改为资料；请先移动子项")
-    if row.id and row.is_group and row.stage_key != body.stage_key and db.query(DocumentRequirement.id).filter_by(parent_id=row.id).first():
-        raise HTTPException(400, "分组仍有子项，不能跨阶段移动；请先移动子项")
-    if body.is_group and row.blank_file_id:
-        raise HTTPException(400, "请先移除空白模板引用，再改为分组")
-    if body.parent_id:
-        parent = owned_requirement(db, template_id, body.parent_id)
-        if not parent.is_group or parent.stage_key != body.stage_key:
-            raise HTTPException(400, "父项必须是当前模板同阶段的分组")
-        seen = {row.id} if row.id else set()
-        while parent:
-            if parent.id in seen:
-                raise HTTPException(400, "资料分组不能形成循环")
-            seen.add(parent.id)
-            parent = db.get(DocumentRequirement, parent.parent_id) if parent.parent_id else None
-    before = requirement_dict(row) if row.id else None
-    for key, value in body.model_dump().items():
-        setattr(row, key, value)
-    db.add(row)
-    db.flush()
-    draft(db, template_id)
-    log_change(db, None, "document_requirement", row.id, "update" if before else "create", actor_id,
-               f"资料要求：{row.code} {row.name}", before, requirement_dict(row))
-    return row
-
-
-def delete_requirement(db, template_id, requirement_id, actor_id):
-    lock_templates(db, template_id)
-    recheck_authority(db, actor_id)
-    row = owned_requirement(db, template_id, requirement_id)
-    if db.query(DocumentRequirement.id).filter_by(parent_id=row.id).first():
-        raise HTTPException(400, "分组仍有子项，请先移动或删除子项")
-    before = requirement_dict(row)
-    db.delete(row)
-    draft(db, template_id)
-    log_change(db, None, "document_requirement", requirement_id, "delete", actor_id, f"删除资料要求：{before['code']} {before['name']}", before, None)
-
-
 def track_new_file(db, path):
     if path.parent.resolve() != UPLOAD_DIR.resolve() or path.is_symlink():
         raise ValueError("拒绝登记上传目录外的临时文件")
@@ -305,56 +256,12 @@ def read_asset(row):
     return data
 
 
-def copy_requirements(db, source_id, target_id):
-    lock_templates(db, source_id, target_id)
-    source = rows_for(db, source_id)
-    tid = template_key(db, target_id)
-    ids = {row.id: str(uuid4()) for row in source}
-    assets = {}
-    for row in source:
-        if row.blank_file_id and row.blank_file_id not in assets:
-            asset = db.get(DocumentTemplateFile, row.blank_file_id)
-            if asset is None:
-                raise HTTPException(409, "来源空白模板记录缺失，复制已取消")
-            copied = create_file(db, read_asset(asset), asset.filename, asset.content_type, asset.uploaded_by)
-            copied.uploaded_at = asset.uploaded_at
-            assets[row.blank_file_id] = copied.id
-    for row in source:
-        db.add(DocumentRequirement(id=ids[row.id], template_id=tid, parent_id=None,
-            blank_file_id=assets.get(row.blank_file_id), source_metadata=deepcopy(row.source_metadata), **{key: getattr(row, key) for key in FIELDS}))
-    db.flush()
-    for row in source:
-        if row.parent_id:
-            db.get(DocumentRequirement, ids[row.id]).parent_id = ids[row.parent_id]
-    db.flush()
-
-
 def clear_requirements(db, template_id):
     lock_templates(db, template_id)
     tid = template_key(db, template_id)
     db.query(DocumentRequirement).filter_by(template_id=tid).update({"parent_id": None}, synchronize_session=False)
     db.query(DocumentRequirement).filter_by(template_id=tid).delete(synchronize_session=False)
     db.flush()
-
-
-def export_bundle(db, template_id):
-    rows = list_requirements(db, template_id)
-    definitions, files = [], {}
-    total = 0
-    for row in rows:
-        definitions.append({**{key: row[key] for key in FIELDS}, "parent_code": row["parent_code"], "blank_file_key": row["blank_file_id"], "source_metadata": row.get("source_metadata")})
-        key = row["blank_file_id"]
-        if key and key not in files:
-            asset = db.get(DocumentTemplateFile, key)
-            if asset is None:
-                raise HTTPException(409, "空白模板记录缺失，不能生成完整导出")
-            data = read_asset(asset)
-            total += len(data)
-            if total > MAX_UPLOAD_SIZE or len(files) >= MAX_BUNDLE_FILES:
-                raise HTTPException(413, "模板文件总量超过10MB，无法便携导出；请压缩空白文件后重试")
-            files[key] = {**file_dict(asset), "data": base64.b64encode(data).decode('ascii')}
-            files[key].pop("id")
-    return {"document_requirements": definitions, "document_template_files": files}
 
 
 def _portable_reference(value, label, max_length):
@@ -399,12 +306,8 @@ def parse_bundle(bundle):
         item = dict(item)
         parent = _portable_reference(item.pop('parent_code', None), '资料父编号', 40)
         asset = _portable_reference(item.pop('blank_file_key', None), '空白模板文件键', 36)
-        source = item.pop('source_metadata', None)
-        if source is not None and not isinstance(source, dict):
-            raise ValueError('历史来源必须是只读对象快照')
+        item.pop('source_metadata', None)
         body = RequirementInput.model_validate(item)
-        if body.stage_key == 'legacy' and (not source or body.is_group or body.scope != 'project' or body.timing_type != 'on_demand'):
-            raise ValueError('历史待分类要求必须携带只读来源快照，不能伪造已分类规则')
         if body.parent_id is not None:
             raise ValueError("便携资料定义必须用父编号，不能包含本地父ID")
         if body.code in codes:
@@ -412,8 +315,8 @@ def parse_bundle(bundle):
         if asset and (asset not in decoded or body.is_group):
             raise ValueError("空白模板引用无效或分组不能挂文件")
         codes[body.code] = body
-        parsed.append((body, parent, asset, source))
-    for body, parent, asset, source in parsed:
+        parsed.append((body, parent, asset))
+    for body, parent, asset in parsed:
         seen = {body.code}
         current = parent
         while current:
@@ -421,33 +324,9 @@ def parse_bundle(bundle):
                 raise ValueError("资料父分组不存在、跨阶段或形成循环")
             seen.add(current)
             current = next(value[1] for value in parsed if value[0].code == current)
-    used = {asset for _, _, asset, _ in parsed if asset}
+    used = {asset for _, _, asset in parsed if asset}
     if used != set(decoded):
         raise ValueError("空白模板文件含无归属内容")
     return parsed, decoded
 
 
-def replace_bundle(db, template_id, parsed_bundle, actor_id, capability="system.templates.manage"):
-    if parsed_bundle is None:
-        return
-    lock_templates(db, template_id)
-    recheck_authority(db, actor_id, capability)
-    parsed, files = parsed_bundle
-    tid = template_key(db, template_id)
-    previous = {row.code: deepcopy(row.source_metadata) for row in rows_for(db, template_id)}
-    before_count = len(previous)
-    assets = {key: create_file(db, *values, actor_id).id for key, values in files.items()}
-    clear_requirements(db, template_id)
-    ids = {body.code: str(uuid4()) for body, _, _, _ in parsed}
-    for body, parent, asset, source in parsed:
-        values = body.model_dump(exclude={'parent_id'})
-        values['source_metadata'] = previous.get(body.code) or ({'kind':'portable_unverified_snapshot','original':deepcopy(source)} if source else None)
-        db.add(DocumentRequirement(id=ids[body.code], template_id=tid, **values, blank_file_id=assets.get(asset)))
-    db.flush()
-    for body, parent, asset, source in parsed:
-        if parent:
-            db.get(DocumentRequirement, ids[body.code]).parent_id = ids[parent]
-    draft(db, template_id)
-    log_change(db, None, 'template', template_id or 'default', 'import', actor_id,
-               f"导入资料要求：{len(parsed)}项", {'count': before_count}, {'count': len(parsed)})
-    db.flush()

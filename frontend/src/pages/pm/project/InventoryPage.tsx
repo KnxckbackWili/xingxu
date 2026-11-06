@@ -45,8 +45,7 @@ const APP_STATUS: Record<string, { label: string; color: string }> = {
   rejected: { label: '已驳回', color: 'error' },
 }
 
-const movementDisplayTime = (movement: any) => movement.time_basis === 'legacy_local'
-  ? dayjs(movement.occurred_at).format('YYYY-MM-DD HH:mm') : formatDateTime(movement.occurred_at)
+const movementDisplayTime = (movement: any) => formatDateTime(movement.occurred_at)
 
 interface Props { projectId: string; canManage: boolean }
 
@@ -419,7 +418,7 @@ export default function InventoryPage({ projectId, canManage: managePermission }
       <Typography.Title level={5}>历史记录</Typography.Title>
       <Timeline items={[...movements].sort((a, b) => movementDisplayTime(b).localeCompare(movementDisplayTime(a))).map((movement) => ({
         color: ['consume', 'return_owner'].includes(movement.movement_type) ? 'orange' : 'blue',
-        children: <div className="inventory-movement"><strong>{MOVEMENT[movement.movement_type] ?? movement.movement_type}</strong><span>{movementDisplayTime(movement)}{movement.time_basis === 'legacy_local' && '（旧记录未注明时区）'} · 结余 {movement.balance_after} {movementItem?.unit}</span><p>{[movement.from_location && `从 ${movement.from_location}`, movement.to_location && `到 ${movement.to_location}`, movement.handler, movement.note].filter(Boolean).join(' · ')}</p></div>,
+        children: <div className="inventory-movement"><strong>{MOVEMENT[movement.movement_type] ?? movement.movement_type}</strong><span>{movementDisplayTime(movement)} · 结余 {movement.balance_after} {movementItem?.unit}</span><p>{[movement.from_location && `从 ${movement.from_location}`, movement.to_location && `到 ${movement.to_location}`, movement.handler, movement.note].filter(Boolean).join(' · ')}</p></div>,
       }))} pending={false} />
     </Drawer>
   </div>

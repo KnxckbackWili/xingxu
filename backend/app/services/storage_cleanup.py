@@ -35,11 +35,7 @@ def milestone_protection(db,project,documents,versions):
         for identity in source.get('document_version_ids',[]):protected[identity]='签单直接关联版本'
         if not fact.get('actual_at') and not fact.get('actual_date'):continue
         key=fact['event_key'];precision=fact.get('actual_precision')
-        legacy=source.get('kind')=='legacy_status_transition'
         facts.append({'event_key':key,'precision':precision,'basis':source.get('time_basis') or ('实际日期' if precision=='date' else '实际时刻')})
-        if legacy:
-            for version in versions:protected[version.id]='旧状态审计补登尚无可核实业务日期，相关周次保守保留'
-            continue
         if precision=='date' or key=='arrival_all':
             day=date.fromisoformat(fact['actual_date'])
             start=datetime.combine(day,time.min,ZoneInfo(project.timezone or 'Asia/Shanghai')).astimezone(timezone.utc).replace(tzinfo=None)
@@ -76,7 +72,7 @@ def _references(db,assets):
                 evidence.append([table.name,column.name,*row])
     # These retained business links intentionally predate FK constraints.
     # Match actual Attachment IDs, never human filenames or inferred projects.
-    for model,label in ((models.VehicleLifecycleEvent,'车辆问题履历'),(models.ArchiveChecklist,'历史归档清单'),(models.AcceptanceRecord,'验收记录')):
+    for model,label in ((models.VehicleLifecycleEvent,'车辆问题履历'),(models.AcceptanceRecord,'验收记录')):
         for row in db.query(model.id,model.project_id,model.attachment_id).filter(model.attachment_id.in_(ids)):
             protected[row.attachment_id].append(f'仍由{label}引用')
             evidence.append([model.__tablename__,'attachment_id',row.id,row.project_id,row.attachment_id])
@@ -112,7 +108,7 @@ def build_preview(db,project,user,keep_periods=8):
     candidates=[];protected=[];physical=[]
     for asset in assets:
         refs=version_map[asset.id]
-        weekly=[document for _,document in refs if document.timing_type=='weekly' and document.stage_key!='legacy']
+        weekly=[document for _,document in refs if document.timing_type=='weekly']
         if not weekly:continue
         visible=docs.can_read_file(user,project,asset)
         reasons=list(ownership[asset.id]);stat=None
@@ -120,7 +116,7 @@ def build_preview(db,project,user,keep_periods=8):
             reasons.append('已按策略清理' if removal_record(asset,db) else '原清理凭据不一致，需管理员核对')
         if asset.entity_type not in ('project','') or asset.entity_id not in ('',project.id):reasons.append('仍作为任务或问题的原始文件')
         for version,document in refs:
-            if document.project_id!=project.id or document.timing_type!='weekly' or document.stage_key=='legacy':reasons.append('仍有非旧weekly资料引用')
+            if document.project_id!=project.id or document.timing_type!='weekly':reasons.append('仍有非周报资料引用')
             if not document.period_key or document.period_key in kept.get(series(document),set()):reasons.append('最新/当前期或最近保留周次')
             if document.period_key:
                 from app.services.document_deadlines import period_start

@@ -11,7 +11,7 @@ import { RefreshAction } from './IconAction'
 
 type Cell = { version: number; is_done: boolean; done_on: string | null; recorded_at: string; done_by: string; note: string }
 type Unit = { id: string; asset_code: string; fleet_no: string; vehicle_type: string; model_name: string; cells: Record<string, Cell> }
-type Matrix = { source_snapshot_available?: boolean; today?: string; steps: { key: string; name: string }[]; units: Unit[]; can_record?: boolean; can_manage?: boolean; summary: { completed: number; target: number; percent: number | null; quantity_unknown: boolean; unregistered_quantity: number }; migration_warnings: string[] }
+type Matrix = { today?: string; steps: { key: string; name: string }[]; units: Unit[]; can_record?: boolean; can_manage?: boolean; summary: { completed: number; target: number; percent: number | null; quantity_unknown: boolean; unregistered_quantity: number }; migration_warnings: string[] }
 
 function matrixError(error: unknown) {
   const detail = (error as { response?: { data?: { detail?: { message?: string; blockers?: { name: string; reason: string; vehicle_unit_id: string; vehicle_label?: string }[] } } } }).response?.data?.detail
@@ -42,8 +42,6 @@ export default function VehicleProgressMatrix({ projectId, status, onChanged, in
   const [data, setData] = useState<Matrix | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [source, setSource] = useState<unknown>(undefined)
-  const [readingSource, setReadingSource] = useState(false)
   const [vehicleType, setVehicleType] = useState<string>()
   const [selected, setSelected] = useState<React.Key[]>([])
   const [step, setStep] = useState<string>()
@@ -65,16 +63,9 @@ export default function VehicleProgressMatrix({ projectId, status, onChanged, in
     } catch (e) { if (generation.current === id) { setError(matrixError(e)); setData(null) } }
     finally { if (generation.current === id) setLoading(false) }
   }
-  useEffect(() => { setData(null); setChecking(null); setSelected([]); setVehicleType(undefined); setEditing(null); setSource(undefined); setReadingSource(false); void load(); return () => { generation.current++ } }, [projectId])
+  useEffect(() => { setData(null); setChecking(null); setSelected([]); setVehicleType(undefined); setEditing(null); void load(); return () => { generation.current++ } }, [projectId])
   const seenReload = useRef(reloadKey)
   useEffect(() => { if (seenReload.current === reloadKey) return; seenReload.current = reloadKey; void load() }, [reloadKey])
-  const readSource = async () => {
-    const id = projectId; const gen = generation.current
-    setReadingSource(true)
-    try { const response = await api.get(`/projects/${id}/vehicle-progress/source`); if (active.current === id && generation.current === gen) setSource(response.data.source) }
-    catch (e) { if (active.current === id && generation.current === gen) setError(matrixError(e)) }
-    finally { if (active.current === id && generation.current === gen) setReadingSource(false) }
-  }
   const canRecord = !!data?.can_record && ['executing', 'acceptance'].includes(status)
   const infoOf = (id: string) => info.find(row => row.id === id)
   const needsAttention = (id: string) => { const row = infoOf(id); return !!row && (!!row.open_issue_count || ['fault', 'stopped', 'attention'].includes(row.current_status ?? '')) }
@@ -124,7 +115,6 @@ export default function VehicleProgressMatrix({ projectId, status, onChanged, in
         <span className="vboard-summary">已完成 {data.summary.completed} / {data.summary.target} 个环节{data.summary.percent == null ? ' · 进度未知（数量待补）' : ` · ${data.summary.percent}%`}</span>
         <RefreshAction label="刷新车辆" onClick={() => { void load(); onChanged?.() }} loading={loading} />
       </div>
-      {data.source_snapshot_available && <Alert type="info" message="便携导入来源仅供核对，不计入本项目完成资格" action={<Button loading={readingSource} onClick={() => void readSource()}>查阅原始来源</Button>} />}
       {notice}
       {(data.migration_warnings ?? []).length > 0 && !notice && <Alert type="warning" showIcon message={data.migration_warnings.join('；')} />}
       {/* Batch tools appear once vehicles are ticked; tapping a step is enough for one-by-one work. */}
@@ -151,9 +141,6 @@ export default function VehicleProgressMatrix({ projectId, status, onChanged, in
     </>}
     <Modal open={!!checking} title="车辆环节检查" footer={null} width={760} onCancel={() => setChecking(null)} destroyOnClose>
       {checking && data && <VehicleChecksPanel key={`${projectId}:${checking.unit.id}:${checking.key}`} projectId={projectId} unitId={checking.unit.id} unitLabel={checking.unit.fleet_no || checking.unit.asset_code} stepKey={checking.key} steps={data.steps} canManage={!!data.can_manage} onChanged={() => { void load(); onChanged?.() }} />}
-    </Modal>
-    <Modal title="原始来源记录（只读，未核验）" open={source !== undefined} onCancel={() => setSource(undefined)} footer={<Button onClick={() => setSource(undefined)}>关闭</Button>} width={800}>
-      <p>原字段、日期、车号和操作者保留用于核对；本项目完成、检查和验收须重新登记。</p><pre style={{ whiteSpace: 'pre-wrap', maxHeight: '60vh', overflow: 'auto' }}>{JSON.stringify(source, null, 2)}</pre>
     </Modal>
     <Modal title={editing?.is_done ? '登记完成' : '取消完成'} open={!!editing} okText="确认" cancelText="取消" confirmLoading={saving} okButtonProps={{ disabled: !editing?.is_done && !reason.trim() }} cancelButtonProps={{ disabled: saving }} onCancel={() => { if (!lock.current) setEditing(null) }} onOk={() => void save()} destroyOnClose>
       <p>{editing && editing.cells.length > 1 ? `${editing.cells.length} 台车一起登记；全部成功或全部保持原状。` : editing ? `${data?.units.find(u => u.id === editing.cells[0].vehicle_unit_id)?.asset_code ?? ''} · ${data?.steps.find(s => s.key === editing.cells[0].step_key)?.name ?? ''}` : ''}</p>

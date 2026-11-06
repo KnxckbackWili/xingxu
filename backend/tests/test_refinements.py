@@ -41,7 +41,7 @@ def _find_task(client, pm_headers, pid, name):
 def test_worker_cannot_edit_task(client, pm_headers, worker_headers):
     pid = _project(client, pm_headers)
     task = _find_task(client, pm_headers, pid, "场地勘测")
-    r = client.put(f"/api/projects/{pid}/tasks/{task['id']}", headers=worker_headers, json=versioned(task['id'], {"target_quantity": 9}, 'Task'))
+    r = client.put(f"/api/projects/{pid}/tasks/{task['id']}", headers=worker_headers, json=versioned(task['id'], {"name": "改名"}, 'Task'))
     assert r.status_code in (403, 404)
 
 

@@ -183,11 +183,11 @@ def test_inventory_shared_generation_preserves_original_movement_time_and_source
     with SessionLocal() as db:
         item=models.ProjectInventoryItem(project_id=pid,name='真实工具',quantity=2,unit='个');db.add(item);db.flush()
         move=models.ProjectInventoryMovement(project_id=pid,item_id=item.id,movement_type='in',quantity=2,balance_after=2,
-            occurred_at=datetime(2026,1,2,3,4,5),time_basis='utc');db.add(move)
+            occurred_at=datetime(2026,1,2,3,4,5));db.add(move)
         db.add(models.ProjectInventoryMovement(project_id=pid,item_id=item.id,movement_type='out',quantity=1,balance_after=1,
-            occurred_at=datetime(2026,1,2,18,30),time_basis='legacy_local'))
+            occurred_at=datetime(2026,1,2,18,30)))
         db.commit();mid=move.id
     result=generate(client,pm_headers,pid,document['id'],'inventory');assert result.status_code==200,result.text
     book=workbook(client,pm_headers,result.json());assert book['收发流水']['A2'].value=='2026-01-02T03:04:05+00:00'
-    assert book['收发流水']['A3'].value=='2026-01-02T18:30:00' and book['收发流水']['B3'].value=='legacy_local'
+    assert book['收发流水']['A3'].value=='2026-01-02T18:30:00+00:00' and book['收发流水']['B3'].value=='真实工具'
     assert mid in result.json()['latest_version']['review_metadata']['generated']['source_movement_ids']

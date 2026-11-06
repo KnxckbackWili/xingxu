@@ -88,7 +88,7 @@ def _project_archive_evidence(db: Session, project, files_meta: list[dict], gene
     from datetime import datetime, timezone
     from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
     from app.config import TIMEZONE
-    from app.models import AcceptanceRecord, ArchiveChecklist, User
+    from app.models import AcceptanceRecord, User
     from app.services.acceptance import acceptance_evidence
     from app.services.project_lifecycle import status_label
 
@@ -114,11 +114,10 @@ def _project_archive_evidence(db: Session, project, files_meta: list[dict], gene
     # must not appear only in a later service read and miss the source-field map.
     selected_evidence = acceptance_evidence(db, project.id)
     original_records = {row.id: row for row in db.query(AcceptanceRecord).filter_by(project_id=project.id).all()}
-    checks = db.query(ArchiveChecklist).filter_by(project_id=project.id).order_by(ArchiveChecklist.sort_order, ArchiveChecklist.id).all()
     original_retro = project.retrospective if isinstance(project.retrospective, dict) else (
         {"content": project.retrospective} if isinstance(project.retrospective, str) else {})
     author_id = original_retro.get("author")
-    actor_ids = {value for value in (author_id, *(row.done_by for row in checks)) if isinstance(value, str) and value}
+    actor_ids = {author_id} if isinstance(author_id, str) and author_id else set()
     for row in original_records.values():
         actor_ids.update((row.accepted_by, row.created_by))
     actor_ids.discard(None)
@@ -158,15 +157,6 @@ def _project_archive_evidence(db: Session, project, files_meta: list[dict], gene
         "retrospective": retrospective,
         "current_acceptance_id": next((row["id"] for row in records if row["is_effective"]), None),
         "acceptance_records": records,
-        "archive_checklist": [{
-            "id": row.id, "category": row.category, "item_name": row.item_name,
-            "is_required": row.is_required, "is_done": row.is_done,
-            "requirements": row.requirements or {}, "done_by": row.done_by,
-            "done_by_name": actors.get(row.done_by, ""),
-            "done_at": row.done_at.isoformat() if row.done_at else None,
-            "done_at_local": local_time(row.done_at.isoformat() if row.done_at else None),
-            "attachment_id": row.attachment_id, "attachment": attachment_ref(row.attachment_id),
-        } for row in checks],
     }
 
 
@@ -203,19 +193,6 @@ def _archive_evidence_html(evidence: dict) -> str:
             raw += f'<br>SHA-256：{text(item["sha256"])}'
         return f'<div class="file-record"><p>{visible}</p>{raw_details(raw)}</div>'
 
-    def requirement_text(requirements):
-        known = []
-        if isinstance(requirements, dict):
-            for key, label in (("doc_type", "文件格式"), ("version_requirement", "版本要求"), ("notes", "补充说明")):
-                if requirements.get(key):
-                    known.append(f'{label}：{text(requirements[key])}')
-            signoff = requirements.get("signoff_required")
-            if isinstance(signoff, bool):
-                known.append(f'客户签字：{"需要" if signoff else "不需要"}')
-        if known:
-            return '<div class="content">' + '<br>'.join(known) + '</div>'
-        return '<p class="muted">其他交付要求见原始记录</p>' if requirements else '<p class="muted">无额外要求</p>'
-
     retro = evidence["retrospective"]
     retro_sections = []
     for key, title in (("content", "复盘原文"), ("success", "成功经验"), ("problems", "问题教训"), ("improvements", "改进建议")):
@@ -235,12 +212,6 @@ def _archive_evidence_html(evidence: dict) -> str:
 <p>录入人：{text(row["creator_name"] or "原录入人已不存在或未记录")}<br>录入时间：{text(local_time_text(row["created_at_local"], row["created_at"]))}</p>
 <div class="content">{text(row["notes"])}</div>{file_text(row["attachment"])}
 {raw_details(raw)}</article>''')
-    checks_html = []
-    for row in evidence["archive_checklist"]:
-        raw = f'清单ID：{text(row["id"])}<br>原完成人ID：{text(row["done_by"] or "未记录")}<br>原完成时间：{text(row["done_at"] or "未记录")}<br>原交付要求：{text(json.dumps(row["requirements"], ensure_ascii=False))}'
-        checks_html.append(f'''<article><h3>{text(row["category"])} · {text(row["item_name"])}</h3>
-<p>{"必需" if row["is_required"] else "可选"} · {"已完成" if row["is_done"] else "未完成"}<br>完成人：{text(row["done_by_name"] or "未记录或原账号已不存在")}<br>完成时间：{text(local_time_text(row["done_at_local"], row["done_at"]))}</p>
-{requirement_text(row["requirements"])}{file_text(row["attachment"])}{raw_details(raw)}</article>''')
     project = evidence["project"]
     project_raw = f'项目ID：{text(project["id"])}<br>原状态：{text(project["status"])}<br>项目原时区：{text(project["timezone"] or "未记录")}<br>时间展示时区：{text(evidence["display_timezone"])}<br>原导出时间：{text(evidence["generated_at"])}<br>{text(evidence["time_basis"])}<br><a href="{quote("归档记录.json")}">查看完整归档记录 JSON</a>'
     return f'''<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -254,7 +225,7 @@ h1{{font-size:26px}}h2{{font-size:22px;margin-top:32px}}h3{{font-size:18px}}arti
 {raw_details(project_raw)}<h2>项目复盘</h2>
 <p>作者：{text(retro["author_name"] or "原作者已不存在或未记录")}<br>填写时间：{text(local_time_text(retro["written_at_local"], retro.get("written_at")))}</p>{retro_html}{raw_details(retro_raw)}
 <h2>验收记录（当前与全部历史）</h2>{"".join(records_html) or '<p class="muted">暂无验收记录。</p>'}
-<h2>交付资料归档清单</h2>{"".join(checks_html) or '<p class="muted">暂无归档清单。</p>'}
+
 </body></html>'''
 
 
@@ -372,7 +343,7 @@ def project_to_json(db: Session, project_id: str, actor=None, include_documents=
     from app.services.project_events import iso_utc
     from app.models import (
         Project, ProjectEvent, Vehicle, VehicleUnit, VehicleLifecycleEvent,
-        ProjectPreparationItem, ArchiveChecklist, Issue,
+        ProjectPreparationItem, Issue,
         ProjectInventoryItem, ProjectInventoryMovement,
     )
     p = db.get(Project, project_id)
@@ -414,17 +385,11 @@ def project_to_json(db: Session, project_id: str, actor=None, include_documents=
         "vehicle_units": [],
         "preparations": [],
         "inventory_items": [],
-        "archive_checklist": [],
         "issues": [],
     }
-    from app.services.inventory_time import inventory_time_basis
 
     from app.services.work_items import portable_modules
     snapshot['modules']=portable_modules(db,project_id)
-    from app.services.project_retention import _row
-    from app.models import WeeklyPlanCell
-    snapshot['weekly_plan_source']={'read_only':True,'meaning':'原项目周计划仅供核对，新项目需重新确认范围、负责人和发布',
-        'cells':[_row(row) for row in db.query(WeeklyPlanCell).filter_by(project_id=project_id).order_by(WeeklyPlanCell.id)]}
     vehicle_map = {v.id: v for v in db.query(Vehicle).filter_by(project_id=project_id).all()}
     for unit in db.query(VehicleUnit).filter_by(project_id=project_id).order_by(VehicleUnit.asset_code).all():
         _vehicle = vehicle_map.get(unit.vehicle_id)
@@ -455,10 +420,6 @@ def project_to_json(db: Session, project_id: str, actor=None, include_documents=
             "actual_date": item.actual_date.isoformat() if item.actual_date else None,
             "risk": item.risk, "note": item.note, "extra": item.extra or {}, "sort_order": item.sort_order,
         })
-    snapshot["archive_checklist"] = [{
-        "category": item.category, "item_name": item.item_name, "is_required": item.is_required,
-        "is_done": item.is_done, "requirements": item.requirements or {}, "sort_order": item.sort_order,
-    } for item in db.query(ArchiveChecklist).filter_by(project_id=project_id).order_by(ArchiveChecklist.sort_order).all()]
     for item in db.query(ProjectInventoryItem).filter_by(project_id=project_id).order_by(ProjectInventoryItem.name).all():
         snapshot["inventory_items"].append({
             "item_code": item.item_code, "name": item.name, "category": item.category,
@@ -474,7 +435,7 @@ def project_to_json(db: Session, project_id: str, actor=None, include_documents=
                 "movement_type": movement.movement_type, "quantity": movement.quantity,
                 "balance_after": movement.balance_after, "from_location": movement.from_location,
                 "to_location": movement.to_location, "handler": movement.handler,
-                "occurred_at": movement.occurred_at.isoformat(), "time_basis": inventory_time_basis(movement), "note": movement.note,
+                "occurred_at": movement.occurred_at.isoformat(), "note": movement.note,
             } for movement in db.query(ProjectInventoryMovement).filter_by(item_id=item.id).order_by(ProjectInventoryMovement.occurred_at).all()],
         })
     snapshot["issues"] = [{
@@ -492,7 +453,5 @@ def project_to_json(db: Session, project_id: str, actor=None, include_documents=
     snapshot['execution_evidence'] = execution_evidence(db, project_id)
     from app.services.field_operations import export_evidence
     snapshot['field_operation_evidence']=export_evidence(db,p,actor)
-    if p.portable_unverified_snapshot is not None:
-        snapshot['portable_unverified_snapshot'] = p.portable_unverified_snapshot
 
     return snapshot

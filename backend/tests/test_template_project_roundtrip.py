@@ -50,22 +50,7 @@ def test_template_delete_removes_document_requirements_and_procurement_children(
 
 def _minimal_import():
     return {'type': 'agvpm-project', 'project': {'name': 'round6 import', 'start_date': '2026-01-01', 'end_date': '2026-12-31'},
-            'modules': [{'name': 'module', 'phase_name': 'phase', 'tasks': [{'name': 'task', 'quantity_type': 'fixed', 'target_quantity': 1}]}]}
-
-
-@pytest.mark.parametrize('field,value', [('target_quantity', 'nan'), ('target_quantity', 'inf'), ('standard_hours', 'NaN')])
-def test_import_rejects_nonfinite_task_values(client, pm_headers, field, value):
-    from app.db import SessionLocal
-    from app.models import Project
-    payload = _minimal_import()
-    payload['modules'][0]['tasks'][0][field] = value
-    preview = client.post('/api/projects/import/preview', headers=pm_headers, json=payload)
-    assert preview.status_code == 200
-    assert preview.json()['valid'] is False, preview.text
-    imported = client.post('/api/projects/import/json', headers=pm_headers, json=payload)
-    assert imported.status_code == 400
-    with SessionLocal() as db:
-        assert db.query(Project).filter_by(name='round6 import').count() == 0
+            'modules': [{'name': 'module', 'phase_name': 'phase', 'tasks': [{'name': 'task', 'kind': 'other'}]}]}
 
 
 @pytest.mark.parametrize('quantity', [True, 1.5])
@@ -118,37 +103,6 @@ def test_clone_preserves_project_planning_context_but_resets_execution(client, p
         assert copied.status == 'preparing'
 
 
-def test_import_keeps_legacy_approval_as_readonly_source_without_submitted_evidence(client, pm_headers):
-    from tests.document_helpers import documents
-    from app.db import SessionLocal
-    from app.models import Task
-    payload = _minimal_import()
-    original = {'name': 'Signed evidence', 'required': True, 'doc_type': 'PDF', 'note': 'Customer signed',
-        'attachment_id': 'foreign-file', 'status': 'accepted', 'done': True,
-        'submitted_by': 'source-user', 'reviewed_by': 'source-reviewer', 'reviewed_at': '2026-01-01'}
-    payload['modules'][0]['tasks'][0]['deliverables'] = [original]
-    preview = client.post('/api/projects/import/preview', headers=pm_headers, json=payload).json()
-    assert preview['valid'] and preview['warnings']
-    assert preview['summary']['legacy_document_requirements'] == 1
-    response = client.post('/api/projects/import/json', headers=pm_headers, json=payload)
-    assert response.status_code == 200 and response.json()['warnings'], response.text
-    state = documents(client, pm_headers, response.json()['id'])
-    definition = next(row for row in state['definitions'] if row['name'] == original['name'])
-    assert definition['stage_key'] == 'legacy' and definition['source_metadata']['original']['original'] == original
-    assert all(row['status'] == 'pending' and not row['versions'] for row in state['documents'])
-    with SessionLocal() as db:
-        assert not db.query(Task).filter_by(project_id=response.json()['id']).one().deliverables
-
-
-@pytest.mark.parametrize('dependencies', [['missing'], ['self']])
-def test_import_rejects_unresolved_or_cyclic_dependency_before_write(client, pm_headers, dependencies):
-    payload = _minimal_import()
-    payload['modules'][0]['tasks'][0].update(source_id='self', depends_on=dependencies)
-    preview = client.post('/api/projects/import/preview', headers=pm_headers, json=payload)
-    assert preview.status_code == 200 and preview.json()['valid'] is False
-    assert client.post('/api/projects/import/json', headers=pm_headers, json=payload).status_code == 400
-
-
 def test_template_upload_audit_failure_removes_uncommitted_file(client, admin_headers, monkeypatch):
     from app.routers import templates
     tid, tree = _new_template(client, admin_headers)
@@ -162,21 +116,3 @@ def test_template_upload_audit_failure_removes_uncommitted_file(client, admin_he
     assert set(templates.UPLOAD_DIR.iterdir()) == before
 
 
-def test_legacy_string_requirement_roundtrip_stays_unclassified_source(client, pm_headers):
-    from tests.document_helpers import documents
-    payload = _minimal_import()
-    payload['modules'][0]['tasks'][0]['deliverables'] = ['验收报告']
-    assert client.post('/api/projects/import/preview', headers=pm_headers, json=payload).json()['valid']
-    created = client.post('/api/projects/import/json', headers=pm_headers, json=payload)
-    assert created.status_code == 200, created.text
-    state = documents(client, pm_headers, created.json()['id'])
-    source = next(row for row in state['definitions'] if row['name'] == '验收报告')
-    assert source['stage_key'] == 'legacy'
-    assert source['source_metadata']['original']['original'] == '验收报告'
-    snapshot = client.get(f'/api/projects/{created.json()["id"]}/export/json', headers=pm_headers).json()
-    imported = client.post('/api/projects/import/json', headers=pm_headers, json=snapshot)
-    assert imported.status_code == 200, imported.text
-    target = documents(client, pm_headers, imported.json()['id'])
-    kept = next(row for row in target['definitions'] if row['name'] == '验收报告')
-    assert kept['stage_key'] == 'legacy' and '验收报告' in str(kept['source_metadata'])
-    assert all(row['status'] == 'pending' and not row['versions'] for row in target['documents'])

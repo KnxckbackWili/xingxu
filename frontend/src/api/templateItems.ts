@@ -23,7 +23,7 @@ export const STAGES = [
 ]
 /** What a section's stage means for the project: when its required files must be in. */
 export const STAGE_GATES: Record<string, string> = {
-  '4': '开始实施前交齐', '5': '发车进场前核对', '6': '项目完成前交齐', '7': '项目完成前交齐', '8': '归档前交齐', '9': '归档前交齐', legacy: '不参与核对',
+  '4': '开始实施前交齐', '5': '发车进场前核对', '6': '项目完成前交齐', '7': '项目完成前交齐', '8': '归档前交齐', '9': '归档前交齐',
 }
 
 /** The body the API accepts for a row: the row minus the read-only parts. */

@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 import pytest
 from fastapi import HTTPException
 from app.db import SessionLocal
-from app.models import AcceptanceRecord, ArchiveChecklist, Module, Phase, Project, ProjectPreparationItem, Task, User
+from app.models import AcceptanceRecord, Module, Phase, Project, ProjectPreparationItem, Task, User
 
 
 def _project(client, headers, status="preparing"):
@@ -61,11 +61,8 @@ def _completion_fixture(client, headers, status="acceptance"):
         db.add(phase); db.flush()
         module = Module(project_id=pid, phase_id=phase.id, name="执行范围")
         db.add(module); db.flush()
-        task = Task(project_id=pid, phase_id=phase.id, module_id=module.id, name="设备调试", quantity_type="fixed",
-                    target_quantity=1)
+        task = Task(project_id=pid, phase_id=phase.id, module_id=module.id, name="设备调试", quantity_type="fixed")
         db.add(task); db.flush()
-        for row in db.query(ArchiveChecklist).filter_by(project_id=pid):
-            row.is_done = True
         db.commit()
         tid = task.id
     from tests.lifecycle_helpers import complete_vehicle_progress

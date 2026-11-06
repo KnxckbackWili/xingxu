@@ -62,7 +62,7 @@ def materialize(db,project,event,actor_id):
     units=db.query(VehicleUnit).filter_by(project_id=project.id).all()
     generated=[]
     for definition in definitions:
-        if definition.stage_key=='legacy' or not applicable(project,definition):continue
+        if not applicable(project,definition):continue
         for unit in units if definition.scope=='vehicle' else [None]:
             existing=db.query(ProjectDocument.id).filter_by(definition_id=definition.id,trigger_ref=event.id,
                 vehicle_unit_id=unit.id if unit else None).first()
@@ -109,7 +109,7 @@ def removal_preview(db,project,removed):
     from app.services.project_documents import applicable
     people={row.id:row for row in db.query(User).filter(User.id.in_(removed))}
     rules=[row for row in db.query(ProjectDocumentDefinition).filter_by(project_id=project.id,
-        timing_type='on_trigger',trigger_type='member_leave') if row.stage_key!='legacy' and applicable(project,row)]
+        timing_type='on_trigger',trigger_type='member_leave') if applicable(project,row)]
     return {'project_id':project.id,'version':project.version,
         'removed':[{'user_id':identity,'name':people[identity].display_name if identity in people else '原成员',
                     'documents':[{'code':row.code,'name':row.name,'required':row.required} for row in rules]} for identity in sorted(removed)],

@@ -260,7 +260,7 @@ export default function TemplateEditorPage() {
         <Tooltip title={`这一段要交的文件：${STAGE_GATES[section.stage_key] ?? ''}`}>
           <Select className="tpl-section-stage" size="small" variant="borderless" aria-label={`段落「${section.title}」所属阶段`} value={section.stage_key} disabled={!canManage || busy} popupMatchSelectWidth={false}
             onChange={stage_key => void mutate(() => templateItemsApi.updateSection(tid, section.id, { stage_key }))}
-            options={[...STAGES.map(stage => ({ value: stage.key, label: `阶段：${stage.name}` })), ...(section.stage_key === 'legacy' ? [{ value: 'legacy', label: '历史待分类' }] : [])]} />
+            options={STAGES.map(stage => ({ value: stage.key, label: `阶段：${stage.name}` }))} />
         </Tooltip>
         <span className="tpl-section-count">{section.items.length} 件事{files ? ` · ${files} 份文件` : ''}</span>
         {canManage && <Dropdown trigger={['click']} menu={{ items: [

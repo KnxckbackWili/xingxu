@@ -137,19 +137,15 @@ def test_portable_matrix_restores_real_vehicle_links_and_clone_has_no_actuals(cl
     imported=client.post('/api/projects/import/json',headers=pm_headers,json=snapshot)
     assert imported.status_code==200,imported.text
     target=matrix(client,pm_headers,imported.json()['id'])
-    assert target['summary']['completed']==0 and target['source_snapshot_available']
+    assert target['summary']['completed']==0
     assert target['units'][0]['id'] not in ids and target['units'][0]['cells']=={}
-    source=client.get(f"/api/projects/{imported.json()['id']}/vehicle-progress/source",headers=pm_headers).json()
-    assert source['read_only'] and not source['verified']
-    assert source['source']['vehicle_progress_matrix']['units'][0]['cells']['arrival_inspection']['done_on']
-    assert source['source']['execution_evidence']['vehicle_progress_matrix']['summary']['completed']==1
     clone=client.post(f'/api/projects/{pid}/clone',headers=pm_headers,json={'name':'新现场'})
     assert clone.status_code==200,clone.text
     target=matrix(client,pm_headers,clone.json()['id'])
     assert len(target['steps'])==4 and target['units']==[] and target['summary']['completed']==0
-    # Tampered provenance must fail in preview before creating any project.
-    snapshot['vehicle_progress_matrix']['units'][0]['id']='foreign-unit'
-    with pytest.raises(ValueError,match='真实车辆'):parse_snapshot(snapshot)
+    # Malformed step definitions must fail in preview before creating any project.
+    snapshot['vehicle_progress_matrix']['steps'].append(dict(snapshot['vehicle_progress_matrix']['steps'][0]))
+    with pytest.raises(ValueError,match='重复'):parse_snapshot(snapshot)
 
 
 def test_same_version_concurrent_writes_never_double_count(client,pm_headers):

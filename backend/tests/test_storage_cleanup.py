@@ -99,10 +99,6 @@ def test_date_precision_protects_week_and_neighbors_and_backfill_warns_truthfull
     warnings=view(client,admin_headers,pid)['storage_warnings']
     assert warnings and '原字节不可再下载' in warnings[0]
     protected=preview(client,admin_headers,pid)['protected'];assert any('日期精度' in row['reason'] or '当日' in row['reason'] for row in protected)
-    with SessionLocal() as db:
-        db.query(models.ProjectEvent).filter_by(project_id=pid).delete()
-        db.add(models.ProjectEvent(project_id=pid,event_key='handover',actual_at=datetime(2025,2,1),actual_source={'kind':'legacy_status_transition'}));db.commit()
-    assert not preview(client,admin_headers,pid,1)['candidates']
 
 
 def test_other_real_file_refs_are_protected_and_rollback_restores_all_originals(client,admin_headers,monkeypatch):

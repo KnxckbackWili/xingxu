@@ -60,25 +60,6 @@ def test_batch_sync_offline_checkitem(client, pm_headers, worker_headers):
     assert found["failed_reason"] == "离线实测不通过"
 
 
-def test_unmatched_legacy_offline_document_preserves_uuid_payload_and_has_no_receipt(client, pm_headers, worker_headers):
-    from copy import deepcopy
-    from app.db import SessionLocal
-    from app.models import OfflineOpReceipt
-    pid = _setup(client, pm_headers)
-    task = _tree_task_with_checkitems(client, pid, pm_headers)
-    operation = {'type': 'deliverable', 'client_uuid': 'offline-deliv-01',
-        'payload': {'project_id': pid, 'task_id': task['id'], 'deliverables': [{'name': '离线交付单', 'done': True}]}}
-    original = deepcopy(operation)
-    for _ in range(2):
-        response = client.post('/api/worker/sync', headers=worker_headers, json={'ops': [operation]})
-        assert response.status_code == 200, response.text
-        assert response.json()['accepted'] == [] and response.json()['rejected'] == ['offline-deliv-01']
-        assert '保留原UUID和完整草稿' in response.json()['rejected_detail']['offline-deliv-01']
-    assert operation == original
-    with SessionLocal() as db:
-        assert db.query(OfflineOpReceipt).filter_by(client_uuid='offline-deliv-01').count() == 0
-
-
 def test_batch_sync_offline_issue_idempotent(client, pm_headers, worker_headers):
     """C5-5：离线问题上报走 client_uuid 幂等——重发不重复建单。"""
     pid = _setup(client, pm_headers)
@@ -171,9 +152,6 @@ def test_batch_sync_malformed_item_rejected_not_500(client, pm_headers, worker_h
             # 缺 check_item_id → apply 时 KeyError
             {"type": "checkitem", "client_uuid": "h99-mal-ci-01",
              "payload": {"project_id": pid, "body": {"is_done": True}}},
-            # 缺 task_id → apply 时 KeyError
-            {"type": "deliverable", "client_uuid": "h99-mal-dl-01",
-             "payload": {"project_id": pid, "deliverables": [{"name": "x", "done": True}]}},
             # title 缺失 → IssueCreate 校验失败
             {"type": "issue", "client_uuid": "h99-mal-is-01",
              "payload": {"project_id": pid, "severity": "low"}},
@@ -188,7 +166,7 @@ def test_batch_sync_malformed_item_rejected_not_500(client, pm_headers, worker_h
     })
     assert r.status_code == 200, r.json()
     body = r.json()
-    for u in ("h99-mal-ci-01", "h99-mal-dl-01", "h99-mal-is-01", "h99-mal-ci-02"):
+    for u in ("h99-mal-ci-01", "h99-mal-is-01", "h99-mal-ci-02"):
         assert u in body["rejected"], u
         assert u in body["rejected_detail"]
         assert body["rejected_detail"][u]
@@ -197,7 +175,7 @@ def test_batch_sync_malformed_item_rejected_not_500(client, pm_headers, worker_h
 
 
 def test_batch_sync_retry_all_op_types_idempotent(client, pm_headers, worker_headers):
-    """HYPE-99：checkitem/issue 离线条目（旧交付物离线项另有保全测试）在「首响应丢失重发」时都被幂等吸收。
+    """HYPE-99：checkitem/issue 离线条目在「首响应丢失重发」时都被幂等吸收。
 
     重试整批后所有 uuid 仍 accepted，且服务端不重复落库/自增/建单。
     """

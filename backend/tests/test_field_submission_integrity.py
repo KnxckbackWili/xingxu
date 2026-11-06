@@ -9,27 +9,6 @@ from app.time_utils import project_today
 from tests.test_execution_workflow_audit import _execution
 
 
-def test_legacy_offline_document_honors_frozen_source_version(client, worker_headers, pm_headers):
-    from tests.document_helpers import legacy_document, upload_documents
-    from app.models import ProjectDocument, OfflineOpReceipt
-    pid, tid, _ = _execution(client)
-    with SessionLocal() as db:
-        db.get(Task, tid).version = 2; db.commit()
-    did = legacy_document(client, pm_headers, pid, tid, name='验收单')
-    asset = upload_documents(client, worker_headers, pid)['file']
-    operation = {'type': 'deliverable', 'client_uuid': 'stale-delivery-001', 'payload': {
-        'project_id': pid, 'task_id': tid, 'version': 1, 'deliverables': [{'name': '验收单', 'done': True, 'attachment_id': asset['id']}]}}
-    from copy import deepcopy
-    before = deepcopy(operation)
-    result = client.post('/api/worker/sync', headers=worker_headers, json={'ops': [operation]})
-    # Legacy offline deliverables are never re-applied: preserved for manual review, no receipt.
-    assert result.json()['rejected'] == ['stale-delivery-001'] and result.json()['rejected_detail']['stale-delivery-001']
-    assert operation == before
-    with SessionLocal() as db:
-        assert db.get(ProjectDocument, did).status == 'pending'
-        assert db.query(OfflineOpReceipt).filter_by(client_uuid='stale-delivery-001').count() == 0
-
-
 def test_document_submission_preserves_requirement_snapshots_and_other_rows(client, worker_headers, pm_headers):
     from tests.document_helpers import requirement, documents, upload_documents
     pid, _, _ = _execution(client)

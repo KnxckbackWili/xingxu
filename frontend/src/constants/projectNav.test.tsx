@@ -16,10 +16,9 @@ describe('project navigation',()=>{
   expect(PROJECT_CHILD_BY_SEGMENT.history.parentKey).toBe('activity')
  })
  it.each([
-  ['overview','overview',null],['documents','delivery',null],['files','delivery',null],['archive','delivery',null],['preparation','delivery',null],
-  ['tasks','plan',null],['schedule','plan',null],['vehicles','vehicles',null],['site','vehicles',null],['inventory','field','inventory'],['handover','field','handover'],
-  ['history','activity','history'],['activity','activity','history'],['reports','activity','reports'],['edit','overview',null],['export','delivery',null],['start','overview',null],['unknown','overview',null],
- ])('resolves the retained %s link to its current renderer', (url,parent,child)=>expect(resolveProjectNav(url)).toEqual({parent,child}))
+  ['overview','overview',null],['documents','delivery',null],['plan','plan',null],['vehicles','vehicles',null],['inventory','field','inventory'],['handover','field','handover'],
+  ['history','activity','history'],['reports','activity','reports'],['edit','overview',null],['export','delivery',null],['unknown','overview',null],
+ ])('resolves the %s route to its renderer', (url,parent,child)=>expect(resolveProjectNav(url)).toEqual({parent,child}))
  it('shares readable project destinations across roles while keeping writes separate',()=>{
   for(const role of ['pm','admin','worker','intern','readonly'])expect(filterProjectNav(PROJECT_NAV_GROUPS,role,[])).toEqual(PROJECT_NAV_GROUPS)
   expect(filterProjectActions(PROJECT_ACTIONS,'readonly',false,[]).some(item=>item.key==='report')).toBe(false)

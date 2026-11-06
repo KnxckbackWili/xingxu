@@ -6,7 +6,7 @@ from app.time_utils import utcnow
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session
 
@@ -14,7 +14,6 @@ from app.db import get_db
 from app.deps import get_current_user
 from app.models import Project, ProjectInventoryItem, ProjectInventoryMovement, User
 from app.services.change_log import log_change
-from app.services.inventory_time import inventory_time_basis
 from app.services.record_lock import lock_record, lock_writable_project
 from app.services.permissions import C_INVENTORY, require_project_capability, authorize_project
 from app.services.scope import ensure_project_visible, visible_project_ids
@@ -119,16 +118,11 @@ class MovementBody(BaseModel):
             raise ValueError("流水类型无效")
         return value
 
-    _time_basis: str = PrivateAttr(default="utc")
-
     @model_validator(mode="after")
     def occurred_at_utc(self):
-        # Old clients sent a local wall-clock value. Preserve it explicitly;
-        # aware timestamps and server defaults have a known UTC basis.
+        # Stored as naive UTC; a value without an offset is taken as UTC.
         if self.occurred_at.tzinfo:
             self.occurred_at = self.occurred_at.astimezone(timezone.utc).replace(tzinfo=None)
-        elif "occurred_at" in self.model_fields_set:
-            self._time_basis = "legacy_local"
         return self
 
 
@@ -161,7 +155,7 @@ def _movement_dict(row: ProjectInventoryMovement, operator_name: str = "") -> di
         "movement_type": row.movement_type, "quantity": row.quantity,
         "balance_after": row.balance_after, "from_location": row.from_location,
         "to_location": row.to_location, "handler": row.handler,
-        "occurred_at": row.occurred_at.isoformat(), "time_basis": inventory_time_basis(row), "note": row.note,
+        "occurred_at": row.occurred_at.isoformat(), "note": row.note,
         "operator_id": row.operator_id, "operator_name": operator_name,
     }
 
@@ -419,8 +413,7 @@ def create_movement(
             same_fields = all(getattr(prior, key) == getattr(body, key) for key in
                               ("movement_type", "from_location", "to_location", "handler", "note"))
             same_time = ("occurred_at" not in body.model_fields_set
-                         or (prior.occurred_at.replace(tzinfo=None) == body.occurred_at.replace(tzinfo=None)
-                             and inventory_time_basis(prior) == body._time_basis))
+                         or prior.occurred_at.replace(tzinfo=None) == body.occurred_at.replace(tzinfo=None))
             if not same_quantity or not same_fields or not same_time:
                 raise HTTPException(409, "同一流水操作编号的内容已变化，请刷新核对原流水后再创建新操作")
             return {"item": _item_dict(item), "movement": _movement_dict(prior, user.display_name), "accepted": False}
@@ -471,7 +464,7 @@ def create_movement(
         project_id=project_id, item_id=item_id, movement_type=body.movement_type,
         quantity=body.quantity if body.movement_type not in {"adjust", "inventory"} else abs(after - before),
         balance_after=after, from_location=body.from_location, to_location=body.to_location,
-        handler=body.handler, occurred_at=body.occurred_at, time_basis=body._time_basis, note=body.note, operator_id=user.id,
+        handler=body.handler, occurred_at=body.occurred_at, note=body.note, operator_id=user.id,
     )
     db.add(movement)
     db.flush()

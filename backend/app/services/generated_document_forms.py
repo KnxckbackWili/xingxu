@@ -31,7 +31,7 @@ class Product:
 
 def target(project,document,user,kind,now=None):
     if not docs.can_read_document(user,project,document):raise HTTPException(403,'无权生成该保密资料')
-    if document.stage_key=='legacy' or document.scope!='project' or not docs.applicable(project,document):
+    if document.scope!='project' or not docs.applicable(project,document):
         raise HTTPException(400,'当前资料范围不支持系统生成')
     if kind=='lifecycle':
         if document.code!='6.2' or document.timing_type!='weekly':raise HTTPException(400,'仅每周6.2生命周期表可生成本周文件')
@@ -154,13 +154,10 @@ def inventory(db,project,document,user,options):
     sheet.append(['物品编码','名称','规格','序列号','归属','现存数量','单位','位置','保管人','说明'])
     items={row.id:row for row in db.query(models.ProjectInventoryItem).filter_by(project_id=project.id).order_by(models.ProjectInventoryItem.name,models.ProjectInventoryItem.id)}
     for row in items.values():sheet.append([row.item_code,row.name,row.specification,row.serial_number,row.ownership,row.quantity,row.unit,row.location,row.custodian,row.note])
-    history=workbook.create_sheet('收发流水');history.append(['发生时间（按时间依据）','时间依据','物品','动作','数量','结余','原位置','新位置','经手人','说明'])
+    history=workbook.create_sheet('收发流水');history.append(['发生时间（UTC）','物品','动作','数量','结余','原位置','新位置','经手人','说明'])
     movements=db.query(models.ProjectInventoryMovement).filter_by(project_id=project.id).order_by(models.ProjectInventoryMovement.occurred_at,models.ProjectInventoryMovement.id).all()
-    from app.services.inventory_time import inventory_time_basis
     for row in movements:
-        known_utc=inventory_time_basis(row)=='utc'
-        stamp=docs.iso(row.occurred_at) if known_utc else row.occurred_at.isoformat() if row.occurred_at else ''
-        history.append([stamp,'utc' if known_utc else row.time_basis or 'legacy_local（历史时区未声明）',items[row.item_id].name if row.item_id in items else row.item_id,row.movement_type,row.quantity,row.balance_after,row.from_location,row.to_location,row.handler,row.note])
+        history.append([docs.iso(row.occurred_at),items[row.item_id].name if row.item_id in items else row.item_id,row.movement_type,row.quantity,row.balance_after,row.from_location,row.to_location,row.handler,row.note])
     for tab in workbook:
         tab.freeze_panes='A2'
         for cells in tab:
@@ -168,7 +165,7 @@ def inventory(db,project,document,user,options):
                 if isinstance(cell.value,str):cell.data_type='s'
     data=io.BytesIO();workbook.save(data)
     return Product(data.getvalue(),'项目物资收发清单.xlsx',XLSX,{'kind':'inventory','source_item_ids':list(items),'source_movement_ids':[row.id for row in movements],
-        'time_basis':'不可变收发流水原发生时间及原time_basis'},[])
+        'time_basis':'收发流水发生时间（UTC）'},[])
 
 
 def generate(db,project,document,user,options,kind,*,application_id=None):

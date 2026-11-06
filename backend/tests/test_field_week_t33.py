@@ -159,44 +159,6 @@ def test_check_note_revision_preserves_tri_state_and_retraction_restores_origina
         assert db.query(FieldOperation).filter_by(project_id=pid).count()==2
 
 
-def test_private_backup_purge_and_portable_source_preserve_actual_people_without_new_qualification(client,pm_headers,worker_headers,admin_headers,tmp_path):
-    import json
-    from tests.test_retention_unification import prepare,purge
-    from app.services.project_deletion import backup_zip
-    pid,unit,people=prepared(client,pm_headers)
-    result=save(client,worker_headers,operation(pid,unit,assisted_user_id=people['worker2']));assert result.status_code==200,result.text
-    identity=result.json()['id']
-    exported=client.get('/api/projects/'+pid+'/export/json',headers=pm_headers)
-    assert exported.status_code==200,exported.text
-    payload=exported.json();evidence=payload['field_operation_evidence']
-    assert evidence['read_only'] and evidence['verified'] is False
-    assert evidence['records'][0]['actor_id']==people['worker1'] and evidence['records'][0]['assisted_user_id']==people['worker2']
-    payload['project']['name']='独立来源不授予完成'
-    payload['project']['status']='preparing'
-    imported=client.post('/api/projects/import/json',headers=pm_headers,json=payload)
-    assert imported.status_code==200,imported.text
-    imported_id=imported.json()['id']
-    with SessionLocal() as db:
-        assert db.query(FieldOperation).filter_by(project_id=imported_id).count()==0
-        assert db.query(VehicleProgress).filter_by(project_id=imported_id,is_done=True).count()==0
-        original=db.get(Project,imported_id).portable_unverified_snapshot['field_operation_evidence']
-        assert original['records'][0]['id']==identity
-    current=client.get('/api/projects/'+pid,headers=pm_headers).json()
-    assert client.delete('/api/projects/'+pid,headers=pm_headers,params={'version':current['version']}).status_code==200
-    recycled=client.get('/api/project-recycle-bin/projects/'+pid,headers=admin_headers).json()
-    response=prepare(client,admin_headers,recycled);assert response.status_code==200,response.text
-    receipt=response.json();download=client.get('/api/project-recycle-bin/backups/'+receipt['backup_id'],headers=admin_headers)
-    path=tmp_path/'actual-evidence.agvenc';path.write_bytes(download.content)
-    with backup_zip(path) as bundle:
-        snapshot=json.loads(bundle.read('project-backup.json'))
-        row=next(r for r in snapshot['records']['field_operations'] if r['id']==identity)
-        assert row['actor_id']==people['worker1'] and row['assisted_user_id']==people['worker2']
-        assert {people['worker1'],people['worker2']}<={person['id'] for person in snapshot['actors']}
-    deleted=purge(client,admin_headers,recycled,receipt);assert deleted.status_code==200,deleted.text
-    with SessionLocal() as db:
-        assert db.get(Project,pid) is None and db.query(FieldOperation).filter_by(project_id=pid).count()==0
-
-
 @pytest.mark.parametrize('backwards',[False,True])
 def test_latest_revision_uses_locked_sequence_when_clock_is_equal_or_moves_back(client,pm_headers,worker_headers,monkeypatch,backwards):
     from app.time_utils import utcnow

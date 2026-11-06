@@ -5,7 +5,7 @@ from copy import deepcopy
 from uuid import uuid4
 
 from app.db import SessionLocal
-from app.models import Task, Module, Phase, ArchiveChecklist
+from app.models import Task, Module, Phase
 
 
 def make_project(client, headers, name='记录完整性'):
@@ -23,7 +23,7 @@ def add_same_name_tasks(project_id, user_id):
         for index in range(2):
             module = Module(project_id=project_id, phase_id=phase.id, name=f'模块{index}')
             db.add(module); db.flush()
-            task = Task(project_id=project_id, module_id=module.id, name='检查', quantity_type='manual', target_quantity=10)
+            task = Task(project_id=project_id, module_id=module.id, name='检查', quantity_type='manual')
             db.add(task); db.flush()
             ids.append(task.id)
         db.commit()

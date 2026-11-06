@@ -28,7 +28,7 @@
 
 ## 接口与服务接缝
 
-项目统一入口 `/api/projects/{id}/weekly-plans`，支持 GET/POST、`PUT /{cell_id}`、`POST /publish`、`GET /draft-rules`、`POST /draft/preview`、`POST /draft`、`GET/PUT /settings`、`POST /{cell_id}/claim`、`GET /legacy-source` 和 `GET /export/excel`。读窗口按项目时区周一至周日规范化；查询最多 104 周。保存必须携带当前版本，工作 ID 不可通过格子更新替换。
+项目统一入口 `/api/projects/{id}/weekly-plans`，支持 GET/POST、`PUT /{cell_id}`、`POST /publish`、`GET /draft-rules`、`POST /draft/preview`、`POST /draft`、`GET/PUT /settings`、`POST /{cell_id}/claim` 和 `GET /export/excel`。读窗口按项目时区周一至周日规范化；查询最多 104 周。保存必须携带当前版本，工作 ID 不可通过格子更新替换。
 
 本人读取 `/api/worker/weekly-plans?scope=mine` 返回本人已发布格子和单列 `unassigned`；团队读取仍受项目可见性与调度能力约束。人员页、周报和工作台复用 `services.weekly_plans.select_cells`、`serialize_cell`、`completion_fact`，不从计划负责人或旧数量报告推导实际执行人。
 

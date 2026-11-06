@@ -77,8 +77,6 @@ def _calculate(document, project, events, units):
     """Pure calculation from persisted facts and immutable instance rule fields."""
     kind = document.timing_type
     basis = {'timezone': project.timezone or 'Asia/Shanghai', 'rule': kind}
-    if document.stage_key == 'legacy':
-        return Deadline(None, False, basis | {'kind': 'unclassified'})
     if kind == 'on_demand':
         return Deadline(None, False, basis | {'kind': 'on_demand'})
     if kind == 'lifetime':
@@ -204,7 +202,7 @@ def generate_weekly(db, project, now=None, actor_id=None):
     site_start = execution_start(db, project)
     count = 0
     for definition in definitions:
-        if definition.stage_key == 'legacy' or not applicable(project, definition):
+        if not applicable(project, definition):
             continue
         created = utc(definition.created_at).replace(tzinfo=timezone.utc).astimezone(zone(project)).date()
         floor = max(project.start_date, created)
@@ -245,7 +243,6 @@ def refresh_project(db, project, *, now=None, actor_id=None, generate=True):
     units = {row.id: row for row in db.query(VehicleUnit).filter_by(project_id=project.id)}
     changed = 0
     for row in db.query(ProjectDocument).filter_by(project_id=project.id, status='pending'):
-        if row.stage_key=='legacy':continue
         deadline = calculate(row, project, events, units)
         if (row.due_at, bool(row.due_is_estimated), row.due_basis) == (deadline.due_at, deadline.estimated, deadline.basis):
             continue
@@ -262,8 +259,6 @@ def refresh_project(db, project, *, now=None, actor_id=None, generate=True):
 
 def due_state(row, project, now=None):
     from app.services.project_documents import applicable
-    if row.stage_key == 'legacy':
-        return 'unclassified'
     if not applicable(project, row):
         return 'not_applicable'
     if row.status != 'pending':
@@ -286,7 +281,7 @@ def action_summary(db, project, user, now=None, documents=None, users=None):
     end = calendar_anchor(week_start(local_now(project, now).date()) + timedelta(days=7), project)
     documents = documents if documents is not None else db.query(ProjectDocument).filter_by(project_id=project.id).all()
     users = users if users is not None else _users(db, project, documents)
-    visible = [row for row in documents if row.stage_key != 'legacy' and applicable(project, row)
+    visible = [row for row in documents if applicable(project, row)
                and (user is None or can_read_document(user, project, row))]
     def brief(row):
         from app.services.project_documents import iso
@@ -342,7 +337,7 @@ def missing_lifetime_requirements(db, project):
     units=db.query(VehicleUnit).filter_by(project_id=project.id).all()
     missing=[]
     for rule in definitions:
-        if rule.stage_key=='legacy' or not applicable(project,rule):continue
+        if not applicable(project,rule):continue
         for unit in units if rule.scope=='vehicle' else [None]:
             if (rule.id,unit.id if unit else None) not in existing:
                 missing.append(f'{rule.code} {rule.name}'+(f'（{unit.asset_code}）' if unit else '')+'：等待实际内部启动会建档')
@@ -372,7 +367,7 @@ def remind_project(db, project, now=None):
     users = _users(db, project, rows)
     count = missing = 0
     for row in rows:
-        if row.stage_key == 'legacy' or not applicable(project, row):
+        if not applicable(project, row):
             continue
         due = utc(row.due_at)
         kind = 'overdue' if now > due else 'due_soon' if now >= due - timedelta(days=1) else None

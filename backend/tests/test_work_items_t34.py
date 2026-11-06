@@ -80,7 +80,6 @@ def test_canonical_work_rejects_legacy_quantity_writes_and_new_work_appends(clie
     tree=client.get(f'/api/projects/{pid}/tree',headers=pm_headers).json();assert row['id'] in {t['id'] for p in tree for t in p['work_items']}
     response=client.get(f"/api/projects/{pid}/tasks/{row['id']}/workspace",headers=pm_headers)
     assert response.status_code==200 and response.json()['work_item']['id']==row['id'],response.text
-    with SessionLocal() as db:assert db.get(Task,row['id']).target_quantity is None
 
 
 def test_project_lock_rechecks_quality_before_boolean_completion(client,pm_headers):
@@ -128,7 +127,7 @@ def test_flat_work_creates_no_module_and_boolean_completion_requires_reason_and_
     assert row['kind']=='other' and not row['is_completed'] and row['group_label']=='原模块标签'
     with SessionLocal() as db:
         task=db.get(Task,row['id']);assert task.module_id is None and task.phase_id==ph
-        assert task.target_quantity is None and db.query(Module).filter_by(project_id=pid).count()==before
+        assert db.query(Module).filter_by(project_id=pid).count()==before
     url=f"/api/projects/{pid}/work-items/{row['id']}/completion"
     assert client.put(url,headers=pm_headers,json={'version':0,'is_completed':True,'reason':' '}).status_code==400
     r=client.put(url,headers=pm_headers,json={'version':0,'is_completed':True,'reason':'现场实测已确认'})

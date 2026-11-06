@@ -23,7 +23,7 @@ def create_repair_work(db, project, actor, event, unit, notes):
         db.add(phase); db.flush()
     task = Task(project_id=project.id, phase_id=phase.id, module_id=None,
         group_label='车辆维修', name=f'维修 {unit.asset_code} · {event.title}'[:200], description=notes,
-        quantity_type='fixed', target_quantity=None, unit='项', source_vehicle_event_id=event.id)
+        quantity_type='fixed', source_vehicle_event_id=event.id)
     db.add(task); db.flush()
     log_change(db, project.id, 'task', task.id, 'create', actor.id, '从真实车辆问题建立维修工作项；未推定处理人或完成事实')
     return task, True

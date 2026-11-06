@@ -50,17 +50,6 @@ it('does not let a late previous project response overwrite the current project'
   old({ data: fixture() })
   await waitFor(() => expect(screen.queryByText('现场01')).not.toBeInTheDocument())
 })
-it('shows portable execution as an inspectable read-only source, without changing current progress', async () => {
-  get.mockImplementation((url: string) => Promise.resolve({ data: url.endsWith('/source')
-    ? { read_only: true, verified: false, source: { legacy_quantity_reports: [{ completed_quantity: 1000, client_uuid: '原项目真实登记', user_id: '原操作者' }] } }
-    : fixture({ source_snapshot_available: true }) }))
-  render(<ConfigProvider theme={{ token: { motion: false } }}><VehicleProgressMatrix projectId="p1" status="preparing" /></ConfigProvider>)
-  fireEvent.click(await screen.findByRole('button', { name: '查阅原始来源' }))
-  await waitFor(() => expect(screen.getByText(/原项目真实登记/)).toBeVisible())
-  expect(screen.getByText(/不计入本项目完成资格/)).toBeVisible()
-  expect(put).not.toHaveBeenCalled()
-})
-
 it('shows the exact car and check blocker after an atomic batch refusal', async () => {
   put.mockRejectedValue({ response: { data: { detail: { message: '车辆检查未满足', blockers: [{ vehicle_unit_id: 'real-u1', vehicle_label: '现场01', name: '急停检查', reason: '安全关键检查须真实通过' }] } } } })
   render(<ConfigProvider theme={{ token: { motion: false } }}><VehicleProgressMatrix projectId="p1" status="executing" /></ConfigProvider>)

@@ -14,11 +14,10 @@ from app.services.permissions import authorize_project, C_EXPORT
 from app.services.scope import ensure_project_visible
 from app.services.project_documents import can_read_document, can_read_file
 from app.services.report_forms import LIFECYCLE_HEADERS, LIFECYCLE_WIDTHS, lifecycle_columns
-from app.services.inventory_time import inventory_time_basis
 
 SHEET_NAMES = ('交付概览', '生命周期表', '问题清单', '物资清单', '收发流水', '交付资料')
 INVENTORY_HEADERS = ['物品编码', '名称', '规格', '序列号', '归属', '现存数量', '单位', '位置', '保管人', '说明']
-MOVEMENT_HEADERS = ['发生时间（UTC）', '时间依据', '物品', '动作', '数量', '结余', '原位置', '新位置', '经手人', '说明']
+MOVEMENT_HEADERS = ['发生时间（UTC）', '物品', '动作', '数量', '结余', '原位置', '新位置', '经手人', '说明']
 _TEXT_CHUNK = 16000  # Below Excel's UTF-16 cell limit, including astral characters.
 _XML_CONTROL = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]')
 _KIND = {'hardware': '硬件', 'software': '软件', 'environment': '环境', 'process': '流程', 'safety': '安全', 'other': '其他'}
@@ -138,9 +137,6 @@ def _overview(db, book, project, documents, visible_assets, users):
         for key,fact in unit['cells'].items():
             _append(sheet,['车辆环节事实',unit['fleet_no'] or unit['asset_code'],names.get(key,key),
                 {'车辆ID':unit['id'],'车辆编号':unit['asset_code'],'环节key':key,**fact}])
-    if project.portable_unverified_snapshot is not None:
-        _append(sheet,['只读导入来源','未核验，不计入本项目完成资格',project.portable_unverified_snapshot,
-            '保留来源原字段、日期和操作者；原始事实不会自动应用到新项目。'])
     _append(sheet, ['导出说明', '完整事实与原件', '可在应用导出 JSON 或完整项目包获取全部授权事实与附件。',
                     '长字段按记录分段续行；续行不重复数量。控制字符以可见Unicode转义呈现。'])
     return sheet, header
@@ -205,14 +201,12 @@ def _inventory(db, book, project, users):
     for row in items.values():
         _append(sheet, [row.item_code,row.name,row.specification,row.serial_number,row.ownership,row.quantity,row.unit,row.location,row.custodian,row.note,
             row.category,row.tracking_mode,row.status,row.supplier,_iso(row.received_date),_iso(row.expected_return_date),row.minimum_quantity,row.extra,row.id], identities=(0,18))
-    history, history_header = _sheet(book, SHEET_NAMES[4], MOVEMENT_HEADERS + ['物品编码','单位','物品ID','流水ID','操作人','记录时间（UTC）','时间依据原值'])
+    history, history_header = _sheet(book, SHEET_NAMES[4], MOVEMENT_HEADERS + ['物品编码','单位','物品ID','流水ID','操作人','记录时间（UTC）'])
     for row in db.query(models.ProjectInventoryMovement).filter_by(project_id=project.id).order_by(models.ProjectInventoryMovement.occurred_at,models.ProjectInventoryMovement.id):
         item = items.get(row.item_id)
-        basis = inventory_time_basis(row)
-        occurred = _iso(row.occurred_at) if basis == 'utc' else '原记录：' + (row.occurred_at.isoformat() if row.occurred_at else '')
-        _append(history,[occurred,basis if basis=='utc' else '原记录时区未知',item.name if item else row.item_id,row.movement_type,row.quantity,row.balance_after,
+        _append(history,[_iso(row.occurred_at),item.name if item else row.item_id,row.movement_type,row.quantity,row.balance_after,
             row.from_location,row.to_location,row.handler,row.note,item.item_code if item else '',item.unit if item else '',row.item_id,row.id,
-            users.get(row.operator_id,row.operator_id or ''),_iso(row.created_at),row.time_basis or '未声明'],identities=(10,12,13))
+            users.get(row.operator_id,row.operator_id or ''),_iso(row.created_at)],identities=(9,11,12))
     return [(sheet,header),(history,history_header)]
 
 

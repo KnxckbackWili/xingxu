@@ -40,17 +40,15 @@ def test_document_history_protects_file_after_explicit_withdrawal(client, pm_hea
     assert client.get('/api/files/' + aid + '/download', headers=pm_headers).content == b'original proof'
 
 
-@pytest.mark.parametrize('reference_kind', ['acceptance', 'archive', 'vehicle'])
+@pytest.mark.parametrize('reference_kind', ['acceptance', 'vehicle'])
 def test_record_evidence_cannot_be_deleted_while_referenced(client, pm_headers, reference_kind):
-    from app.models import AcceptanceRecord, ArchiveChecklist, VehicleUnit
+    from app.models import AcceptanceRecord, VehicleUnit
     pid, _, _ = _execution(client)
     aid = client.post(f'/api/projects/{pid}/documents/files', headers=pm_headers,
         files={'file': ('record.txt', b'original evidence', 'text/plain')}).json()['file']['id']
     with SessionLocal() as db:
         if reference_kind == 'acceptance':
             db.add(AcceptanceRecord(project_id=pid, accepted_at=date.today(), attachment_id=aid))
-        elif reference_kind == 'archive':
-            db.add(ArchiveChecklist(project_id=pid, category='资料', item_name='原件', attachment_id=aid))
         else:
             unit = VehicleUnit(project_id=pid, asset_code='R6-proof'); db.add(unit); db.flush()
             event = VehicleLifecycleEvent(project_id=pid, vehicle_unit_id=unit.id, event_type='fault',

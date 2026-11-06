@@ -4,7 +4,7 @@ from datetime import date
 import pytest
 from fastapi import HTTPException
 from app.db import SessionLocal
-from app.models import AcceptanceRecord, ArchiveChecklist, CheckItem, Module, Phase, Project, ProjectPreparationItem, ProjectReadinessReview, Task, User
+from app.models import AcceptanceRecord, CheckItem, Module, Phase, Project, ProjectPreparationItem, ProjectReadinessReview, Task, User
 from tests.test_project_lifecycle_boundaries import project
 
 
@@ -23,7 +23,7 @@ def completeable_project(client, headers, *, documents_data=None, legacy_accepta
         module = Module(project_id=pid, phase_id=phase.id, name='现场工作')
         db.add(module); db.flush()
         task = Task(project_id=pid, phase_id=phase.id, module_id=module.id, name='安全调试',
-                    quantity_type='fixed', target_quantity=1)
+                    quantity_type='fixed')
         db.add(task); db.flush()
         check = CheckItem(project_id=pid, task_id=task.id, name='安全保护', is_safety_critical=True,
                           is_required=True, is_applicable=True, is_done=True)
@@ -31,8 +31,6 @@ def completeable_project(client, headers, *, documents_data=None, legacy_accepta
         if legacy_acceptance:
             db.add(AcceptanceRecord(project_id=pid, accepted_by_name='客户代表',
                                    accepted_at=date(2026, 9, 30), conclusion='accepted'))
-        for row in db.query(ArchiveChecklist).filter_by(project_id=pid):
-            row.is_done = True
         db.commit()
         ids = pid, task.id, check.id
     from tests.lifecycle_helpers import complete_vehicle_progress
@@ -148,7 +146,6 @@ def test_completion_evidence_rechecks_archival_after_preload(client, pm_headers,
     with SessionLocal() as stale:
         p = stale.get(Project, pid)
         actor = stale.get(User, p.manager)
-        item = stale.query(ArchiveChecklist).filter_by(project_id=pid).first()
         with SessionLocal() as newer:
             newer.get(Project, pid).status = 'archived'
             newer.commit()
@@ -159,7 +156,6 @@ def test_completion_evidence_rechecks_archival_after_preload(client, pm_headers,
         stale.rollback()
     with SessionLocal() as db:
         assert db.query(AcceptanceRecord).filter_by(project_id=pid).count() == 0
-        assert not db.query(ArchiveChecklist).filter_by(project_id=pid, is_done=True).count()
 
 
 def test_repair_after_failed_archive_gate_can_finish_normally(client, pm_headers):

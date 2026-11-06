@@ -46,19 +46,3 @@ def requirement(client, headers, project_id, *, name='资料要求', code='6.99'
     return row
 
 
-def legacy_document(client, headers, project_id, task_id, *, name='原交付物', code='6.99'):
-    """Construct a migrated source snapshot, never create legacy via a new HTTP write."""
-    from app.db import SessionLocal
-    from app.models import ProjectDocument, ProjectDocumentDefinition, Task
-    row = requirement(client, headers, project_id, name=name, code=code)
-    with SessionLocal() as db:
-        task = db.get(Task, task_id)
-        source = {'kind': 'task_deliverable', 'task': {'id': task_id, 'version': task.version or 0},
-                  'original': {'name': name, 'required': True, 'done': False}}
-        for entity in (db.get(ProjectDocument, row['id']), db.get(ProjectDocumentDefinition, row['definition_id'])):
-            entity.stage_key = 'legacy'
-            entity.code = 'legacy.' + row['id'].replace('-', '')
-            entity.timing_type = 'on_demand'; entity.timing_event = None; entity.timing_offset_hours = None
-            entity.source_metadata = source
-        db.commit()
-    return row['id']

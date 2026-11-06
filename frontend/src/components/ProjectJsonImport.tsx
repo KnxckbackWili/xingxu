@@ -137,11 +137,8 @@ function ImportForm({ allowed: canImport }: { allowed: boolean }) {
             { key: 'vehicle_units', label: '现场车辆', children: `${importPreview.summary?.vehicle_units ?? 0} 台` },
             { key: 'vehicle_issues', label: '车辆问题', children: `${importPreview.summary?.vehicle_issues ?? 0} 条` },
             { key: 'tasks', label: '任务', children: `${importPreview.summary?.tasks ?? 0} 项` },
-            { key: 'document_definitions', label: '资料要求快照', children: `${importPreview.summary?.document_definitions ?? 0} 项` },
-            { key: 'project_documents', label: '来源资料实例（需重新提交）', children: `${importPreview.summary?.project_documents ?? 0} 项` },
-            { key: 'legacy_document_requirements', label: '历史待分类资料', children: `${importPreview.summary?.legacy_document_requirements ?? 0} 项` },
+            { key: 'document_definitions', label: '资料要求', children: `${importPreview.summary?.document_definitions ?? 0} 项` },
             { key: 'procurements', label: '采购明细', children: `${importPreview.summary?.procurements ?? 0} 项` },
-            { key: 'schedule', label: '排程', children: `${importPreview.summary?.schedule ?? 0} 条` },
             { key: 'issues', label: '项目问题', children: `${importPreview.summary?.issues ?? 0} 条` },
           ]} />
           <Typography.Text type="secondary">附件文件和用户账号不会从 JSON 导入；项目创建后可继续上传文件和分配人员。</Typography.Text>

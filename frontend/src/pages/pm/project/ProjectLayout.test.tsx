@@ -238,13 +238,13 @@ describe('persistent project directory during route refresh', () => {
     expect(screen.queryByText('项目不存在或无权访问',{selector:'.ant-result-title'})).toBeNull()
   })
   it.each([
-    ['tasks','计划','任务占位'], ['history','操作记录','动态占位 history'], ['activity','操作记录','动态占位 history'],
-    ['site','车辆','现场占位 vehicles'], ['delivery','资料','资料占位'], ['files','资料','资料占位'], ['documents','资料','资料占位'],
-  ])('keeps legacy %s route reachable and highlighted', async (path,label,content) => {
+    ['plan','计划','任务占位'], ['history','操作记录','动态占位 history'],
+    ['vehicles','车辆','现场占位 vehicles'], ['documents','资料','资料占位'],
+  ])('keeps the %s route reachable and highlighted', async (path,label,content) => {
     route.pathname=`/pm/projects/p1/${path}`;apiGet.mockResolvedValue({data:PROJECT})
     render(<ProjectLayout />)
     await screen.findByText(content)
-    if (path === 'history' || path === 'activity') {
+    if (path === 'history') {
       fireEvent.click(screen.getByRole('button', { name: /更多/ })); await screen.findByRole('dialog')
     }
     expect(screen.getByRole('button',{name:label})).toHaveAttribute('aria-current','page')
@@ -322,7 +322,7 @@ describe('explicit archive and audit permission denials', () => {
     expect(overview).toHaveAttribute('data-manage-status', String(statusAllowed))
     expect(overview).toHaveAttribute('data-can-archive', String(archiveAllowed))
   })
-  it.each(['history', 'activity'])('blocks the %s audit route while project reads remain allowed', async path => {
+  it.each(['history'])('blocks the %s audit route while project reads remain allowed', async path => {
     useAuthMock.mockReturnValue({ user: { id: 'pm', role: 'pm', permission_overrides: { 'system.audit.read': false } } })
     route.pathname = `/pm/projects/p1/${path}`
     apiGet.mockResolvedValue({ data: { ...PROJECT, capabilities: ['project.read'] } })

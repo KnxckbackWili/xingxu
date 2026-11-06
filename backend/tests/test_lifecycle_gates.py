@@ -2,7 +2,7 @@
 from dataclasses import asdict
 
 from app.db import SessionLocal
-from app.models import AcceptanceRecord, ArchiveChecklist, CheckItem, Issue, Project, Task, ProjectDocument
+from app.models import AcceptanceRecord, CheckItem, Issue, Project, Task, ProjectDocument
 from app.services.lifecycle_gates import check_transition
 from tests.test_lifecycle_write_integrity import completeable_project
 

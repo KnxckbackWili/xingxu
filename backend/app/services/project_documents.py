@@ -307,7 +307,7 @@ def owned_definition(db, project_id, definition_id):
 
 def instantiate(db, project, definition, *, vehicle=None, period_key=None, trigger_ref=None, triggered_at=None):
     """Idempotent seam for T23/T24: only the caller supplies real periods/triggers."""
-    if not applicable(project,definition) or definition.stage_key == 'legacy':
+    if not applicable(project,definition):
         return None
     if definition.scope == 'vehicle' and (vehicle is None or vehicle.project_id != project.id):
         raise HTTPException(400,'车辆范围资料必须对应本项目车辆档案')
@@ -324,7 +324,6 @@ def instantiate(db, project, definition, *, vehicle=None, period_key=None, trigg
         if source is None or source.project_id!=project.id or source.trigger_type!=definition.trigger_type or utc(source.occurred_at)!=utc(triggered_at):
             raise HTTPException(400,'触发来源、项目、性质与真实时刻不匹配')
     key = ':'.join((definition.id, vehicle.id if vehicle else '-', period_key or '-', trigger_ref or '-'))
-    # Migrated records keep their original source key and identity after explicit classification.
     row = db.query(ProjectDocument).filter_by(project_id=project.id,definition_id=definition.id,
         vehicle_unit_id=vehicle.id if vehicle else None,period_key=period_key,trigger_ref=trigger_ref).first()
     if row:
@@ -344,7 +343,7 @@ def materialize_static(db, project, actor_id=None, now=None):
     definitions = db.query(ProjectDocumentDefinition).filter_by(project_id=project.id).all()
     units = db.query(VehicleUnit).filter_by(project_id=project.id).all()
     for definition in definitions:
-        if definition.stage_key == 'legacy' or definition.timing_type in DEFERRED_TYPES or not applicable(project,definition):
+        if definition.timing_type in DEFERRED_TYPES or not applicable(project,definition):
             continue
         if definition.timing_type == 'lifetime' and not db.query(ProjectEvent.id).filter(ProjectEvent.project_id==project.id,ProjectEvent.event_key=='internal_kickoff',or_(ProjectEvent.actual_at.isnot(None), ProjectEvent.actual_date.isnot(None))).first():
             continue
@@ -371,7 +370,6 @@ def initialize(db, project, excluded_requirement_ids=()):
 
 
 def waiting_reason(project, definition, count):
-    if definition.stage_key == 'legacy': return '历史待分类，请负责人明确归入第4–9阶段'
     if not applicable(project,definition): return '不适用于当前调度平台'
     if count: return None
     if definition.timing_type == 'weekly': return '等待按周生成当期资料'
@@ -469,8 +467,8 @@ def view(db, project, user, *, vehicle_unit_id=None, audit=False):
 
 
 def save_definition(db, project, body, user, definition_id=None):
-    if body.stage_key == 'legacy' or body.is_group or body.parent_id:
-        raise HTTPException(400,'项目资料要求需明确归入第4–9阶段，不能伪造历史来源或分组')
+    if body.is_group or body.parent_id:
+        raise HTTPException(400,'项目资料要求不能设置分组')
     row=owned_definition(db,project.id,definition_id) if definition_id else ProjectDocumentDefinition(project_id=project.id,source_key='custom:'+str(uuid4()),created_by=user.id)
     if definition_id and not can_read_definition(user,project,row):raise HTTPException(403,'无权修改该保密资料要求')
     if definition_id and any(getattr(body,key)!=getattr(row,key) for key in DEFAULT_FIELDS):
@@ -480,7 +478,6 @@ def save_definition(db, project, body, user, definition_id=None):
     before={column.key:(iso(getattr(row,column.key)) if isinstance(getattr(row,column.key),datetime) else deepcopy(getattr(row,column.key))) for column in row.__table__.columns} if row.id else None
     from app.services.document_deadlines import validate_owner
     if 'owner_id' in body.model_fields_set:validate_owner(db,project,body.owner_id)
-    old_stage,old_scope=row.stage_key,row.scope
     previous_identity=tuple(getattr(row,key) for key in IDENTITY_FIELDS)
     duplicate=db.query(ProjectDocumentDefinition).filter(ProjectDocumentDefinition.project_id==project.id,ProjectDocumentDefinition.code==body.code).first()
     if duplicate and duplicate.id!=row.id:raise HTTPException(409,'当前项目已有相同编号的资料要求')
@@ -488,12 +485,7 @@ def save_definition(db, project, body, user, definition_id=None):
     for key,value in body.model_dump(exclude=excluded).items():
         setattr(row,key,value)
     db.add(row);db.flush()
-    if old_stage=='legacy' and old_scope==row.scope:
-        for document in db.query(ProjectDocument).filter_by(definition_id=row.id,stage_key='legacy'):
-            for key in RULE_FIELDS:
-                if key not in {'source_metadata','blank_file_id'}:setattr(document,key,deepcopy(getattr(row,key)))
-            if 'owner_id' in body.model_fields_set:document.owner_id=body.owner_id
-    elif previous_identity==tuple(getattr(row,key) for key in IDENTITY_FIELDS):
+    if previous_identity==tuple(getattr(row,key) for key in IDENTITY_FIELDS):
         for document in db.query(ProjectDocument).filter_by(definition_id=row.id):
             if document.status=='submitted' or db.query(DocumentVersion.id).filter_by(project_document_id=document.id).first():
                 continue
@@ -616,7 +608,7 @@ def progress_summary(db,project,user,documents=None):
     from app.services.lifecycle_gates import _pending_required_documents
     return {'phase4_ready': not _pending_required_documents(db, project.id, stages=('4',), verify_files=False), 'total':len(rows),'pending':sum(row.status=='pending' for row in rows),
         'submitted':sum(row.status=='submitted' for row in rows),'waived':sum(row.status=='waived' for row in rows),
-        'required_pending':sum(row.required and row.status=='pending' and row.stage_key!='legacy' for row in rows)}
+        'required_pending':sum(row.required and row.status=='pending' for row in rows)}
 
 
 def clone_definitions(db,source,target,user):
@@ -675,7 +667,7 @@ def export_snapshot(db,project,user=None):
             'project_documents':[serial(row) for row in documents],'document_versions':versions,
             'document_trigger_events':[serial(row) for row in db.query(DocumentTriggerEvent).filter_by(project_id=project.id)
                 if row.id in {document.trigger_ref for document in documents} or row.source_metadata.get('warning')],
-            'document_import_note':'JSON为新项目计划导入；源提交和审核仅作为只读来源保留，真实证据请使用完整加密备份恢复。'}
+            'document_import_note':'导入 JSON 只复制资料要求；已提交文件和审核记录请用完整加密备份恢复。'}
 
 
 def parse_snapshot(payload):
@@ -695,79 +687,18 @@ def parse_snapshot(payload):
         record['blank_file_key']=row.get('blank_file_key')
         record['parent_code']=None;record['is_group']=False
         records.append(record)
-    for key in ('project_documents','document_versions','document_trigger_events'):
-        values=payload.get(key,[])
-        if not isinstance(values,list) or len(values)>10000 or any(not isinstance(item,dict) for item in values):raise ValueError(f'{key}必须是有界对象数组')
-    document_ids=set()
-    for row in payload.get('project_documents',[]):
-        identity=row.get('id');definition_id=row.get('definition_id')
-        trigger=row.get('trigger_ref')
-        if trigger is not None and (not isinstance(trigger,str) or not trigger.strip() or len(trigger)>100):
-            raise ValueError('资料实例历史的触发来源ID无效')
-        if not isinstance(identity,str) or not identity.strip() or len(identity)>36 or identity in document_ids:
-            raise ValueError('资料实例历史ID无效或重复')
-        if not isinstance(definition_id,str) or definition_id not in source_ids:
-            raise ValueError('资料实例历史的定义来源缺失或无效')
-        document_ids.add(identity)
-    version_ids=set()
-    for row in payload.get('document_versions',[]):
-        identity=row.get('id');document_id=row.get('project_document_id')
-        if not isinstance(identity,str) or not identity.strip() or len(identity)>36 or identity in version_ids:
-            raise ValueError('资料版本历史ID无效或重复')
-        if not isinstance(document_id,str) or document_id not in document_ids:
-            raise ValueError('资料版本历史无对应实例')
-        version_ids.add(identity)
-    event_ids=set()
-    for row in payload.get('document_trigger_events',[]):
-        identity=row.get('id');source=row.get('source_id')
-        if not isinstance(identity,str) or not identity.strip() or len(identity)>36 or identity in event_ids:
-            raise ValueError('触发事件历史ID无效或重复')
-        if not isinstance(source,str) or not source.strip() or len(source)>36:
-            raise ValueError('触发事件历史来源ID无效')
-        if row.get('trigger_type') not in ('accident','quality','member_leave') or row.get('source_type') not in ('issue','member_departure'):
-            raise ValueError('触发事件历史类型无效')
-        event_ids.add(identity)
-    parsed=parse_bundle({'document_requirements':records,'document_template_files':payload.get('document_template_files',{})})
-    return parsed,source_ids,deepcopy(payload.get('project_documents',[])),deepcopy(payload.get('document_versions',[])),deepcopy(payload.get('document_trigger_events',[]))
+    return parse_bundle({'document_requirements':records,'document_template_files':payload.get('document_template_files',{})})
 
 
 def import_snapshot(db,project,parsed,user):
+    """Copy the document rules only; submissions and reviews stay in the source project."""
     from app.services.document_requirements import create_file
     if parsed is None:return False
-    bundle,source_ids,history,versions,events=parsed;definitions,files=bundle
+    definitions,files=parsed
     assets={key:create_file(db,*data,user.id).id for key,data in files.items()}
-    for (body,parent,asset,source),source_id in zip(definitions,source_ids):
+    for body,parent,asset in definitions:
         values=body.model_dump(exclude={'parent_id','is_group'})
-        source_history=[row for row in history if row.get('definition_id')==source_id]
-        document_ids={row.get('id') for row in source_history if isinstance(row.get('id'),str)}
-        values['source_metadata']={'kind':'portable_unverified_snapshot','portable_source_id':source_id,'definition':source,
-            'project_documents':source_history,'document_versions':[row for row in versions if row.get('project_document_id') in document_ids],
-            'document_trigger_events':[row for row in events if row.get('id') in {item.get('trigger_ref') for item in source_history}]}
         values['blank_file_id']=assets.get(asset)
-        row=ProjectDocumentDefinition(project_id=project.id,source_key='import:'+str(uuid4()),created_by=user.id,**values)
-        db.add(row)
+        db.add(ProjectDocumentDefinition(project_id=project.id,source_key='import:'+str(uuid4()),created_by=user.id,**values))
     db.flush();materialize_static(db,project)
     return True
-
-
-def import_legacy_requirements(db,project,payload,user):
-    """Old JSON contains planning requirements, not transferable attachment ownership."""
-    from uuid import uuid5,NAMESPACE_URL
-    entries=[]
-    for mi,module in enumerate(payload.get('modules',[])):
-        for ti,task in enumerate(module.get('tasks',[])):
-            for index,original in enumerate(task.get('deliverables') or []):
-                item=original if isinstance(original,dict) else {'name':str(original)}
-                entries.append(('task',f'{mi}:{ti}:{index}',item.get('name') or '旧交付要求',item.get('required',True),
-                    {'module':deepcopy(module),'task_name':task.get('name'),'index':index,'original':deepcopy(original)}))
-    for index,item in enumerate(payload.get('archive_checklist',[])):
-        entries.append(('archive',str(index),item.get('item_name') or '旧归档要求',item.get('is_required',True),deepcopy(item)))
-    for index,item in enumerate(payload.get('preparations',[])):
-        if item.get('category')=='procurement':continue
-        entries.append(('preparation',str(index),item.get('name') or '旧准备要求',item.get('is_required',True),deepcopy(item)))
-    for kind,source,name,required,original in entries:
-        db.add(ProjectDocumentDefinition(project_id=project.id,source_key=f'legacy-import:{kind}:{source}',stage_key='legacy',
-            code='legacy.'+uuid5(NAMESPACE_URL,f'{project.id}:{kind}:{source}').hex,name=name[:300],required=bool(required),scope='project',
-            timing_type='on_demand',source_metadata={'kind':'portable_legacy_unverified','source_type':kind,'original':original},created_by=user.id,
-            note='旧导入要求待明确分类，源提交/审核/附件引用只保留为只读来源，不假定已满足'))
-    db.flush();return bool(entries)

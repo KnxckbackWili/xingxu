@@ -145,16 +145,6 @@ export default function ProjectLayout() {
   const { parent: activeParent, child: activeChild } = resolveProjectNav(rawTab)
   const activeTab = specialView === 'edit' ? 'overview' : specialView === 'export' ? 'delivery' : activeParent
 
-  useEffect(() => {
-    const redirected: Record<string,string> = { schedule: 'plan?view=weeks', team: 'edit', start: 'overview', site: 'vehicles', activity: 'history' }
-    if (redirected[rawTab]) { navigate(`/pm/projects/${projectId}/${redirected[rawTab]}`, { replace: true }); return }
-    const oldDocumentTab = ['delivery', 'files', 'archive', 'preparation'].includes(rawTab)
-    const oldTaskDocument = ['plan', 'tasks'].includes(rawTab) && new URLSearchParams(location.search).get('tab') === 'deliverables'
-    if (oldDocumentTab || oldTaskDocument) {
-      const query = rawTab === 'archive' ? '?acceptance=1' : rawTab === 'preparation' ? '?review=1' : ''
-      navigate(`/pm/projects/${projectId}/documents${query}`, { replace: true })
-    }
-  }, [rawTab, projectId, location.search, navigate])
 
   /** 二级页内 Tab 切换 → 更新地址栏（走配置源里该二级项的 path 段） */
   const subNav = (parentKey: string) => (childKey: string) => {

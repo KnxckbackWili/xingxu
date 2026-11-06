@@ -347,7 +347,6 @@ def upgrade():
     sa.Column('created_by', sa.String(length=36), nullable=True),
     sa.Column('template_id', sa.String(length=36), nullable=True),
     sa.Column('template_version', sa.Integer(), nullable=True),
-    sa.Column('portable_unverified_snapshot', sa.JSON(), nullable=True),
     sa.Column('dispatch_platform', sa.String(length=20), nullable=True),
     sa.Column('readiness_state', sa.String(length=20), nullable=True),
     sa.Column('prep_conditions', sa.JSON(), nullable=True),
@@ -396,22 +395,6 @@ def upgrade():
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_acceptance_records_project_id'), 'acceptance_records', ['project_id'], unique=False)
-    op.create_table('archive_checklists',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('project_id', sa.String(length=36), nullable=False),
-    sa.Column('category', sa.String(length=100), nullable=False),
-    sa.Column('item_name', sa.String(length=200), nullable=False),
-    sa.Column('is_required', sa.Boolean(), nullable=True),
-    sa.Column('is_done', sa.Boolean(), nullable=True),
-    sa.Column('done_by', sa.String(length=36), nullable=True),
-    sa.Column('done_at', sa.DateTime(), nullable=True),
-    sa.Column('attachment_id', sa.String(length=36), nullable=True),
-    sa.Column('requirements', sa.JSON(), nullable=True),
-    sa.Column('sort_order', sa.Integer(), nullable=True),
-    sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_archive_checklists_project_id'), 'archive_checklists', ['project_id'], unique=False)
     op.create_table('attachments',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('project_id', sa.String(length=36), nullable=False),
@@ -888,7 +871,6 @@ def upgrade():
     sa.Column('to_location', sa.String(length=200), nullable=True),
     sa.Column('handler', sa.String(length=100), nullable=True),
     sa.Column('occurred_at', sa.DateTime(), nullable=False),
-    sa.Column('time_basis', sa.String(length=20), nullable=True),
     sa.Column('note', sa.Text(), nullable=True),
     sa.Column('operator_id', sa.String(length=36), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=True),
@@ -1119,14 +1101,9 @@ def upgrade():
     sa.Column('name', sa.String(length=200), nullable=False),
     sa.Column('description', sa.Text(), nullable=True),
     sa.Column('quantity_type', sa.String(length=20), nullable=False),
-    sa.Column('target_quantity', sa.Float(), nullable=True),
-    sa.Column('unit', sa.String(length=20), nullable=True),
-    sa.Column('standard_hours', sa.Float(), nullable=True),
     sa.Column('safety_flag', sa.Boolean(), nullable=True),
     sa.Column('applicable_vehicle_types', sa.JSON(), nullable=True),
     sa.Column('sort_order', sa.Integer(), nullable=True),
-    sa.Column('depends_on', sa.JSON(), nullable=True),
-    sa.Column('deliverables', sa.JSON(), nullable=True),
     sa.Column('reference_docs', sa.JSON(), nullable=True),
     sa.Column('version', sa.Integer(), nullable=True),
     sa.Column('source_task_id', sa.String(length=36), nullable=True),
@@ -1407,8 +1384,6 @@ def downgrade():
     op.drop_table('change_logs')
     op.drop_index(op.f('ix_attachments_project_id'), table_name='attachments')
     op.drop_table('attachments')
-    op.drop_index(op.f('ix_archive_checklists_project_id'), table_name='archive_checklists')
-    op.drop_table('archive_checklists')
     op.drop_index(op.f('ix_acceptance_records_project_id'), table_name='acceptance_records')
     op.drop_table('acceptance_records')
     op.drop_index(op.f('ix_template_sections_template_id'), table_name='template_sections')

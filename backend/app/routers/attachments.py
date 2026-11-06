@@ -62,16 +62,11 @@ def delete_attachment(attachment_id: str, user: User = Depends(get_current_user)
         raise HTTPException(404, "附件不存在")
     from app.services.project_documents import can_read_file
     if not can_read_file(user,project,a):raise HTTPException(403,"无权删除该保密文件")
-    from app.models import AcceptanceRecord, ArchiveChecklist, VehicleLifecycleEvent, DocumentVersion
+    from app.models import AcceptanceRecord, VehicleLifecycleEvent, DocumentVersion
     if db.query(DocumentVersion.id).filter_by(attachment_id=a.id).first():
         raise HTTPException(400, "附件仍被资料版本引用，不能删除历史证据")
-    for task in db.query(Task).filter_by(project_id=project.id).all():
-        if any(isinstance(item, dict) and item.get("attachment_id") == a.id for item in task.deliverables or []):
-            raise HTTPException(400, f"附件仍被任务「{task.name}」的交付物引用，请先撤回或更换交付附件")
     if db.query(AcceptanceRecord.id).filter_by(attachment_id=a.id).first():
         raise HTTPException(400, "附件是已保存验收记录的证据，不能直接删除")
-    if db.query(ArchiveChecklist.id).filter_by(attachment_id=a.id).first():
-        raise HTTPException(400, "附件仍被归档清单引用，请先解除或更换清单附件")
     if db.query(VehicleLifecycleEvent.id).filter_by(attachment_id=a.id).first():
         raise HTTPException(400, "附件仍被车辆事件引用，请先解除或更换事件附件")
 

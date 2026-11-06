@@ -117,7 +117,7 @@ def test_project_export_excel_sheets(client, pm_headers, worker_headers):
     assert any('AGV-03' in str(cell.value) for row in wb['问题清单'].iter_rows(min_row=3) for cell in row if cell.value)
     assert '更换配件' in [cell.value for cell in wb['生命周期表'][2]]
     assert [cell.value for cell in wb['物资清单'][1]][:10] == ['物品编码','名称','规格','序列号','归属','现存数量','单位','位置','保管人','说明']
-    assert [cell.value for cell in wb['收发流水'][1]][:10] == ['发生时间（UTC）','时间依据','物品','动作','数量','结余','原位置','新位置','经手人','说明']
+    assert [cell.value for cell in wb['收发流水'][1]][:9] == ['发生时间（UTC）','物品','动作','数量','结余','原位置','新位置','经手人','说明']
     assert {'文件名','资料状态','提交人','提交时间（UTC）','审核信息'} <= set(cell.value for cell in wb['交付资料'][2])
 
 
@@ -236,8 +236,7 @@ def test_ai_quick_import_template_preview_and_full_import(client, pm_headers):
         "asset_code": "AGV-001", "vehicle_type": "潜伏式", "model_name": "AGV-500", "current_stage": "on_site", "current_status": "attention",
         "events": [{"event_type": "fault", "event_date": "2026-09-20", "title": "传感器报警", "action_taken": "重新压接", "verification": "运行正常", "is_closed": True, "replaced_parts": [{"name": "M12 接插件", "quantity": 1}]}],
     }]
-    payload["modules"] = [{"phase_name": "现场实施", "name": "网络联调", "tasks": [{"name": "完成现场网络联调", "quantity_type": "manual", "target_quantity": 1, "unit": "项", "deliverables": [{"name": "测试记录", "required": True}], "check_items": [{"name": "网络连通", "acceptance_standard": "无丢包"}]}]}]
-    payload["schedule"] = [{"task_name": "完成现场网络联调", "work_date": "2026-09-21", "planned_quantity": 1, "status": "planned"}]
+    payload["modules"] = [{"phase_name": "现场实施", "name": "网络联调", "tasks": [{"name": "完成现场网络联调", "kind": "other", "check_items": [{"name": "网络连通", "acceptance_standard": "无丢包"}]}]}]
     payload["inventory_items"] = [{
         "item_code": "CLIENT-PC-01", "name": "甲方工控机", "category": "equipment",
         "ownership": "client", "tracking_mode": "serial", "serial_number": "PC-SN-01",
@@ -268,9 +267,7 @@ def test_ai_quick_import_template_preview_and_full_import(client, pm_headers):
     tree = client.get(f"/api/projects/{project_id}/tree", headers=pm_headers).json()
     tasks = [task for phase in tree for module in phase["modules"] for task in module["tasks"]]
     assert any(task["name"] == "完成现场网络联调" for task in tasks)
-    assert 'deliverables' not in next(task for task in tasks if task['name'] == '完成现场网络联调')
     source = client.get(f'/api/projects/{project_id}/documents', headers=pm_headers).json()
-    assert any(row['name'] == '测试记录' and row['stage_key'] == 'legacy' for row in source['definitions'])
     assert all(row['status'] != 'submitted' for row in source['documents'])
     inventory = client.get(f"/api/projects/{project_id}/inventory", headers=pm_headers).json()
     assert inventory["items"][0]["ownership"] == "client"

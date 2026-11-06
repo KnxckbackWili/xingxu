@@ -2,7 +2,6 @@
 import hashlib
 import json
 from datetime import timedelta
-from collections import defaultdict
 
 from app.models import AcceptanceRecord, CheckItem, Task, Vehicle, User, Project, ProjectDocument
 from app.time_utils import utcnow
@@ -20,12 +19,6 @@ def _canonical_definition(value):
     return value
 
 
-def _document_definition(item):
-    # Ordinary form saves may explicitly send empty text omitted by old rows.
-    # Preserve meaningful whitespace/content; only absent/null/empty are equivalent.
-    return {key: item.get(key) or '' for key in ('name', 'doc_type', 'description', 'note')}
-
-
 def acceptance_scope_fingerprint(db, project_id):
     """Hash only execution/quality/delivery definitions, never execution evidence.
 
@@ -39,41 +32,12 @@ def acceptance_scope_fingerprint(db, project_id):
     ids = [task.id for task in tasks]
     tasks = db.query(Task).populate_existing().filter(Task.id.in_(ids)).order_by(Task.id).all() if ids else []
     checks = db.query(CheckItem).populate_existing().filter(CheckItem.task_id.in_(ids)).order_by(CheckItem.id).all() if ids else []
-    requirements = []
-    # Completion also requires documents attached to reminder-only tasks.
-    all_tasks = db.query(Task).populate_existing().filter_by(project_id=project_id).order_by(Task.id).all()
-    # T22 moves each original item without changing its business definition. Rebuild
-    # the v1 input from immutable migration provenance so existing signatures remain
-    # valid only when their original execution scope still matches.
-    legacy=defaultdict(list)
-    document_rows=db.query(ProjectDocument).populate_existing().filter_by(project_id=project_id).order_by(ProjectDocument.id).all()
-    for document in document_rows:
-        source=document.source_metadata or {}
-        if source.get('kind')=='task_deliverable' and isinstance(source.get('task'),dict) and isinstance(source.get('index'),int):
-            legacy[source['task'].get('id')].append((source['index'],source.get('original')))
-    def task_deliveries(task):
-        return [item for _,item in sorted(legacy[task.id],key=lambda item:item[0])] if task.id in legacy else task.deliverables or []
-    required_deliveries = []
-    for task in all_tasks:
-        for value in task_deliveries(task):
-            item = {"name": value} if isinstance(value, str) else value
-            if isinstance(item, dict) and item.get("name") and item.get("required", True):
-                required_deliveries.append({"task_id": task.id, **_document_definition(item)})
-    for task in tasks:
-        deliveries = []
-        for value in task_deliveries(task):
-            item = {'name': value} if isinstance(value, str) else value
-            if isinstance(item, dict) and item.get('name') and item.get('required', True):
-                deliveries.append(_document_definition(item))
-        requirements.append({
-            'id': task.id, 'name': task.name, 'description': task.description or '',
-            'quantity_type': task.quantity_type, 'target_quantity': float(task.target_quantity or 0),
-            'unit': task.unit or '', 'safety_flag': bool(task.safety_flag),
-            'applicable_vehicle_types': sorted(task.applicable_vehicle_types or []),
-            'deliverables': sorted(deliveries, key=lambda item: json.dumps(item, sort_keys=True)),
-        })
+    requirements = [{
+        'id': task.id, 'name': task.name, 'description': task.description or '',
+        'quantity_type': task.quantity_type, 'safety_flag': bool(task.safety_flag),
+        'applicable_vehicle_types': sorted(task.applicable_vehicle_types or []),
+    } for task in tasks]
     payload = {'version': 1, 'tasks': requirements,
-               'required_deliveries': sorted(required_deliveries, key=lambda item: json.dumps(item, sort_keys=True)),
                'checks': [{'id': c.id, 'task_id': c.task_id, 'name': c.name,
                            'description': c.description or '', 'required': bool(c.is_required),
                            'safety': bool(c.is_safety_critical), 'applicable': bool(c.is_applicable)}
@@ -81,33 +45,29 @@ def acceptance_scope_fingerprint(db, project_id):
                'vehicles': [{'id': v.id, 'type': v.vehicle_type, 'model': v.model_name,
                              'quantity': v.quantity, 'configuration': v.configuration or {}}
                             for v in db.query(Vehicle).populate_existing().filter_by(project_id=project_id).order_by(Vehicle.id)]}
-    # T32's exact g30 legacy link is a redundant representation, not new scope.
+    # A step created from a task repeats that task's own link, so it is not new scope.
     # New explicit links, definitions and real-unit obligations do alter scope.
     from app.models import ProjectVehicleStep, VehicleCheckDefinition
-    legacy_links = {(r.source_task_id,r.key) for r in db.query(ProjectVehicleStep).filter_by(project_id=project_id) if r.source_task_id}
+    step_links = {(r.source_task_id,r.key) for r in db.query(ProjectVehicleStep).filter_by(project_id=project_id) if r.source_task_id}
     links = [{'task_id':t.id,'step_key':t.vehicle_step_key} for t in tasks
-             if t.vehicle_step_key and (t.id,t.vehicle_step_key) not in legacy_links]
+             if t.vehicle_step_key and (t.id,t.vehicle_step_key) not in step_links]
     unit_checks = [{key:getattr(c,key) for key in ('id','vehicle_unit_id','vehicle_step_key','vehicle_check_definition_id','definition_version')}
                    for c in checks if c.vehicle_unit_id and (c.is_required or c.is_safety_critical)]
-    legacy_check_ids = {c.id for c in checks if not c.vehicle_unit_id}
+    task_check_ids = {c.id for c in checks if not c.vehicle_unit_id}
     definitions = [{key:getattr(d,key) for key in ('id','task_id','source_check_id','source_version','version','name','description','is_required','is_safety_critical')}
                    for d in db.query(VehicleCheckDefinition).filter(VehicleCheckDefinition.task_id.in_(ids)).order_by(VehicleCheckDefinition.id)
-                   if d.source_check_id not in legacy_check_ids and (d.is_required or d.is_safety_critical)]
+                   if d.source_check_id not in task_check_ids and (d.is_required or d.is_safety_critical)]
     if links or unit_checks or definitions:
         payload['vehicle_checks']={'links':links,'checks':unit_checks,'definitions':definitions}
     # Future archive/lifetime materials do not alter the acceptance-stage scope.
-    # Frozen preparation/archive sources were not part of v1 acceptance scope.
     project=db.get(Project,project_id)
     canonical=[]
-    for row in document_rows:
-        source=row.source_metadata or {}
-        if row.stage_key not in {'4','5','6','7'} or not row.required or source.get('kind') in {'preparation_item','archive_checklist'}:
+    for row in db.query(ProjectDocument).populate_existing().filter_by(project_id=project_id).order_by(ProjectDocument.id):
+        if row.stage_key not in {'4','5','6','7'} or not row.required:
             continue
         if row.platform and row.platform!=project.dispatch_platform:continue
         canonical.append({key:getattr(row,key) for key in ('id','definition_id','stage_key','code','name','template_no','scope','platform','timing_type','timing_event','timing_offset_hours','timing_weekday','trigger_type','vehicle_unit_id','period_key','trigger_ref','note')})
-    if canonical:
-        payload['version']=2
-        payload['project_documents']=canonical
+    payload['project_documents']=canonical
     return hashlib.sha256(json.dumps(_canonical_definition(payload), sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 

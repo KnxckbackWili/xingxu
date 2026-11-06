@@ -3,7 +3,6 @@
 已有：projects/tasks/issues/schedule_entries 的 PUT 主端点。
 本次新增：
 - check_items 增加 version 列，检查项 PUT 校验版本（现场多端同时打勾防覆盖）；
-- 交付物子端点（POST tasks/{id}/deliverables）校验父任务版本，防提交/审核互相覆盖。
 version 缺省（旧前端）时跳过校验但仍自增，保持向后兼容。
 """
 

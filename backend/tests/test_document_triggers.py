@@ -193,19 +193,6 @@ def test_instantiate_rejects_fake_cross_project_type_or_time_source(client,admin
         assert db.query(ProjectDocument).filter_by(project_id=a,code='6.6').count()==0
 
 
-@pytest.mark.parametrize('field,value',[('trigger_ref',[]),('id',['bad']),('trigger_type',['accident'])])
-def test_portable_malformed_trigger_refs_fail_before_import_mutations(client,admin_headers,field,value):
-    from app.services.project_documents import export_snapshot,parse_snapshot
-    pid=create(client,admin_headers)['id'];report(client,admin_headers,pid,'accident')
-    with SessionLocal() as db:
-        payload=export_snapshot(db,db.get(Project,pid),db.get(User,'user-admin-001'))
-        if field=='trigger_ref':payload['project_documents'][0][field]=value
-        else:payload['document_trigger_events'][0][field]=value
-        before=(db.query(ProjectDocument).count(),db.query(DocumentTriggerEvent).count(),db.query(ChangeLog).count())
-        with pytest.raises(ValueError):parse_snapshot(payload)
-        assert (db.query(ProjectDocument).count(),db.query(DocumentTriggerEvent).count(),db.query(ChangeLog).count())==before
-
-
 def test_concurrent_real_source_materialization_creates_one_obligation(client,admin_headers):
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier

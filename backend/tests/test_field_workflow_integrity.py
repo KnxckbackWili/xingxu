@@ -14,8 +14,6 @@ def test_task_requirements_edit_cannot_forge_review_provenance(client, pm_header
                           'submitted_by': 'user-worker-001', 'review_by': 'user-admin-001',
                           'attachment_id': 'forged-file', 'review_at': '2026-09-30T00:00:00'}]})
     assert changed.status_code == 422, changed.text
-    with SessionLocal() as db:
-        assert not db.get(Task, tid).deliverables
 
 
 def test_material_requirement_edit_preserves_submitted_snapshot_and_file(client, pm_headers, worker_headers):

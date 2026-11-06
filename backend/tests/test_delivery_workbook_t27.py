@@ -42,7 +42,7 @@ def test_exact_six_sheet_contract_headers_styles_and_empty_project_are_real_xlsx
     assert tuple(book.sheetnames) == SHEET_NAMES
     assert [cell.value for cell in book['生命周期表'][2]][:12] == LIFECYCLE_HEADERS
     assert [cell.value for cell in book['物资清单'][1]][:10] == INVENTORY_HEADERS
-    assert [cell.value for cell in book['收发流水'][1]][:10] == MOVEMENT_HEADERS
+    assert [cell.value for cell in book['收发流水'][1]][:len(MOVEMENT_HEADERS)] == MOVEMENT_HEADERS
     for sheet in book:
         assert sheet.auto_filter.ref and sheet.freeze_panes
         assert sheet.print_title_rows and sheet.page_setup.fitToWidth == 1
@@ -88,28 +88,6 @@ def test_issue_states_quality_terms_and_extra_are_not_collapsed_or_truncated(cli
         assert row['解决方案/关闭或作废说明']=='保留解决/作废理由'
     overview=records(book['交付概览'])
     assert next(row['内容'] for row in overview if row['项目/指标']=='未闭环问题')==4
-
-
-def test_all_inventory_movements_and_legacy_time_provenance_survive_with_numeric_quantities(client,admin_headers):
-    pid=create_project(client,admin_headers)
-    with SessionLocal() as db:
-        item=models.ProjectInventoryItem(project_id=pid,item_code='I-01',name='工具',specification='M12',ownership='client',quantity=0,minimum_quantity=0,unit='件',supplier='甲方',extra={'serial_fact':'保留'})
-        db.add(item);db.flush()
-        for index in range(75):
-            db.add(models.ProjectInventoryMovement(project_id=pid,item_id=item.id,movement_type='transfer' if index%2 else 'receive',quantity=index-.5,balance_after=index,from_location='A',to_location='B',handler='经手人',operator_id='user-admin-001',occurred_at=datetime(2026,2,3,10,0),time_basis=None if index==0 else 'utc',note='未知来源时间' if index==0 else '完整流水-'+str(index)))
-        db.flush()
-        from sqlalchemy import update
-        db.execute(update(models.ProjectInventoryMovement).where(models.ProjectInventoryMovement.note=='未知来源时间').values(time_basis=None))
-        db.commit()
-    book=workbook(client,admin_headers,pid)
-    assert records(book['物资清单'],1)[0]['现存数量']==0
-    assert json.loads(records(book['物资清单'],1)[0]['扩展字段'])=={'serial_fact':'保留'}
-    rows=records(book['收发流水'],1);assert len(rows)==75
-    assert all(isinstance(row['数量'],(int,float)) for row in rows)
-    assert sum(row['数量'] for row in rows)==sum(index-.5 for index in range(75))
-    old=next(row for row in rows if row['说明']=='未知来源时间')
-    assert old['时间依据']=='原记录时区未知' and old['发生时间（UTC）'].startswith('原记录：')
-    assert any(row['发生时间（UTC）'].endswith('+00:00') for row in rows if row['时间依据']=='utc')
 
 
 def test_long_fields_continue_without_excel_cell_truncation_or_double_count_and_formula_text_is_literal(client,admin_headers):
@@ -183,7 +161,7 @@ def test_complete_json_preserves_exact_readonly_execution_evidence_and_reimport_
         from app.services.execution_scope import REMINDER_ONLY_PHASE_NAMES
         phase=db.query(models.Phase).filter(models.Phase.project_id.is_(None),models.Phase.name.notin_(REMINDER_ONLY_PHASE_NAMES)).first()
         module=models.Module(project_id=pid,phase_id=phase.id,name='执行事实模块');db.add(module);db.flush()
-        task=models.Task(project_id=pid,module_id=module.id,name='原直接完成任务',quantity_type='fixed',target_quantity=1,unit='台',manually_completed=True,
+        task=models.Task(project_id=pid,module_id=module.id,name='原直接完成任务',quantity_type='fixed',manually_completed=True,
             manual_completed_by='user-admin-001',manual_completed_role='admin',manual_completed_at=datetime(2026,2,3,4,5),manual_completed_reason='精确保留覆盖理由')
         db.add(task);db.flush()
         check=models.CheckItem(task_id=task.id,project_id=pid,name='保留失败检查',failed=True,failed_reason='原失败事实',is_done=False,version=7)

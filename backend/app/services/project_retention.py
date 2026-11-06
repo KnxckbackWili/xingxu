@@ -21,7 +21,7 @@ RETAINED_MODELS = (
     models.ProjectInventoryItem, models.ProjectInventoryMovement, models.ItemApplication,
     models.Phase, models.Module, models.Task, models.VehicleCheckDefinition, models.CheckItem,
     models.WeeklyPlanCell, models.Issue,
-    models.Attachment, models.ArchiveChecklist, models.AcceptanceRecord,
+    models.Attachment, models.AcceptanceRecord,
     models.FieldOperation,
     models.ProjectDocumentDefinition, models.ProjectDocument, models.DocumentNoticeReceipt, models.ProjectReportReceipt,
     models.UploadSession,models.UploadChunk,models.FileCleanupReceipt,models.FileRemovalRecord,

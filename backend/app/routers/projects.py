@@ -142,13 +142,6 @@ class MemberPermissionGrant(BaseModel):
 
 
 class ProjectUpdate(EventPlanInput):
-    @model_validator(mode="before")
-    @classmethod
-    def readonly_portable_source(cls,value):
-        if isinstance(value,dict) and 'portable_unverified_snapshot' in value:
-            raise ValueError('便携导入执行来源为只读，不能通过项目修改接口覆写')
-        return value
-
     name: Optional[str] = None
     abbreviation: Optional[str] = None
     contract_no: Optional[str] = Field(default=None, max_length=100)
@@ -656,17 +649,6 @@ def _create_project(data: ProjectCreate, user: User, db: Session):
             "generate",
             user.id,
             f"生成实施任务：{generated['tasks']} 个任务，{generated['check_items']} 个检查项",
-        )
-        from app.models import Task
-
-        generated["zero_target_tasks"] = (
-            db.query(Task)
-            .filter(
-                Task.project_id == p.id,
-                Task.quantity_type == "per_vehicle",
-                Task.target_quantity == 0,
-            )
-            .count()
         )
         result["initial_generation"] = generated
     return result

@@ -110,12 +110,9 @@ def matrix(db,pid):
 
 def parse_snapshot(payload):
     """Validate portable matrix before any import rows or files are created."""
-    from datetime import date, datetime
     value=payload.get('vehicle_progress_matrix')
     if value is None: return None
-    if not isinstance(value,dict): raise ValueError('vehicle_progress_matrix必须是对象')
-    for key in ('steps','units'):
-        if not isinstance(value.get(key),list): raise ValueError(f'车辆进度{key}必须是数组')
+    if not isinstance(value,dict) or not isinstance(value.get('steps'),list): raise ValueError('车辆进度steps必须是数组')
     keys=set()
     for step in value['steps']:
         if not isinstance(step,dict) or not isinstance(step.get('key'),str) or not 1<=len(step['key'])<=80 or not isinstance(step.get('name'),str) or not 1<=len(step['name'])<=300:
@@ -127,28 +124,11 @@ def parse_snapshot(payload):
         qty=step.get('expected_quantity')
         if qty is not None and (type(qty) is not int or qty<0): raise ValueError('历史环节目标台数无效')
     if not keys: raise ValueError('车辆进度表必须保留至少一个环节')
-    exported={r.get('source_id') for r in payload.get('vehicle_units',[]) if isinstance(r,dict)}
-    unit_ids=set()
-    for unit in value['units']:
-        if not isinstance(unit,dict) or unit.get('id') not in exported or unit.get('id') in unit_ids or not isinstance(unit.get('cells'),dict):
-            raise ValueError('车辆进度引用的真实车辆不存在或重复')
-        unit_ids.add(unit['id'])
-        for key,fact in unit['cells'].items():
-            if key not in keys or not isinstance(fact,dict) or type(fact.get('is_done')) is not bool:
-                raise ValueError('车辆进度单元格无效')
-            if type(fact.get('version')) is not int or fact['version']<1: raise ValueError('车辆进度版本无效')
-            if fact.get('done_on'):
-                from app.time_utils import project_today
-                if date.fromisoformat(fact['done_on'])>project_today((payload.get('project') or {}).get('timezone')):
-                    raise ValueError('车辆环节完成日期不能晚于项目当地今天')
-            if fact['is_done'] and not fact.get('done_on'): raise ValueError('实际完成环节缺少完成日期')
-            if not isinstance(fact.get('recorded_at'),str): raise ValueError('车辆进度缺少原登记时间')
-            datetime.fromisoformat(fact['recorded_at'])
     return value
 
 
-def import_snapshot(db,project,value,task_map,unit_map,*,planning_only=False):
-    from datetime import date, datetime, timezone
+def import_snapshot(db,project,value,task_map):
+    """Only the step definitions transfer; vehicle facts are recorded again in the new project."""
     if value is None:
         initialize_project(db,project)
         return
@@ -156,36 +136,6 @@ def import_snapshot(db,project,value,task_map,unit_map,*,planning_only=False):
         source=task_map.get(s.get('source_task_id'))
         db.add(ProjectVehicleStep(project_id=project.id,key=s['key'],name=s['name'],sort_order=i,
             source_task_id=source.id if source else None,expected_quantity=s.get('expected_quantity')))
-    if planning_only:
-        db.flush()
-        return
-    for u in value['units']:
-        for key,f in u['cells'].items():
-            recorded=datetime.fromisoformat(f['recorded_at'])
-            if recorded.tzinfo: recorded=recorded.astimezone(timezone.utc).replace(tzinfo=None)
-            db.add(VehicleProgress(project_id=project.id,vehicle_unit_id=unit_map[u['id']].id,step_key=key,is_done=f['is_done'],
-                done_on=date.fromisoformat(f['done_on']) if f.get('done_on') else None,recorded_at=recorded,done_by=None,
-                note=f.get('note',''),version=f['version'],source_metadata=f))
     db.flush()
-    for u in unit_map.values(): derive_stage(db,u)
 
 
-
-def retain_portable_source(project,payload,*,source_project_id=None):
-    """Keep every original execution field for inspection, never as qualification."""
-    from copy import deepcopy
-    from app.time_utils import utcnow
-    project.portable_unverified_snapshot={
-        'read_only':True,'verified':False,'source_project_id':source_project_id,
-        'recorded_at':utcnow().isoformat(),
-        'meaning':'来源执行事实仅供核对，新项目须重新登记完成、检查和验收。',
-        'vehicle_progress_matrix':deepcopy(payload.get('vehicle_progress_matrix')),
-        'execution_evidence':deepcopy(payload.get('execution_evidence')),
-        'field_operation_evidence':deepcopy(payload.get('field_operation_evidence')),
-        'legacy_quantity_reports':deepcopy(payload.get('progress',[])),
-        'legacy_daily_plans':deepcopy(payload.get('schedule',[])),
-        'legacy_work_items':deepcopy(payload.get('legacy_work_items',[])),
-        'legacy_planning_schedule':deepcopy(payload.get('planning_schedule')),
-        'legacy_planning_source':deepcopy(payload.get('legacy_planning_source')),
-        'weekly_plan_source':deepcopy(payload.get('weekly_plan_source')),
-        'prior_portable_unverified_snapshot':deepcopy(payload.get('portable_unverified_snapshot'))}

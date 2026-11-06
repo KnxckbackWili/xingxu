@@ -36,7 +36,7 @@ export const PROJECT_DISPLAY_LABEL = Object.fromEntries(Object.entries(PROJECT_P
 export const PROJECT_PAGE_TITLE: Record<string, string> = { ...PROJECT_DISPLAY_LABEL, handover: '联系人与入场' }
 export const PROJECT_PRIMARY_SECTIONS = PROJECT_NAV_ITEMS.filter(item => !item.more).map(item => ({ key: item.key, label: item.label, defaultKey: item.children?.find(child => child.defaultChild)?.key ?? item.key, keys: item.children?.map(child => child.key) ?? [item.key] }))
 export const PROJECT_MORE_KEYS = PROJECT_NAV_ITEMS.filter(item => item.more).flatMap(item => item.children?.map(child => child.key) ?? [item.key])
-/** A derived compatibility view for older consumers; no separate group definitions. */
+/** One group view derived from the navigation items. */
 export const PROJECT_NAV_GROUPS: ProjectNavGroup[] = [{ key: 'project', label: '本项目', items: PROJECT_NAV_ITEMS }]
 export const FIELD_STAFF_TOP_KEYS = PROJECT_NAV_ITEMS.filter(item => !item.more).map(item => item.key)
 export function filterProjectNav(groups: ProjectNavGroup[], _role?: string, _capabilities?: string[]): ProjectNavGroup[] { return groups }
@@ -47,12 +47,8 @@ export function defaultChildKey(item: ProjectNavItem): string | null { return it
 export interface ResolvedNav { parent: string; child: string | null }
 export function resolveProjectNav(raw: string): ResolvedNav {
   const tab=raw.replace(/^\//, '')
-  if (['documents','delivery','files','archive','preparation'].includes(tab)) return { parent: 'delivery', child: null }
-  if (['plan','tasks','schedule'].includes(tab)) return { parent: 'plan', child: null }
-  if (['edit','team','start'].includes(tab)) return { parent: 'overview', child: null }
-  if (tab==='export') return { parent: 'delivery', child: null }
-  if (tab==='site') return { parent: 'vehicles', child: null }
-  if (tab==='activity') return { parent: 'activity', child: 'history' }
+  if (tab==='documents' || tab==='export') return { parent: 'delivery', child: null }
+  if (tab==='edit') return { parent: 'overview', child: null }
   const child=PROJECT_CHILD_BY_SEGMENT[tab]
   if (child) return { parent: child.parentKey, child: child.child.key }
   const item=PROJECT_ITEM_BY_KEY[tab]

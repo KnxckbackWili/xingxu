@@ -31,7 +31,6 @@ def list_steps(template_id:str,user:User=Depends(get_current_user),db:Session=De
 def get_matrix(project_id:str,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
     project=ensure_project_visible(db,project_id,user)
     result=service.matrix(db,project_id)
-    result['source_snapshot_available']=project.portable_unverified_snapshot is not None
     result['today']=project_today(project.timezone).isoformat()
     result['can_manage']=C_PLAN in project_capabilities(user,project)
     result['can_record']=_has_record_authority(db,project,user) and project.status in service.WRITE_STATUSES
@@ -126,13 +125,6 @@ def _apply_matrix(project_id,body,user,db):
 def change_matrix(project_id:str,body:MatrixChange,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
     from app.services.field_operations import direct_matrix
     return direct_matrix(db,project_id,user,body)
-
-
-@router.get('/projects/{project_id}/vehicle-progress/source')
-@route_permission('project.read')
-def read_portable_source(project_id:str,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-    project=ensure_project_visible(db,project_id,user)
-    return {'read_only':True,'verified':False,'source':project.portable_unverified_snapshot}
 
 
 @router.get('/projects/{project_id}/vehicle-units/{unit_id}/checks')

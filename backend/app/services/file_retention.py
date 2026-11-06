@@ -18,7 +18,7 @@ def periods_kept(documents,count):
     from app.services.document_deadlines import period_start
     grouped=defaultdict(set)
     for row in documents:
-        if row.stage_key=='legacy' or row.timing_type!='weekly' or not row.period_key:continue
+        if row.timing_type!='weekly' or not row.period_key:continue
         try:period_start(row.period_key)
         except Exception:continue
         grouped[series(row)].add(row.period_key)
@@ -54,7 +54,7 @@ def removal_payload(asset):
 
 
 def retained_submission(db,project,document,version,asset):
-    if document.status!='submitted' or document.stage_key=='legacy' or document.timing_type!='weekly':return False
+    if document.status!='submitted' or document.timing_type!='weekly':return False
     record=removal_record(asset,db)
     if record is None or document.project_id!=project.id or asset.project_id!=project.id or version.project_document_id!=document.id:return False
     candidate=_matching_candidate(record.receipt,record)

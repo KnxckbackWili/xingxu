@@ -20,7 +20,7 @@ def _new_project(client, headers, name="归档证据测试"):
 
 def _archived_project(client, headers):
     from app.db import SessionLocal
-    from app.models import Project, AcceptanceRecord, ArchiveChecklist
+    from app.models import Project, AcceptanceRecord
     from app.services.acceptance import acceptance_scope_fingerprint
     from app.time_utils import project_today
 
@@ -49,10 +49,9 @@ def _archived_project(client, headers):
             AcceptanceRecord(id="archive-future", project_id=pid, accepted_by_name="历史未来日期",
                              accepted_at=today + timedelta(days=1), conclusion="accepted", scope_fingerprint=fingerprint,
                              created_at=datetime(2026, 10, 4, 21, 53)),
-            ArchiveChecklist(id="archive-check", project_id=pid, category="验收文件", item_name="终验报告",
-                             is_required=True, is_done=True, done_by="user-pm-001", done_at=datetime(2026, 10, 4, 21, 54),
-                             attachment_id=attachments[1][0], requirements={"doc_type": "PDF", "version_requirement": "终稿",
-                             "signoff_required": True, "notes": '<svg onload="bad()">', "unknown_field": "原扩展要求"}),
+            AcceptanceRecord(id="archive-second", project_id=pid, accepted_by_name="复验客户代表",
+                             accepted_at=today - timedelta(days=2), conclusion="rejected", notes='<svg onload="bad()">',
+                             scope_fingerprint="old-scope", attachment_id=attachments[1][0], created_at=datetime(2026, 10, 4, 21, 54)),
         ])
         db.commit()
     return pid, content, attachments
@@ -87,15 +86,13 @@ def test_package_preserves_full_closure_history_original_times_and_manifest_link
     assert evidence["retrospective"]["written_at_local"] == "2026-10-05T05:58:00+08:00"
     assert evidence["current_acceptance_id"] == "archive-current"
     rows = {row["id"]: row for row in evidence["acceptance_records"]}
-    assert set(rows) == {"archive-current", "archive-old", "archive-future"}
+    assert set(rows) == {"archive-current", "archive-old", "archive-future", "archive-second"}
     assert rows["archive-current"]["scope_current"] is True
     assert rows["archive-old"]["scope_current"] is False and rows["archive-old"]["scope_verified"] is True
     assert rows["archive-future"]["effective_date_reached"] is False and rows["archive-future"]["is_effective"] is False
     files = {item["id"]: item for item in manifest["files"]}
     assert rows["archive-current"]["attachment"] == files[attachments[0][0]]
-    check = next(row for row in evidence["archive_checklist"] if row["id"] == "archive-check")
-    assert check["attachment"] == files[attachments[1][0]]
-    assert check["done_at_local"] == "2026-10-05T05:54:00+08:00"
+    assert rows["archive-second"]["attachment"] == files[attachments[1][0]]
     for attachment_id, original in attachments:
         item = files[attachment_id]
         assert archive.read(item["archive_path"]) == original
@@ -160,30 +157,22 @@ def test_package_html_escapes_all_record_text_and_encodes_relative_file_links(cl
     assert "新项目导入及克隆不会继承" in html
     visible = "".join(parser.visible_texts)
     assert "2026-10-05 05:58:00" in visible and "2026-10-05 05:52:00" in visible
-    assert "文件格式：PDF" in visible and "版本要求：终稿" in visible and "客户签字：需要" in visible
-    assert "补充说明：" in visible and '<svg onload="bad()">' in visible
-    assert "原扩展要求" not in visible and "原扩展要求" in html
+    assert '<svg onload="bad()">' in visible
     assert "archive-current" not in visible and "archive-current" in html
     assert "SHA-256" not in visible and "SHA-256" in html
     assert "2026-10-04T21:52:00.123456" not in visible and "2026-10-04T21:52:00.123456" in html
     assert "原始记录与校验信息" in html and parser.open_details == []
-    from app.services.import_export import _archive_evidence_html
-    evidence["archive_checklist"] = [next(row for row in evidence["archive_checklist"] if row["id"] == "archive-check")]
-    evidence["archive_checklist"][0]["requirements"] = {}
-    empty = _ParsedHtml()
-    empty.feed(_archive_evidence_html(evidence))
-    assert "无额外要求" in "".join(empty.visible_texts)
 
 
 def test_missing_and_unrelated_attachment_refs_match_manifest_without_fake_links(client, pm_headers):
     from app.config import UPLOAD_DIR
     from app.db import SessionLocal
-    from app.models import Attachment, ArchiveChecklist
+    from app.models import Attachment, AcceptanceRecord
 
     pid, _, attachments = _archived_project(client, pm_headers)
     with SessionLocal() as db:
         stored = db.get(Attachment, attachments[0][0]).stored_name
-        db.get(ArchiveChecklist, "archive-check").attachment_id = "outside-project-attachment"
+        db.get(AcceptanceRecord, "archive-second").attachment_id = "outside-project-attachment"
         db.commit()
     (UPLOAD_DIR / stored).unlink()
     archive, evidence, html = _package(client, pm_headers, pid)
@@ -192,7 +181,7 @@ def test_missing_and_unrelated_attachment_refs_match_manifest_without_fake_links
     current = next(row for row in evidence["acceptance_records"] if row["is_effective"])
     assert current["attachment"] == missing and missing["missing"] is True
     assert missing["archive_path"] not in archive.namelist()
-    check = next(row for row in evidence["archive_checklist"] if row["id"] == "archive-check")
+    check = next(row for row in evidence["acceptance_records"] if row["id"] == "archive-second")
     assert check["attachment"] == {"id": "outside-project-attachment", "missing": True, "reason": "attachment_not_in_project_manifest"}
     assert "附件缺失，未包含文件内容" in html
     parser = _ParsedHtml()

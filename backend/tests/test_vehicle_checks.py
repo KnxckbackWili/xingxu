@@ -14,7 +14,7 @@ def work(pid, ids, *, key='arrival_inspection', safety=True, legacy=False, types
     with SessionLocal() as db:
         p=Phase(project_id=pid,name='检查工作',sort_order=100);db.add(p);db.flush()
         m=Module(project_id=pid,phase_id=p.id,name='逐车检查');db.add(m);db.flush()
-        t=Task(project_id=pid,module_id=m.id,name='实车检查',quantity_type='per_vehicle',target_quantity=len(ids),vehicle_step_key=key,applicable_vehicle_types=types or [])
+        t=Task(project_id=pid,module_id=m.id,name='实车检查',quantity_type='per_vehicle',vehicle_step_key=key,applicable_vehicle_types=types or [])
         db.add(t);db.flush()
         c=CheckItem(id=str(uuid4()),task_id=t.id,project_id=pid,name='急停测试',is_required=True,is_safety_critical=safety,version=0)
         if legacy:db.add(c);db.flush()
@@ -254,7 +254,7 @@ def test_type_change_adds_only_newly_applicable_safety_checks(client,pm_headers)
         vid=db.get(VehicleUnit,ids[0]).vehicle_id
         original=db.query(CheckItem).filter_by(task_id=legacy).one();original.is_done=True;db.commit()
         assert db.query(CheckItem).filter_by(task_id=tid).count()==0
-        db.get(Task,tid).target_quantity=0;db.commit()
+        db.commit()
     r=client.put(f'/api/projects/{pid}/vehicles/{vid}',headers=pm_headers,json={'vehicle_type':target_type})
     assert r.status_code==200,r.text
     row=next(c for c in checks(client,pm_headers,pid,ids[0]) if c['task_id']==tid)

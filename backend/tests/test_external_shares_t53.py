@@ -257,7 +257,7 @@ def test_project_and_vehicle_progress_use_real_distinct_canonical_totals_without
     with SessionLocal() as db:
         phase=Phase(project_id=pid,name='INTERNAL-PHASE',sort_order=1);db.add(phase);db.flush()
         module=Module(project_id=pid,phase_id=phase.id,name='INTERNAL-WORK');db.add(module);db.flush()
-        db.add(Task(project_id=pid,module_id=module.id,name='INTERNAL-TASK',quantity_type='fixed',unit='米',target_quantity=1000,manually_completed=True))
+        db.add(Task(project_id=pid,module_id=module.id,name='INTERNAL-TASK',quantity_type='fixed',manually_completed=True))
         db.commit();canonical=project_progress_tree(db,pid)
         assert canonical['completed']==1 and canonical['percent']>0
     payload,_=enter(client,share(client,pm_headers,pid))

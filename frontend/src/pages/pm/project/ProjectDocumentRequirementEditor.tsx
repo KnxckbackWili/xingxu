@@ -62,7 +62,7 @@ export default function ProjectDocumentRequirementEditor({ projectId, editing, o
       <Form.Item name="name" label="资料名称" rules={[{ required: true, whitespace: true }]}><Input maxLength={300} /></Form.Item>
       <Space align="start" wrap>
         <Form.Item name="code" label="编号" rules={[{ required: true, whitespace: true, message: '请填写编号，如6.12' }]}><Input maxLength={40} placeholder="如6.12" /></Form.Item>
-        <Form.Item name="stage_key" label="阶段" rules={[{ required: true, message: '请选择阶段' }, { validator: (_, value) => value === 'legacy' ? Promise.reject(new Error('请将历史资料明确归类到一个阶段')) : Promise.resolve() }]}>
+        <Form.Item name="stage_key" label="阶段" rules={[{ required: true, message: '请选择阶段' }]}>
           <Select options={DOCUMENT_STAGES} placeholder="选择阶段" style={{ width: 160 }} />
         </Form.Item>
       </Space>

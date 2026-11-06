@@ -201,7 +201,6 @@ def set_definition(db,task,data,*,creating=False):
         if 'sort_order' not in data or data['sort_order'] is None:
             task.sort_order=(db.query(func.max(Task.sort_order)).filter(Task.project_id==task.project_id,Task.template_id==task.template_id,Task.phase_id==task.phase_id).scalar() or 0)+1
         task.quantity_type='per_vehicle' if data['kind']=='vehicle' else 'fixed'
-        task.target_quantity=None;task.unit='台' if is_vehicle(task) else '项'
     for key in ('name','description','group_label','sort_order','applicable_vehicle_types','scope_conditions'):
         if key in data and not (creating and key=='sort_order' and data[key] is None):setattr(task,key,data[key])
     if 'vehicle_step_key' in data or creating:
@@ -301,8 +300,7 @@ def generate(db,project,source_tasks):
                 entry_criteria=origin.entry_criteria,exit_criteria=origin.exit_criteria,stage_key=origin.stage_key)
             db.add(phase);db.flush()
         row=Task(project_id=project.id,phase_id=phase.id,module_id=None,name=source.name,description=source.description,
-            quantity_type='per_vehicle' if is_vehicle(source) else 'fixed',target_quantity=None,
-            unit='台' if is_vehicle(source) else '项',safety_flag=source.safety_flag,
+            quantity_type='per_vehicle' if is_vehicle(source) else 'fixed',safety_flag=source.safety_flag,
             applicable_vehicle_types=list(source.applicable_vehicle_types or []),group_label=group_of(db,source),
             scope_conditions=list(source.scope_conditions or []),sort_order=source.sort_order,
             source_task_id=source.id,vehicle_step_key=source.vehicle_step_key)
@@ -319,10 +317,6 @@ def generate(db,project,source_tasks):
                     is_required=value.get('is_required',True),is_safety_critical=value.get('is_safety_critical',False),sort_order=i))
                 result['check_items']+=1
         mapping[source.id]=row;result['tasks']+=1;result['work_items'].append(row.id)
-    for source in source_tasks:
-        target=mapping.get(source.id)
-        if target and target.id in result['work_items']:
-            target.depends_on=[mapping[key].id for key in source.depends_on or [] if key in mapping]
     db.flush()
     return result
 
@@ -332,10 +326,9 @@ def portable_definition(db,task):
     from app.services.vehicle_checks import definition_data
     return {'source_id':task.id,'source_task_id':task.source_task_id,'name':task.name,'description':task.description or '',
         'kind':'vehicle' if is_vehicle(task) else 'other','quantity_type':task.quantity_type,
-        'target_quantity':task.target_quantity,'unit':task.unit,'standard_hours':task.standard_hours,
         'safety_flag':task.safety_flag,'applicable_vehicle_types':task.applicable_vehicle_types or [],
         'vehicle_step_key':task.vehicle_step_key,'group_label':group_of(db,task),'scope_conditions':task.scope_conditions or [],
-        'depends_on':task.depends_on or [],'sort_order':task.sort_order or 0,
+        'sort_order':task.sort_order or 0,
         'check_items':definition_data(db,task)}
 
 

@@ -1,7 +1,7 @@
 /**
  * Offline queue for worker operations.
  *
- * Covers check items, deliverables, issue submissions and field operations.
+ * Covers check items, issue submissions and field operations.
  * Each op is typed; the backend `/worker/sync` dispatches
  * by type. Dedupe on the server is handled by client_uuid, so re-sending
  * after a crash is safe.
@@ -66,7 +66,7 @@ function scopedKey(scope: 'queue' | 'rejected'): string | null {
   return owner ? `agvpm_offline_${scope}:${owner}` : null
 }
 
-export type OfflineOpType = 'checkitem' | 'deliverable' | 'issue' | 'field'
+export type OfflineOpType = 'checkitem' | 'issue' | 'field'
 
 export interface QueuedReport {
   client_uuid: string

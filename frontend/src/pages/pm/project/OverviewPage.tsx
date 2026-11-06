@@ -209,7 +209,7 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
     ],
   }
 
-  const go = (path: string) => navigate(`/pm/projects/${projectId}${({ '/archive': '/documents?acceptance=1', '/preparation': '/documents?review=1', '/files': '/documents', '/delivery': '/documents' } as Record<string, string>)[path] ?? path}`)
+  const go = (path: string) => navigate(`/pm/projects/${projectId}${path}`)
   const milestoneNext: Record<string, string> = { executing: 'acceptance' }
   // 每次人工推进都先确认；归档另有复盘弹窗。
   const requestStatus = (status: string) => {
@@ -319,7 +319,7 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
           {!fieldStaff && recentLogs.length > 0 && <section className="overview-card overview-side-logs">
             <h2>最近记录</h2>
             {recentLogs.slice(0, 3).map((log: any) => <div key={log.id}><span>{formatAuditDetail(log.detail)}</span><small>{log.operator_name || '系统'} · {log.created_at ? formatDateTime(log.created_at) : ''}</small></div>)}
-            <Button type="link" onClick={() => go('/activity')}>全部记录</Button>
+            <Button type="link" onClick={() => go('/history')}>全部记录</Button>
           </section>}
         </aside>
       </div>
@@ -349,7 +349,7 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
             <LazyChart option={chartOption} style={{ height: 240 }} />
             {!fieldStaff && <><h3 className="overview-evidence-title">最近动态</h3><div className="overview-tree-logs">
               {recentLogs.length ? recentLogs.map((log: any) => <div key={log.id}><span>{formatAuditDetail(log.detail)}</span><small>{log.operator_name || '系统'} · {log.created_at ? formatDateTime(log.created_at) : ''}</small></div>) : <Typography.Text type="secondary">还没有项目动态。</Typography.Text>}
-              {link('查看操作记录', '/activity')}
+              {link('查看操作记录', '/history')}
             </div></>}
       </div>}
 

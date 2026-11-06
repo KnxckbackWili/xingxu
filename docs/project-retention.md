@@ -28,16 +28,13 @@ python docker/scripts/backup_runtime.py decrypt-file \
   --passphrase-file /private/original-backup-password
 ```
 
-输出须是尚不存在的文件，权限为 0600；在私有目录检查 ZIP 内 `project-backup.json` 与 `files/`。这是完整证据备份，不自动导入成新项目、不补造执行或验收资格。完整系统恢复仍使用 T12 协议。
+输出须是尚不存在的文件，权限为 0600；在私有目录检查 ZIP 内 `project-backup.json` 与 `files/`。这是完整证据备份，不自动导入成新项目、不补造执行或验收资格。完整系统恢复见[加密备份](encrypted-backups.md)。
 
-## 旧数据与兼容接口
+## 接口
 
-本 v3 版本继续保留升级前的 `project_archives`、只读查询及文件引用保护，接口增加 `legacy_read_only` 提示，不创建新的归档快照，不自动删除旧归档。移除旧归档属于后续版本的数据交接工作。本轮迁移不会清空或去重旧快照。
-
-接口：`POST /api/project-recycle-bin/projects/{id}/permanent-backup` 准备，`DELETE .../projects/{id}/permanent` 明确删除，`GET .../permanent-backups` 列表，`GET .../backups/{backup_id}` 鉴权下载。准备需要版本和删除周期；删除还需备份凭据 ID 和完整名称。全系统备份同时保全该表、旧 ZIP 与新 `.zip.agvenc`，恢复不丢失永久备份下载凭据。
+接口：`POST /api/project-recycle-bin/projects/{id}/permanent-backup` 准备，`DELETE .../projects/{id}/permanent` 明确删除，`GET .../permanent-backups` 列表，`GET .../backups/{backup_id}` 鉴权下载。准备需要版本和删除周期；删除还需备份凭据 ID 和完整名称。全系统备份同时保全该表与 `.zip.agvenc` 文件，恢复不丢失永久备份下载凭据。
 
 ## 验证与容量
 
-项目备份计数字段在 PostgreSQL 使用 BIGINT、SQLite 使用其原生 64 位 INTEGER，迁移保留旧值并验证 5 GiB 数值往返。ZIP64 与流式加密支持大包，相关删除、恢复、准备及下载请求使用较长等待窗口，不因默认 15 秒请求超时轻易放弃备份。
+项目备份计数字段在 PostgreSQL 使用 BIGINT、SQLite 使用其原生 64 位 INTEGER，支持 5 GiB 以上数值。ZIP64 与流式加密支持大包，相关删除、恢复、准备及下载请求使用较长等待窗口，不因默认 15 秒请求超时轻易放弃备份。
 
-本机 Node 24.9 完整前端 124 个文件、1105 项通过，类型检查与生产构建通过。与 T22 集成后的迁移单 head 和正式 Node 22 双库 CI、真实部署验收由交付集成执行；本轮未触碰真实业务数据或运行容器。

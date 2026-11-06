@@ -27,7 +27,7 @@ def _project_progress_totals(db: Session, tasks: list[Task], project_ids=None) -
     totals={pid:{'target':m['target'],'completed':m['completed'],'quantities_by_unit':{},'vehicle_progress':m} for pid,m in matrices.items()}
     for task in tasks:
         row=totals[task.project_id]
-        unit=(task.unit or '项').strip() or '项'
+        unit='台' if task.quantity_type=='per_vehicle' else '项'
         group=row['quantities_by_unit'].setdefault(unit,{'unit':unit,'completed':0,'target':0})
         group['completed']+=completed[task.id];group['target']+=targets[task.id]
         if task.quantity_type!='per_vehicle' and targets[task.id]>0:

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { openNotification, formatNotificationContent, TYPE_TAG } from './notifyNav'
+import { openNotification, formatNotificationContent } from './notifyNav'
 
 const nav = vi.fn()
 
@@ -7,20 +7,10 @@ beforeEach(() => {
   nav.mockClear()
 })
 
-it('uses current fixed categories while preserving historical notification facts', () => {
-  expect(TYPE_TAG.schedule).toBe('计划通知')
-  expect(TYPE_TAG.schedule_confirmed).toBe('计划通知')
-  expect(TYPE_TAG.governance).toBe('负责人更换（历史）')
-  const historical = '「原项目」日程已下达（v2），共 3 条日程'
-  expect(formatNotificationContent(historical, 'schedule_confirmed')).toBe(historical)
-})
-
 describe('openNotification 通知跳转按 PM 工作台权限判权', () => {
   it.each([
-    ['deliverable_submitted', '/documents'],
-    ['deliverable_reviewed', '/documents'],
+    ['document_submitted', '/documents'],
     ['report', '/reports'],
-    ['schedule', '/plan?view=weeks'],
     ['schedule_confirmed', '/plan?view=weeks'],
   ])('PM %s 通知进入对应项目业务页', (ntype, path) => {
     openNotification({ ntype, project_id: 'p1' }, { role: 'pm' }, nav)
@@ -33,12 +23,12 @@ describe('openNotification 通知跳转按 PM 工作台权限判权', () => {
   })
 
   it('worker → 现场工作台（不进项目页）', () => {
-    openNotification({ ntype: 'schedule', project_id: 'p1' }, { role: 'worker' }, nav)
+    openNotification({ ntype: 'schedule_confirmed', project_id: 'p1' }, { role: 'worker' }, nav)
     expect(nav).toHaveBeenCalledWith('/worker/week?project_id=p1')
   })
 
   it('intern → 现场工作台（回归：原 `role !== worker` 会把 intern 导向 /pm/projects → 403）', () => {
-    openNotification({ ntype: 'schedule', project_id: 'p1' }, { role: 'intern' }, nav)
+    openNotification({ ntype: 'schedule_confirmed', project_id: 'p1' }, { role: 'intern' }, nav)
     expect(nav).toHaveBeenCalledWith('/worker/week?project_id=p1')
   })
 
@@ -46,12 +36,6 @@ describe('openNotification 通知跳转按 PM 工作台权限判权', () => {
     openNotification({ ntype: 'system', project_id: null }, { role: 'pm' }, nav)
     expect(nav).toHaveBeenCalledWith('/pm/dashboard')
   })
-})
-
-it('retired approval notifications remain in personal messages after project access changes',()=>{
- const navigate=vi.fn()
- openNotification({ntype:'governance',project_id:'old-project'},{role:'pm'},navigate)
- expect(navigate).toHaveBeenCalledWith('/pm/messages')
 })
 
 it('localizes only legacy system issue severity fields and preserves user text', () => {
@@ -69,11 +53,6 @@ it.each(['issue_reported', 'issue_assigned', 'issue_resolved', 'issue_reopened',
 it('opens the field issue list when a legacy issue notification has no entity', () => {
   openNotification({ ntype: 'issue_assigned', project_id: 'p1' }, { role: 'intern' }, nav)
   expect(nav).toHaveBeenCalledWith('/worker/issues')
-})
-
-it('opens the document list for a historical field delivery review', () => {
-  openNotification({ ntype: 'deliverable_reviewed', project_id: 'p1', entity_id: 'task-1' }, { role: 'worker' }, nav)
-  expect(nav).toHaveBeenCalledWith('/pm/projects/p1/documents')
 })
 
 it.each(['worker', 'intern', 'pm'])('new document notifications use the same document list for %s', role => {

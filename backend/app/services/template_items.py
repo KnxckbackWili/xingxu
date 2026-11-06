@@ -37,7 +37,7 @@ from app.time_utils import utcnow
 DEFAULT_TEMPLATE_ID = 'default'
 KINDS = ('work', 'file', 'purchase')
 KIND_NAMES = {'work': '工作', 'file': '资料', 'purchase': '采购'}
-SECTION_STAGES = (*STAGE_KEYS, 'legacy')
+SECTION_STAGES = STAGE_KEYS
 FILE_RULE_KEYS = ('code', 'name', 'template_no', 'required', 'scope', 'platform', 'timing_type', 'timing_event',
                   'timing_offset_hours', 'timing_weekday', 'trigger_type', 'confidential_default',
                   'external_visible_default', 'external_never_visible', 'note')
@@ -603,10 +603,8 @@ def compile_template(db: Session, tid):
                 'group_label': extra.get('group_label') or '', 'scope_conditions': list(extra.get('scope_conditions') or []),
                 'name': row.name, 'description': row.note or '',
                 'quantity_type': 'per_vehicle' if per_vehicle else extra.get('quantity_type') or 'fixed',
-                'target_quantity': None if per_vehicle else extra.get('target_quantity'),
-                'unit': '台' if per_vehicle else extra.get('unit') or '项', 'standard_hours': extra.get('standard_hours'),
                 'safety_flag': bool(extra.get('safety_flag')), 'applicable_vehicle_types': list(extra.get('applicable_vehicle_types') or []),
-                'sort_order': position, 'depends_on': list(extra.get('depends_on') or []), 'deliverables': [], 'reference_docs': [],
+                'sort_order': position, 'reference_docs': [],
                 'version': 0, 'source_task_id': None, 'vehicle_step_key': row.step_key if per_vehicle else None}
             for index, check in enumerate(row.checks or []):
                 wanted_checks[check['id']] = {
@@ -866,7 +864,7 @@ def parse_workbook(content: bytes) -> dict:
         if not title or not name:
             raise ValueError(f'「事项」表第 {number} 行：段落和名称都要填写')
         stage_text = str(_cell(row, 1))
-        stage = stage_text if stage_text in SECTION_STAGES else stage_names.get(stage_text, '历史待分类' == stage_text and 'legacy' or None)
+        stage = stage_text if stage_text in SECTION_STAGES else stage_names.get(stage_text)
         if stage is None:
             raise ValueError(f'「事项」表第 {number} 行：阶段「{stage_text}」无法识别，可填：{"、".join(STAGE_NAMES[key] for key in STAGE_KEYS)}')
         kind = {'工作': 'work', '资料': 'file', '采购': 'purchase', **{key: key for key in KINDS}}.get(str(_cell(row, 2)))

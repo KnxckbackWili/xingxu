@@ -11,8 +11,8 @@ def make_template():
         db.add(phase); db.flush()
         module = Module(template_id=tpl.id, phase_id=phase.id, name='站点部署')
         db.add(module); db.flush()
-        a = Task(template_id=tpl.id, module_id=module.id, name='站点确认', quantity_type='manual', unit='个')
-        b = Task(template_id=tpl.id, module_id=module.id, name='单车检查', quantity_type='per_vehicle', unit='台')
+        a = Task(template_id=tpl.id, module_id=module.id, name='站点确认', quantity_type='manual')
+        b = Task(template_id=tpl.id, module_id=module.id, name='单车检查', quantity_type='per_vehicle')
         db.add_all([a, b, DocumentRequirement(template_id=tpl.id, stage_key='6', code='6.99', name='窄巷道净宽确认', scope='project', timing_type='on_demand')])
         db.commit()
         return tpl.id, phase.id, module.id, a.id, b.id

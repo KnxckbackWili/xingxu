@@ -123,7 +123,6 @@ class Project(Base):
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     template_id = Column(String(36), nullable=True)  # 生成来源模板（P3：记录使用情况）
     template_version = Column(Integer, default=0)  # 生成时的模板版本
-    portable_unverified_snapshot = Column(JSON, nullable=True)  # immutable imported execution source; never active qualification
     dispatch_platform = Column(String(20), nullable=True)  # NDC / GRACE / integrated
     readiness_state = Column(String(20), default="preparing")
     # preparing 准备中 / risky 有风险 / pending_confirm 待确认 / ready 已就绪（独立准备状态，不干扰项目状态）
@@ -346,7 +345,6 @@ class ProjectInventoryMovement(Base):
     handler = Column(String(100), default="")
     occurred_at = Column(DateTime, default=utcnow, nullable=False)
     # Null marks historical records whose source did not declare a timezone.
-    time_basis = Column(String(20), nullable=True, default="utc")
     note = Column(Text, default="")
     operator_id = Column(String(36), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=utcnow)
@@ -443,14 +441,9 @@ class Task(Base):
     description = Column(Text, default="")
     quantity_type = Column(String(20), nullable=False, default="per_vehicle")
     # per_vehicle / manual / fixed
-    target_quantity = Column(Float, nullable=True)  # None for per_vehicle (computed)
-    unit = Column(String(20), default="台")  # 台/个/次/人/套/项
-    standard_hours = Column(Float, nullable=True)  # hours per unit (None = 由统计得出, 不预设)
     safety_flag = Column(Boolean, default=False)
     applicable_vehicle_types = Column(JSON, default=list)  # [] means all types
     sort_order = Column(Integer, default=0)
-    depends_on = Column(JSON, default=list)  # [task_id, ...] in template; resolved at copy
-    deliverables = Column(JSON, default=list)  # 交付物清单: [{"name": "验收单", "required": true}]
     reference_docs = Column(JSON, default=list)  # 参考文档（生成时从模板任务复制）: [{filename, stored_name, file_size, content_type, note}]
     version = Column(Integer, default=0)  # 乐观锁版本号
     # C2-6：模板源任务 ID——项目任务稳定关联生成它的模板任务，模板任务改名后重生成不再产生新旧两批
@@ -755,26 +748,6 @@ class Notification(Base):
 
 
 # ===== ArchiveChecklist (归档资料清单) =====
-
-class ArchiveChecklist(Base):
-    """Per-project delivery/archive document checklist (AGV delivery docs)."""
-
-    __tablename__ = "archive_checklists"
-
-    id = Column(String(36), primary_key=True, default=gen_uuid)
-    project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
-    category = Column(String(100), nullable=False)  # 设计资料/测试记录/培训资料/验收文件...
-    item_name = Column(String(200), nullable=False)
-    is_required = Column(Boolean, default=True)
-    is_done = Column(Boolean, default=False)
-    done_by = Column(String(36), nullable=True)
-    done_at = Column(DateTime, nullable=True)
-    attachment_id = Column(String(36), nullable=True)  # linked uploaded file
-    requirements = Column(JSON, default=dict)  # 版本、签字、文件格式和其他交付要求
-    sort_order = Column(Integer, default=0)
-
-
-# ===== AcceptanceRecord (验收签字记录) =====
 
 class AcceptanceRecord(Base):
     """项目验收/签字记录（C7-2）：验收人、时间、结论、附件，作为 acceptance→completed 的门禁。"""

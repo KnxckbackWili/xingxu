@@ -163,7 +163,7 @@ def test_statistics_known_matrix_counts_only_visible_real_vehicle_steps(client,p
         db.add(VehicleProgress(project_id=pid,vehicle_unit_id=units[0],step_key=step.key,is_done=True,done_on=date.today()))
         phase=Phase(project_id=pid,name='不应进入统计文本',sort_order=1);db.add(phase);db.flush()
         module=Module(project_id=pid,phase_id=phase.id,name='旧混单位工作');db.add(module);db.flush()
-        db.add(Task(project_id=pid,module_id=module.id,name='1000米不应加权车辆百分比',quantity_type='fixed',target_quantity=1000,unit='米',manually_completed=True));db.commit()
+        db.add(Task(project_id=pid,module_id=module.id,name='1000米不应加权车辆百分比',quantity_type='fixed',manually_completed=True));db.commit()
     hidden=client.post('/api/projects',headers=admin_headers,json={'name':'HIDDEN-PROJECT','start_date':'2026-01-01','end_date':'2026-12-31'})
     assert hidden.status_code==200
     response=client.get('/api/dashboard/statistics',headers=pm_headers,params={'project_id':hidden.json()['id']})

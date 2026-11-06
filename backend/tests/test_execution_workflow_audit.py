@@ -14,7 +14,7 @@ def _execution(client, *, manager='user-pm-001', status='executing'):
                     ProjectMember(project_id=p.id, user_id='user-worker-001')])
         phase = Phase(project_id=p.id, name='现场实施'); db.add(phase); db.flush()
         mod = Module(project_id=p.id, phase_id=phase.id, name='实施'); db.add(mod); db.flush()
-        task = Task(project_id=p.id, module_id=mod.id, name='调试', quantity_type='fixed', target_quantity=10)
+        task = Task(project_id=p.id, module_id=mod.id, name='调试', quantity_type='fixed')
         db.add(task); db.flush()
         ci = CheckItem(project_id=p.id, task_id=task.id, name='普通检查')
         db.add(ci); db.commit()

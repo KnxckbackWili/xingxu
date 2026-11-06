@@ -28,8 +28,7 @@ def upload(client,headers,pid,ids=(),data=b'evidence',**fields):
 def test_new_project_snapshot_platform_and_real_event_seams(client,admin_headers):
     p=create(client,admin_headers,dispatch_platform='NDC');pid=p['id']
     state=view(client,admin_headers,pid)
-    assert len([row for row in state['definitions'] if row['stage_key']!='legacy'])==53 and not any(row.get('is_group') for row in state['definitions'])
-    assert not any(row['stage_key']=='legacy' for row in state['documents'])
+    assert len(state['definitions'])==53 and not any(row.get('is_group') for row in state['definitions'])
     assert not any(row['code'] in {'8.3','8.4'} for row in state['documents'])
     assert any(row['code']=='8.2' for row in state['documents'])
     assert not any(row['timing_type'] in {'weekly','on_trigger','lifetime'} for row in state['documents'])
@@ -138,8 +137,7 @@ def test_project_snapshot_blank_ownership_clone_portable_history_and_excel(clien
     target=view(client,admin_headers,imported.json()['id'])
     assert all(row['status']=='pending' and not row['versions'] for row in target['documents'])
     imported_definition=next(row for row in target['definitions'] if row['code']=='4.1')
-    facts=imported_definition['source_metadata']
-    assert facts['kind']=='portable_unverified_snapshot' and facts['document_versions'][0]['file']['sha256']==hashlib.sha256(b'original evidence').hexdigest()
+    assert imported_definition['source_metadata'] is None
     assert client.get(f'/api/projects/{imported.json()["id"]}/documents/requirements/{imported_definition["id"]}/blank-file',headers=admin_headers).content==blank
     with SessionLocal() as db:
         archive=project_package_zip(db,pid,actor=db.query(User).filter_by(username='admin').one())
@@ -241,52 +239,6 @@ def test_edit_unsubmitted_rule_updates_pending_but_preserves_submitted_snapshot(
         json=rule_body(changed.json(),source_metadata={'fake':True})).status_code==422
 
 
-def legacy_fixture(pid):
-    from app.db import SessionLocal
-    from app.models import ProjectDocumentDefinition,ProjectDocument
-    with SessionLocal() as db:
-        definition=db.query(ProjectDocumentDefinition).filter_by(project_id=pid,code='4.1').one()
-        document=db.query(ProjectDocument).filter_by(definition_id=definition.id).one()
-        source={'kind':'task_deliverable','task':{'id':'original-task','version':3},'original':{'name':'原交付物','required':True,'done':False}}
-        for row in (definition,document):
-            row.stage_key='legacy';row.code='legacy.'+'a'*32;row.name='原交付物';row.timing_type='on_demand';row.timing_event=None;row.timing_offset_hours=None;row.source_metadata=source
-        document.version=1  # Frozen pre-T22 migration records begin at version 1.
-        db.commit();return document.id,definition.id,source
-
-
-def test_explicit_legacy_classification_keeps_identity_versions_and_source(client,admin_headers):
-    pid=create(client,admin_headers)['id'];did,rid,source=legacy_fixture(pid)
-    assert upload(client,admin_headers,pid,[did]).status_code==200
-    current=next(row for row in view(client,admin_headers,pid)['definitions'] if row['id']==rid)
-    body=rule_body(current,stage_key='6',code='6.99',name='明确分类的原交付物')
-    assert client.put(f'/api/projects/{pid}/documents/requirements/{rid}',headers=admin_headers,json=body).status_code==200
-    state=view(client,admin_headers,pid);classified=[row for row in state['documents'] if row['definition_id']==rid]
-    assert len(classified)==1 and classified[0]['id']==did and classified[0]['stage_key']=='6'
-    assert classified[0]['status']=='submitted' and classified[0]['versions'] and classified[0]['source_metadata']==source
-    assert client.post(f'/api/projects/{pid}/documents/requirements',headers=admin_headers,
-        json=rule_body(current)).status_code==400
-
-
-def test_legacy_offline_queue_translation_is_idempotent_and_keeps_rejected_drafts(client,admin_headers):
-    from app.db import SessionLocal
-    from app.models import DocumentVersion,ChangeLog,OfflineOpReceipt
-    pid=create(client,admin_headers)['id'];did,_,_=legacy_fixture(pid)
-    asset=upload(client,admin_headers,pid).json()['file']
-    payload={'project_id':pid,'task_id':'original-task','version':3,'deliverables':[{'name':'原交付物','done':True,'attachment_id':asset['id']}]}
-    operation={'type':'deliverable','client_uuid':'preserved-original-uuid','payload':payload}
-    result=client.post('/api/worker/sync',headers=admin_headers,json={'ops':[operation]})
-    assert result.status_code==200 and result.json()['accepted']==['preserved-original-uuid'],result.text
-    assert client.post('/api/worker/sync',headers=admin_headers,json={'ops':[operation]}).json()['accepted']==['preserved-original-uuid']
-    unknown=copy.deepcopy(operation);unknown['client_uuid']='unknown-original-uuid';unknown['payload']['deliverables'][0]['name']='不能猜对应'
-    refused=client.post('/api/worker/sync',headers=admin_headers,json={'ops':[unknown]})
-    assert refused.json()['rejected']==['unknown-original-uuid'] and '保留' in refused.json()['rejected_detail']['unknown-original-uuid']
-    with SessionLocal() as db:
-        assert db.query(DocumentVersion).filter_by(project_document_id=did).count()==1
-        log=db.query(ChangeLog).filter_by(entity_type='legacy_offline_document').one()
-        assert log.new_value['client_uuid']=='preserved-original-uuid' and log.new_value['original_payload']==payload
-        assert db.query(OfflineOpReceipt).filter_by(client_uuid='unknown-original-uuid').count()==0
-
-
 def test_completed_document_gate_excludes_future_stages_and_requires_real_evidence(client,admin_headers):
     from app.db import SessionLocal
     from app.models import ProjectDocument
@@ -303,8 +255,6 @@ def test_completed_document_gate_excludes_future_stages_and_requires_real_eviden
         missing=next(row for row in rows if row.stage_key=='4')
         missing.status='submitted';missing.waived_reason='';db.commit()
         assert any(missing.code in text for text in _pending_required_documents(db,pid))
-        missing.stage_key='legacy';db.commit()
-        assert _pending_required_documents(db,pid)==[]
 
 
 @pytest.mark.member_rules
@@ -322,26 +272,6 @@ def test_agent_document_read_has_scope_and_project_isolation(client,admin_header
     assert denied.status_code==403 or denied.json().get('ok') is False
     _,other=token(client,admin_headers,user='user-worker-001',scopes=['projects:read','files:read'])
     assert call(client,other,'documents_read',project_id=pid).json()['ok'] is False
-
-
-def test_acceptance_scope_survives_structural_migration_but_detects_real_changes(client,admin_headers):
-    from tests.lifecycle_helpers import setup_project
-    from app.db import SessionLocal
-    from app.models import Task,ProjectDocument
-    from app.services.acceptance import acceptance_scope_fingerprint
-    pid,tasks=setup_project(client,admin_headers)
-    with SessionLocal() as db:
-        task=db.get(Task,tasks[0]['id']);original=[{'name':'原验收交付要求','required':True,'doc_type':'PDF','note':'保留定义'}]
-        task.deliverables=original;db.flush()
-        before=acceptance_scope_fingerprint(db,pid)
-        task.deliverables=[]
-        moved=ProjectDocument(project_id=pid,instance_key='task:'+task.id+':0',stage_key='legacy',code='legacy.'+'b'*32,
-            name='原验收交付要求',scope='project',timing_type='on_demand',required=True,
-            source_metadata={'kind':'task_deliverable','task':{'id':task.id},'index':0,'original':original[0]})
-        db.add(moved);db.flush()
-        assert acceptance_scope_fingerprint(db,pid)==before
-        task.name+='真实范围修改';db.flush()
-        assert acceptance_scope_fingerprint(db,pid)!=before
 
 
 def test_concurrent_real_submissions_keep_every_accepted_version_and_file(client,admin_headers):

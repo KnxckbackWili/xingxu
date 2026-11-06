@@ -23,13 +23,12 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import get_current_user, require_pm, require_admin
-from app.models import User, Project, Vehicle, Phase, Module, Task, CheckItem, VehicleUnit, VehicleLifecycleEvent, ProjectPreparationItem, ArchiveChecklist, Issue, ProjectInventoryItem, ProjectInventoryMovement
+from app.models import User, Project, Vehicle, Phase, Module, Task, CheckItem, VehicleUnit, VehicleLifecycleEvent, ProjectPreparationItem, Issue, ProjectInventoryItem, ProjectInventoryMovement
 from app.routers.projects import get_project_or_404
 from app.routers.vehicle_types import normalize_vehicle_type
 from app.services.scope import ensure_project_visible
 from app.services.permissions import require_project_capability
 from app.services import import_export
-from app.services.inventory_time import resolve_inventory_time_basis
 
 
 def _stream_bytes(data: bytes, chunk_size: int = 1024 * 1024):
@@ -48,27 +47,6 @@ def _quick_import_template() -> dict:
     """Use the portable Skill template as the single source of truth."""
     from app.services.ai_project_assistant import template_payload
     return template_payload()
-
-
-def _portable_deliverable(item) -> dict:
-    # Historical task requirements may be bare names. They remain required by
-    # default, like the ordinary task/delivery paths, but never retain evidence.
-    requirement = {"name": item.strip()} if isinstance(item, str) else {
-        key: deepcopy(value) for key, value in item.items()
-        if key in {"name", "required", "doc_type", "note", "description"}
-    }
-    return {**requirement, "status": "pending", "done": False, "attachment_id": None}
-
-
-def _planning_schedule_errors(value, source_tasks: dict) -> list[str]:
-    """Quarantine original planning JSON; no source is copied to active policy."""
-    if not isinstance(value, dict):
-        return ['planning_schedule 历史来源必须是对象']
-    try:
-        json.dumps(value, allow_nan=False)
-    except (ValueError, TypeError):
-        return ['planning_schedule 历史来源包含非法JSON值']
-    return []
 
 
 def _validate_quick_import(payload: dict) -> dict:
@@ -92,7 +70,7 @@ def _validate_quick_import(payload: dict) -> dict:
     if not isinstance(project, dict):
         errors.append("project 必须是对象")
         project = {}
-    arrays = ("vehicles", "vehicle_units", "project_events", "modules", "preparations", "inventory_items", "archive_checklist", "schedule", "progress", "issues", "document_definitions", "project_documents", "document_versions")
+    arrays = ("vehicles", "vehicle_units", "project_events", "modules", "preparations", "inventory_items", "issues", "document_definitions")
     normalized: dict[str, list] = {}
     for key in arrays:
         value = payload.get(key, [])
@@ -279,31 +257,11 @@ def _validate_quick_import(payload: dict) -> dict:
                     errors.append(f"任务 source_id 不能重复：{source_id}")
                 source_ids.add(source_id)
             task_sources.setdefault(name, []).append(source_id or "")
-            qtype = task.get("quantity_type", "manual")
-            if qtype not in {"per_vehicle", "manual", "fixed"}:
-                errors.append(f"{path}.quantity_type 只能是 per_vehicle/manual/fixed")
-            if qtype != "per_vehicle" and task.get("target_quantity") in (None, ""):
-                warnings.append(f"任务「{name}」未填目标数量，将按 1 处理")
-            for field in ("target_quantity", "standard_hours"):
-                if task.get(field) not in (None, ""):
-                    try:
-                        nonnegative(task[field])
-                    except (TypeError, ValueError):
-                        errors.append(f"{path}.{field} 必须是非负数")
-            for field in ("depends_on", "applicable_vehicle_types"):
-                values = task.get(field, [])
-                if not isinstance(values, list) or any(not isinstance(value, str) for value in values):
-                    errors.append(f"{path}.{field} 必须是字符串数组")
-            deliveries = task.get("deliverables") or []
-            if not isinstance(deliveries, list):
-                errors.append(f"{path}.deliverables 必须是数组")
-            elif any(not ((isinstance(item, str) and item.strip()) or (
-                    isinstance(item, dict) and isinstance(item.get("name"), str) and item["name"].strip()))
-                    for item in deliveries):
-                errors.append(f"{path}.deliverables 每项必须包含有效名称")
-            elif any(isinstance(item, dict) and any(key in item for key in (
-                    "attachment_id", "submitted_by", "reviewed_by", "done", "status")) for item in deliveries):
-                warnings.append(f"任务「{name}」的附件、提交和审核记录不属于新项目；交付项将重置为待提交，需重新上传与审核")
+            if task.get("kind", "other") not in {"vehicle", "other"}:
+                errors.append(f"{path}.kind 只能是 vehicle/other")
+            values = task.get("applicable_vehicle_types", [])
+            if not isinstance(values, list) or any(not isinstance(value, str) for value in values):
+                errors.append(f"{path}.applicable_vehicle_types 必须是字符串数组")
             checks = task.get("check_items") or []
             if not isinstance(checks, list):
                 errors.append(f"{path}.check_items 必须是数组")
@@ -312,45 +270,9 @@ def _validate_quick_import(payload: dict) -> dict:
                     if not isinstance(check, dict) or not str(check.get("name", "")).strip():
                         errors.append(f"{path}.check_items[{check_idx}].name 不能为空")
 
-    dependency_graph = {}
-    for module in normalized["modules"]:
-        if not isinstance(module, dict) or not isinstance(module.get("tasks", []), list):
-            continue
-        for task in module.get("tasks", []):
-            if not isinstance(task, dict):
-                continue
-            dependencies = task.get("depends_on", [])
-            if not isinstance(dependencies, list) or any(not isinstance(dep, str) for dep in dependencies):
-                continue
-            if any(dep not in source_ids for dep in dependencies):
-                errors.append(f"任务「{task.get('name', '')}」依赖未在导入任务中找到")
-            source_id = task.get("source_id")
-            if dependencies and not source_id:
-                errors.append(f"任务「{task.get('name', '')}」含依赖时必须提供 source_id")
-            if isinstance(source_id, str):
-                dependency_graph[source_id] = dependencies
-    # Iterative traversal avoids recursion failures for large portable plans.
-    remaining = {source: set(deps) & dependency_graph.keys() for source, deps in dependency_graph.items()}
-    while remaining:
-        ready = {source for source, deps in remaining.items() if not deps}
-        if not ready:
-            errors.append("任务依赖不能循环")
-            break
-        remaining = {source: deps - ready for source, deps in remaining.items() if source not in ready}
-
     for name, sources in task_sources.items():
         if len(sources) > 1 and not all(sources):
             errors.append(f"同名任务「{name}」缺少 source_id，无法区分；请重新导出备份或为任务提供唯一 source_id")
-
-    def validate_task_reference(item: dict, label: str):
-        source_id = item.get("task_source_id")
-        if "task_source_id" in item:
-            if not isinstance(source_id, str) or source_id not in source_ids:
-                errors.append(f"{label} task_source_id 未在导入任务中找到")
-        elif len(task_sources.get(item.get("task_name", ""), [])) > 1:
-            errors.append(f"{label}任务「{item.get('task_name', '')}」有重名，必须提供 task_source_id")
-        elif item.get("task_name") not in task_names:
-            warnings.append(f"{label}任务「{item.get('task_name', '')}」未在导入任务中找到，将跳过")
 
     for idx, item in enumerate(normalized["preparations"]):
         if not isinstance(item, dict) or not str(item.get("name", "")).strip():
@@ -373,9 +295,6 @@ def _validate_quick_import(payload: dict) -> dict:
             elif not extra.get("quantity") or not extra.get("unit"):
                 warnings.append(f"采购项「{item.get('name', '')}」未填数量或单位")
 
-    for idx, item in enumerate(normalized["archive_checklist"]):
-        if not isinstance(item, dict) or not str(item.get("item_name", "")).strip():
-            errors.append(f"archive_checklist[{idx}].item_name 不能为空")
     inventory_categories = {"equipment", "tool", "spare_part", "material", "consumable", "document", "other"}
     inventory_statuses = {"expected", "in_transit", "on_site", "in_use", "loaned", "consumed", "returned", "lost", "damaged", "scrapped"}
     inventory_movements = {"receive", "issue", "transfer", "consume", "return_owner", "return_site", "adjust", "inventory"}
@@ -426,38 +345,12 @@ def _validate_quick_import(payload: dict) -> dict:
                     nonnegative(movement.get(field, 0) or 0)
                 except (TypeError, ValueError):
                     errors.append(f"{movement_path}.{field} 必须是非负数")
-            if movement.get("time_basis") not in (None, "utc", "legacy_local"):
-                errors.append(f"{movement_path}.time_basis 无效")
             occurred_at = movement.get("occurred_at")
             if occurred_at:
                 try:
                     datetime.fromisoformat(occurred_at)
                 except (TypeError, ValueError):
                     errors.append(f"{movement_path}.occurred_at 必须是 ISO 日期时间")
-    for item in normalized["schedule"]:
-        if not isinstance(item, dict):
-            errors.append("schedule 中每项必须是对象")
-            continue
-        validate_task_reference(item, "排程")
-        if item.get("status", "planned") not in {"planned", "done", "skipped"}:
-            errors.append(f"排程「{item.get('task_name', '')}」.status 枚举值无效")
-        try:
-            nonnegative(item.get("planned_quantity", 0) or 0)
-        except (TypeError, ValueError):
-            errors.append(f"排程「{item.get('task_name', '')}」.planned_quantity 必须是非负数")
-        work = checked_date(item.get("work_date"), f"排程「{item.get('task_name', '')}」.work_date", True)
-        if work and start and end and not start <= work <= end:
-            warnings.append(f"排程「{item.get('task_name', '')}」日期不在项目周期内")
-    for item in normalized["progress"]:
-        if not isinstance(item, dict):
-            errors.append("progress 中每项必须是对象")
-            continue
-        validate_task_reference(item, "进度")
-        checked_date(item.get("work_date"), f"进度「{item.get('task_name', '')}」.work_date", True)
-        try:
-            nonnegative(item.get("completed_quantity", 0) or 0)
-        except (TypeError, ValueError):
-            errors.append(f"进度「{item.get('task_name', '')}」.completed_quantity 必须是非负数")
     for idx, item in enumerate(normalized["issues"]):
         if not isinstance(item, dict) or not str(item.get("title", "")).strip():
             errors.append(f"issues[{idx}].title 不能为空")
@@ -473,15 +366,6 @@ def _validate_quick_import(payload: dict) -> dict:
         if item.get("status") in {"resolved", "closed"} and not str(item.get("resolution", "")).strip():
             warnings.append(f"已解决问题「{item.get('title', '')}」未写解决方案")
 
-    if "planning_schedule" in payload:
-        source_tasks = {}
-        for module in normalized["modules"]:
-            if not isinstance(module, dict) or not isinstance(module.get("tasks", []), list):
-                continue
-            for task in module.get("tasks", []):
-                if isinstance(task, dict) and isinstance(task.get("source_id"), str):
-                    source_tasks[task["source_id"]] = task
-        errors.extend(_planning_schedule_errors(payload["planning_schedule"], source_tasks))
     return {
         "valid": not errors, "errors": errors, "warnings": warnings,
         "summary": {
@@ -489,12 +373,9 @@ def _validate_quick_import(payload: dict) -> dict:
             "vehicle_types": len(normalized["vehicles"]), "vehicle_units": len(normalized["vehicle_units"]),
             "vehicle_issues": event_count, "modules": len(normalized["modules"]), "tasks": len(task_names),
             "document_definitions": len(normalized["document_definitions"]),
-            "project_documents": len(normalized["project_documents"]),
-            "legacy_document_requirements": sum(len(task.get("deliverables") or []) for module in normalized["modules"] if isinstance(module,dict) for task in module.get("tasks",[]) if isinstance(task,dict)) + len(normalized["archive_checklist"]) + sum(1 for item in normalized["preparations"] if isinstance(item,dict) and item.get("category")!="procurement"),
             "procurements": sum(1 for item in normalized["preparations"] if isinstance(item, dict) and item.get("category") == "procurement"),
             "inventory_items": len(normalized["inventory_items"]),
-            "archive": len(normalized["archive_checklist"]), "schedule": len(normalized["schedule"]),
-            "progress": len(normalized["progress"]), "issues": len(normalized["issues"]),
+            "issues": len(normalized["issues"]),
         },
     }
 
@@ -650,9 +531,6 @@ def import_project_json(
         vehicle_lookup[(vehicle.vehicle_type, vehicle.model_name)] = vehicle.id
 
     task_by_source = {}
-    explicit_per_vehicle_targets = []
-    # Import the supplied task tree exactly. Name-based template matching used
-    # to discard AI-edited descriptions, checks and deliverables.
     for module_index, m in enumerate(payload.get("modules", [])):
         phase_name = m.get("phase_name", "自定义")
         pphase = db.query(Phase).filter(Phase.project_id == p.id, Phase.name == phase_name).first()
@@ -663,54 +541,30 @@ def import_project_json(
             db.add(pphase)
             db.flush()
         for task_index, t in enumerate(m.get("tasks", [])):
-            description = t.get("description", "")
-            if t.get("acceptance_criteria"):
-                description = f"{description}\n\n验收标准：{t['acceptance_criteria']}".strip()
-            target = t.get("target_quantity")
-            if t.get("quantity_type", "manual") != "per_vehicle" and target in (None, ""):
-                target = 1
+            vehicle = t.get("kind") == "vehicle"
             task = Task(
-                project_id=p.id, module_id=None, phase_id=pphase.id, name=t.get("name", "任务"), description=description,
+                project_id=p.id, phase_id=pphase.id, name=t.get("name", "任务"), description=t.get("description", ""),
                 group_label=t.get("group_label",m.get("source_group_label",m.get("name",""))), scope_conditions=t.get("scope_conditions",m.get("preparation_conditions",[])),
                 source_task_id=t.get("source_task_id"),
-                quantity_type="per_vehicle" if t.get("kind", "vehicle" if t.get("quantity_type")=="per_vehicle" else "other")=="vehicle" else "fixed", target_quantity=None,
+                quantity_type="per_vehicle" if vehicle else "fixed",
                 vehicle_step_key=t.get("vehicle_step_key") or None,
-                unit="台" if t.get("kind", "vehicle" if t.get("quantity_type")=="per_vehicle" else "other")=="vehicle" else "项", standard_hours=None,
                 safety_flag=bool(t.get("safety_flag", False)), sort_order=t.get("sort_order", task_index),
-                deliverables=[],
                 applicable_vehicle_types=t.get("applicable_vehicle_types") or [],
             )
             db.add(task)
             db.flush()
             if t.get("source_id"):
                 task_by_source[t["source_id"]] = task
-            if task.quantity_type == "per_vehicle" and target not in (None, ""):
-                explicit_per_vehicle_targets.append((task, float(target)))
             if task.quantity_type == 'per_vehicle':
                 from app.services.vehicle_checks import import_definitions
                 import_definitions(db,task,t.get('check_items',[]))
             else:
                 for check_index, ci in enumerate(t.get("check_items", [])):
-                    check_description = "\n".join(filter(None, [
-                        ci.get("description", ""),
-                        f"验收标准：{ci.get('acceptance_standard')}" if ci.get("acceptance_standard") else "",
-                        f"证据要求：{ci.get('evidence_required')}" if ci.get("evidence_required") else "",
-                    ]))
                     db.add(CheckItem(
                         project_id=p.id, task_id=task.id, name=ci.get("name", "检查项"),
-                        description=check_description, is_required=ci.get("is_required", True),
+                        description=ci.get("description", ""), is_required=ci.get("is_required", True),
                         is_safety_critical=ci.get("is_safety_critical", False), sort_order=check_index,
                     ))
-
-    for module in payload.get("modules", []):
-        for task_data in module.get("tasks", []):
-            if task_data.get("source_id"):
-                task_by_source[task_data["source_id"]].depends_on = [
-                    task_by_source[source_id].id for source_id in task_data.get("depends_on", [])]
-
-    # Portable definitions may contain an explicit per-vehicle quantity override.
-    # Only absent quantities are inferred; exporting/importing is not a fleet edit.
-    # Original quantities remain in each read-only source snapshot; never become active targets.
 
 
     # Portable operational records. Binary attachments are intentionally restored only by system backup.
@@ -775,19 +629,13 @@ def import_project_json(
         if movements:
             for movement in movements:
                 occurred_at = datetime.fromisoformat(movement["occurred_at"]) if movement.get("occurred_at") else utcnow()
-                time_basis = resolve_inventory_time_basis(movement.get("time_basis"),
-                    movement.get("movement_type", "inventory"), movement.get("note", ""))
                 if occurred_at.tzinfo:
                     occurred_at = occurred_at.astimezone(timezone.utc).replace(tzinfo=None)
-                    time_basis = "utc"
-                elif not movement.get("occurred_at"):
-                    time_basis = "utc"
                 db.add(ProjectInventoryMovement(
                     project_id=p.id, item_id=item.id, movement_type=movement.get("movement_type", "inventory"),
                     quantity=float(movement.get("quantity", 0) or 0), balance_after=float(movement.get("balance_after", item.quantity) or 0),
                     from_location=movement.get("from_location", ""), to_location=movement.get("to_location", ""),
                     handler=movement.get("handler", ""), occurred_at=occurred_at,
-                    time_basis=time_basis,
                     note=movement.get("note", ""), operator_id=user.id,
                 ))
         elif item.quantity:
@@ -796,24 +644,16 @@ def import_project_json(
                 handler=item.custodian, note="导入项目时的初始数量", operator_id=user.id))
 
     db.flush()
-    # Original daily plans are quarantined below with their exact source values.
-    # They are never recreated as active day assignments or implicitly published.
-    # Original quantity reports remain in the immutable portable source below.
-    # Importing another project's execution must not complete this new scope.
-
-    db.flush()
-    from app.services.project_documents import parse_snapshot,import_snapshot,import_legacy_requirements,initialize
+    from app.services.project_documents import parse_snapshot,import_snapshot,initialize
     from app.services.vehicle_progress import parse_snapshot as parse_vehicle_snapshot, import_snapshot as import_vehicle_snapshot
-    import_vehicle_snapshot(db,p,parse_vehicle_snapshot(payload),task_by_source,imported_unit_map,planning_only=True)
-    from app.services.vehicle_progress import retain_portable_source
-    retain_portable_source(p,payload)
+    import_vehicle_snapshot(db,p,parse_vehicle_snapshot(payload),task_by_source)
     from app.services.vehicle_checks import validate_step,generate_for_units
     for work in db.query(Task).filter_by(project_id=p.id):
         work.vehicle_step_key=validate_step(db,work,work.vehicle_step_key)
     generate_for_units(db,p.id,list(imported_unit_map.values()))
     parsed_documents=parse_snapshot(payload)
     if not import_snapshot(db,p,parsed_documents,user):
-        if not import_legacy_requirements(db,p,payload,user):initialize(db,p)
+        initialize(db,p)
     log_change(db, p.id, "project", p.id, "import", user.id, f"从快捷导入创建项目「{p.name}」")
     db.commit()
     return {"message": f"项目「{p.name}」已创建，请确认人员与排程", "id": p.id, "warnings": validation["warnings"]}
@@ -846,15 +686,6 @@ def clone_project(
     snapshot = import_export.project_to_json(db, project_id, actor=user,include_documents=False)
     # Validate portable intent before creating rows or copying physical files.
     # A transaction rollback cannot remove an already-copied reference file.
-    if "planning_schedule" in snapshot:
-        source_tasks = {
-            task["source_id"]: task
-            for module in snapshot.get("modules", [])
-            for task in module.get("tasks", [])
-        }
-        planning_errors = _planning_schedule_errors(snapshot["planning_schedule"], source_tasks)
-        if planning_errors:
-            raise HTTPException(status_code=400, detail="克隆计划偏好校验失败：" + "；".join(planning_errors))
     if body.name:
         snapshot["project"]["name"] = body.name
     if body.client:
@@ -913,10 +744,10 @@ def clone_project(
         task=Task(project_id=p.id,phase_id=phase_map[old_phase.id],module_id=None,group_label=group_of(db,old_task),
             scope_conditions=deepcopy(old_task.scope_conditions or []),
             name=old_task.name,description=old_task.description,quantity_type='per_vehicle' if old_task.quantity_type=='per_vehicle' else 'fixed',
-            target_quantity=None,unit='台' if old_task.quantity_type=='per_vehicle' else '项',safety_flag=old_task.safety_flag,
+            safety_flag=old_task.safety_flag,
             applicable_vehicle_types=deepcopy(old_task.applicable_vehicle_types or []),sort_order=old_task.sort_order,
             source_task_id=old_task.source_task_id,vehicle_step_key=old_task.vehicle_step_key)
-        task.deliverables=[];db.add(task);db.flush();task_map[old_task.id]=task
+        db.add(task);db.flush();task_map[old_task.id]=task
         # Reference files must also be independent of the source project.
         from app.services.generate_tasks import _upload_dir
         import shutil
@@ -944,18 +775,13 @@ def clone_project(
                 db.add(CheckItem(project_id=p.id, task_id=task.id,
                     **{key: getattr(old_check, key) for key in
                        ("name", "description", "is_safety_critical", "is_required", "sort_order")}))
-    for old_id, task in task_map.items():
-        old_task = db.get(Task, old_id)
-        task.depends_on = [task_map[dep].id for dep in (old_task.depends_on or []) if dep in task_map]
     for prep in db.query(ProjectPreparationItem).filter_by(project_id=src.id,category="procurement").all():
         db.add(ProjectPreparationItem(project_id=p.id, required_date=p.start_date,
             **{key: getattr(prep, key) for key in
                ("category", "name", "is_required", "blocks_entry", "owner_party", "risk", "sort_order")}))
     db.flush()
     from app.services.vehicle_progress import import_snapshot as import_vehicle_snapshot
-    import_vehicle_snapshot(db,p,snapshot.get('vehicle_progress_matrix'),task_map,{},planning_only=True)
-    from app.services.vehicle_progress import retain_portable_source
-    retain_portable_source(p,snapshot,source_project_id=src.id)
+    import_vehicle_snapshot(db,p,snapshot.get('vehicle_progress_matrix'),task_map)
     from app.services.vehicle_checks import validate_step
     for work in task_map.values():
         work.vehicle_step_key=validate_step(db,work,work.vehicle_step_key)
