@@ -263,7 +263,6 @@ def _procurement_summary(db: Session, project: Project) -> dict:
         'dispatch_readiness': _summary(db, project)}
 
 
-
 class ProcurementImportItem(BaseModel):
     item_id: str
     quantity: float = Field(allow_inf_nan=False, default=1, gt=0)
@@ -447,49 +446,3 @@ def delete_item(project_id: str, item_id: str,
     return {"message": "已删除"}
 
 
-
-
-class ConfirmReadyBody(BaseModel):
-    conclusion: Optional[str] = Field(default="", max_length=4000)
-    risk_entry: bool = False
-
-
-@router.post("/projects/{project_id}/preparations/confirm-ready")
-@route_permission('project.manage_plan')
-def confirm_ready(project_id: str, data: ConfirmReadyBody = None,
-                  user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_project_visible(db, project_id, user)
-    raise HTTPException(410, '旧准备评审入口已下线，请到资料清单进行发车前资料确认')
-
-def _review_manifest(db: Session, project: Project) -> dict:
-    from app.services.dispatch_review import manifest
-    return manifest(db, project)
-
-
-@router.post("/projects/{project_id}/preparations/review")
-@route_permission('project.manage_plan')
-def review_manifest(project_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_project_visible(db, project_id, user)
-    raise HTTPException(410, '旧准备评审入口已下线，请到资料清单进行发车前资料确认')
-
-
-class ReviewConfirmBody(BaseModel):
-    conclusion: str = Field(..., pattern="^(not_ready|risky|ready)$")
-    notes: str = Field(default="", max_length=4000)
-    review_token: Optional[str] = Field(default=None, max_length=64)
-    remaining_risks: Optional[list] = None  # [{name, owner, due, plan}]
-
-
-@router.post("/projects/{project_id}/preparations/review/confirm")
-@route_permission('project.manage_plan')
-def review_confirm(project_id: str, data: ReviewConfirmBody,
-                   user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_project_visible(db, project_id, user)
-    raise HTTPException(410, '旧准备评审入口已下线，请到资料清单进行发车前资料确认')
-
-
-@router.get("/projects/{project_id}/preparations/reviews")
-@route_permission('project.read')
-def list_reviews(project_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_project_visible(db, project_id, user)
-    raise HTTPException(410, '旧准备评审入口已下线，请到资料清单进行发车前资料确认')

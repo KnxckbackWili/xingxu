@@ -88,10 +88,7 @@ def test_status_rejects_bad_parameter_types(client, pm_headers, fields):
 @pytest.mark.parametrize('value', ['Infinity', '-Infinity', 'NaN'])
 def test_numeric_schemas_reject_non_finite_quantities(value):
     from pydantic import ValidationError
-    from app.routers.worker import ProgressSubmit
     from app.routers.tasks import GenerateTasksBody
-    with pytest.raises(ValidationError):
-        ProgressSubmit(task_id='t', work_date='2026-09-16', completed_quantity=value, client_uuid='audit-numeric')
     with pytest.raises(ValidationError):
         GenerateTasksBody(module_ids=['m'], task_quantities={'任务': value})
 

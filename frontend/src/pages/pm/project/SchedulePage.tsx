@@ -209,7 +209,6 @@ export default function SchedulePage({projectId,project,onProjectChange}: {proje
               :<div className="weekly-plan-cell-body">{body}</div>}
             {cell.kind==='vehicle'&&cell.completion.required_count!=null&&!!cell.completion.completed_count&&<small>已完成 {cell.completion.completed_count} / {cell.completion.required_count} 台</small>}
             {cell.notes&&!(draftSource(cell)&&cell.notes.startsWith('初稿：按'))&&<p>{cell.notes}</p>}
-            {!draftSource(cell)&&cell.source_metadata&&<details><summary>历史计划来源（只读）</summary><pre>{JSON.stringify(cell.source_metadata,null,2)}</pre></details>}
           </article>})}{allowed&&<button type="button" className="weekly-plan-add" disabled={busy} aria-label={`安排${item.name} ${week.week_start}`} onClick={()=>openNew(item,week.week_start)}><PlusOutlined aria-hidden/></button>}</td>
         })}</tr></Fragment>)}</tbody></table></div>}
       </div>

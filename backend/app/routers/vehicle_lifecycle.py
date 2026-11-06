@@ -188,17 +188,6 @@ def _unit_dict(
         ).order_by(VehicleLifecycleEvent.event_date.desc(), VehicleLifecycleEvent.created_at.desc()).all()
         weekly=_weekly_event_assignments(db,issue_events,viewer)
         result["events"] = [_event_dict(db, event,viewer,weekly=weekly.get(event.id,[])) for event in issue_events]
-        from app.models import Task, ScheduleEntry
-        assignments = db.query(Task.source_vehicle_event_id, ScheduleEntry, User.display_name).join(
-            ScheduleEntry, ScheduleEntry.task_id == Task.id).outerjoin(User, User.id == ScheduleEntry.assignee_id).filter(
-            Task.project_id == unit.project_id, ScheduleEntry.project_id == unit.project_id, Task.source_vehicle_event_id.in_([event.id for event in issue_events]),
-            ScheduleEntry.status != 'skipped').order_by(ScheduleEntry.work_date).all()
-        by_event = {}
-        for event_id, entry, name in assignments:
-            by_event.setdefault(event_id, []).append({'id': entry.id, 'work_date': entry.work_date.isoformat(),
-                'assignee_name': name or '待分配', 'task_id': entry.task_id, 'status': entry.status,'read_only_source':True})
-        for row in result['events']:
-            row['assignments'] = by_event.get(row['id'], [])
     if issue_summary is not None:
         issue_count, open_issue_count, last_issue_date = issue_summary
     else:
@@ -378,14 +367,6 @@ def update_event(
     db.commit()
     db.refresh(event)
     return _event_dict(db, event,user)
-
-
-@router.post('/projects/{project_id}/vehicle-units/{unit_id}/events/{event_id}/schedule')
-@route_permission('project.manage_schedule')
-def retired_repair_schedule(project_id: str, unit_id: str, event_id: str,
-                            user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_project_visible(db, project_id, user)
-    raise HTTPException(410, '按天维修安排已退休，请将真实维修工作加入周计划')
 
 
 class RepairWeeklyBody(BaseModel):

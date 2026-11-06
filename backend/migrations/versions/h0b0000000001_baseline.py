@@ -14,34 +14,6 @@ depends_on = None
 
 
 def upgrade():
-    op.create_table('ai_jobs',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('user_id', sa.String(length=36), nullable=False),
-    sa.Column('kind', sa.String(length=30), nullable=False),
-    sa.Column('status', sa.String(length=20), nullable=False),
-    sa.Column('percent', sa.Integer(), nullable=False),
-    sa.Column('stage', sa.String(length=40), nullable=False),
-    sa.Column('message', sa.Text(), nullable=False),
-    sa.Column('result', sa.JSON(), nullable=True),
-    sa.Column('error', sa.Text(), nullable=True),
-    sa.Column('created_at', sa.DateTime(), nullable=True),
-    sa.Column('updated_at', sa.DateTime(), nullable=True),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_ai_jobs_user_id'), 'ai_jobs', ['user_id'], unique=False)
-    op.create_table('ai_rate_limit_buckets',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('user_id', sa.String(length=36), nullable=False),
-    sa.Column('scope', sa.String(length=20), nullable=False),
-    sa.Column('bucket', sa.Integer(), nullable=False),
-    sa.Column('window', sa.Integer(), nullable=False),
-    sa.Column('count', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=True),
-    sa.Column('updated_at', sa.DateTime(), nullable=True),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('user_id', 'scope', 'bucket', 'window', name='uq_ai_rate_limit_user_scope_bucket_window')
-    )
-    op.create_index(op.f('ix_ai_rate_limit_buckets_user_id'), 'ai_rate_limit_buckets', ['user_id'], unique=False)
     op.create_table('ai_usage_ledger',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('month', sa.String(length=7), nullable=False),
@@ -124,19 +96,6 @@ def upgrade():
     sa.UniqueConstraint('user_id', 'op_type', 'project_id', 'client_uuid', name='uq_offline_op_receipt_user_op_uuid')
     )
     op.create_index(op.f('ix_offline_op_receipts_user_id'), 'offline_op_receipts', ['user_id'], unique=False)
-    op.create_table('project_archives',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('project_id', sa.String(length=36), nullable=False),
-    sa.Column('project_name', sa.String(length=200), nullable=True),
-    sa.Column('snapshot', sa.JSON(), nullable=False),
-    sa.Column('change_logs', sa.JSON(), nullable=False),
-    sa.Column('actor_ids', sa.JSON(), nullable=True),
-    sa.Column('checksum', sa.String(length=64), nullable=False),
-    sa.Column('purged_at', sa.DateTime(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=True),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_project_archives_project_id'), 'project_archives', ['project_id'], unique=False)
     op.create_table('project_creation_receipts',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('user_id', sa.String(length=36), nullable=False),
@@ -344,26 +303,6 @@ def upgrade():
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_notifications_user_id'), 'notifications', ['user_id'], unique=False)
-    op.create_table('project_governance_requests',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('project_id', sa.String(length=36), nullable=False),
-    sa.Column('project_name', sa.String(length=200), nullable=True),
-    sa.Column('request_type', sa.String(length=20), nullable=False),
-    sa.Column('status', sa.String(length=20), nullable=True),
-    sa.Column('requested_by', sa.String(length=36), nullable=False),
-    sa.Column('target_manager_id', sa.String(length=36), nullable=True),
-    sa.Column('source_manager_id', sa.String(length=36), nullable=True),
-    sa.Column('reason', sa.Text(), nullable=False),
-    sa.Column('review_note', sa.Text(), nullable=True),
-    sa.Column('reviewed_by', sa.String(length=36), nullable=True),
-    sa.Column('reviewed_at', sa.DateTime(), nullable=True),
-    sa.Column('created_at', sa.DateTime(), nullable=True),
-    sa.ForeignKeyConstraint(['requested_by'], ['users.id'], ),
-    sa.ForeignKeyConstraint(['reviewed_by'], ['users.id'], ),
-    sa.ForeignKeyConstraint(['target_manager_id'], ['users.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_project_governance_requests_project_id'), 'project_governance_requests', ['project_id'], unique=False)
     op.create_table('project_permanent_backups',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('project_id', sa.String(length=36), nullable=False),
@@ -439,20 +378,6 @@ def upgrade():
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_template_sections_template_id'), 'template_sections', ['template_id'], unique=False)
-    op.create_table('user_unavailability',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('user_id', sa.String(length=36), nullable=False),
-    sa.Column('start_date', sa.Date(), nullable=False),
-    sa.Column('end_date', sa.Date(), nullable=False),
-    sa.Column('reason', sa.String(length=100), nullable=True),
-    sa.Column('note', sa.Text(), nullable=True),
-    sa.Column('created_by', sa.String(length=36), nullable=True),
-    sa.Column('created_at', sa.DateTime(), nullable=True),
-    sa.Column('updated_at', sa.DateTime(), nullable=True),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_user_unavailability_user_id'), 'user_unavailability', ['user_id'], unique=False)
     op.create_table('acceptance_records',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('project_id', sa.String(length=36), nullable=False),
@@ -665,21 +590,6 @@ def upgrade():
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_item_applications_project_id'), 'item_applications', ['project_id'], unique=False)
-    op.create_table('personal_events',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('user_id', sa.String(length=36), nullable=False),
-    sa.Column('project_id', sa.String(length=36), nullable=False),
-    sa.Column('work_date', sa.Date(), nullable=False),
-    sa.Column('title', sa.String(length=100), nullable=False),
-    sa.Column('notes', sa.String(length=500), nullable=True),
-    sa.Column('created_at', sa.DateTime(), nullable=True),
-    sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_personal_events_project_id'), 'personal_events', ['project_id'], unique=False)
-    op.create_index(op.f('ix_personal_events_user_id'), 'personal_events', ['user_id'], unique=False)
-    op.create_index(op.f('ix_personal_events_work_date'), 'personal_events', ['work_date'], unique=False)
     op.create_table('phases',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('project_id', sa.String(length=36), nullable=True),
@@ -834,15 +744,6 @@ def upgrade():
     sa.UniqueConstraint('project_id', 'period_key', name='uq_project_weekly_report')
     )
     op.create_index(op.f('ix_project_report_receipts_project_id'), 'project_report_receipts', ['project_id'], unique=False)
-    op.create_table('project_schedule_policies',
-    sa.Column('project_id', sa.String(length=36), nullable=False),
-    sa.Column('duration_scale', sa.Float(), nullable=False),
-    sa.Column('version', sa.Integer(), nullable=False),
-    sa.Column('updated_by', sa.String(length=36), nullable=True),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('project_id')
-    )
     op.create_table('template_items',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('template_id', sa.String(length=36), nullable=True),
@@ -1215,7 +1116,6 @@ def upgrade():
     sa.Column('phase_id', sa.String(length=36), nullable=True),
     sa.Column('group_label', sa.String(length=200), nullable=True),
     sa.Column('scope_conditions', sa.JSON(), nullable=True),
-    sa.Column('legacy_work_snapshot', sa.JSON(), nullable=True),
     sa.Column('name', sa.String(length=200), nullable=False),
     sa.Column('description', sa.Text(), nullable=True),
     sa.Column('quantity_type', sa.String(length=20), nullable=False),
@@ -1291,41 +1191,6 @@ def upgrade():
     sa.UniqueConstraint('project_id', 'key', name='uq_project_vehicle_step_key')
     )
     op.create_index(op.f('ix_project_vehicle_steps_project_id'), 'project_vehicle_steps', ['project_id'], unique=False)
-    op.create_table('schedule_entries',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('project_id', sa.String(length=36), nullable=False),
-    sa.Column('task_id', sa.String(length=36), nullable=False),
-    sa.Column('work_date', sa.Date(), nullable=False),
-    sa.Column('assignee_id', sa.String(length=36), nullable=True),
-    sa.Column('planned_quantity', sa.Float(), nullable=True),
-    sa.Column('status', sa.String(length=20), nullable=True),
-    sa.Column('notes', sa.Text(), nullable=True),
-    sa.Column('is_confirmed', sa.Boolean(), nullable=True),
-    sa.Column('is_locked', sa.Boolean(), nullable=True),
-    sa.Column('version', sa.Integer(), nullable=True),
-    sa.ForeignKeyConstraint(['assignee_id'], ['users.id'], ),
-    sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['task_id'], ['tasks.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_schedule_entries_project_id'), 'schedule_entries', ['project_id'], unique=False)
-    op.create_index(op.f('ix_schedule_entries_task_id'), 'schedule_entries', ['task_id'], unique=False)
-    op.create_table('task_duration_overrides',
-    sa.Column('task_id', sa.String(length=36), nullable=False),
-    sa.Column('project_id', sa.String(length=36), nullable=False),
-    sa.Column('workdays', sa.Integer(), nullable=False),
-    sa.Column('baseline_quantity', sa.Float(), nullable=False),
-    sa.Column('baseline_unit', sa.String(length=20), nullable=False),
-    sa.Column('is_active', sa.Boolean(), nullable=False),
-    sa.Column('recovered_from_log_id', sa.String(length=36), nullable=True),
-    sa.Column('version', sa.Integer(), nullable=False),
-    sa.Column('updated_by', sa.String(length=36), nullable=True),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['task_id'], ['tasks.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('task_id')
-    )
-    op.create_index(op.f('ix_task_duration_overrides_project_id'), 'task_duration_overrides', ['project_id'], unique=False)
     op.create_table('vehicle_check_definitions',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('project_id', sa.String(length=36), nullable=False),
@@ -1417,27 +1282,6 @@ def upgrade():
     op.create_index(op.f('ix_check_items_template_id'), 'check_items', ['template_id'], unique=False)
     op.create_index(op.f('ix_check_items_vehicle_check_definition_id'), 'check_items', ['vehicle_check_definition_id'], unique=False)
     op.create_index(op.f('ix_check_items_vehicle_unit_id'), 'check_items', ['vehicle_unit_id'], unique=False)
-    op.create_table('daily_progress',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('project_id', sa.String(length=36), nullable=False),
-    sa.Column('task_id', sa.String(length=36), nullable=False),
-    sa.Column('schedule_entry_id', sa.String(length=36), nullable=True),
-    sa.Column('work_date', sa.Date(), nullable=False),
-    sa.Column('user_id', sa.String(length=36), nullable=False),
-    sa.Column('completed_quantity', sa.Float(), nullable=True),
-    sa.Column('note', sa.Text(), nullable=True),
-    sa.Column('client_uuid', sa.String(length=36), nullable=False),
-    sa.Column('source', sa.String(length=20), nullable=True),
-    sa.Column('created_at', sa.DateTime(), nullable=True),
-    sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['schedule_entry_id'], ['schedule_entries.id'], ondelete='SET NULL'),
-    sa.ForeignKeyConstraint(['task_id'], ['tasks.id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('task_id', 'work_date', 'user_id', 'client_uuid', name='uq_progress_dedupe')
-    )
-    op.create_index(op.f('ix_daily_progress_project_id'), 'daily_progress', ['project_id'], unique=False)
-    op.create_index(op.f('ix_daily_progress_task_id'), 'daily_progress', ['task_id'], unique=False)
     op.create_table('issue_sla_receipts',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('project_id', sa.String(length=36), nullable=False),
@@ -1459,9 +1303,6 @@ def upgrade():
 def downgrade():
     op.drop_index(op.f('ix_issue_sla_receipts_project_id'), table_name='issue_sla_receipts')
     op.drop_table('issue_sla_receipts')
-    op.drop_index(op.f('ix_daily_progress_task_id'), table_name='daily_progress')
-    op.drop_index(op.f('ix_daily_progress_project_id'), table_name='daily_progress')
-    op.drop_table('daily_progress')
     op.drop_index(op.f('ix_check_items_vehicle_unit_id'), table_name='check_items')
     op.drop_index(op.f('ix_check_items_vehicle_check_definition_id'), table_name='check_items')
     op.drop_index(op.f('ix_check_items_template_id'), table_name='check_items')
@@ -1475,11 +1316,6 @@ def downgrade():
     op.drop_index(op.f('ix_vehicle_check_definitions_task_id'), table_name='vehicle_check_definitions')
     op.drop_index(op.f('ix_vehicle_check_definitions_project_id'), table_name='vehicle_check_definitions')
     op.drop_table('vehicle_check_definitions')
-    op.drop_index(op.f('ix_task_duration_overrides_project_id'), table_name='task_duration_overrides')
-    op.drop_table('task_duration_overrides')
-    op.drop_index(op.f('ix_schedule_entries_task_id'), table_name='schedule_entries')
-    op.drop_index(op.f('ix_schedule_entries_project_id'), table_name='schedule_entries')
-    op.drop_table('schedule_entries')
     op.drop_index(op.f('ix_project_vehicle_steps_project_id'), table_name='project_vehicle_steps')
     op.drop_table('project_vehicle_steps')
     op.drop_index(op.f('ix_issues_project_id'), table_name='issues')
@@ -1531,7 +1367,6 @@ def downgrade():
     op.drop_index(op.f('ix_template_items_template_id'), table_name='template_items')
     op.drop_index(op.f('ix_template_items_section_id'), table_name='template_items')
     op.drop_table('template_items')
-    op.drop_table('project_schedule_policies')
     op.drop_index(op.f('ix_project_report_receipts_project_id'), table_name='project_report_receipts')
     op.drop_table('project_report_receipts')
     op.drop_index(op.f('ix_project_readiness_reviews_project_id'), table_name='project_readiness_reviews')
@@ -1553,10 +1388,6 @@ def downgrade():
     op.drop_index(op.f('ix_phases_template_id'), table_name='phases')
     op.drop_index(op.f('ix_phases_project_id'), table_name='phases')
     op.drop_table('phases')
-    op.drop_index(op.f('ix_personal_events_work_date'), table_name='personal_events')
-    op.drop_index(op.f('ix_personal_events_user_id'), table_name='personal_events')
-    op.drop_index(op.f('ix_personal_events_project_id'), table_name='personal_events')
-    op.drop_table('personal_events')
     op.drop_index(op.f('ix_item_applications_project_id'), table_name='item_applications')
     op.drop_table('item_applications')
     op.drop_index(op.f('ix_file_cleanup_receipts_project_id'), table_name='file_cleanup_receipts')
@@ -1580,15 +1411,11 @@ def downgrade():
     op.drop_table('archive_checklists')
     op.drop_index(op.f('ix_acceptance_records_project_id'), table_name='acceptance_records')
     op.drop_table('acceptance_records')
-    op.drop_index(op.f('ix_user_unavailability_user_id'), table_name='user_unavailability')
-    op.drop_table('user_unavailability')
     op.drop_index(op.f('ix_template_sections_template_id'), table_name='template_sections')
     op.drop_table('template_sections')
     op.drop_table('projects')
     op.drop_index(op.f('ix_project_permanent_backups_project_id'), table_name='project_permanent_backups')
     op.drop_table('project_permanent_backups')
-    op.drop_index(op.f('ix_project_governance_requests_project_id'), table_name='project_governance_requests')
-    op.drop_table('project_governance_requests')
     op.drop_index(op.f('ix_notifications_user_id'), table_name='notifications')
     op.drop_table('notifications')
     op.drop_index(op.f('ix_mfa_recovery_codes_user_id'), table_name='mfa_recovery_codes')
@@ -1616,8 +1443,6 @@ def downgrade():
     op.drop_index(op.f('ix_rate_limit_buckets_user_id'), table_name='rate_limit_buckets')
     op.drop_table('rate_limit_buckets')
     op.drop_table('project_creation_receipts')
-    op.drop_index(op.f('ix_project_archives_project_id'), table_name='project_archives')
-    op.drop_table('project_archives')
     op.drop_index(op.f('ix_offline_op_receipts_user_id'), table_name='offline_op_receipts')
     op.drop_table('offline_op_receipts')
     op.drop_index(op.f('ix_notification_outbox_status'), table_name='notification_outbox')
@@ -1631,7 +1456,3 @@ def downgrade():
     op.drop_table('holiday_calendars')
     op.drop_index(op.f('ix_ai_usage_ledger_month'), table_name='ai_usage_ledger')
     op.drop_table('ai_usage_ledger')
-    op.drop_index(op.f('ix_ai_rate_limit_buckets_user_id'), table_name='ai_rate_limit_buckets')
-    op.drop_table('ai_rate_limit_buckets')
-    op.drop_index(op.f('ix_ai_jobs_user_id'), table_name='ai_jobs')
-    op.drop_table('ai_jobs')

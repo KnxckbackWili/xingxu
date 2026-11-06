@@ -3,7 +3,7 @@ export const PM_ROLES = ['admin', 'director', 'lead', 'pm', 'technician', 'worke
 /** 可进现场端 /worker 的角色 */
 export const WORKER_ROLES = ['worker', 'intern', 'technician', 'pm', 'lead', 'admin']
 
-/** 管理端核心工作台角色（/pm/dashboard、/pm/people、/pm/stats 守卫）。
+/** 管理端工作台角色（/pm/dashboard 守卫）。
  *  登录落地也据此区分：该集合内 → /pm，否则（worker/intern）→ /worker。
  *  worker 虽可进 /pm 项目区，但默认落地是现场工作台，不能按 PM_ROLES 判断。 */
 export const PM_WORKBENCH_ROLES = ['admin', 'director', 'lead', 'pm', 'technician']

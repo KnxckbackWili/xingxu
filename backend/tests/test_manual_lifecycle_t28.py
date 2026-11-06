@@ -4,7 +4,7 @@ from datetime import date, datetime
 import json
 
 from app.db import SessionLocal
-from app.models import Project, ProjectEvent, Attachment, DocumentVersion, Task, Module, Phase, ScheduleEntry
+from app.models import Project, ProjectEvent, Attachment, DocumentVersion, Task, Module, Phase
 from app.services.project_lifecycle import PROJECT_STATUSES
 from tests.document_helpers import documents, upload_documents
 
@@ -84,31 +84,6 @@ def test_wrong_event_future_date_and_conflict_reject_entire_upload_without_losin
         event=db.query(ProjectEvent).filter_by(project_id=pid,event_key='commissioning_done').one()
         assert event.actual_at==datetime(2026,1,3,2) and event.actual_date is None
         assert db.query(Attachment).filter_by(project_id=pid).count()==0
-
-
-def test_task_complete_reopen_and_schedule_publication_never_change_project_state(client,admin_headers):
-    pid=create(client,admin_headers)['id']
-    with SessionLocal() as db:
-        phase=Phase(project_id=pid,name='现场工作');db.add(phase);db.flush()
-        module=Module(project_id=pid,phase_id=phase.id,name='工作分组');db.add(module);db.flush()
-        task=Task(project_id=pid,module_id=module.id,phase_id=phase.id,name='非车辆工作',quantity_type='fixed',target_quantity=1)
-        db.add(task);db.flush();tid=task.id
-        db.add(ScheduleEntry(project_id=pid,task_id=tid,work_date=date(2026,1,5),assignee_id='user-worker-001',planned_quantity=1));db.commit()
-    response=client.post(f'/api/projects/{pid}/schedule/confirm',headers=admin_headers)
-    assert response.status_code==410,response.text  # 按日排程发布已退役
-    assert client.get(f'/api/projects/{pid}',headers=admin_headers).json()['status']=='preparing'
-    with SessionLocal() as db:db.get(Project,pid).status='executing';db.commit()
-    for done in (True,False):
-        with SessionLocal() as db:version=db.get(Task,tid).version or 0
-        response=client.put(f'/api/projects/{pid}/work-items/{tid}/completion',headers=admin_headers,
-                            json={'version':version,'is_completed':done,'reason':'实际现场核对'})
-        assert response.status_code==200,response.text
-        assert client.get(f'/api/projects/{pid}',headers=admin_headers).json()['status']=='executing'
-    from app.services.status_flow import advance_project_status,regress_project_status
-    with SessionLocal() as db:
-        project=db.get(Project,pid);before=project.version
-        assert advance_project_status(db,project) is None and regress_project_status(db,project) is None
-        assert project.status=='executing' and project.version==before
 
 
 def test_date_only_kickoff_creates_lifetime_and_same_submission_captures_real_deadline(client,admin_headers):

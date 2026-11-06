@@ -3,7 +3,7 @@
 from datetime import date
 import pytest
 from app.db import SessionLocal
-from app.models import Attachment, DailyProgress, Project, Task, VehicleLifecycleEvent
+from app.models import Attachment, Project, Task, VehicleLifecycleEvent
 from tests.test_execution_workflow_audit import _execution
 
 
@@ -13,7 +13,7 @@ def test_task_requirements_edit_cannot_forge_review_provenance(client, pm_header
         'deliverables': [{'name': '客户验收单', 'required': True, 'status': 'approved', 'done': True,
                           'submitted_by': 'user-worker-001', 'review_by': 'user-admin-001',
                           'attachment_id': 'forged-file', 'review_at': '2026-09-30T00:00:00'}]})
-    assert changed.status_code == 400, changed.text
+    assert changed.status_code == 422, changed.text
     with SessionLocal() as db:
         assert not db.get(Task, tid).deliverables
 
@@ -50,27 +50,6 @@ def test_vehicle_event_attachment_must_be_current_project_evidence(client, pm_he
     assert result.status_code == 400, result.text
     with SessionLocal() as db:
         assert db.query(VehicleLifecycleEvent).filter_by(vehicle_unit_id=unit, event_type='fault').count() == 0
-
-
-@pytest.mark.parametrize('target', [None, 0])
-@pytest.mark.parametrize('completion', ['pending', 'na', 'manual'])
-def test_unknown_quantity_must_be_resolved_before_completion(client, target, completion):
-    from app.models import CheckItem
-    from app.services.progress import project_completion_blocker_tasks
-    pid, tid, cid = _execution(client)
-    with SessionLocal() as db:
-        task = db.get(Task, tid)
-        task.target_quantity = target
-        db.get(CheckItem, cid).is_done = True
-        if completion == 'na':
-            db.get(CheckItem, cid).is_applicable = False
-        elif completion == 'manual':
-            task.manually_completed = True
-        other = Task(project_id=pid, module_id=task.module_id, name='已完成的另一任务', target_quantity=1,
-                     manually_completed=True)
-        db.add(other); db.commit()
-        blockers = {row.id for row in project_completion_blocker_tasks(db, pid)}
-        assert (tid in blockers) == (completion == 'pending')
 
 
 @pytest.mark.parametrize('operation', ['create', 'edit'])

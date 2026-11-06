@@ -93,11 +93,6 @@ def _references(db,assets):
             if not isinstance(ref,dict) or ref.get('stored_name') not in stored:continue
             for asset in owners[ref['stored_name']]:protected[asset.id].append('仍由任务参考文档拥有')
             evidence.append(['task_reference',row.id,ref])
-    for archive in db.query(models.ProjectArchive):
-        for item in (archive.snapshot or {}).get('binary_files',{}).get('manifest',[]):
-            if not isinstance(item,dict) or item.get('stored_name') not in stored:continue
-            for asset in owners[item['stored_name']]:protected[asset.id].append('仍由保留归档拥有')
-            evidence.append(['retained_archive',archive.id,item])
     return protected,evidence
 
 

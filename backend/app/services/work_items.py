@@ -6,7 +6,7 @@ commits; callers own transactions. No Module is created to hold new work.
 from uuid import uuid4
 from fastapi import HTTPException
 from sqlalchemy import func,or_
-from app.models import (Task,Phase,Module,Project,User,CheckItem,DailyProgress,
+from app.models import (Task,Phase,Module,Project,User,CheckItem,
     VehicleUnit,ProjectVehicleStep,VehicleProgress)
 from app.services.execution_scope import REMINDER_ONLY_PHASE_NAMES
 from app.services.permissions import C_PLAN,authorize_project,project_capabilities
@@ -66,16 +66,6 @@ def lock_work(db,project,user,task_id,version):
     lock_record(db,row,conflict_detail='工作项已被其它操作更新，请刷新核对')
     bump_version(row,version)
     return row
-
-
-def legacy_quantity(db,task):
-    rows=db.query(DailyProgress,User.display_name).outerjoin(User,User.id==DailyProgress.user_id).filter(DailyProgress.task_id==task.id).order_by(DailyProgress.work_date,DailyProgress.id).all()
-    return {'read_only':True,'meaning':'原工作数量事实，仅供追溯，不作为当前目标或新项目完成资格',
-        'quantity_type':task.quantity_type,'target_quantity':task.target_quantity,'unit':task.unit,
-        'completed_quantity':sum(row.completed_quantity or 0 for row,_ in rows),
-        'source':task.legacy_work_snapshot,'reports':[{'id':row.id,'client_uuid':row.client_uuid,'work_date':row.work_date.isoformat(),
-            'user_id':row.user_id,'user_name':name or '原操作人未记录','completed_quantity':row.completed_quantity,'note':row.note,
-            'created_at':row.created_at.isoformat()+'Z' if row.created_at else None} for row,name in rows]}
 
 
 def step_state(db,task):
@@ -175,7 +165,7 @@ def item_dicts(db,tasks,*,checks=False):
                 'by_name':actor.display_name if actor else '原操作人未记录' if task.manual_completed_by else '',
                 'at':task.manual_completed_at.isoformat()+'Z' if task.manual_completed_at else None},
             'sort_order':task.sort_order or 0,'version':task.version or 0,'source_task_id':task.source_task_id,
-            'source_vehicle_event_id':task.source_vehicle_event_id,'has_legacy_quantity':task.legacy_work_snapshot is not None or task.target_quantity is not None,
+            'source_vehicle_event_id':task.source_vehicle_event_id,
             'reference_docs':[{'filename':ref.get('filename'),'note':ref.get('note','')} for ref in task.reference_docs or []]}
         if not task.project_id:
             row['reference_docs']=[{'id':d.id,'filename':d.filename,'note':d.note} for d in template_docs[task.id]]
@@ -315,10 +305,7 @@ def generate(db,project,source_tasks):
             unit='台' if is_vehicle(source) else '项',safety_flag=source.safety_flag,
             applicable_vehicle_types=list(source.applicable_vehicle_types or []),group_label=group_of(db,source),
             scope_conditions=list(source.scope_conditions or []),sort_order=source.sort_order,
-            source_task_id=source.id,vehicle_step_key=source.vehicle_step_key,
-            legacy_work_snapshot={'kind':'template_definition_source','source_task_id':source.id,
-                'quantity':{'type':source.quantity_type,'target':source.target_quantity,'unit':source.unit},
-                'original':source.legacy_work_snapshot})
+            source_task_id=source.id,vehicle_step_key=source.vehicle_step_key)
         db.add(row);db.flush();copy_reference_docs(db,source,row)
         definitions=definition_data(db,source)
         result['check_definitions']+=len(definitions)
@@ -349,16 +336,14 @@ def portable_definition(db,task):
         'safety_flag':task.safety_flag,'applicable_vehicle_types':task.applicable_vehicle_types or [],
         'vehicle_step_key':task.vehicle_step_key,'group_label':group_of(db,task),'scope_conditions':task.scope_conditions or [],
         'depends_on':task.depends_on or [],'sort_order':task.sort_order or 0,
-        'legacy_work_snapshot':task.legacy_work_snapshot,'check_items':definition_data(db,task)}
+        'check_items':definition_data(db,task)}
 
 
 def portable_modules(db,project_id):
-    """Legacy JSON envelopes carry labels; no Module business identity is needed."""
-    groups={};retired=[]
+    """Work grouped by stage and group label for the project JSON export."""
+    groups={}
     for task in db.query(Task).filter_by(project_id=project_id).order_by(Task.sort_order,Task.id):
         phase=phase_of(db,task)
-        if phase and phase.name in REMINDER_ONLY_PHASE_NAMES:
-            retired.append({'read_only':True,'phase_name':phase.name,**portable_definition(db,task)});continue
         label=group_of(db,task);key=(phase.id if phase else None,label)
         envelope=groups.setdefault(key,{'name':label or '工作项','source_group_label':label,'read_only_source_envelope':True,
             'phase_name':phase.name if phase else '历史未分类','phase_color':phase.color if phase else '#1890ff',
@@ -366,4 +351,4 @@ def portable_modules(db,project_id):
             'phase_exit_criteria':phase.exit_criteria if phase else '', 'category':'core','is_selected':True,
             'sort_order':task.sort_order or 0,'preparation_conditions':task.scope_conditions or [],'tasks':[]})
         envelope['tasks'].append(portable_definition(db,task))
-    return list(groups.values()),retired
+    return list(groups.values())

@@ -4,7 +4,7 @@ from tests.lifecycle_helpers import versioned
 from datetime import date
 import pytest
 from app.db import SessionLocal
-from app.models import Task, DailyProgress, ScheduleEntry
+from app.models import Task
 from app.time_utils import project_today
 from tests.test_execution_workflow_audit import _execution
 

@@ -30,7 +30,7 @@ describe('主导航与设置目录', () => {
     expect(MENU_GROUPS('admin').map(group => group.label)).toEqual(['项目', '人员与数据', '系统', '高级'])
     const items = MENU_ITEMS('admin'); const paths = items.map(item => item.key)
     for (const path of ['/pm/templates', '/pm/users', '/pm/permissions', '/pm/vehicle-types', '/pm/holidays', '/pm/notification-channels', '/pm/backups', '/pm/storage', '/pm/system-updates', '/pm/ai-tokens', '/pm/project-recycle-bin']) expect(paths).toContain(path)
-    for (const path of ['/pm/dashboard', '/pm/projects', '/pm/people', '/pm/messages', '/pm/stats', '/pm/governance', '/pm/my-schedule', '/pm/team-schedule', '/pm/feedback', '/pm/inventory']) expect(paths).not.toContain(path)
+    for (const path of ['/pm/dashboard', '/pm/projects', '/pm/messages', '/pm/feedback', '/pm/inventory']) expect(paths).not.toContain(path)
     expect(new Set(paths).size).toBe(paths.length)
     for (const item of items) { expect(item.label).toBe(NAV_LABEL[item.key]); expect(item.description).toBe(NAV_DESCRIPTION[item.key]); expect(item.aliases).toEqual([]) }
   })
@@ -76,12 +76,7 @@ describe('主导航与设置目录', () => {
     expect(canAccessNav('/worker/my', member)).toBe(true)
     expect(canAccessNav('/pm/permissions', { role: 'admin', system_permissions: [], permission_overrides: { 'permission.manage': false } })).toBe(true)
   })
-  it('does not expose the retired governance workflow to any role',()=>{
-    for(const role of PM_ROLES)expect(MENU_ITEMS(role).some(item=>item.key==='/pm/governance')).toBe(false)
-  })
   it('keeps project recovery distinct from system backups and denies explicitly prohibited access',()=>{
-    expect(NAV_LABEL['/pm/governance']).toBe('项目移交')
-    expect(NAV_DESCRIPTION['/pm/governance']).not.toContain('项目删除')
     expect(canAccessNav('/pm/project-recycle-bin',{role:'worker',system_permissions:[]})).toBe(true)
     expect(MENU_ITEMS('worker').map(item=>item.key)).toContain('/pm/project-recycle-bin')
     expect(canAccessNav('/pm/backups','worker')).toBe(false)

@@ -287,43 +287,6 @@ def test_legacy_offline_queue_translation_is_idempotent_and_keeps_rejected_draft
         assert db.query(OfflineOpReceipt).filter_by(client_uuid='unknown-original-uuid').count()==0
 
 
-def test_retention_delete_restore_and_legacy_no_auto_purge_preserve_new_document_evidence(client,admin_headers):
-    from datetime import timedelta
-    from app.db import SessionLocal
-    from app.models import Project,ProjectArchive,DocumentVersion,Attachment,ProjectDocument
-    from app.services.project_retention import project_retention_snapshot
-    from app.services.report_scheduler import purge_soft_deleted_projects
-    from app.time_utils import utcnow
-    pid=create(client,admin_headers)['id'];document=view(client,admin_headers,pid)['documents'][0]
-    result=upload(client,admin_headers,pid,[document['id']]);assert result.status_code==200
-    version_id=result.json()['documents'][0]['latest_version']['id']
-    with SessionLocal() as db:
-        snapshot=project_retention_snapshot(db,db.get(Project,pid))
-        assert snapshot['records']['document_versions'][0]['id']==version_id
-        assert snapshot['binary_files']['manifest'][0]['sha256']==hashlib.sha256(b'evidence').hexdigest()
-    current=client.get('/api/projects/'+pid,headers=admin_headers).json()
-    deleted=client.delete('/api/projects/'+pid,headers=admin_headers,params={'version':current['version'],'reason':'验证新资料保全'})
-    assert deleted.status_code==200,deleted.text
-    row=next(row for row in client.get('/api/project-recycle-bin/projects',headers=admin_headers).json() if row['id']==pid)
-    restored=client.post(f'/api/project-recycle-bin/projects/{pid}/restore',headers=admin_headers,json={'version':row['version'],'deletion_id':row['deletion_id']})
-    assert restored.status_code==200,restored.text
-    assert next(row for row in view(client,admin_headers,pid)['documents'] if row['id']==document['id'])['latest_version']['id']==version_id
-    # #85: the retired automatic purge entrypoint cannot delete old recycled evidence.
-    other=create(client,admin_headers)['id'];other_doc=view(client,admin_headers,other)['documents'][0]
-    assert upload(client,admin_headers,other,[other_doc['id']]).status_code==200
-    with SessionLocal() as db:
-        p=db.get(Project,other);p.deleted_at=utcnow()-timedelta(days=60);db.commit()
-        result=purge_soft_deleted_projects(db)
-        assert result['purged']==0 and result['disabled'];db.commit()
-        assert db.get(Project,other).deleted_at is not None
-        assert not db.query(ProjectArchive).filter_by(project_id=other).first()
-        assert db.query(DocumentVersion).filter_by(project_document_id=other_doc['id']).count()==1
-        assert db.query(Attachment).filter_by(project_id=other).count()==1
-        retained=project_retention_snapshot(db,db.get(Project,other))
-        assert len(retained['records']['document_versions'])==1
-        assert retained['binary_files']['manifest'][0]['available_at_purge']
-
-
 def test_completed_document_gate_excludes_future_stages_and_requires_real_evidence(client,admin_headers):
     from app.db import SessionLocal
     from app.models import ProjectDocument

@@ -21,7 +21,7 @@ beforeEach(() => {
 describe('离线队列按账号隔离（HYPE-99）', () => {
   it('A 账号的待同步记录只在 A 账号下可见', () => {
     setOfflineAccount('user-a')
-    enqueue({ client_uuid: 'a-001', task_id: 't1' } as any, 'report')
+    enqueue({ client_uuid: 'a-001', task_id: 't1' } as any, 'field')
     enqueue({ client_uuid: 'a-002', task_id: 't2' } as any, 'checkitem')
     expect(getQueue().map((i) => i.client_uuid)).toEqual(['a-001', 'a-002'])
 
@@ -31,7 +31,7 @@ describe('离线队列按账号隔离（HYPE-99）', () => {
 
   it('切换账号不会让 A 的待同步数据被 B 提交', () => {
     setOfflineAccount('user-a')
-    enqueue({ client_uuid: 'a-003' } as any, 'report')
+    enqueue({ client_uuid: 'a-003' } as any, 'field')
     setOfflineAccount('user-b')
     // B 的同步（removeFromQueue）只能移除 B 自己的条目
     removeFromQueue(['a-003'])
@@ -44,7 +44,7 @@ describe('离线队列按账号隔离（HYPE-99）', () => {
 
   it('登出（owner=null）后队列不可读；同账号重登数据仍在', () => {
     setOfflineAccount('user-a')
-    enqueue({ client_uuid: 'a-004' } as any, 'report')
+    enqueue({ client_uuid: 'a-004' } as any, 'field')
     setOfflineAccount(null)
     expect(getQueue()).toEqual([])  // 登出即不可读，绝不自动提交
 
@@ -55,7 +55,7 @@ describe('离线队列按账号隔离（HYPE-99）', () => {
 
   it('被拒列表同样按账号隔离；retry 只回 A 的待同步队列', () => {
     setOfflineAccount('user-a')
-    enqueue({ client_uuid: 'a-rj-01', type: 'report' } as any, 'report')
+    enqueue({ client_uuid: 'a-rj-01', type: 'field' } as any, 'field')
     addRejected(getQueue()[0], '服务端拒绝')
     removeFromQueue(['a-rj-01'])  // 与服务端拒绝流程一致：被拒条目从待同步队列移除
     expect(getQueue()).toEqual([])
@@ -76,9 +76,9 @@ describe('离线队列按账号隔离（HYPE-99）', () => {
 
   it('clearQueue 只清当前账号的队列', () => {
     setOfflineAccount('user-a')
-    enqueue({ client_uuid: 'a-005' } as any, 'report')
+    enqueue({ client_uuid: 'a-005' } as any, 'field')
     setOfflineAccount('user-b')
-    enqueue({ client_uuid: 'b-005' } as any, 'report')
+    enqueue({ client_uuid: 'b-005' } as any, 'field')
     clearQueue()
     expect(getQueue()).toEqual([])
     setOfflineAccount('user-a')

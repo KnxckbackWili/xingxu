@@ -1,9 +1,7 @@
-"""Equal-weight vehicle steps and non-vehicle work; original quantities remain facts."""
+"""Progress: vehicle steps from the vehicle progress table, other work by completion."""
 
-from sqlalchemy import case, func, and_, or_
 from sqlalchemy.orm import Session
-from app.models import Task, DailyProgress, CheckItem, ScheduleEntry, Module, Phase
-from app.services.execution_scope import REMINDER_ONLY_PHASE_NAMES
+from app.models import Task, CheckItem
 
 
 def execution_tasks_for_projects(db: Session, project_ids: list[str]) -> list[Task]:
@@ -35,113 +33,36 @@ def quality_blocked_task_ids(db,tasks,checks=None):
 
 
 def task_progress_maps(db: Session, tasks: list[Task]) -> tuple[dict, dict, dict]:
-    """Batch-compute completed quantity, effective target and percent."""
-    task_ids = [t.id for t in tasks]
-    if not task_ids:
+    """Completed count, target and percent of each task.
+
+    Per-vehicle work counts the cars that finished its step; other work is one
+    item that is done once it is marked complete. Open required or safety checks
+    cap a task at 99%.
+    """
+    if not tasks:
         return {}, {}, {}
-
-    # 完成量按 2 位小数取整：SUM(0.1/0.9 等浮点分片) 会累积出 49.99999999999999 类误差，
-    # 直接透传到前端会显示成「49.99999999999999/50」。统一在聚合处四舍五入。
-    completed_map = {task_id: round(quantity or 0, 2) for task_id, quantity in (
-        db.query(
-            DailyProgress.task_id,
-            func.coalesce(func.sum(DailyProgress.completed_quantity), 0),
-        )
-        .filter(DailyProgress.task_id.in_(task_ids))
-        .group_by(DailyProgress.task_id)
-        .all()
-    )}
-    check_counts = {
-        task_id: (total or 0, applicable or 0, failed or 0, pending or 0, safety or 0)
-        for task_id, total, applicable, failed, pending, safety in (
-            db.query(
-                CheckItem.task_id,
-                func.count(CheckItem.id),
-                func.sum(case((CheckItem.is_applicable.is_(True), 1), else_=0)),
-                func.sum(case((CheckItem.failed.is_(True), 1), else_=0)),
-                func.sum(case((and_(CheckItem.is_applicable.is_(True), CheckItem.is_done.is_not(True), or_(CheckItem.is_required.is_(True), CheckItem.is_safety_critical.is_(True))), 1), else_=0)),
-                func.sum(case((and_(CheckItem.is_safety_critical.is_(True), or_(CheckItem.is_done.is_not(True), CheckItem.failed.is_(True), CheckItem.is_applicable.is_not(True))), 1), else_=0)),
-            )
-            .filter(CheckItem.task_id.in_(task_ids))
-            .group_by(CheckItem.task_id)
-            .all()
-        )
-    }
-
-    target_map = {}
-    percent_map = {}
-    for task in tasks:
-        target = task.target_quantity or 0
-        total_checks, applicable_checks, failed_checks, pending_checks, safety_checks = check_counts.get(task.id, (0, 0, 0, 0, 0))
-        if target <= 0 or (total_checks > 0 and applicable_checks == 0):
-            target = 0
-        completed = completed_map.get(task.id, 0)
-        target_map[task.id] = target
-        # 管理员可覆盖数量/普通检查，但安全检查仍须通过；实际报工不变。
-        if getattr(task, "manually_completed", False):
-            percent = 100.0
-        else:
-            percent = (
-                min(100.0, round(completed / target * 100, 1))
-                if target > 0 else (100.0 if total_checks > 0 and applicable_checks == 0 else 0.0)
-            )
-            # C5-3：存在「不通过」检查项 → 进度封顶 99%（阶段/项目进度无法到达 100%，
-            # 从而阻塞完成/归档门禁，直到安全项重新通过）。不通过项本身由前端红标展示。
-            if failed_checks or pending_checks:
-                percent = min(percent, 99.0)
-        # Safety verification remains mandatory, including managerial quantity overrides.
-        if safety_checks:
-            percent = min(percent, 99.0)
-        percent_map[task.id] = percent
-        completed_map.setdefault(task.id, 0)
-
-    # T34 work has no editable quantity target. Preserve old raw report functions
-    # for source readers, while active status uses booleans or the real matrix.
     from app.services.work_items import step_states
-    quality_blocked=quality_blocked_task_ids(db,tasks)
-    states=step_states(db,[task for task in tasks if task.phase_id is not None and task.quantity_type == 'per_vehicle'])
+    quality_blocked = quality_blocked_task_ids(db, tasks)
+    states = step_states(db, [task for task in tasks if task.quantity_type == 'per_vehicle'])
+    completed_map, target_map, percent_map = {}, {}, {}
     for task in tasks:
-        if task.phase_id is None:
-            continue  # compatibility for historical adapters awaiting normalization
         if task.quantity_type == 'per_vehicle':
-            state=states.get(task.id) or {}
-            target_map[task.id]=state.get('expected_count') or 0
-            completed_map[task.id]=state.get('completed_count') or 0
-            percent_map[task.id]=state.get('percent') or 0
+            state = states.get(task.id) or {}
+            target_map[task.id] = state.get('expected_count') or 0
+            completed_map[task.id] = state.get('completed_count') or 0
+            percent_map[task.id] = state.get('percent') or 0
         else:
-            target_map[task.id]=1
-            completed_map[task.id]=1 if task.manually_completed else 0
-            percent_map[task.id]=100 if task.manually_completed else 0
+            target_map[task.id] = 1
+            completed_map[task.id] = 1 if task.manually_completed else 0
+            percent_map[task.id] = 100 if task.manually_completed else 0
         if task.id in quality_blocked:
-            percent_map[task.id]=min(percent_map[task.id],99)
+            percent_map[task.id] = min(percent_map[task.id], 99)
     return completed_map, target_map, percent_map
 
 
 def task_completed(db: Session, task_id: str) -> float:
-    return round(db.query(func.coalesce(func.sum(DailyProgress.completed_quantity), 0)).filter(
-        DailyProgress.task_id == task_id
-    ).scalar() or 0, 2)
-
-
-def effective_target(db: Session, task_id: str) -> float:
-    """Target minus not-applicable check items is not subtracted (quantities stay),
-    but tasks with zero applicable check items contribute nothing."""
     task = db.get(Task, task_id)
-    if task is None:
-        return 0
-    target = task.target_quantity or 0
-    if target <= 0:
-        return 0
-    # If ALL check items are not applicable → task contributes nothing
-    items = db.query(CheckItem).filter(CheckItem.task_id == task_id).all()
-    if items and not any(i.is_applicable for i in items):
-        return 0
-    return target
-
-
-def _has_failed_check(db: Session, task_id: str) -> bool:
-    return bool(db.query(CheckItem.id).filter(
-        CheckItem.task_id == task_id, CheckItem.failed.is_(True)).first())
+    return task_progress_maps(db, [task])[0][task_id] if task else 0
 
 
 def task_progress(db: Session, task_id: str) -> float:
@@ -152,36 +73,17 @@ def task_progress(db: Session, task_id: str) -> float:
     return task_progress_maps(db, [task])[2][task_id]
 
 
-def _is_na_or_completed(db: Session, task_id: str) -> bool:
-    items = db.query(CheckItem).filter(CheckItem.task_id == task_id).all()
-    if items and not any(i.is_applicable for i in items):
-        return True
-    return False
-
-
 def project_completion_blocker_tasks(db: Session, project_id: str) -> list[Task]:
-    """Completion is a task invariant, never a rounded display percentage.
-
-    Keep the explicit manual-completion override and all-not-applicable semantics.
-    """
+    """Work that keeps the project from completing: open checks, unlinked vehicle work, unfinished items."""
     tasks = execution_tasks(db, project_id)
-    _, targets, percentages = task_progress_maps(db, tasks)
-    # Display aggregates round to two decimals. The gate must use the raw sum.
-    completed = dict(db.query(DailyProgress.task_id, func.sum(DailyProgress.completed_quantity))
-                     .filter(DailyProgress.task_id.in_([task.id for task in tasks]))
-                     .group_by(DailyProgress.task_id).all())
-    quality_blocked=quality_blocked_task_ids(db,tasks)
+    quality_blocked = quality_blocked_task_ids(db, tasks)
     from app.services.work_items import step_states
-    vehicle_tasks=[task for task in tasks if task.phase_id is not None and task.quantity_type=='per_vehicle']
-    states=step_states(db,vehicle_tasks)
-    unlinked={task.id for task in vehicle_tasks if not (states.get(task.id) or {}).get('linked')}
-    return [
-        task for task in tasks
-        if (task.id in quality_blocked or task.id in unlinked
-            or (task.quantity_type != "per_vehicle" and not task.manually_completed
-                and (percentages[task.id] < 100
-                     or (task.phase_id is None and targets[task.id] > 0 and (completed.get(task.id) or 0) < targets[task.id] - 1e-9))))
-    ]
+    vehicle_tasks = [task for task in tasks if task.quantity_type == 'per_vehicle']
+    states = step_states(db, vehicle_tasks)
+    unlinked = {task.id for task in vehicle_tasks if not (states.get(task.id) or {}).get('linked')}
+    return [task for task in tasks
+            if task.id in quality_blocked or task.id in unlinked
+            or (task.quantity_type != 'per_vehicle' and not task.manually_completed)]
 
 
 def project_completion_blockers(db: Session, project_id: str) -> list[str]:

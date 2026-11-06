@@ -169,8 +169,6 @@ def client():
     # 限流状态按用户全局累计，跨用例会误伤导出/登录测试 → 每个用例清空
     from app.services.rate_limit import reset_rate_limits
     reset_rate_limits()
-    from app.services.ai_jobs import reset_ai_rate_limits
-    reset_ai_rate_limits()
     from app.routers.auth import reset_login_failures
     reset_login_failures()
     # The app lifespan runs init_db() → alembic upgrade head + seed on startup

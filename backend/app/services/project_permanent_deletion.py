@@ -48,8 +48,6 @@ def _locked(db, project_id, user, version, deletion_id):
     # the evidence as well. SQLite already holds its database writer lock.
     db.execute(select(models.Project.id).where(models.Project.id == project.id).with_for_update()).all()
     list(_affected_keys(db, project, lock=True))
-    if db.query(models.PersonalEvent.id).filter_by(project_id=project.id).first():
-        raise HTTPException(409, '项目仍关联已退役的个人临时日程（只读保留给所有者），暂不能永久删除；请联系系统管理员按备份流程处理；私有日程不会进入项目备份')
     return project
 
 

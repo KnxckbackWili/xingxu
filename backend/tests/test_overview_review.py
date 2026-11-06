@@ -4,17 +4,6 @@ from tests.test_project_timezone import _create_project
 from tests.template_work import default_work
 
 
-def _legacy_past_schedule(pid):
-    """Read-only legacy daily schedule rows in the past; they must never become overdue actions."""
-    from app.db import SessionLocal
-    from app.models import ScheduleEntry, Task
-    with SessionLocal() as db:
-        task = db.query(Task).filter_by(project_id=pid).first()
-        db.add(ScheduleEntry(project_id=pid, task_id=task.id, work_date=date(2020, 1, 1), planned_quantity=1,
-                             assignee_id='user-worker-001', status='planned', is_confirmed=True))
-        db.commit()
-
-
 def _generated_project(client, pm_headers, **kwargs):
     p = _create_project(client, pm_headers, **kwargs)
     assert client.post(f"/api/projects/{p['id']}/tasks/generate", headers=pm_headers,
@@ -26,7 +15,6 @@ def test_overview_overdue_matches_document_action_list(client, pm_headers):
     from app.db import SessionLocal
     from app.models import ProjectDocument
     p = _generated_project(client, pm_headers)
-    _legacy_past_schedule(p['id'])
     with SessionLocal() as db:
         # an applicable row: platform-limited and legacy rows never appear in overdue lists
         row = (db.query(ProjectDocument).filter_by(project_id=p['id'], status='pending', platform=None)
@@ -43,7 +31,6 @@ def test_overview_overdue_matches_document_action_list(client, pm_headers):
 
 def test_legacy_schedule_never_counts_as_overdue_and_timezone_is_reported(client, pm_headers):
     p = _generated_project(client, pm_headers, timezone='Europe/Moscow')
-    _legacy_past_schedule(p['id'])
     r = client.get(f"/api/projects/{p['id']}/overdue", headers=pm_headers)
     assert r.status_code == 200
     body = r.json()

@@ -1,7 +1,7 @@
 import pytest
 """Stage/work items preserve original identities while removing quantity writes."""
 from app.db import SessionLocal
-from app.models import Project,Task,Module,DailyProgress,CheckItem
+from app.models import Project, Task, Module, CheckItem
 from tests.test_vehicle_progress import setup_fleet,write
 
 
@@ -15,27 +15,6 @@ def create(client,h,pid,ph,**extra):
     r=client.post(f'/api/projects/{pid}/work-items',headers=h,json={'phase_id':ph,'name':'现场确认',**extra})
     assert r.status_code==200,r.text
     return r.json()
-
-
-def test_flat_work_creates_no_module_and_boolean_completion_requires_reason_and_cas(client,pm_headers):
-    pid,ids=setup_fleet(client,pm_headers,1);ph=phase(client,pm_headers,pid)
-    with SessionLocal() as db:before=db.query(Module).filter_by(project_id=pid).count()
-    row=create(client,pm_headers,pid,ph,description='完整施工说明',group_label='原模块标签')
-    assert row['kind']=='other' and not row['is_completed'] and row['group_label']=='原模块标签'
-    with SessionLocal() as db:
-        task=db.get(Task,row['id']);assert task.module_id is None and task.phase_id==ph
-        assert task.target_quantity is None and db.query(Module).filter_by(project_id=pid).count()==before
-    url=f"/api/projects/{pid}/work-items/{row['id']}/completion"
-    assert client.put(url,headers=pm_headers,json={'version':0,'is_completed':True,'reason':' '}).status_code==400
-    r=client.put(url,headers=pm_headers,json={'version':0,'is_completed':True,'reason':'现场实测已确认'})
-    assert r.status_code==200 and r.json()['is_completed'],r.text
-    assert client.put(url,headers=pm_headers,json={'version':0,'is_completed':False,'reason':'迟到旧页面'}).status_code==409
-    r=client.put(url,headers=pm_headers,json={'version':1,'is_completed':False,'reason':'复测发现需返工'})
-    assert r.status_code==200 and not r.json()['is_completed']
-    with SessionLocal() as db:assert db.query(DailyProgress).filter_by(task_id=row['id']).count()==0
-    listed=client.get(f'/api/projects/{pid}/work-items',headers=pm_headers).json()
-    item=next(w for p in listed['phases'] for w in p['work_items'] if w['id']==row['id'])
-    assert item['description']=='完整施工说明'
 
 
 def test_vehicle_work_uses_real_matrix_and_safety_definitions_no_bool_override(client,pm_headers):
@@ -78,46 +57,6 @@ def test_member_boolean_completion_and_same_failed_version_override(client,pm_he
     assert client.put(url,headers=worker_headers,json={'version':1,'is_completed':False,'reason':'现场仍需继续工作'}).status_code==200
 
 
-def test_old_uuid_is_preserved_and_readonly_even_after_structure_changes(client,pm_headers):
-    from app.models import User
-    from datetime import date
-    pid,ids=setup_fleet(client,pm_headers,1);ph=phase(client,pm_headers,pid)
-    row=create(client,pm_headers,pid,ph)
-    uuid='old-report-exact-payload-0001'
-    with SessionLocal() as db:
-        uid=db.query(User).filter_by(username='pm').one().id
-        report=DailyProgress(project_id=pid,task_id=row['id'],user_id=uid,work_date=date(2026,1,1),completed_quantity=2.7,note='原事实',client_uuid=uuid)
-        db.add(report);db.commit();rid=report.id
-    payload={'task_id':row['id'],'work_date':'2026-01-01','completed_quantity':2.7,'note':'原事实','client_uuid':uuid}
-    assert client.post('/api/worker/reports',headers=pm_headers,json=payload).status_code==410
-    def sync(values):
-        return client.post('/api/worker/sync',headers=pm_headers,json={'ops':[{'type':'report','client_uuid':values['client_uuid'],'payload':values}]}).json()
-    assert sync(payload)['accepted']==[uuid]
-    assert sync({**payload,'completed_quantity':3})['deferred']==[uuid]
-    unknown='unknown-preserve-original-0001'
-    assert sync({**payload,'client_uuid':unknown})['deferred']==[unknown]
-    assert client.delete(f'/api/worker/reports/{rid}',headers=pm_headers).status_code==410
-    history=client.get(f"/api/projects/{pid}/work-items/{row['id']}/history",headers=pm_headers).json()
-    assert history['reports'][0]['client_uuid']==uuid and history['reports'][0]['completed_quantity']==2.7
-    with SessionLocal() as db:
-        assert db.query(DailyProgress).filter_by(task_id=row['id']).count()==1
-        assert not db.get(Task,row['id']).manually_completed
-
-
-def test_unknown_legacy_report_sync_is_deferred_without_clearing_uuid(client,pm_headers):
-    from app.models import OfflineOpReceipt
-    pid,ids=setup_fleet(client,pm_headers,1);ph=phase(client,pm_headers,pid);row=create(client,pm_headers,pid,ph)
-    uuid='legacy-unknown-no-clear-0001'
-    body={'ops':[{'type':'report','client_uuid':uuid,'payload':{'project_id':pid,'task_id':row['id'],'work_date':'2026-01-01','completed_quantity':2.3,'note':'原始内容保留'}}]}
-    for _ in range(2):
-        r=client.post('/api/worker/sync',headers=pm_headers,json=body)
-        assert r.status_code==200,r.text
-        assert r.json()['deferred']==[uuid] and r.json()['accepted']==[] and r.json()['rejected']==[]
-    with SessionLocal() as db:
-        assert db.query(DailyProgress).filter_by(task_id=row['id']).count()==0
-        assert db.query(OfflineOpReceipt).filter_by(client_uuid=uuid).count()==0
-
-
 def test_quality_retraction_invalidates_eligibility_without_erasing_completion_fact(client,pm_headers):
     from app.services.progress import project_completion_blocker_tasks,task_progress_maps
     pid,_=setup_fleet(client,pm_headers,1);ph=phase(client,pm_headers,pid)
@@ -131,31 +70,11 @@ def test_quality_retraction_invalidates_eligibility_without_erasing_completion_f
         assert t.id in {t.id for t in project_completion_blocker_tasks(db,pid)}
 
 
-def test_missing_step_blocks_and_retired_preparation_is_readonly_discoverable(client,pm_headers):
-    from app.models import Phase
-    from app.services.progress import project_completion_blocker_tasks
-    pid,_=setup_fleet(client,pm_headers,1);ph=phase(client,pm_headers,pid)
-    with SessionLocal() as db:
-        prep=Phase(project_id=pid,name='项目准备');db.add(prep);db.flush()
-        old=Task(project_id=pid,phase_id=prep.id,name='原资料工作',quantity_type='fixed',target_quantity=2,unit='份');db.add(old);db.flush()
-        ci=CheckItem(task_id=old.id,project_id=pid,name='原检查',is_safety_critical=True);db.add(ci)
-        car=Task(project_id=pid,phase_id=ph,name='原环节未映射',quantity_type='per_vehicle',target_quantity=2);db.add(car);db.commit();wid=old.id;cid=ci.id;carid=car.id
-    data=client.get(f'/api/projects/{pid}/work-items',headers=pm_headers).json()
-    assert wid in {t['id'] for t in data['legacy_work_items']}
-    assert client.get(f'/api/projects/{pid}/work-items/{wid}/history',headers=pm_headers).status_code==200
-    assert client.put(f'/api/projects/{pid}/work-items/{wid}',headers=pm_headers,json={'version':0,'name':'不能修改'}).status_code==400
-    assert client.put(f'/api/projects/{pid}/work-items/{wid}/completion',headers=pm_headers,json={'version':0,'is_completed':True,'reason':'旧资料不能重新完成'}).status_code==400
-    assert client.put(f'/api/projects/{pid}/check-items/{cid}',headers=pm_headers,json={'version':0,'is_done':True}).status_code==400
-    with SessionLocal() as db:
-        assert db.get(Task,wid).name=='原资料工作' and not db.get(CheckItem,cid).is_done
-        blocked={t.id for t in project_completion_blocker_tasks(db,pid)};assert wid not in blocked and carid in blocked
-
-
 def test_canonical_work_rejects_legacy_quantity_writes_and_new_work_appends(client,pm_headers):
     pid,_=setup_fleet(client,pm_headers,1);ph=phase(client,pm_headers,pid)
     row=create(client,pm_headers,pid,ph,sort_order=9)
     assert create(client,pm_headers,pid,ph,name='追加工作')['sort_order']==10
-    assert client.put(f"/api/projects/{pid}/tasks/{row['id']}",headers=pm_headers,json={'target_quantity':9,'version':0}).status_code==400
+    assert client.put(f"/api/projects/{pid}/tasks/{row['id']}",headers=pm_headers,json={'target_quantity':9,'version':0}).status_code==422
     assert client.put(f"/api/projects/{pid}/work-items/{row['id']}",headers=pm_headers,json={'name':' ', 'version':0}).status_code==400
     assert client.put(f"/api/projects/{pid}/work-items/{row['id']}",headers=pm_headers,json={'phase_id':None,'version':0}).status_code==400
     tree=client.get(f'/api/projects/{pid}/tree',headers=pm_headers).json();assert row['id'] in {t['id'] for p in tree for t in p['work_items']}
@@ -202,3 +121,21 @@ def test_canonical_and_legacy_plan_adapters_respect_closed_project_status(client
     with SessionLocal() as db:assert db.get(Task,row['id']).name=='现场确认' and not db.get(Task,row['id']).manually_completed
 
 
+def test_flat_work_creates_no_module_and_boolean_completion_requires_reason_and_cas(client,pm_headers):
+    pid,ids=setup_fleet(client,pm_headers,1);ph=phase(client,pm_headers,pid)
+    with SessionLocal() as db:before=db.query(Module).filter_by(project_id=pid).count()
+    row=create(client,pm_headers,pid,ph,description='完整施工说明',group_label='原模块标签')
+    assert row['kind']=='other' and not row['is_completed'] and row['group_label']=='原模块标签'
+    with SessionLocal() as db:
+        task=db.get(Task,row['id']);assert task.module_id is None and task.phase_id==ph
+        assert task.target_quantity is None and db.query(Module).filter_by(project_id=pid).count()==before
+    url=f"/api/projects/{pid}/work-items/{row['id']}/completion"
+    assert client.put(url,headers=pm_headers,json={'version':0,'is_completed':True,'reason':' '}).status_code==400
+    r=client.put(url,headers=pm_headers,json={'version':0,'is_completed':True,'reason':'现场实测已确认'})
+    assert r.status_code==200 and r.json()['is_completed'],r.text
+    assert client.put(url,headers=pm_headers,json={'version':0,'is_completed':False,'reason':'迟到旧页面'}).status_code==409
+    r=client.put(url,headers=pm_headers,json={'version':1,'is_completed':False,'reason':'复测发现需返工'})
+    assert r.status_code==200 and not r.json()['is_completed']
+    listed=client.get(f'/api/projects/{pid}/work-items',headers=pm_headers).json()
+    item=next(w for p in listed['phases'] for w in p['work_items'] if w['id']==row['id'])
+    assert item['description']=='完整施工说明'

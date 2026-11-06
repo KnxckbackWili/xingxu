@@ -5,7 +5,7 @@ from copy import deepcopy
 from uuid import uuid4
 
 from app.db import SessionLocal
-from app.models import Task, Module, Phase, DailyProgress, ScheduleEntry, ArchiveChecklist
+from app.models import Task, Module, Phase, ArchiveChecklist
 
 
 def make_project(client, headers, name='记录完整性'):
@@ -26,74 +26,8 @@ def add_same_name_tasks(project_id, user_id):
             task = Task(project_id=project_id, module_id=module.id, name='检查', quantity_type='manual', target_quantity=10)
             db.add(task); db.flush()
             ids.append(task.id)
-            db.add(DailyProgress(project_id=project_id, task_id=task.id, user_id=user_id,
-                work_date=date(2026, 9, 30), completed_quantity=index + 1, client_uuid=str(uuid4())))
-            db.add(ScheduleEntry(project_id=project_id, task_id=task.id, work_date=date(2026, 9, 30), planned_quantity=index + 3))
         db.commit()
         return ids
-
-
-def test_same_named_tasks_backup_roundtrip(client, admin_headers):
-    pid = make_project(client, admin_headers)
-    uid = client.get('/api/auth/me', headers=admin_headers).json()['id']
-    ids = add_same_name_tasks(pid, uid)
-    snapshot = client.get(f'/api/projects/{pid}/export/json', headers=admin_headers).json()
-    assert {t['source_id'] for m in snapshot['modules'] for t in m['tasks']} == set(ids)
-    assert {r['task_source_id'] for r in snapshot['progress']} == set(ids)
-    result = client.post('/api/projects/import/json', headers=admin_headers, json=snapshot)
-    assert result.status_code == 200, result.text
-    with SessionLocal() as db:
-        new_pid = result.json()['id']
-        # A new-project import keeps each same-named work definition distinct; retired
-        # daily facts are not replayed into the new project (full restore keeps them).
-        imported = db.query(Task).filter_by(project_id=new_pid, name='检查').all()
-        assert sorted(task.group_label for task in imported) == ['模块0', '模块1']
-        assert not {task.id for task in imported} & set(ids)
-        assert not db.query(DailyProgress).filter(DailyProgress.task_id.in_([t.id for t in imported])).count()
-    # Legacy ambiguous snapshots fail explicitly rather than misassigning history.
-    legacy = deepcopy(snapshot)
-    for module in legacy['modules']:
-        for task in module['tasks']:
-            task.pop('source_id')
-    for key in ('schedule', 'progress'):
-        for record in legacy[key]:
-            record.pop('task_source_id')
-    rejected = client.post('/api/projects/import/json', headers=admin_headers, json=legacy)
-    assert rejected.status_code == 400
-    assert 'source_id' in rejected.json()['detail']
-    # Stable task IDs must be supplied when references would otherwise be ambiguous.
-    missing_ref = deepcopy(snapshot)
-    missing_ref['progress'][0].pop('task_source_id')
-    rejected = client.post('/api/projects/import/json', headers=admin_headers, json=missing_ref)
-    assert rejected.status_code == 400
-    assert '有重名' in rejected.json()['detail']
-    bad_ref = deepcopy(snapshot)
-    bad_ref['progress'][0]['task_source_id'] = 'missing'
-    assert client.post('/api/projects/import/json', headers=admin_headers, json=bad_ref).status_code == 400
-    bad_ref['progress'][0]['task_source_id'] = None
-    assert client.post('/api/projects/import/json', headers=admin_headers, json=bad_ref).status_code == 400
-    duplicate_id = deepcopy(snapshot)
-    duplicate_id['modules'][1]['tasks'][0]['source_id'] = duplicate_id['modules'][0]['tasks'][0]['source_id']
-    assert client.post('/api/projects/import/json', headers=admin_headers, json=duplicate_id).status_code == 400
-
-
-def test_clone_resets_document_history_and_work_records_without_changing_source(client, admin_headers):
-    from tests.document_helpers import documents, upload_documents
-    pid = make_project(client, admin_headers)
-    uid = client.get('/api/auth/me', headers=admin_headers).json()['id']
-    add_same_name_tasks(pid, uid)
-    source = documents(client, admin_headers, pid)['documents'][0]
-    original = upload_documents(client, admin_headers, pid, [source['id']])['documents'][0]
-    result = client.post(f'/api/projects/{pid}/clone', headers=admin_headers,
-        json={'name': '新一期', 'start_date': '2026-11-01', 'end_date': '2026-12-01'})
-    assert result.status_code == 200, result.text
-    target = documents(client, admin_headers, result.json()['id'])
-    assert all(row['status'] == 'pending' and not row['versions'] for row in target['documents'])
-    assert all(row['id'] != original['id'] for row in target['documents'])
-    kept = next(row for row in documents(client, admin_headers, pid)['documents'] if row['id'] == original['id'])
-    assert kept['status'] == 'submitted' and kept['versions'] == original['versions']
-    with SessionLocal() as db:
-        assert db.query(DailyProgress).filter_by(project_id=result.json()['id']).count() == 0
 
 
 def test_document_withdrawal_keeps_immutable_file_history(client, admin_headers):

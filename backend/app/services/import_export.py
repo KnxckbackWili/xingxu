@@ -372,15 +372,12 @@ def project_to_json(db: Session, project_id: str, actor=None, include_documents=
     from app.services.project_events import iso_utc
     from app.models import (
         Project, ProjectEvent, Vehicle, VehicleUnit, VehicleLifecycleEvent,
-        ProjectPreparationItem, ArchiveChecklist, ScheduleEntry, DailyProgress, Issue,
+        ProjectPreparationItem, ArchiveChecklist, Issue,
         ProjectInventoryItem, ProjectInventoryMovement,
     )
     p = db.get(Project, project_id)
     if p is None:
         raise ValueError("项目不存在")
-    from app.models import ProjectSchedulePolicy, TaskDurationOverride, ChangeLog
-    policy = db.query(ProjectSchedulePolicy).filter_by(project_id=project_id).first()
-    overrides = {row.task_id: row for row in db.query(TaskDurationOverride).filter_by(project_id=project_id).all()}
     snapshot = {
         "type": "agvpm-project",
         "version": "2.4",
@@ -418,24 +415,14 @@ def project_to_json(db: Session, project_id: str, actor=None, include_documents=
         "preparations": [],
         "inventory_items": [],
         "archive_checklist": [],
-        "schedule": [],
-        "progress": [],
         "issues": [],
-        "planning_schedule": {"duration_scale": policy.duration_scale if policy else None, "task_durations": [], "read_only": True},
     }
     from app.services.inventory_time import inventory_time_basis
 
     from app.services.work_items import portable_modules
-    snapshot['modules'],snapshot['legacy_work_items']=portable_modules(db,project_id)
-    for task in db.query(Task).filter_by(project_id=project_id):
-        budget=overrides.get(task.id)
-        if budget is not None:
-            snapshot['planning_schedule']['task_durations'].append({'task_source_id':task.id,'workdays':budget.workdays,
-                'baseline_quantity':budget.baseline_quantity,'baseline_unit':budget.baseline_unit,'is_active':bool(budget.is_active)})
-    from app.services.legacy_planning_source import snapshot as legacy_planning_snapshot
+    snapshot['modules']=portable_modules(db,project_id)
     from app.services.project_retention import _row
     from app.models import WeeklyPlanCell
-    snapshot['legacy_planning_source']=legacy_planning_snapshot(db,project_id)
     snapshot['weekly_plan_source']={'read_only':True,'meaning':'原项目周计划仅供核对，新项目需重新确认范围、负责人和发布',
         'cells':[_row(row) for row in db.query(WeeklyPlanCell).filter_by(project_id=project_id).order_by(WeeklyPlanCell.id)]}
     vehicle_map = {v.id: v for v in db.query(Vehicle).filter_by(project_id=project_id).all()}
@@ -490,19 +477,6 @@ def project_to_json(db: Session, project_id: str, actor=None, include_documents=
                 "occurred_at": movement.occurred_at.isoformat(), "time_basis": inventory_time_basis(movement), "note": movement.note,
             } for movement in db.query(ProjectInventoryMovement).filter_by(item_id=item.id).order_by(ProjectInventoryMovement.occurred_at).all()],
         })
-    task_names = {task.id: task.name for task in db.query(Task).filter_by(project_id=project_id).all()}
-    snapshot["schedule"] = [{
-        "task_source_id": item.task_id,
-        "task_name": task_names.get(item.task_id, ""), "work_date": item.work_date.isoformat(),
-        "planned_quantity": item.planned_quantity, "status": item.status, "notes": item.notes,
-    } for item in db.query(ScheduleEntry).filter_by(project_id=project_id).order_by(ScheduleEntry.work_date).all()]
-    snapshot["progress"] = [{
-        "id":item.id,"project_id":item.project_id,"task_source_id": item.task_id,
-        "task_name": task_names.get(item.task_id, ""), "work_date": item.work_date.isoformat(),
-        "completed_quantity": item.completed_quantity, "note": item.note,
-        "user_id":item.user_id,"source":item.source,"client_uuid":item.client_uuid,
-        "schedule_entry_id":item.schedule_entry_id,"created_at":iso_utc(item.created_at),
-    } for item in db.query(DailyProgress).filter_by(project_id=project_id).order_by(DailyProgress.work_date).all()]
     snapshot["issues"] = [{
         "source_id":item.id,"created_at":item.created_at.isoformat() if item.created_at else None,
         "title": item.title, "description": item.description, "issue_type": item.issue_type,

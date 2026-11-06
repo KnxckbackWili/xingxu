@@ -33,32 +33,6 @@ def test_presets_create_the_selected_role_and_audit_resolved_role(client, admin_
     }).status_code == 422
 
 
-def test_readonly_can_view_assigned_project_but_cannot_write_even_with_old_grants(client, admin_headers, pm_headers):
-    from app.db import SessionLocal
-    from app.models import User
-    user, headers = account(client, admin_headers, 'readonly', 'reader')
-    pid = _project(client, pm_headers, 'reader project')
-    assert client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': [user['id']]})).status_code == 200
-    assert client.get(f'/api/projects/{pid}', headers=headers).status_code == 200
-    assert client.get(f'/api/projects/{pid}/export/json', headers=headers).status_code == 200
-    # Simulate historical grants left behind when a former writer becomes readonly.
-    with SessionLocal() as db:
-        actor = db.get(User, user['id'])
-        actor.permission_overrides = {'project.update': True, 'worker.issues': True, 'projects.create': True}
-        db.commit()
-    for method, path, body in [
-        ('PUT', f'/api/projects/{pid}', {'description': 'forbidden'}),
-        ('POST', f'/api/projects/{pid}/issues', {'title': 'forbidden'}),
-        ('POST', '/api/projects', {'name': 'forbidden'}),
-        ('POST', f'/api/projects/{pid}/governance-requests', {'request_type': 'transfer', 'reason': 'forbidden'}),
-    ]:
-        response = client.request(method, path, headers=headers, json=body)
-        assert response.status_code == 403, response.text
-        assert '只读预设' in response.text
-    assert client.get(f'/api/projects/{pid}', headers=headers).json()['description'] != 'forbidden'
-    assert set(client.get(f'/api/projects/{pid}', headers=headers).json()['capabilities']) <= {'project.export'}
-
-
 def test_readonly_ceiling_cannot_be_removed_by_system_or_member_grants(client, admin_headers, pm_headers):
     reader, _ = account(client, admin_headers, 'readonly', 'ceiling-reader')
     pid = _project(client, pm_headers, 'ceiling')

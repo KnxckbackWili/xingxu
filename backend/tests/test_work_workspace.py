@@ -11,27 +11,6 @@ def assigned_repair(client, headers):
     return p, unit, event, result.json()
 
 
-def test_detail_and_repair_update_original_records(client, pm_headers, worker_headers):
-    p, unit, event, ids = assigned_repair(client, pm_headers)
-    path = f'/api/projects/{p}/tasks/{ids["task_id"]}/workspace'
-    worker = client.get(path, headers=worker_headers).json()
-    assert worker['can_report'] and not worker['can_schedule'] and not worker['can_update_repair']
-    assert worker['repair']['id'] == event
-    assert worker['entries'] == [] and worker['reports'] == []
-    # 按日报量已退役：旧入口不再写入新事实。
-    retired = client.post('/api/worker/reports', headers=worker_headers, json={
-        'task_id': ids['task_id'], 'work_date': '2026-09-17', 'completed_quantity': 1, 'client_uuid': 'workspace-retry-001'})
-    assert retired.status_code == 410
-    detail = client.get(path, headers=pm_headers).json()
-    assert detail['can_schedule'] and detail['can_update_repair'] and detail['reports'] == []
-    assert client.put(f'/api/projects/{p}/vehicle-units/{unit}/events/{event}', headers=pm_headers,
-        json={'action_taken':'更换驱动轮','verification':'带载运行正常','is_closed':True,'status_after':'normal'}).status_code == 200
-    detail = client.get(path,headers=worker_headers).json()
-    assert detail['repair']['is_closed'] and detail['repair']['current_status'] == 'normal'
-    summary = client.get(f'/api/projects/{p}/handover-summary',headers=pm_headers).json()
-    assert summary['counts']['faults'] == 0
-
-
 @pytest.mark.member_rules
 def test_detail_and_handover_cannot_leak_another_project(client, pm_headers, worker_headers):
     p, _, _, ids = assigned_repair(client, pm_headers)

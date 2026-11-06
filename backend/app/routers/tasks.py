@@ -12,7 +12,7 @@ from app.db import get_db
 from app.deps import get_current_user, require_pm
 from app.services.vehicle_checks import vehicle_label
 from app.services.work_items import item_dict as work_item_dict
-from app.models import User, Project, Phase, Module, Task, CheckItem, DailyProgress, ScheduleEntry
+from app.models import User, Project, Phase, Module, Task, CheckItem
 from app.routers.projects import get_project_or_404
 from app.services.permissions import require_project_capability, authorize_project, C_PLAN
 from app.services.scope import ensure_project_visible
@@ -26,38 +26,6 @@ router = APIRouter(tags=["任务"])
 
 
 # ===== Modules =====
-
-@router.get("/projects/{project_id}/modules")
-@route_permission('project.read')
-def list_modules(project_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """List modules for the project: core + extra, with selection state."""
-    ensure_project_visible(db, project_id, user)
-    # Default template modules as the catalog (multi-template safe).
-    # C2-5：条件模块（「项目准备」阶段）不再整体排除——返回并标注 prep_only，
-    # 前端展示「仅准备项」标识，让 PM 明白勾选它们只产准备项、不产执行任务。
-    template_modules = (
-        db.query(Module)
-        .join(Phase, Phase.id == Module.phase_id)
-        .filter(Module.project_id.is_(None), Module.template_id.is_(None))
-        .order_by(Phase.sort_order, Module.sort_order)
-        .all()
-    )
-    # Project-selected modules: match by name (project modules get fresh UUIDs on generation)
-    proj_modules = db.query(Module).filter(Module.project_id == project_id).all()
-    proj_names = {m.name for m in proj_modules}
-    return [
-        {
-            "id": m.id,
-            "name": m.name,
-            "category": m.category,
-            "phase_name": db.get(Phase, m.phase_id).name if m.phase_id else "",
-            "sort_order": m.sort_order,
-            "is_selected": m.name in proj_names,
-            "prep_only": (db.get(Phase, m.phase_id).name if m.phase_id else "") in REMINDER_ONLY_PHASE_NAMES,
-        }
-        for m in template_modules
-    ]
-
 
 class GenerateTasksBody(BaseModel):
     module_ids: list[str] = Field(default_factory=list, max_length=500)
@@ -79,15 +47,9 @@ def generate_tasks(
 ):
     """Generate project tasks from selected template modules."""
     _lock_task_plan(db, p, user)
-    # C2-6：状态守卫——终态项目（已完成/已归档）禁止再生成任务；
-    # 日程已确认下达的项目同样禁止（避免改完日程又冒出新任务，破坏已下达排程）。
+    # 已完成/已归档的项目不再添加工作。
     if p.status in TERMINAL_PROJECT_STATUSES:
         raise HTTPException(status_code=400, detail=f"项目状态为「{p.status}」，不能再生成任务")
-    confirmed = db.query(ScheduleEntry.id).filter(
-        ScheduleEntry.project_id == project_id, ScheduleEntry.is_confirmed == True  # noqa: E712
-    ).first()
-    if confirmed:
-        raise HTTPException(status_code=400, detail="日程已确认下达，不能再生成任务（如需调整请先修改排程）")
     from app.services.project_templates import project_template_info
     source = project_template_info(db, p)
     template_id = body.template_id or source['id'] or 'default'
@@ -135,12 +97,8 @@ def _task_dict(t: Task, completed: float = 0, db: Session | None = None) -> dict
         "name": t.name,
         "description": t.description,
         "quantity_type": t.quantity_type, "vehicle_step_key": t.vehicle_step_key,
-        "target_quantity": t.target_quantity,
-        "unit": t.unit,
-        "standard_hours": t.standard_hours,
         "safety_flag": t.safety_flag,
         "completed": completed,
-        "remaining": max(0, (t.target_quantity or 0) - completed),
         "reference_docs": t.reference_docs or [],
         "version": t.version or 0,
     }
@@ -168,8 +126,9 @@ def get_project_tree(project_id: str, user: User = Depends(get_current_user), db
     from sqlalchemy import or_
     from app.models import VehicleUnit
     from app.services.work_items import phase_of,group_of,item_dicts
-    completed={tid:qty or 0 for tid,qty in db.query(DailyProgress.task_id,func.sum(DailyProgress.completed_quantity)).filter_by(project_id=project_id).group_by(DailyProgress.task_id)}
     tasks=db.query(Task).filter_by(project_id=project_id).order_by(Task.sort_order,Task.id).all()
+    from app.services.progress import task_progress_maps
+    completed=task_progress_maps(db,tasks)[0]
     # Load the few phases/modules up front so per-task phase_of/group_of lookups hit the identity map.
     module_ids={t.module_id for t in tasks if t.module_id}
     modules=db.query(Module).filter(Module.id.in_(module_ids)).all() if module_ids else []
@@ -255,10 +214,6 @@ def task_workspace(project_id: str, task_id: str, user: User = Depends(get_curre
     from app.services.execution_scope import REMINDER_ONLY_PHASE_NAMES
     active = p.status in EXECUTION_PROJECT_STATUSES and phase is not None and phase.name not in REMINDER_ONLY_PHASE_NAMES
     checks = db.query(CheckItem).filter_by(project_id=project_id, task_id=task_id).order_by(CheckItem.sort_order).all()
-    entries = db.query(ScheduleEntry, User.display_name).outerjoin(User, User.id == ScheduleEntry.assignee_id).filter(
-        ScheduleEntry.project_id == project_id, ScheduleEntry.task_id == task_id).order_by(ScheduleEntry.work_date, ScheduleEntry.id).all()
-    reports = db.query(DailyProgress, User.display_name).outerjoin(User, User.id == DailyProgress.user_id).filter(
-        DailyProgress.project_id == project_id, DailyProgress.task_id == task_id).order_by(DailyProgress.created_at.desc(), DailyProgress.id).limit(30).all()
     event = db.get(VehicleLifecycleEvent, task.source_vehicle_event_id) if task.source_vehicle_event_id else None
     if event and event.project_id != project_id:
         event = None
@@ -278,11 +233,6 @@ def task_workspace(project_id: str, task_id: str, user: User = Depends(get_curre
                  "check_items": [{"id": c.id, "name": c.name, "vehicle_unit_id": c.vehicle_unit_id, "vehicle_label": vehicle_label(db,c), "vehicle_step_key": c.vehicle_step_key, "source_definition_id": c.vehicle_check_definition_id, "definition_version": c.definition_version, "description": c.description or "", "is_required": c.is_required,
                    "is_safety_critical": c.is_safety_critical, "is_applicable": c.is_applicable, "not_applicable_reason": c.not_applicable_reason,
                    "is_done": c.is_done, "failed": c.failed, "failed_reason": c.failed_reason, "version": c.version or 0} for c in checks]},
-        "entries": [{"id": e.id, "task_id": task_id, "task_name": task.name, "project_id": project_id, "assignee_id": e.assignee_id,
-                     "assignee_name": name or "未分配", "work_date": e.work_date.isoformat(), "planned_quantity": e.planned_quantity,
-                     "notes": e.notes, "is_confirmed": e.is_confirmed, "status": e.status, "version": e.version or 0} for e, name in entries],
-        "reports": [{"id": r.id, "work_date": r.work_date.isoformat(), "user_name": name or "历史人员", "quantity": r.completed_quantity,
-                     "note": r.note, "created_at": r.created_at.isoformat() + "+00:00" if r.created_at else None} for r, name in reports],
         "repair": repair,
         "can_schedule": active and C_SCHEDULE in caps,
         "can_report": active and (member or user.role in ("pm", "admin")) and has_permission(user, "worker.report", default=True),
@@ -290,55 +240,6 @@ def task_workspace(project_id: str, task_id: str, user: User = Depends(get_curre
         "can_update_repair": bool(active and event and recorder and has_permission(user, "worker.issues", default=True) and (event.operator_id == user.id or user.role in ("admin", "director") or user.id in (p.manager, p.technical_manager) or active_co_manager(p, user.id) or C_ISSUES in caps)),
     }
 
-class TaskCreate(BaseModel):
-    module_id: str = Field(..., min_length=1)
-    name: str = Field(..., min_length=1, max_length=200)
-    quantity_type: str = Field(default="manual", pattern="^(per_vehicle|manual|fixed)$")
-    target_quantity: Optional[float] = Field(allow_inf_nan=False, default=None, ge=0)
-    unit: str = "项"
-    standard_hours: Optional[float] = Field(allow_inf_nan=False, default=None, ge=0)
-    safety_flag: bool = False
-    vehicle_step_key: Optional[str] = Field(default=None, max_length=80)
-
-
-@router.post("/projects/{project_id}/tasks")
-@route_permission('project.manage_plan')
-def create_single_task(
-    project_id: str,
-    data: TaskCreate,
-    user: User = Depends(get_current_user),
-    p: Project = Depends(require_project_capability("project.manage_plan")),
-    db: Session = Depends(get_db),
-):
-    """快速添加单个任务到项目的某个模块（Linear/Jira 式）。"""
-    from app.services.work_items import lock_plan
-    lock_plan(db,p,user)
-    m = db.get(Module, data.module_id)
-    if m is None or m.project_id != project_id:
-        raise HTTPException(status_code=404, detail="模块不存在")
-    from app.services.work_items import assert_phase
-    mapped={value for (value,) in db.query(Task.phase_id).filter_by(project_id=project_id,module_id=m.id) if value}
-    phase=db.get(Phase,m.phase_id) if m.phase_id else None
-    phase_id=phase.id if phase and phase.project_id==project_id else next(iter(mapped)) if len(mapped)==1 else None
-    if phase_id is None:raise HTTPException(400,'历史模块已不作为工作归属，请在工作项中明确选择项目阶段')
-    assert_phase(db,phase_id,project_id=project_id)
-    t=Task(project_id=project_id,phase_id=phase_id,module_id=None,group_label=m.name,name=data.name,
-        quantity_type='per_vehicle' if data.quantity_type=='per_vehicle' else 'fixed',target_quantity=None,
-        unit='台' if data.quantity_type=='per_vehicle' else '项',safety_flag=data.safety_flag,
-        legacy_work_snapshot={'kind':'legacy_client_work_definition','module_id':m.id,
-            'quantity':{'type':data.quantity_type,'target':data.target_quantity,'unit':data.unit,'standard_hours':data.standard_hours}},
-        sort_order=(db.query(func.max(Task.sort_order)).filter_by(project_id=project_id,phase_id=phase_id).scalar() or 0)+1)
-    from app.services.vehicle_checks import validate_step
-    if data.quantity_type=='per_vehicle' and not data.vehicle_step_key:raise HTTPException(400,'车辆工作须明确关联真实车辆环节')
-    t.vehicle_step_key=validate_step(db,t,data.vehicle_step_key)
-    db.add(t)
-    db.flush()
-    log_change(db, project_id, "task", t.id, "create", user.id, f"添加任务「{t.name}」")
-    db.commit()
-    return {"id":t.id,"name":t.name,"target_quantity":None,"message":"工作项已添加；原数量输入仅保留来源"}
-
-
-# ===== Task update =====
 
 def _lock_task_plan(db: Session, project: Project, user: User) -> None:
     """Planning and execution serialize on the same project before revalidation."""
@@ -353,41 +254,11 @@ def _lock_task_plan(db: Session, project: Project, user: User) -> None:
         raise HTTPException(400, "已结束的项目不能调整任务计划，请先恢复到验收中")
 
 
-def _validate_target_actuals(db: Session, task: Task, target: float) -> None:
-    completed = db.query(func.coalesce(func.sum(DailyProgress.completed_quantity), 0)).filter(
-        DailyProgress.task_id == task.id).scalar() or 0
-    if target < completed - 1e-9:
-        raise HTTPException(400, f"目标数量不能低于已填报的实际完成量（{completed:g} {task.unit}），请先核对并修正报工")
-
-
-def _validate_target_withdrawal(db: Session, task: Task) -> None:
-    """Withdraw unexecuted work without erasing reporting or schedule history."""
-    # A correcting report can bring the sum back to zero. Its original execution
-    # is still part of the audit trail, so a SUM-only check is insufficient.
-    if db.query(DailyProgress.id).filter(DailyProgress.task_id == task.id).first():
-        raise HTTPException(400, "已有报工记录，不能清空目标数量；请保留目标并核对报工")
-    if task.manually_completed:
-        raise HTTPException(400, "任务已手动完成，不能清空目标数量；请先取消手动完成")
-    protected = db.query(ScheduleEntry.id).filter(
-        ScheduleEntry.task_id == task.id,
-        or_(ScheduleEntry.status.is_(None), ScheduleEntry.status != "skipped"),
-        or_(ScheduleEntry.is_confirmed.is_(True), ScheduleEntry.is_locked.is_(True), ScheduleEntry.status == "done"),
-    ).first()
-    if protected:
-        raise HTTPException(400, "任务有已下达、锁定或已完成的工作安排，不能清空目标数量；请先在项目日程核对或取消未完成的安排、解除锁定，保留已完成记录")
-
-
-
-
 class TaskUpdate(BaseModel):
-    target_quantity: Optional[float] = Field(allow_inf_nan=False, default=None, ge=0)
-    unit: Optional[str] = None
-    standard_hours: Optional[float] = Field(allow_inf_nan=False, default=None, ge=0)
+    model_config = {'extra': 'forbid'}
     name: Optional[str] = None
-    deliverables: Optional[list] = None
     vehicle_step_key: Optional[str] = Field(default=None, max_length=80)
-    module_id: Optional[str] = None  # 看板拖拽：直接指定目标模块
-    phase_id: Optional[str] = None   # 看板拖拽：指定目标阶段，自动落到该阶段首个模块
+    phase_id: Optional[str] = None
     version: Optional[int] = None  # 乐观锁版本号
 
 
@@ -401,7 +272,7 @@ def update_task(
     p: Project = Depends(require_project_capability("project.manage_plan")),
     db: Session = Depends(get_db),
 ):
-    """PM updates a task (e.g. fill target quantity for manual tasks)."""
+    """Rename a work item, move it to another stage or link it to a vehicle step."""
     _lock_task_plan(db, p, user)
     t = db.get(Task, task_id)
     if t is None or t.project_id != project_id:
@@ -411,142 +282,18 @@ def update_task(
     from app.services.optimistic import bump_version, require_client_version
     bump_version(t, require_client_version(data.version))
     old = _task_dict(t)
-    if t.phase_id is not None:
-        from app.services.project_lifecycle import ACTIVE_PROJECT_STATUSES
-        if p.status not in ACTIVE_PROJECT_STATUSES:raise HTTPException(400,'当前项目状态不能维护工作定义')
-        if data.model_fields_set & {'target_quantity','unit','standard_hours','module_id'}:
-            raise HTTPException(400,'原数量与模块来源保持只读；当前工作按阶段、完成状态或真实车辆环节维护')
-        if data.model_fields_set & {'phase_id','vehicle_step_key'} and data.version is None:
-            raise HTTPException(400,'工作关联变更须提交当前版本号')
-        from app.services.work_items import set_definition
-        values={key:getattr(data,key) for key in ('name','phase_id','vehicle_step_key') if key in data.model_fields_set}
-        set_definition(db,t,values)
-        log_change(db,project_id,'task',t.id,'update',user.id,f'修改工作项「{t.name}」',old,_task_dict(t))
-        db.commit()
-        return _task_dict(t,db=db)
-    if "vehicle_step_key" in data.model_fields_set:
-        if data.version is None:
-            raise HTTPException(400, "关联车辆环节须提交当前工作版本号")
-        from app.services.vehicle_checks import bind_step
-        bind_step(db, t, data.vehicle_step_key)
-    if "target_quantity" in data.model_fields_set:
-        # Execution/startup requires a positive target. Explicit zero, like an
-        # empty editor, withdraws the target; omission remains a partial update.
-        target = data.target_quantity if data.target_quantity else None
-        if target is None:
-            if t.target_quantity is not None:
-                _validate_target_withdrawal(db, t)
-        else:
-            _validate_target_actuals(db, t, target)
-        t.target_quantity = target
-    if data.unit is not None:
-        t.unit = data.unit
-    if data.standard_hours is not None:
-        t.standard_hours = data.standard_hours
-    if data.name is not None:
-        t.name = data.name
-    if "deliverables" in data.model_fields_set:
-        raise HTTPException(400, "任务交付物已并入项目资料要求，请在资料页维护")
-    # —— 看板拖拽：跨阶段/跨模块移动（module_id 与 phase_id 二选一）——
-    if data.module_id is not None and data.phase_id is not None:
-        raise HTTPException(status_code=400, detail="module_id 与 phase_id 只能传一个")
-    target_module = None
-    if data.phase_id is not None:
-        # 项目模块的 phase_id 指向模板阶段（project_id IS NULL），
-        # 因此用「该项目存在挂在该阶段的模块」判定目标阶段，而非 Phase.project_id
-        target_module = (
-            db.query(Module)
-            .filter(Module.project_id == project_id, Module.phase_id == data.phase_id)
-            .order_by(Module.sort_order)
-            .first()
-        )
-        if target_module is None:
-            raise HTTPException(status_code=404, detail="目标阶段不存在于该项目")
-    elif data.module_id is not None:
-        target_module = db.get(Module, data.module_id)
-        if target_module is None or target_module.project_id != project_id:
-            raise HTTPException(status_code=404, detail="目标模块不存在")
-
-    if target_module is not None and target_module.id != t.module_id:
-        old_module = db.get(Module, t.module_id)
-        t.module_id = target_module.id
-        # 追加到目标模块末尾
-        max_order = db.query(func.coalesce(func.max(Task.sort_order), 0)).filter(
-            Task.project_id == project_id, Task.module_id == target_module.id).scalar()
-        t.sort_order = (max_order or 0) + 1
-        log_change(db, project_id, "task", t.id, "update", user.id,
-                   f"移动任务「{t.name}」：{old_module.name if old_module else '?'} → {target_module.name}",
-                   {"module_id": old_module.id, "phase_id": old_module.phase_id},
-                   {"module_id": target_module.id, "phase_id": target_module.phase_id})
-    db.flush()
-    old_target = old['target_quantity'] if old['target_quantity'] else '待确认'
-    new_target = t.target_quantity if t.target_quantity else '待确认'
-    log_change(db, project_id, "task", t.id, "update", user.id,
-               f"更新任务「{t.name}」：目标数量 {old_target} → {new_target} {t.unit}")
+    from app.services.project_lifecycle import ACTIVE_PROJECT_STATUSES
+    if p.status not in ACTIVE_PROJECT_STATUSES:raise HTTPException(400,'当前项目状态不能维护工作定义')
+    if data.model_fields_set & {'phase_id','vehicle_step_key'} and data.version is None:
+        raise HTTPException(400,'工作关联变更须提交当前版本号')
+    from app.services.work_items import set_definition
+    values={key:getattr(data,key) for key in ('name','phase_id','vehicle_step_key') if key in data.model_fields_set}
+    set_definition(db,t,values)
+    log_change(db,project_id,'task',t.id,'update',user.id,f'修改工作项「{t.name}」',old,_task_dict(t))
     db.commit()
     from app.services.cache import cache_clear
-    from app.services.progress import task_completed
     cache_clear("dashboard:")
-    return _task_dict(t, task_completed(db, t.id), db)
-
-
-class TaskTargetItem(BaseModel):
-    id: str
-    target_quantity: float = Field(gt=0, allow_inf_nan=False)
-    version: int = Field(ge=0)
-
-
-class TaskTargetsBatch(BaseModel):
-    items: list[TaskTargetItem] = Field(min_length=1, max_length=500)
-
-
-@router.put("/projects/{project_id}/task-targets")
-@route_permission('project.manage_plan')
-def update_task_targets(
-    project_id: str,
-    data: TaskTargetsBatch,
-    user: User = Depends(get_current_user),
-    p: Project = Depends(require_project_capability("project.manage_plan")),
-    db: Session = Depends(get_db),
-):
-    """开工清单批量填写工作量；任一越权/冲突时整批回滚。"""
-    _lock_task_plan(db, p, user)
-    if p.status != "preparing":
-        raise HTTPException(400, "当前项目不在开工准备阶段，请到任务详情调整工作量")
-    if db.query(ScheduleEntry.id).filter(
-        ScheduleEntry.project_id == project_id, ScheduleEntry.is_confirmed.is_(True)
-    ).first():
-        raise HTTPException(400, "日程已下达，请到任务详情调整工作量并核对日程")
-    ids = [item.id for item in data.items]
-    if len(set(ids)) != len(ids):
-        raise HTTPException(400, "不能重复提交同一任务")
-    tasks = {task.id: task for task in db.query(Task).filter(Task.project_id == project_id, Task.id.in_(ids)).all()}
-    if len(tasks) != len(ids):
-        raise HTTPException(404, "任务不存在于当前项目，请刷新工作清单")
-    from app.services.optimistic import bump_version
-    try:
-        for item in data.items:
-            task = tasks[item.id]
-            if task.phase_id is not None:
-                raise HTTPException(400,"工作项不再维护目标数量，原数量保持只读")
-            before = task.target_quantity
-            _validate_target_actuals(db, task, item.target_quantity)
-            bump_version(task, item.version)
-            task.target_quantity = item.target_quantity
-            log_change(db, project_id, "task", task.id, "update", user.id,
-                       f"开工安排：{task.name} 目标数量 {before} → {item.target_quantity} {task.unit}")
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    from app.services.cache import cache_clear
-    cache_clear("dashboard:")
-    return {"updated": len(data.items), "tasks": [_task_dict(tasks[item.id]) for item in data.items]}
-
-
-
-
-# Retired T22 submission route; only the unified document service writes evidence.
+    return _task_dict(t,db=db)
 
 
 # ===== Check items =====
@@ -687,7 +434,6 @@ def _apply_check(project_id,cid,data,user,db):
             "not_applicable_reason": ci.not_applicable_reason,
             "version": ci.version or 0,
         }
-
 
 
 @router.put("/projects/{project_id}/check-items/{cid}")

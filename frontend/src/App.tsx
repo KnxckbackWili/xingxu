@@ -38,12 +38,6 @@ function WeekRoute() {
   return <WeekPage projectId={new URLSearchParams(location.search).get('project_id') || ''} />
 }
 
-function LegacyWeekRedirect() {
-  const location = useLocation()
-  const projectId = new URLSearchParams(location.search).get('project_id')
-  return <Navigate to={projectId ? `/worker/week?project_id=${encodeURIComponent(projectId)}` : '/worker/week'} replace />
-}
-
 const WorkerIssuesPage = lazy(() => import('./pages/worker/WorkerIssuesPage'))
 const MyPage = lazy(() => import('./pages/worker/MyPage'))
 function WorkerProjectRedirect() {
@@ -169,21 +163,12 @@ export default function App() {
         <Route index element={<Navigate to={canAccessNav('/pm/dashboard', user) ? '/pm/dashboard' : canAccessNav('/pm/projects', user) ? '/pm/projects' : '/pm/messages'} replace />} />
         <Route path="projects" element={<ProtectedRoute navKey="/pm/projects">{load(<ProjectListPage />)}</ProtectedRoute>} />
         <Route path="inventory" element={<ProtectedRoute navKey="/pm/inventory">{load(<InventoryOverviewPage />)}</ProtectedRoute>} />
-        <Route path="ai" element={<Navigate to="/pm/projects" replace />} />
         <Route path="dashboard" element={<ProtectedRoute navKey="/pm/dashboard">{load(<DashboardPage />)}</ProtectedRoute>} />
-        <Route path="my-schedule" element={<Navigate to="/worker/week" replace />} />
-        <Route path="team-schedule" element={<Navigate to="/pm/dashboard" replace />} />
-        {/* 人员排班已下线：只记录实际做了什么，不再安排人。旧链接回到工作台。 */}
-        <Route path="people" element={<Navigate to="/pm/dashboard" replace />} />
         <Route path="projects/:projectId" element={<ProtectedRoute navKey="/pm/projects">{load(<ProjectLayout />)}</ProtectedRoute>} />
         <Route path="projects/:projectId/:tab" element={<ProtectedRoute navKey="/pm/projects">{load(<ProjectLayout />)}</ProtectedRoute>} />
         <Route path="templates" element={<ProtectedRoute navKey="/pm/templates">{load(<TemplateLibraryPage />)}</ProtectedRoute>} />
         <Route path="templates/:templateId" element={<ProtectedRoute navKey="/pm/templates">{load(<TemplateEditorPage />)}</ProtectedRoute>} />
-        <Route path="ai-assistant" element={<Navigate to="/pm/projects" replace />} />
-        <Route path="progress" element={<Navigate to="/pm/dashboard" replace />} />
-        <Route path="stats" element={<Navigate to="/pm/dashboard#statistics" replace />} />
         <Route path="messages" element={<ProtectedRoute navKey="/pm/messages">{load(<MessagesPage />)}</ProtectedRoute>} />
-        <Route path="governance" element={<Navigate to="/pm/projects" replace />} />
         <Route path="project-recycle-bin" element={<ProtectedRoute navKey="/pm/project-recycle-bin">{load(<ProjectRecycleBinPage />)}</ProtectedRoute>} />
         <Route path="storage" element={<ProtectedRoute navKey="/pm/storage">{load(<StorageSettingsPage />)}</ProtectedRoute>} />
         <Route path="backups" element={<ProtectedRoute navKey="/pm/backups">{load(<SystemBackupPanel />)}</ProtectedRoute>} />
@@ -207,16 +192,11 @@ export default function App() {
       >
         <Route index element={<Navigate to="/worker/week" replace />} />
         <Route path="week" element={<ProtectedRoute navKey="/worker/week">{load(<WeekRoute />)}</ProtectedRoute>} />
-        <Route path="today" element={<LegacyWeekRedirect />} />
-        <Route path="schedule" element={<LegacyWeekRedirect />} />
         <Route path="issues" element={<ProtectedRoute navKey="/worker/issues">{load(<WorkerIssuesPage />)}</ProtectedRoute>} />
         {/* 两端已合并：项目统一在项目页查看 */}
         <Route path="projects" element={<WorkerProjectRedirect />} />
         <Route path="projects/:projectId" element={<WorkerProjectRedirect />} />
         <Route path="my" element={load(<MyPage />)} />
-        {/* 旧路由兼容 */}
-        <Route path="records" element={<Navigate to="/worker/my" replace />} />
-        <Route path="stats" element={<Navigate to="/worker/my" replace />} />
         <Route path="messages" element={<ProtectedRoute navKey="/worker/messages">{load(<MessagesPage />)}</ProtectedRoute>} />
         <Route path="feedback" element={<ProtectedRoute navKey="/worker/feedback">{load(<FeedbackPage />)}</ProtectedRoute>} />
       </Route>

@@ -10,7 +10,7 @@ from fastapi import HTTPException
 
 from app import config
 from app.db import SessionLocal
-from app.models import Project, ProjectDeletionRecord, ProjectPermanentBackup, ProjectArchive, Attachment, ChangeLog, PersonalEvent
+from app.models import Project, ProjectDeletionRecord, ProjectPermanentBackup, Attachment, ChangeLog
 from app.services import backup_crypto as codec
 from app.services import project_permanent_deletion as permanent
 from app.services.project_deletion import _backup_path, backup_directory, backup_zip
@@ -33,60 +33,6 @@ def prepare(client, admin, row):
 def purge(client, admin, row, receipt, **extra):
     return client.request('DELETE', f"/api/project-recycle-bin/projects/{row['id']}/permanent", headers=admin,
         json={'version': row['version'], 'deletion_id': row['deletion_id'], 'backup_id': receipt['backup_id'], 'confirm_name': row['name'], **extra})
-
-
-def test_explicit_purge_preserves_encrypted_download_receipt_after_project_cascade(client, admin_headers, pm_headers, tmp_path):
-    from tests.document_helpers import documents
-    from tests.template_work import upload_template_blank
-    blank_bytes = b'original blank form'
-    blank = upload_template_blank(client, admin_headers, '4.1', {'file': ('blank.txt', blank_bytes, 'text/plain')})
-    assert blank.status_code == 200, blank.text
-    p = _project(client, pm_headers)
-    document = next(row for row in documents(client, pm_headers, p['id'])['documents'] if row['code'] == '4.1')
-    upload = client.post(f"/api/projects/{p['id']}/documents/files", headers=pm_headers,
-        data={'document_ids': json.dumps([document['id']])},
-        files={'file': ('original.bin', b'ORIGINAL bytes\x00', 'application/octet-stream')})
-    assert upload.status_code == 200
-    assert _delete(client, pm_headers, p).status_code == 200
-    row = client.get(f"/api/project-recycle-bin/projects/{p['id']}", headers=admin_headers).json()
-    receipt = prepare(client, admin_headers, row)
-    assert receipt.status_code == 200, receipt.text
-    receipt = receipt.json()
-    download = client.get('/api/project-recycle-bin/backups/' + receipt['backup_id'], headers=admin_headers)
-    assert download.status_code == 200 and download.headers['cache-control'] == 'no-store'
-    encrypted = tmp_path / 'project.agvenc'; encrypted.write_bytes(download.content)
-    assert codec.is_encrypted(encrypted)
-    with backup_zip(encrypted) as bundle:
-        snapshot = json.loads(bundle.read('project-backup.json'))
-        assert snapshot['project']['id'] == p['id']
-        manifest = snapshot['binary_files']['manifest']
-        item = next(row for row in manifest if row['filename'] == 'original.bin')
-        assert bundle.read(item['path']) == b'ORIGINAL bytes\x00'
-        preserved_blank = next(row for row in manifest if row['filename'] == 'blank.txt')
-        assert bundle.read(preserved_blank['path']) == blank_bytes
-        records = snapshot['records']
-        assert any(row['id'] == document['id'] for row in records['project_documents'])
-        assert any(row['id'] == document['definition_id'] for row in records['project_document_definitions'])
-        assert any(row['project_document_id'] == document['id'] for row in records['document_versions'])
-        assert any(row['id'] == document['blank_file_id'] for row in records['document_template_files'])
-        assert 'secret.key' not in bundle.namelist()
-        assert snapshot['records']['project_deletion_records'][0]['id'] == row['deletion_id']
-    result = purge(client, admin_headers, row, receipt)
-    assert result.status_code == 200, result.text
-    with SessionLocal() as db:
-        assert db.get(Project, p['id']) is None
-        assert db.query(Attachment).filter_by(project_id=p['id']).count() == 0
-        assert db.query(ProjectDeletionRecord).filter_by(project_id=p['id']).count() == 0
-        assert db.query(ProjectArchive).filter_by(project_id=p['id']).count() == 0
-        assert db.get(ProjectPermanentBackup, receipt['backup_id']).purged_at
-        assert db.query(ChangeLog).filter_by(entity_id=p['id'], project_id=None, action='delete_permanent').count() == 1
-    repeated = purge(client, admin_headers, row, receipt)
-    assert repeated.status_code in (404, 409)
-    after = client.get('/api/project-recycle-bin/backups/' + receipt['backup_id'], headers=admin_headers)
-    assert after.status_code == 200 and after.content == download.content
-    assert any(item['backup_id'] == receipt['backup_id'] for item in client.get('/api/project-recycle-bin/permanent-backups', headers=admin_headers).json())
-    for url in ['/api/project-recycle-bin/backups/' + receipt['backup_id'], '/api/project-recycle-bin/permanent-backups']:
-        assert client.get(url, headers=pm_headers).status_code == 403
 
 
 def test_no_password_backup_failure_keeps_project_and_current_cycle(client, admin_headers, pm_headers, monkeypatch, tmp_path):
@@ -138,19 +84,6 @@ def test_non_admin_and_explicit_denial_cannot_prepare_or_purge(client, admin_hea
     assert prepare(client, admin_headers, row).status_code == 403
     assert purge(client, admin_headers, row, receipt).status_code == 403
     assert client.get('/api/project-recycle-bin/backups/' + receipt['backup_id'], headers=admin_headers).status_code == 403
-
-
-def test_private_calendar_blocks_permanent_deletion_without_exporting_private_text(client, admin_headers, pm_headers):
-    p = _project(client, pm_headers)
-    with SessionLocal() as db:
-        db.add(PersonalEvent(project_id=p['id'], user_id='user-pm-001', work_date=date.today(), title='OWNER PRIVATE SECRET'))
-        db.commit()
-    assert _delete(client, pm_headers, p).status_code == 200
-    row = client.get(f"/api/project-recycle-bin/projects/{p['id']}", headers=admin_headers).json()
-    response = prepare(client, admin_headers, row)
-    assert response.status_code == 409 and 'OWNER PRIVATE SECRET' not in response.text
-    with SessionLocal() as db:
-        assert db.get(Project, p['id']) and db.query(PersonalEvent).filter_by(project_id=p['id']).count() == 1
 
 
 def test_audit_failure_rolls_back_receipt_and_purge(client, admin_headers, pm_headers, monkeypatch):

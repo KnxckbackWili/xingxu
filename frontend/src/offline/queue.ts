@@ -1,8 +1,8 @@
 /**
  * Offline queue for worker operations.
  *
- * C5-5: generalized to cover quantity reports, check items, deliverables and
- * issue submissions. Each op is typed; the backend `/worker/sync` dispatches
+ * Covers check items, deliverables, issue submissions and field operations.
+ * Each op is typed; the backend `/worker/sync` dispatches
  * by type. Dedupe on the server is handled by client_uuid, so re-sending
  * after a crash is safe.
  *
@@ -66,7 +66,7 @@ function scopedKey(scope: 'queue' | 'rejected'): string | null {
   return owner ? `agvpm_offline_${scope}:${owner}` : null
 }
 
-export type OfflineOpType = 'report' | 'checkitem' | 'deliverable' | 'issue' | 'field'
+export type OfflineOpType = 'checkitem' | 'deliverable' | 'issue' | 'field'
 
 export interface QueuedReport {
   client_uuid: string
@@ -85,16 +85,13 @@ export function getQueue(): QueuedReport[] {
   try {
     const raw = localStorage.getItem(key)
     const arr = raw ? JSON.parse(raw) : []
-    return (Array.isArray(arr) ? arr : []).map((i) => ({
-      type: 'report', // 旧队列无 type 字段 → 视为数量填报
-      ...i,
-    }))
+    return Array.isArray(arr) ? arr : []
   } catch {
     return []
   }
 }
 
-export function enqueue(payload: Record<string, unknown>, type: OfflineOpType = 'report'): QueuedReport {
+export function enqueue(payload: Record<string, unknown>, type: OfflineOpType): QueuedReport {
   const item: QueuedReport = {
     client_uuid: payload.client_uuid as string,
     payload,

@@ -19,8 +19,8 @@ RETAINED_MODELS = (
     models.ProjectMember, models.ProjectEvent, models.Vehicle, models.VehicleUnit, models.VehicleLifecycleEvent,
     models.ProjectVehicleStep, models.VehicleProgress,
     models.ProjectInventoryItem, models.ProjectInventoryMovement, models.ItemApplication,
-    models.Phase, models.Module, models.Task, models.VehicleCheckDefinition, models.CheckItem, models.ScheduleEntry,
-    models.DailyProgress, models.WeeklyPlanCell, models.Issue,
+    models.Phase, models.Module, models.Task, models.VehicleCheckDefinition, models.CheckItem,
+    models.WeeklyPlanCell, models.Issue,
     models.Attachment, models.ArchiveChecklist, models.AcceptanceRecord,
     models.FieldOperation,
     models.ProjectDocumentDefinition, models.ProjectDocument, models.DocumentNoticeReceipt, models.ProjectReportReceipt,
@@ -120,10 +120,3 @@ def project_retention_snapshot(db, project):
     }
 
 
-def is_retained_file(db, stored_name: str) -> bool:
-    """A retained archive remains an owner after live Attachment rows are gone."""
-    for (snapshot,) in db.query(models.ProjectArchive.snapshot).yield_per(50):
-        for item in (snapshot or {}).get('binary_files', {}).get('manifest', []):
-            if isinstance(item, dict) and item.get('stored_name') == stored_name:
-                return True
-    return False

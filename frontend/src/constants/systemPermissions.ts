@@ -150,19 +150,11 @@ export const SYSTEM_PERMISSION_DEFAULTS: Record<string, readonly string[]> = {
     "admin",
     "pm"
   ],
-  "system.archives.read": [
-    "admin",
-    "director"
-  ],
   "system.users.read": [
     "admin"
   ],
   "system.users.manage": [
     "admin"
-  ],
-  "system.availability.manage": [
-    "admin",
-    "pm"
   ],
   "system.templates.read": [
     "admin",
@@ -278,7 +270,7 @@ const READ_ONLY_PERMISSION_KEYS = new Set([
   'workspace.view', 'insights.view', 'personal.schedule.read', 'personal.messages.use',
   'personal.records.read', 'project.read', 'project.export', 'projects.view_all',
   'system.templates.read', 'system.templates.view', 'system.vehicle_types.view',
-  'system.inventory.read', 'system.inventory.view', 'system.archives.read', 'system.audit.read',
+  'system.inventory.read', 'system.inventory.view', 'system.audit.read',
   'system.agent.use', 'system.skills.download',
 ])
 for (const key of READ_ONLY_PERMISSION_KEYS) {

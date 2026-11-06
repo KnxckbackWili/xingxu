@@ -4,23 +4,8 @@ from tests.lifecycle_helpers import versioned
 from datetime import date
 import pytest
 from app.db import SessionLocal
-from app.models import DailyProgress, Issue, Project, ScheduleEntry, User
+from app.models import Issue, Project, User
 from tests.test_project_lifecycle_boundaries import project, task_entry
-
-
-def test_weekly_report_omits_cancelled_future_and_overdue_plans(client, pm_headers):
-    pid = project(client, pm_headers)
-    tid, old, _ = task_entry(pid, status='skipped')
-    with SessionLocal() as db:
-        db.get(ScheduleEntry, old).work_date = date(2026, 8, 31)
-        db.add(ScheduleEntry(project_id=pid, task_id=tid, work_date=date(2026, 9, 8),
-                             planned_quantity=2, status='skipped'))
-        db.commit()
-    result = client.get(f'/api/projects/{pid}/report', headers=pm_headers,
-                        params={'period': 'week', 'ref_date': '2026-09-02'})
-    assert result.status_code == 200, result.text
-    assert result.json()['next_plan'] == []
-    assert result.json()['risks'] == []
 
 
 def test_report_keeps_different_people_with_same_name_separate(client, pm_headers, worker_headers):
@@ -44,17 +29,6 @@ def test_report_keeps_different_people_with_same_name_separate(client, pm_header
     assert result.json()['summary']['person_count'] == 2
     assert len(result.json()['per_person']) == 2
     assert len({row['user_id'] for row in result.json()['per_person']}) == 2
-
-
-def test_zero_quantity_duration_row_is_not_unfinished_quantity(client, pm_headers):
-    pid = project(client, pm_headers)
-    _, eid, _ = task_entry(pid)
-    with SessionLocal() as db:
-        db.get(ScheduleEntry, eid).planned_quantity = 0
-        db.commit()
-    result = client.get(f'/api/projects/{pid}/overdue', headers=pm_headers)
-    assert result.status_code == 200, result.text
-    assert result.json()['count'] == 0
 
 
 def test_report_issue_period_uses_local_midnight_not_utc_midnight(client, pm_headers):

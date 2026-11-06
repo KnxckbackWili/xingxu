@@ -4,8 +4,7 @@ from datetime import datetime,timedelta
 import json
 import pytest
 from app.db import SessionLocal
-from app.models import (User,Project,ProjectMember,ProjectGovernanceRequest,ProjectDocument,DocumentVersion,
-                        ChangeLog,DocumentTriggerEvent,Issue,Attachment,Notification,ProjectDocumentDefinition)
+from app.models import User, Project, ProjectMember, ProjectDocument, DocumentVersion, ChangeLog, DocumentTriggerEvent, Issue, Attachment, Notification, ProjectDocumentDefinition
 from app.time_utils import utcnow
 from tests.test_confidential_documents_t26 import setup_project,policy
 from tests.document_helpers import requirement,documents,upload_documents
@@ -29,65 +28,6 @@ def transfer(client,headers,pid,target,view,**extra):
     return client.post(f'/api/projects/{pid}/transfer',headers=headers,json={'target_manager_id':target,
         'reason':'明确交接并由新的项目经理接手','version':view['version'],
         'member_removal_confirmations':[row['user_id'] for row in view['removed']],**extra})
-
-
-@pytest.mark.member_rules
-def test_direct_transfer_moves_current_owner_acl_creates_real_departure_and_preserves_history(client,pm_headers,admin_headers):
-    pid,people=setup_project(client,pm_headers);target,new_headers=recipient(client,admin_headers)
-    private=requirement(client,pm_headers,pid,name='PRIVATE-OWNER-SCOPE')
-    uploaded=upload_documents(client,pm_headers,pid,[private['id']],content=b'private original')['documents'][0]
-    assert policy(client,pm_headers,pid,'document',uploaded).status_code==200
-    with SessionLocal() as db:
-        old=ProjectGovernanceRequest(project_id=pid,project_name='历史申请',request_type='transfer',requested_by=people['pm'],
-            source_manager_id=people['pm'],target_manager_id=target,reason='完整保全的历史申请',status='pending')
-        db.add(old);db.commit();history_id=old.id
-    view=preview(client,pm_headers,pid)
-    assert view['current_manager']['id']==people['pm'] and target in {row['id'] for row in view['candidates']}
-    assert [row['user_id'] for row in view['removed']]==[people['pm']]
-    result=transfer(client,pm_headers,pid,target,view)
-    assert result.status_code==200,result.text
-    assert result.json()['manager']==target and result.json()['viewer_retains_access'] is False
-    assert result.headers['cache-control']=='private, no-store'
-    assert client.get('/api/projects/'+pid,headers=pm_headers).status_code==404
-    current=documents(client,new_headers,pid)
-    assert private['id'] in {row['id'] for row in current['documents']}
-    assert client.get('/api'+uploaded['latest_version']['download_url'],headers=new_headers).content==b'private original'
-    with SessionLocal() as db:
-        project=db.get(Project,pid)
-        assert people['pm'] not in project.members and target in project.members
-        assert not db.query(ProjectMember).filter_by(project_id=pid,user_id=people['pm']).first()
-        event=db.query(DocumentTriggerEvent).filter_by(project_id=pid,trigger_type='member_leave').one()
-        assert event.source_id==people['pm']
-        assert db.query(ProjectDocument).filter_by(project_id=pid,trigger_ref=event.id,code='6.7').count()==1
-        history=db.get(ProjectGovernanceRequest,history_id)
-        assert history.status=='pending' and history.reason=='完整保全的历史申请'
-        audit=db.query(ChangeLog).filter_by(project_id=pid,action='transfer').one()
-        assert audit.operator_id==people['pm'] and audit.new_value['reason']=='明确交接并由新的项目经理接手'
-        from app.services.project_deletion import project_backup_snapshot
-        from app.services.project_retention import project_retention_snapshot
-        assert project_backup_snapshot(db,project)['records']['project_governance_requests'][0]['id']==history_id
-        assert 'project_governance_requests' not in project_retention_snapshot(db,project)['records']
-
-
-def test_ack_cas_target_and_ordinary_update_cannot_bypass_transfer(client,pm_headers,admin_headers,worker_headers):
-    pid,people=setup_project(client,pm_headers);target,_=recipient(client,admin_headers)
-    view=preview(client,pm_headers,pid)
-    assert transfer(client,pm_headers,pid,target,view,member_removal_confirmations=[]).status_code==409
-    assert transfer(client,pm_headers,pid,target,view,version=view['version']+1).status_code==409
-    assert transfer(client,worker_headers,pid,target,view).status_code==403
-    for headers in (pm_headers,admin_headers):
-        assert client.put('/api/projects/'+pid,headers=headers,json={'manager_id':target,'version':view['version']}).status_code==400
-    with SessionLocal() as db:db.get(User,target).is_active=False;db.commit()
-    assert transfer(client,pm_headers,pid,target,view).status_code==400
-    with SessionLocal() as db:
-        assert db.get(Project,pid).manager==people['pm']
-        assert db.query(DocumentTriggerEvent).filter_by(project_id=pid,trigger_type='member_leave').count()==0
-    for path,method in ((f'/api/projects/{pid}/governance-requests','POST'),('/api/projects/governance/requests','GET'),
-            ('/api/projects/governance/requests/old/review','POST'),('/api/projects/governance/requests/old/withdraw','POST'),
-            ('/api/projects/governance/requests/old/member-removal-preview','GET')):
-        assert client.request(method,path,headers=admin_headers,json={}).status_code==410
-    client.cookies.clear()
-    assert client.post(f'/api/projects/{pid}/transfer').status_code==401
 
 
 def test_explicit_retained_role_stays_member_but_never_keeps_implicit_confidential_owner_access(client,pm_headers,admin_headers):
@@ -212,37 +152,6 @@ def test_permission_and_recipient_changes_after_project_lock_cannot_be_cached(cl
     with SessionLocal() as db:assert db.get(Project,pid).manager==people['pm']
 
 
-def test_full_legacy_governance_row_survives_actual_encrypted_backup_and_purge(client,pm_headers,admin_headers,tmp_path):
-    from app.services.project_deletion import backup_zip
-    from tests.test_project_recycle_bin import _delete
-    from tests.test_retention_unification import prepare,purge
-    from app.services import backup_crypto as codec
-    pid,people=setup_project(client,pm_headers)
-    with SessionLocal() as db:
-        row=ProjectGovernanceRequest(project_id=pid,project_name='原名',request_type='transfer',status='pending',
-            requested_by=people['pm'],source_manager_id=people['pm'],target_manager_id=people['admin'],reason='保全原理由',review_note='保全原备注')
-        db.add(row);db.commit();identity=row.id
-    current=client.get('/api/projects/'+pid,headers=pm_headers).json()
-    assert _delete(client,pm_headers,current).status_code==200
-    recycled=client.get('/api/project-recycle-bin/projects/'+pid,headers=admin_headers).json()
-    response=prepare(client,admin_headers,recycled);assert response.status_code==200,response.text
-    receipt=response.json();download=client.get('/api/project-recycle-bin/backups/'+receipt['backup_id'],headers=admin_headers)
-    assert download.status_code==200
-    path=tmp_path/'legacy-history.agvenc';path.write_bytes(download.content);assert codec.is_encrypted(path)
-    with backup_zip(path) as bundle:
-        saved=json.loads(bundle.read('project-backup.json'))['records']['project_governance_requests']
-        assert saved[0]['id']==identity and saved[0]['status']=='pending'
-        assert saved[0]['reason']=='保全原理由' and saved[0]['review_note']=='保全原备注'
-        assert saved[0]['source_manager_id']==people['pm'] and saved[0]['target_manager_id']==people['admin']
-    result=purge(client,admin_headers,recycled,receipt);assert result.status_code==200,result.text
-    with SessionLocal() as db:
-        assert db.get(Project,pid) is None
-        # Governance has no project FK by design: retired historical evidence
-        # stays private and unchanged, in addition to its authenticated backup.
-        retained=db.get(ProjectGovernanceRequest,identity)
-        assert retained.reason=='保全原理由' and retained.status=='pending' and retained.project_id==pid
-
-
 @pytest.mark.member_rules
 def test_statistics_known_matrix_counts_only_visible_real_vehicle_steps(client,pm_headers,admin_headers):
     from tests.test_vehicle_progress import setup_fleet
@@ -262,43 +171,6 @@ def test_statistics_known_matrix_counts_only_visible_real_vehicle_steps(client,p
     result=response.json();assert result['projects']==1
     assert result['vehicle_progress']=={'target':4,'completed':1,'quantity_unknown':False,'percent':25.0}
     assert 'HIDDEN-PROJECT' not in response.text and '1000米' not in response.text and 'person_days' not in response.text
-
-
-def test_retired_approval_permission_hidden_inert_and_preserved_when_editing_other_policy(client,admin_headers,worker_headers):
-    from app.services.system_permissions import has_permission
-    with SessionLocal() as db:
-        user=db.query(User).filter_by(username='worker1').one();identity=user.id
-        user.permission_overrides={'system.governance.review':True,'historical.unknown.flag':{'retained':'original'},'project.read':True};db.commit()
-        assert not has_permission(user,'system.governance.review',default=True)
-    catalog=client.get('/api/permissions/catalog',headers=admin_headers)
-    assert catalog.status_code==200 and 'system.governance.review' not in catalog.text and '移交审批' not in catalog.text
-    current=client.get('/api/permissions/users/'+identity,headers=admin_headers).json()
-    assert 'system.governance.review' not in current['overrides']
-    saved=client.put('/api/permissions/users/'+identity,headers=admin_headers,json={
-        'version':current['version'],'overrides':{'project.read':True,'workspace.view':False,'system.governance.review':True}})
-    assert saved.status_code==200,saved.text
-    with SessionLocal() as db:
-        actual=db.get(User,identity)
-        assert actual.permission_overrides['system.governance.review'] is True
-        assert actual.permission_overrides['historical.unknown.flag']=={'retained':'original'}
-    assert 'system.governance.review' not in saved.json()['overrides']
-    # Hidden old values cannot be newly granted or flipped by a stale editor.
-    assert client.put('/api/permissions/users/'+identity,headers=admin_headers,json={
-        'version':saved.json()['version'],'overrides':{'system.governance.review':False}}).status_code==422
-    with SessionLocal() as db:other=db.query(User).filter_by(username='worker2').one();other_id=other.id;version=other.permission_version or 0
-    assert client.put('/api/permissions/users/'+other_id,headers=admin_headers,json={
-        'version':version,'overrides':{'system.governance.review':True}}).status_code==422
-
-
-def test_retired_governance_never_reappears_in_legacy_decision_read_model(client,pm_headers,admin_headers):
-    pid,people=setup_project(client,pm_headers)
-    with SessionLocal() as db:
-        db.add(ProjectGovernanceRequest(project_id=pid,project_name='PRIVATE-HISTORY-NAME',request_type='transfer',
-            requested_by=people['pm'],source_manager_id=people['pm'],target_manager_id=people['admin'],reason='PRIVATE-HISTORY-REASON',status='pending'));db.commit()
-    response=client.get('/api/dashboard/decision-view',headers=admin_headers)
-    assert response.status_code==410,response.text
-    assert 'PRIVATE-HISTORY' not in response.text
-    with SessionLocal() as db:assert db.query(ProjectGovernanceRequest).filter_by(project_id=pid).one().reason=='PRIVATE-HISTORY-REASON'
 
 
 def test_overview_and_statistics_share_current_issue_and_vehicle_closure_facts(client,pm_headers):

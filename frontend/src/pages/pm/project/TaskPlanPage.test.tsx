@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import TaskPlanPage from './TaskPlanPage'
 import { catalog, work } from '../../../test/workItems'
@@ -13,11 +13,9 @@ beforeEach(() => {
   get.mockImplementation(async (url: string) => ({ data: url.endsWith('/work-items') ? source : url.endsWith('/vehicle-progress') ? { steps: [] } : url.endsWith('/history') ? { read_only: true, reports: [{ client_uuid: 'original-uuid', note: '原记录' }] } : url.endsWith('/workspace') ? { project: { id: 'p', name: '原项目' }, task: { id: 'w1', description: '原施工说明' }, work_item: work(), entries: [], can_complete: true, can_override: true } : [] }))
 })
 function show(props: any = {}) { return render(<MemoryRouter><TaskPlanPage projectId="p" {...props} /></MemoryRouter>) }
-it('shows phase/work items, matrix identity warnings and history without editable quantities', async () => {
+it('shows phase/work items and matrix warnings without editable quantities', async () => {
   show(); expect(await screen.findByText('现场验证')).toBeVisible(); expect(screen.getAllByText('原模块标签')[0]).toBeVisible(); expect(screen.getByTitle('2 / 3 个车辆环节')).toBeVisible(); expect(screen.getByText(/不代表逐台核验/)).toBeVisible()
   expect(screen.queryByRole('spinbutton')).toBeNull()
-  fireEvent.click(screen.getByRole('button', { name: '现场验证的更多操作' })); fireEvent.click(await screen.findByRole('menuitem', { name: '历史来源' }))
-  expect(await screen.findByText(/original-uuid/)).toBeVisible()
 })
 it('keeps execution details in the global drawer and calls its close callback', async () => {
   const close = vi.fn(); show({ focusTaskId: 'w1', detailsOnly: true, onDetailClose: close })
@@ -33,11 +31,6 @@ it('ignores a late previous project response', async () => {
   const v = show(); v.rerender(<MemoryRouter><TaskPlanPage projectId="next" /></MemoryRouter>); await screen.findByText('新项目工作')
   await act(async () => done({ data: source })); expect(screen.queryByText('现场验证')).toBeNull()
 })
-it('displays retired preparation sources read-only and honors a project plan denial', async () => {
-  get.mockImplementation(async (url: string) => ({ data: url.endsWith('/work-items') ? { ...source, legacy_work_items: [work({ id: 'legacy', name: '原准备工作' })], permissions: { plan: false, record: false, override: false } } : { steps: [] } }))
-  show(); await screen.findByText('现场验证'); expect(screen.queryByRole('button', { name: '添加工作项' })).toBeNull(); expect(screen.getByRole('button', { name: '标记完成' })).toBeDisabled(); fireEvent.click(screen.getByText('历史准备工作来源（只读） 1 项')); await waitFor(() => expect(screen.getByText('原准备工作')).toBeVisible())
-})
-
 it('filters by state and search, opening every matching phase', async () => {
   show(); expect(await screen.findByText('现场验证')).toBeVisible()
   const filters = screen.getByRole('group', { name: '筛选工作项' })
@@ -58,4 +51,10 @@ it('groups work groups under the stage backbone in stage order', async () => {
   show({ canManage: true, projectStatus: 'preparing' })
   const sections = await screen.findAllByRole('region', { name: /^阶段：/ })
   expect(sections.map(section => section.getAttribute('aria-label'))).toEqual(['阶段：发车前', '阶段：验收'])
+})
+it('honors a project plan denial', async () => {
+  get.mockImplementation(async (url: string) => ({ data: url.endsWith('/work-items') ? { ...source, permissions: { plan: false, record: false, override: false } } : { steps: [] } }))
+  show(); await screen.findByText('现场验证')
+  expect(screen.queryByRole('button', { name: '添加工作项' })).toBeNull()
+  expect(screen.getByRole('button', { name: '标记完成' })).toBeDisabled()
 })

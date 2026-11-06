@@ -110,36 +110,3 @@ def test_token_scope_is_rechecked_after_http_admission_before_actual_tool(client
     assert response.status_code==200 and response.json()['ok'] is False
     assert 'Token 未授权' in response.json()['error']
 
-
-@pytest.mark.parametrize('path,method',[('/api/ai-projects/organize','post'),('/api/ai-projects/organize/jobs','post'),('/api/ai-projects/test-connection','post'),('/api/ai-projects/skill-bundle?skill=planning','get')])
-def test_structured_business_drafting_is_410_even_for_admin_and_never_calls_provider(client,admin_headers,monkeypatch,path,method):
-    import app.services.ai_project_assistant as assistant
-    calls=[]
-    monkeypatch.setattr(assistant,'organize_project',lambda *args,**kwargs:calls.append('project'))
-    monkeypatch.setattr(assistant,'organize_domain',lambda *args,**kwargs:calls.append('domain'))
-    monkeypatch.setattr(assistant,'test_connection',lambda *args,**kwargs:calls.append('connect'))
-    response=client.request(method.upper(),path,headers=admin_headers,json={'skill':'planning','source_text':'do not send'})
-    assert response.status_code==410 and response.headers['cache-control']=='private, no-store'
-    assert calls==[]
-    client.cookies.clear()
-    assert client.request(method.upper(),path).status_code==401
-
-
-def test_queued_legacy_callback_never_restarts_model_and_completed_history_stays_owned(client,admin_headers):
-    from app.routers.ai_projects import OrganizeBody,_run_organize_job
-    from app.services.ai_jobs import create_job,get_job,set_job
-    queued=create_job('user-admin-001','old structured draft')
-    _run_organize_job(queued['id'],OrganizeBody(skill='planning'),'user-admin-001')
-    assert get_job(queued['id'],'user-admin-001')['status']=='failed'
-    finished=create_job('user-admin-001','old completed')
-    set_job(finished['id'],status='completed',percent=100,result={'draft':{'old':'owner-only'}})
-    _run_organize_job(finished['id'],OrganizeBody(),'user-admin-001')
-    assert get_job(finished['id'],'user-admin-001')['result']=={'draft':{'old':'owner-only'}}
-    assert client.get('/api/ai-projects/organize/jobs/'+finished['id'],headers=admin_headers).status_code==200
-    status=client.get('/api/ai-projects/status',headers=admin_headers).json()
-    assert not status['available'] and not status['drafting_enabled'] and status['skills']==[]
-    catalog=client.get('/api/ai-projects/capabilities',headers=admin_headers).json()
-    names={row['name'] for row in catalog['tools']}
-    assert {'get_project_documents','get_vehicle_progress','get_documents_due_this_week'}<=names
-    assert not {'get_execution_plan','get_preparations_summary','get_schedule','preview_schedule'}&names
-    assert 'budget' in client.get('/api/ai/internal/tokens',headers=admin_headers).json()

@@ -107,11 +107,8 @@ def project_backup_snapshot(db, project, *, include_deletion_snapshots=False):
     # Project-scoped planning preferences and complete edit/audit history are
     # not part of the older immutable-purge allowlist.
     for model in (
-        models.ProjectGovernanceRequest,
         models.ExternalShare,
         models.ExternalAccessLog,
-        models.ProjectSchedulePolicy,
-        models.TaskDurationOverride,
         models.ProjectCreationReceipt,
         models.OfflineOpReceipt,
     ):
@@ -128,14 +125,7 @@ def project_backup_snapshot(db, project, *, include_deletion_snapshots=False):
         .order_by(models.ChangeLog.id)
     ]
     actors = {item["id"] for item in snapshot["actors"]}
-    for table, field in (
-        ("change_logs", "operator_id"),
-        ("project_schedule_policies", "updated_by"),
-        ("task_duration_overrides", "updated_by"),
-    ):
-        actors.update(
-            row[field] for row in snapshot["records"][table] if row.get(field)
-        )
+    actors.update(row["operator_id"] for row in snapshot["records"]["change_logs"] if row.get("operator_id"))
     snapshot["actors"] = [
         {"id": row.id, "display_name": row.display_name, "role": row.role}
         for row in db.query(models.User)

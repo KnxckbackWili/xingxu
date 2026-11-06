@@ -4,7 +4,7 @@
 from datetime import date
 import pytest
 from app.db import SessionLocal
-from app.models import AcceptanceRecord, Module, Phase, Project, ScheduleEntry, Task, User
+from app.models import AcceptanceRecord, Module, Phase, Project, Task, User
 
 
 def project(client, headers, name='生命周期复核'):
@@ -23,13 +23,9 @@ def task_entry(pid, *, name='现场检查', confirmed=False, status='planned', l
         db.add(phase); db.flush()
         module = Module(project_id=pid, phase_id=phase.id, name='执行', sort_order=1)
         db.add(module); db.flush()
-        task = Task(project_id=pid, module_id=module.id, name=name, target_quantity=2, standard_hours=4)
-        db.add(task); db.flush()
-        entry = ScheduleEntry(project_id=pid, task_id=task.id, work_date=date(2026, 9, 1),
-                              assignee_id=db.get(Project, pid).manager, planned_quantity=2,
-                              is_confirmed=confirmed, is_locked=locked, status=status)
-        db.add(entry); db.commit()
-        return task.id, entry.id, phase.id
+        task = Task(project_id=pid, phase_id=phase.id, name=name)
+        db.add(task); db.commit()
+        return task.id, None, phase.id
 
 
 @pytest.mark.parametrize('field', ['affected_task_id', 'affected_phase_id'])

@@ -43,33 +43,6 @@ def test_overview_stats(client, pm_headers):
     assert p["critical_issues"] == 1
 
 
-def test_overview_reflects_progress(client, pm_headers, worker_headers):
-    pid = _project_with_data(client, pm_headers)
-    # Worker completes some work
-    client.put(f"/api/projects/{pid}", headers=pm_headers, json=versioned(pid, {"members": ["user-worker-001"]}))
-    r = client.get(f"/api/projects/{pid}/tree", headers=pm_headers)
-    tree = r.json()
-    task = None
-    for ph in tree:
-        for m in ph["modules"]:
-            for t in m["tasks"]:
-                if t["name"] == "单车调试":
-                    task = t
-    client.post("/api/worker/reports", headers=worker_headers, json={
-        "task_id": task["id"], "work_date": "2026-08-06",
-        "completed_quantity": 1, "client_uuid": "dash-0001"})
-
-    from tests.test_project_events import unit
-    from tests.test_vehicle_progress import write
-    vid=client.get(f"/api/projects/{pid}/vehicles",headers=pm_headers).json()[0]['id']
-    real=unit(client,pm_headers,pid,vid,'真实AGV-01')
-    assert write(client,pm_headers,pid,[real]).status_code==200
-    r = client.get("/api/dashboard/overview", headers=pm_headers)
-    p = r.json()["projects"][0]
-    assert p["completed"] == 1
-    assert p["percent"] > 0
-
-
 def test_field_worker_has_no_management_workbench(client, pm_headers, worker_headers):
     _project_with_data(client, pm_headers)  # no members
     r = client.get("/api/dashboard/overview", headers=worker_headers)

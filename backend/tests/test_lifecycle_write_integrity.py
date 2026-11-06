@@ -4,7 +4,7 @@ from datetime import date
 import pytest
 from fastapi import HTTPException
 from app.db import SessionLocal
-from app.models import AcceptanceRecord, ArchiveChecklist, CheckItem, DailyProgress, Module, Phase, Project, ProjectPreparationItem, ProjectReadinessReview, Task, User
+from app.models import AcceptanceRecord, ArchiveChecklist, CheckItem, Module, Phase, Project, ProjectPreparationItem, ProjectReadinessReview, Task, User
 from tests.test_project_lifecycle_boundaries import project
 
 
@@ -28,9 +28,6 @@ def completeable_project(client, headers, *, documents_data=None, legacy_accepta
         check = CheckItem(project_id=pid, task_id=task.id, name='安全保护', is_safety_critical=True,
                           is_required=True, is_applicable=True, is_done=True)
         db.add(check)
-        db.add(DailyProgress(project_id=pid, task_id=task.id, user_id=p.manager,
-                             work_date=date(2026, 9, 30), completed_quantity=1,
-                             client_uuid='round6-completeable'))
         if legacy_acceptance:
             db.add(AcceptanceRecord(project_id=pid, accepted_by_name='客户代表',
                                    accepted_at=date(2026, 9, 30), conclusion='accepted'))
@@ -272,67 +269,3 @@ def test_archive_rechecks_required_document_withdrawn_after_completion(client, p
     with SessionLocal() as db:
         assert db.get(Project, pid).status == 'completed'
 
-
-def test_retired_transfer_request_cannot_duplicate_preserved_history(client, pm_headers, admin_headers):
-    """旧创建入口与审批算法已移除；重复调用也不改写原申请或通知。"""
-    from app.models import ProjectGovernanceRequest, Notification, NotificationOutbox, ChangeLog
-    pid = project(client, pm_headers)
-    actor = client.get('/api/auth/me', headers=pm_headers).json()['id']
-    target = client.get('/api/auth/me', headers=admin_headers).json()['id']
-    with SessionLocal() as db:
-        source = ProjectGovernanceRequest(project_id=pid, project_name='原始项目名称', requested_by=actor,
-            source_manager_id=actor, target_manager_id=target, request_type='transfer',
-            reason='原岗位调整申请', status='pending', review_note='完整保留原审核说明')
-        db.add(source); db.commit(); identity=source.id
-        before = tuple(getattr(source, column.name) for column in source.__table__.columns)
-        counts = tuple(db.query(model).filter_by(project_id=pid).count()
-            for model in (ProjectGovernanceRequest, Notification, NotificationOutbox, ChangeLog))
-    for _ in range(2):
-        response = client.post(f'/api/projects/{pid}/governance-requests', headers=pm_headers,
-            json={'request_type': 'transfer', 'target_manager_id': target, 'reason': '重复的旧申请操作'})
-        assert response.status_code == 410, response.text
-    with SessionLocal() as db:
-        source=db.get(ProjectGovernanceRequest, identity)
-        assert tuple(getattr(source, column.name) for column in source.__table__.columns) == before
-        assert tuple(db.query(model).filter_by(project_id=pid).count()
-            for model in (ProjectGovernanceRequest, Notification, NotificationOutbox, ChangeLog)) == counts
-
-
-def test_retired_transfer_request_cannot_restore_previous_manager_authority(client, pm_headers, admin_headers):
-    """旧负责人保留旧页面也不能通过退役审批入口生成另一条事实。"""
-    from app.models import ProjectGovernanceRequest, Notification, NotificationOutbox, ChangeLog
-    pid = project(client, pm_headers)
-    target = client.get('/api/auth/me', headers=admin_headers).json()['id']
-    with SessionLocal() as db:
-        row=db.get(Project, pid); row.manager=target; db.commit(); version=row.version
-        counts=tuple(db.query(model).filter_by(project_id=pid).count()
-            for model in (ProjectGovernanceRequest, Notification, NotificationOutbox, ChangeLog))
-    response = client.post(f'/api/projects/{pid}/governance-requests', headers=pm_headers,
-        json={'request_type': 'transfer', 'target_manager_id': target, 'reason': '已失效的旧负责人页面'})
-    assert response.status_code == 410, response.text
-    with SessionLocal() as db:
-        row=db.get(Project, pid)
-        assert row.manager == target and row.version == version
-        assert tuple(db.query(model).filter_by(project_id=pid).count()
-            for model in (ProjectGovernanceRequest, Notification, NotificationOutbox, ChangeLog)) == counts
-
-
-@pytest.mark.parametrize('kind', ['transfer', 'delete'])
-def test_retired_governance_cannot_forge_requester_or_notify_reviewers(client, pm_headers, worker_headers, kind):
-    from app.models import ProjectGovernanceRequest, Notification, NotificationOutbox, ChangeLog
-    pid = project(client, pm_headers)
-    worker_id = client.get('/api/auth/me', headers=worker_headers).json()['id']
-    manager_id = client.get('/api/auth/me', headers=pm_headers).json()['id']
-    from tests.lifecycle_helpers import project_version
-    assert client.put(f'/api/projects/{pid}', headers=pm_headers, json={'members': [worker_id], 'version': project_version(client, pm_headers, pid)}).status_code == 200
-    with SessionLocal() as db:
-        count=db.query(ChangeLog).filter_by(project_id=pid).count()
-    response = client.post(f'/api/projects/{pid}/governance-requests', headers=worker_headers,
-        json={'request_type': kind, 'reason': '冒用项目负责人的申请',
-            'requested_by': manager_id, 'source_manager_id': manager_id})
-    assert response.status_code == 410, response.text
-    with SessionLocal() as db:
-        assert not db.query(ProjectGovernanceRequest).filter_by(project_id=pid).count()
-        assert not db.query(Notification).filter_by(project_id=pid, ntype='governance').count()
-        assert not db.query(NotificationOutbox).filter_by(project_id=pid, ntype='governance').count()
-        assert db.query(ChangeLog).filter_by(project_id=pid).count() == count

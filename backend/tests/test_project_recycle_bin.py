@@ -9,7 +9,7 @@ from contextlib import nullcontext
 
 import pytest
 from app.db import SessionLocal
-from app.models import Project, User, ProjectDeletionRecord, Attachment, Task, Module, Phase, ScheduleEntry, DailyProgress, PersonalEvent, ProjectSchedulePolicy, TaskDurationOverride, ChangeLog, ProjectGovernanceRequest
+from app.models import Project, User, ProjectDeletionRecord, Attachment, Task, Module, Phase, ChangeLog
 from app.time_utils import utcnow
 
 
@@ -131,56 +131,6 @@ def test_stale_delete_restore_and_cycle_identity_are_atomic(client, pm_headers):
         json={'version': row['version'], 'deletion_id': row['deletion_id']}).status_code == 409
 
 
-def test_backup_contains_all_project_evidence_and_bytes_excludes_private_or_other_project(client, pm_headers, tmp_path):
-    from app import config
-    p = _project(client, pm_headers)
-    other = _project(client, pm_headers, name='不应进入备份的项目')
-    payload = b'project evidence bytes\x00'
-    (config.UPLOAD_DIR / 'evidence-test.bin').write_bytes(payload)
-    with SessionLocal() as db:
-        phase = Phase(project_id=p['id'], name='实施', sort_order=1); db.add(phase); db.flush()
-        module = Module(project_id=p['id'], phase_id=phase.id, name='验证', sort_order=1); db.add(module); db.flush()
-        task = Task(project_id=p['id'], module_id=module.id, name='测试任务', target_quantity=1,
-                    unit='台', reference_docs=[{'stored_name': 'evidence-test.bin', 'filename': '参考.bin'}])
-        db.add(task); db.flush()
-        entry = ScheduleEntry(project_id=p['id'], task_id=task.id, work_date=p['start_date'], planned_quantity=1,
-                              is_confirmed=True, is_locked=True, assignee_id='user-pm-001')
-        # ORM expects dates, unlike API DTOs.
-        from datetime import date
-        entry.work_date = date.fromisoformat(p['start_date']); db.add(entry); db.flush()
-        report = DailyProgress(project_id=p['id'], task_id=task.id, schedule_entry_id=entry.id,
-                               user_id='user-pm-001', work_date=entry.work_date, completed_quantity=.25, client_uuid="backup-report-1")
-        db.add_all([report, Attachment(project_id=p['id'], entity_type='task', entity_id=task.id,
-            stored_name='evidence-test.bin', filename='验收.bin', file_size=len(payload), uploaded_by='user-pm-001'),
-            ProjectSchedulePolicy(project_id=p['id'], duration_scale=.5),
-            TaskDurationOverride(project_id=p['id'], task_id=task.id, workdays=2, baseline_quantity=1, baseline_unit='台'),
-            PersonalEvent(project_id=p['id'], user_id='user-pm-001', work_date=entry.work_date,
-                          title='PRIVATE-calendar-not-to-share')])
-        db.commit()
-    r = _delete(client, pm_headers, p); assert r.status_code == 200, r.text
-    binary = client.get(f"/api/project-recycle-bin/projects/{p['id']}/backup",
-                       params={'deletion_id': r.json()['deletion_id']}, headers=pm_headers)
-    assert binary.status_code == 200
-    assert hashlib.sha256(binary.content).hexdigest() == r.json()['backup']['sha256']
-    from app.services import backup_crypto as codec
-    encrypted = tmp_path / 'project.agvenc'; encrypted.write_bytes(binary.content)
-    assert codec.is_encrypted(encrypted)
-    with codec.decrypted_file(encrypted, codec.get_passphrase(config.DATA_DIR)) as plain, ZipFile(plain) as bundle:
-        assert bundle.testzip() is None
-        assert bundle.read('files/evidence-test.bin') == payload
-        snapshot = json.loads(bundle.read('project-backup.json'))
-        assert snapshot['project']['id'] == p['id']
-        assert snapshot['binary_files']['included'] is True
-        assert snapshot['records']['task_duration_overrides'][0]['workdays'] == 2
-        assert snapshot['records']['project_schedule_policies'][0]['duration_scale'] == .5
-        assert snapshot['records']['daily_progress'][0]['completed_quantity'] == .25
-        assert snapshot['records']['schedule_entries'][0]['is_locked'] is True
-        assert other['id'] not in json.dumps(snapshot)
-        assert 'PRIVATE-calendar-not-to-share' not in json.dumps(snapshot)
-        assert all(set(actor) == {'id', 'display_name', 'role'} for actor in snapshot['actors'])
-        assert 'password_hash' not in json.dumps(snapshot) and 'permission_overrides' not in json.dumps(snapshot)
-
-
 def test_corrupt_backup_prevents_restore_and_download(client, pm_headers):
     from app.services.project_deletion import _backup_path
     p = _project(client, pm_headers); r = _delete(client, pm_headers, p)
@@ -208,27 +158,6 @@ def test_recoverable_and_legacy_deletions_never_automatically_purged(client, pm_
         result = purge_soft_deleted_projects(db); db.commit()
         assert result['purged'] == 0 and result['disabled']
         assert db.get(Project, p['id']) is not None and db.get(Project, old['id']) is not None
-
-
-def test_legacy_pending_delete_not_approved_or_automatically_modified(client, pm_headers, admin_headers):
-    p = _project(client, pm_headers)
-    request = client.post(f"/api/projects/{p['id']}/governance-requests", headers=pm_headers,
-                         json={'request_type': 'delete', 'reason': '重复项目清理'})
-    assert request.status_code == 410 and '退役' in request.json()['detail']
-    with SessionLocal() as db:
-        legacy = ProjectGovernanceRequest(project_id=p['id'], project_name=p['name'], request_type='delete',
-            requested_by='user-pm-001', source_manager_id='user-pm-001', reason='历史删除申请')
-        db.add(legacy); db.commit(); rid = legacy.id
-    denied = client.post(f'/api/projects/governance/requests/{rid}/review', headers=admin_headers,
-                         json={'decision': 'approved'})
-    assert denied.status_code == 410
-    with SessionLocal() as db:
-        assert db.get(ProjectGovernanceRequest, rid).status == 'pending'
-        assert db.get(Project, p['id']).deleted_at is None
-    # Ordinary project deletion doesn't secretly complete an old request.
-    assert _delete(client, pm_headers, p).status_code == 200
-    with SessionLocal() as db:
-        assert db.get(ProjectGovernanceRequest, rid).status == 'pending'
 
 
 def test_restore_recovers_missing_file_but_never_overwrites_changed_file(client, pm_headers):

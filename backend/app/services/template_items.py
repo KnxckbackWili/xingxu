@@ -601,7 +601,7 @@ def compile_template(db: Session, tid):
             wanted_tasks[row.id] = {
                 'project_id': None, 'template_id': tid, 'module_id': None, 'phase_id': row.section_id,
                 'group_label': extra.get('group_label') or '', 'scope_conditions': list(extra.get('scope_conditions') or []),
-                'legacy_work_snapshot': extra.get('legacy_work_snapshot'), 'name': row.name, 'description': row.note or '',
+                'name': row.name, 'description': row.note or '',
                 'quantity_type': 'per_vehicle' if per_vehicle else extra.get('quantity_type') or 'fixed',
                 'target_quantity': None if per_vehicle else extra.get('target_quantity'),
                 'unit': '台' if per_vehicle else extra.get('unit') or '项', 'standard_hours': extra.get('standard_hours'),

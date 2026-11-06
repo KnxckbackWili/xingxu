@@ -264,7 +264,6 @@ def test_type_change_adds_only_newly_applicable_safety_checks(client,pm_headers)
         assert db.query(CheckItem).filter_by(task_id=legacy,vehicle_unit_id=None).one().is_done
         assert db.query(CheckItem).filter(CheckItem.task_id==legacy,CheckItem.vehicle_unit_id.isnot(None)).count()==0
         assert db.query(ChangeLog).filter_by(project_id=pid,action='generate_scope').count()==1
-        assert db.get(Task,tid).target_quantity==1
     assert mark(client,pm_headers,pid,row,is_done=True).status_code==200
     assert write(client,pm_headers,pid,ids).status_code==200
 

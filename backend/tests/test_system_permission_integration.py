@@ -112,24 +112,3 @@ def test_repair_workspace_capability_is_revoked_with_issue_action(client, admin_
     assert client.put(f'/api/projects/{pid}/vehicle-units/{unit}/events/{event}', headers=pm_headers,
                       json={'action_taken': 'revoked'}).status_code == 403
 
-
-def test_archive_denial_blocks_inherited_governance_and_manager_archive(client, admin_headers, pm_headers):
-    pid = _project(client, pm_headers, 'governance denial')
-    director = client.post('/api/users', headers=admin_headers, json={
-        'username': 'policy-director', 'password': 'director12345',
-        'display_name': 'Policy director', 'role': 'director',
-    }).json()
-    login = client.post('/api/auth/login', json={'username': 'policy-director', 'password': 'director12345'}).json()
-    headers = {'Authorization': 'Bearer ' + login['access_token']}
-    from tests.document_helpers import documents, upload_documents
-    kickoff = [row['id'] for row in documents(client, pm_headers, pid)['documents'] if row['stage_key'] == '4' and row['required']]
-    upload_documents(client, pm_headers, pid, kickoff)
-    from tests.lifecycle_helpers import approve_risk_entry
-    approve_risk_entry(client, pm_headers, pid)
-    started = client.post(f'/api/projects/{pid}/status', headers=headers, json={'status': 'executing'})
-    assert started.status_code == 200, started.text
-    policy(client, admin_headers, director['id'], {'project.archive': False})
-    assert client.post(f'/api/projects/{pid}/status', headers=headers, json={'status': 'preparing'}).status_code == 403
-    policy(client, admin_headers, 'user-pm-001', {'project.archive': False})
-    assert client.post(f'/api/projects/{pid}/status', headers=pm_headers, json={'status': 'archived', 'retrospective': 'denied'}).status_code == 403
-    assert client.get(f'/api/projects/{pid}', headers=pm_headers).json()['status'] == 'executing'

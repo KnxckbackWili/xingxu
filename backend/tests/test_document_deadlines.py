@@ -172,18 +172,6 @@ def test_reports_run_on_local_sunday_once_and_scheduler_catchup_uses_real_db(cli
         assert db.query(ProjectReportReceipt).filter_by(project_id=pid).count()==1
 
 
-def test_quantity_backlog_does_not_become_overdue_and_on_demand_is_separate(client,admin_headers):
-    from tests.lifecycle_helpers import setup_project
-    from app.models import ScheduleEntry
-    pid,tasks=setup_project(client,admin_headers)
-    with SessionLocal() as db:
-        db.add(ScheduleEntry(project_id=pid,task_id=tasks[0]['id'],work_date=date(2020,1,1),planned_quantity=100))
-        db.commit()
-    result=client.get(f'/api/projects/{pid}/overdue',headers=admin_headers)
-    assert result.status_code==200 and result.json()['count']==0,result.text
-    assert view(client,admin_headers,pid)['document_actions']['on_demand']
-
-
 @pytest.mark.parametrize('second',[datetime(2026,11,1,12),datetime(2026,10,1,12)])
 def test_frozen_or_regressing_record_clock_keeps_latest_file_and_order(client,admin_headers,monkeypatch,second):
     import app.services.project_documents as service
@@ -302,23 +290,6 @@ def test_weekly_report_restart_recovers_every_period_after_its_real_cursor(clien
         assert generate_and_notify_weekly_report(db,now=datetime(2026,11,22,20))['notified']==3;db.commit()
         assert {row.period_key for row in db.query(ProjectReportReceipt).filter_by(project_id=pid)}=={'2026-W44','2026-W45','2026-W46','2026-W47'}
         assert generate_and_notify_weekly_report(db,now=datetime(2026,11,22,21))['notified']==0
-
-
-def test_project_plan_edit_updates_document_deadline_without_moving_schedule(client,admin_headers):
-    from tests.lifecycle_helpers import setup_project
-    from app.models import ScheduleEntry
-    pid,tasks=setup_project(client,admin_headers)
-    with SessionLocal() as db:
-        entry=ScheduleEntry(project_id=pid,task_id=tasks[0]['id'],work_date=date(2026,11,1),planned_quantity=1)
-        db.add(entry);db.commit();identity=entry.id
-    from tests.lifecycle_helpers import versioned
-    result=client.put('/api/projects/'+pid,headers=admin_headers,json=versioned(pid,{'event_plans':{'ship':'2026-11-20'}}))
-    assert result.status_code==200,result.text
-    document=next(row for row in view(client,admin_headers,pid)['documents'] if row['code']=='5.1.1')
-    assert document['due_at']=='2026-11-12T16:00:00+00:00' and document['due_is_estimated']
-    with SessionLocal() as db:
-        entry=db.get(ScheduleEntry,identity)
-        assert entry.work_date==date(2026,11,1) and entry.planned_quantity==1
 
 
 def test_lifetime_waiting_for_actual_kickoff_blocks_only_archive(client,admin_headers):

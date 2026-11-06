@@ -33,7 +33,6 @@ from app.routers import (
     document_requirements,
     tasks,
     work_items,
-    schedules,
     worker,
     progress,
     issues,
@@ -50,9 +49,7 @@ from app.routers import (
     vehicle_progress,
     inventory,
     system,
-    archives,
     report_forms,
-    availability,
     notification_channels,
     vehicle_types,
     holiday_calendars,
@@ -197,7 +194,6 @@ app.include_router(template_items.router, prefix="/api")
 app.include_router(document_requirements.router, prefix="/api")
 app.include_router(tasks.router, prefix="/api")
 app.include_router(work_items.router, prefix="/api")
-app.include_router(schedules.router, prefix="/api")
 from app.routers import field_week, weekly_plans
 app.include_router(field_week.router, prefix="/api")
 app.include_router(weekly_plans.router, prefix="/api")
@@ -219,9 +215,7 @@ app.include_router(system.router, prefix="/api")
 app.include_router(system_updates.router, prefix="/api")
 app.include_router(ai_internal.router, prefix="/api")
 app.include_router(agent.router, prefix="/api")
-app.include_router(archives.router, prefix="/api")
 app.include_router(report_forms.router, prefix="/api")
-app.include_router(availability.router, prefix="/api")
 app.include_router(notification_channels.router, prefix="/api")
 app.include_router(vehicle_types.router, prefix="/api")
 app.include_router(holiday_calendars.router, prefix="/api")

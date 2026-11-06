@@ -87,25 +87,3 @@ def generate_tasks_for_modules(
     return generate(db,project,selected)
 
 
-def recompute_per_vehicle_targets(db: Session, project_id: str):
-    """Recompute targets of per_vehicle tasks after vehicle changes."""
-    tasks = db.query(Task).filter(
-        Task.project_id == project_id,
-        Task.quantity_type == "per_vehicle",
-    ).all()
-    from app.models import DailyProgress
-    from sqlalchemy import func
-    from fastapi import HTTPException
-    actuals = dict(db.query(DailyProgress.task_id, func.sum(DailyProgress.completed_quantity))
-                   .filter(DailyProgress.task_id.in_([task.id for task in tasks]))
-                   .group_by(DailyProgress.task_id).all())
-    for t in tasks:
-        target = sum_vehicle_quantity(db, project_id, t.applicable_vehicle_types or [])
-        if target < (actuals.get(t.id) or 0) - 1e-9:
-            raise HTTPException(400, f"车型调整后任务「{t.name}」目标低于已填报的实际完成量，请先核对并修正报工")
-        if t.phase_id is not None:
-            continue  # preserved legacy quantity is not an active work target
-        if t.target_quantity != target:
-            from app.services.optimistic import bump_version
-            bump_version(t, None)
-            t.target_quantity = target

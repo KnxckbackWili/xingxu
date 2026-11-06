@@ -11,51 +11,24 @@ from sqlalchemy.orm import Session
 from app.services.system_permissions import route_permission_contextual, route_permission_exempt
 from app.db import get_db, SessionLocal
 from app.deps import get_current_user
-from app.models import User, Task, DailyProgress, OfflineOpReceipt
+from app.models import User, Task, OfflineOpReceipt
 from app.services.scope import ensure_project_visible
 
 router = APIRouter(tags=["现场工作台"])
 
 
-class ProgressSubmit(BaseModel):
-    project_id: Optional[str] = None
-    task_id: str
-    schedule_entry_id: Optional[str] = None
-    work_date: date
-    completed_quantity: float = Field(..., allow_inf_nan=False, gt=0)
-    note: str = ""
-    # DailyProgress.client_uuid 列是 VARCHAR(36)，schema 若放 64 会在 PG 上报错（SQLite 不报）。
-    # 前端 uuid4 正好 36 位；收紧到 36 与列宽一致。
-    client_uuid: str = Field(..., min_length=8, max_length=36)
-
-
 class OfflineOp(BaseModel):
-    """C5-5：离线队列泛化——除数量填报外，检查项/交付物/问题也可离线入队。
+    """离线队列里的一条操作：检查项、交付物、问题或现场实际操作。
 
-    type: report | checkitem | deliverable | issue
     payload: 对应端点所需字段（不含 client_uuid，它单独存放）
     """
-    type: str = Field(..., pattern="^(report|checkitem|deliverable|issue|field)$")
+    type: str = Field(..., pattern="^(checkitem|deliverable|issue|field)$")
     client_uuid: str = Field(..., min_length=8, max_length=64)
     payload: dict
 
 
 class BatchSync(BaseModel):
-    reports: list[ProgressSubmit] = []  # 兼容旧版离线队列
     ops: list[OfflineOp] = []
-
-
-def submit_report(data:ProgressSubmit,user:User,db:Session):
-    """Read-only exact reconciliation for an old offline quantity UUID."""
-    actor=db.get(User,user.id)
-    task=db.get(Task,data.task_id)
-    if task is None:raise HTTPException(409,'旧工作来源无法对应，保留原UUID和内容人工核对')
-    project=ensure_project_visible(db,task.project_id,actor)
-    if data.project_id is not None and data.project_id!=project.id:raise HTTPException(409,'旧项目与工作来源不一致，保留原操作')
-    row=db.query(DailyProgress).filter_by(task_id=task.id,user_id=actor.id,work_date=data.work_date,client_uuid=data.client_uuid).first()
-    if row and row.completed_quantity==data.completed_quantity and (row.note or '')==(data.note or '') and row.schedule_entry_id==data.schedule_entry_id:
-        return {'accepted':False,'read_only':True,'id':row.id,'message':'已精确匹配历史记录，未再次写入'}
-    raise HTTPException(409,'旧数量操作尚不能精确对应历史记录，原UUID和内容须保留人工核对')
 
 
 @router.post("/worker/sync")
@@ -67,7 +40,7 @@ def batch_sync(
 ):
     """Batch submit from offline queue. Returns accepted/rejected uuids.
 
-    C5-5：支持 report / checkitem / deliverable / issue 四种离线操作；
+    支持 checkitem / deliverable / issue / field 四种离线操作；
     C5-6：返回每条的拒绝原因（rejected_detail: {uuid: detail}），前端被拒列表可查看。
     HYPE-99：逐项独立会话 + 幂等凭证——任一被拒项不留下可被后续成功项提交的脏状态/
     版本变更；缺字段/类型错误等单项进入 rejected_detail 而非整批 500；并发重试（多
@@ -76,14 +49,9 @@ def batch_sync(
     在不同项目复用同一 client_uuid 不会被误吞。
     """
     accepted, rejected, rejected_detail = [], [], {}
-    deferred,deferred_detail=[],{}
 
     def attempt(kind,uuid_,project_id,apply):
-        try:return _apply_offline_with_receipt(user,kind,uuid_,project_id,apply)
-        except DeferredOfflineReport as exc:
-            if uuid_ not in deferred:deferred.append(uuid_)
-            deferred_detail[uuid_]=str(exc)
-            return None,None
+        return _apply_offline_with_receipt(user,kind,uuid_,project_id,apply)
 
     def _accept(uuid_: str):
         if uuid_ not in accepted:
@@ -94,25 +62,9 @@ def batch_sync(
             rejected.append(uuid_)
             rejected_detail[uuid_] = detail
 
-    # 兼容旧版队列：仅数量填报
-    for report in data.reports:
-        ok, reason = attempt(
-            "report", report.client_uuid, None,
-            lambda session: submit_report(report, user, session),
-        )
-        if ok is None:continue
-        if ok:
-            _accept(report.client_uuid)
-        else:
-            _reject(report.client_uuid, reason)
-
     for op in data.ops:
         project_id = op.payload.get("project_id") if isinstance(op.payload.get("project_id"), str) else None
-        if op.type == "report":
-            def _apply_report(session: Session):
-                submit_report(ProgressSubmit(**{**op.payload, "client_uuid": op.client_uuid}), user, session)
-            apply = _apply_report
-        elif op.type == "field":
+        if op.type == "field":
             def _apply_field(session:Session):
                 from app.routers.field_week import FieldChange
                 from app.services.field_operations import apply as record_field
@@ -129,17 +81,12 @@ def batch_sync(
             _reject(op.client_uuid, f"未知操作类型：{op.type}")
             continue
         ok, reason = attempt(op.type,op.client_uuid,project_id,apply)
-        if ok is None:continue
         if ok:
             _accept(op.client_uuid)
         else:
             _reject(op.client_uuid, reason)
-    return {"accepted": accepted, "rejected": rejected, "rejected_detail": rejected_detail,"deferred":deferred,"deferred_detail":deferred_detail,
+    return {"accepted": accepted, "rejected": rejected, "rejected_detail": rejected_detail,
             "message": f"同步完成：成功 {len(accepted)} 条"}
-
-
-class DeferredOfflineReport(Exception):
-    """Unknown retired quantity UUID remains in the original local queue."""
 
 
 def _apply_offline_with_receipt(
@@ -158,14 +105,13 @@ def _apply_offline_with_receipt(
     - 其余异常（缺字段/类型错误/损坏 payload/未知错误）→ 同样只拒绝本条并回滚，
       绝不把半截状态留给同一批里的后续成功项提交；
     - IntegrityError → 并发/重试重复：按同作用域查 receipt，已有则按幂等成功处理
-      （不重复写）；project_id 为 NULL 的旧版数量填报无 receipt 级去重，由
-      DailyProgress 的 client_uuid 唯一约束兜底。
+      （不重复写）。
     """
     op_db = SessionLocal()
     try:
         from app.services.system_permissions import has_permission
         current = op_db.get(User, user.id)
-        action = {"report": "worker.report", "checkitem": "worker.report", "deliverable": "worker.deliver", "issue": "worker.issues", "field":"worker.report"}.get(op_type)
+        action = {"checkitem": "worker.report", "deliverable": "worker.deliver", "issue": "worker.issues", "field":"worker.report"}.get(op_type)
         if current is None or not current.is_active or (action and not has_permission(current, action, default=True)):
             raise HTTPException(403, "该离线操作权限已被系统管理员撤销")
         # Do not let an already-authorized batch retain an old policy snapshot.
@@ -173,7 +119,7 @@ def _apply_offline_with_receipt(
         from app.services.two_factor import required
         if (current.token_version or 0)!=(user.token_version or 0) or (required(current) and (not required(user) or not current.mfa_enabled)):
             raise HTTPException(401,'账号验证已变化，请重新登录后核对原离线操作')
-        if op_type in ('field','report'):
+        if op_type == 'field':
             apply(op_db)
             op_db.commit()
             return True,None
@@ -194,7 +140,6 @@ def _apply_offline_with_receipt(
         return True, None
     except HTTPException as e:
         op_db.rollback()
-        if op_type=='report' and e.status_code==409:raise DeferredOfflineReport(str(e.detail)) from None
         return False,str(e.detail)
     except IntegrityError:
         op_db.rollback()
@@ -295,12 +240,3 @@ def _apply_offline_issue(op: OfflineOp, user: User) -> Callable[[Session], None]
         )
     return _do
 
-
-@router.get("/worker/today")
-@router.post("/worker/reports")
-@router.post("/worker/tasks/{task_id}/complete")
-@router.post("/worker/tasks/{task_id}/reopen")
-@router.delete("/worker/reports/{report_id}")
-@route_permission_exempt('旧当天数量填报已由本周实际操作替代；认证后仅返回410，旧行和待核对UUID保全')
-def retired_quantity_operations(user:User=Depends(get_current_user)):
-    raise HTTPException(410,'当天数量填报和旧日程已退役，请进入本周登记实际操作；原历史记录保留')

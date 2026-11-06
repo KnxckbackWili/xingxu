@@ -181,44 +181,6 @@ def test_agent_and_mcp_use_same_scope_and_external_never_reads(client,pm_headers
         assert not docs.can_read_file(external,project,db.get(Attachment,upload['file']['id']))
 
 
-def test_private_encrypted_snapshot_keeps_originals_while_legacy_plain_reader_requires_frozen_scope(client,pm_headers,admin_headers,tmp_path):
-    from app.services.project_retention import project_retention_snapshot
-    from app.models import ProjectArchive
-    from app.routers.archives import _archive_checksum
-    from app.time_utils import utcnow
-    pid,users=setup_project(client,pm_headers)
-    doc=requirement(client,pm_headers,pid,code='6.99',name='T26-RETAINED-PRIVATE')
-    upload=upload_documents(client,pm_headers,pid,[doc['id']],content=b'preserved original',name='retained-secret.txt')
-    assert policy(client,pm_headers,pid,'document',upload['documents'][0],[users['worker1']]).status_code==200
-    with SessionLocal() as db:
-        snapshot=project_retention_snapshot(db,db.get(Project,pid))
-        assert next(r for r in snapshot['records']['project_documents'] if r['id']==doc['id'])['confidential_user_ids']==[users['worker1']]
-        assert any(r['filename']=='retained-secret.txt' for r in snapshot['records']['attachments'])
-        archive=ProjectArchive(project_id=pid,project_name='保留原文',snapshot=snapshot,change_logs=[],actor_ids=[],purged_at=utcnow(),checksum='')
-        archive.checksum=_archive_checksum(archive);checksum=archive.checksum;db.add(archive);db.commit()
-        stored=next(r['stored_name'] for r in snapshot['records']['attachments'] if r['id']==upload['file']['id'])
-    assert client.get('/api/archives/projects/'+pid,headers=admin_headers).status_code==403
-    assert client.get(f'/api/archives/projects/{pid}/files/{stored}',headers=admin_headers).status_code==403
-    assert client.get('/api/archives/projects/'+pid+'/verify',headers=admin_headers).json()['match']
-    assert client.get('/api/archives/projects',headers=admin_headers).status_code==200
-    with SessionLocal() as db:assert db.query(ProjectArchive).filter_by(project_id=pid).one().checksum==checksum
-    from .test_project_recycle_bin import _delete
-    from app.services.project_deletion import backup_zip
-    from app.services import backup_crypto as codec
-    current=client.get('/api/projects/'+pid,headers=pm_headers).json()
-    assert _delete(client,pm_headers,current).status_code==200
-    recycled=client.get('/api/project-recycle-bin/projects/'+pid,headers=pm_headers).json()
-    download=client.get(f'/api/project-recycle-bin/projects/{pid}/backup',params={'deletion_id':recycled['deletion_id']},headers=pm_headers)
-    assert download.status_code==200
-    encrypted=tmp_path/'private-project.agvenc';encrypted.write_bytes(download.content)
-    assert codec.is_encrypted(encrypted)
-    with backup_zip(encrypted) as bundle:
-        private=json.loads(bundle.read('project-backup.json'))
-        assert next(row for row in private['records']['project_documents'] if row['id']==doc['id'])['confidential_user_ids']==[users['worker1']]
-        file=next(row for row in private['binary_files']['manifest'] if row['filename']=='retained-secret.txt')
-        assert bundle.read(file['path'])==b'preserved original'
-
-
 def test_project_blank_uses_family_scope_while_global_unfilled_template_stays_public(client,pm_headers,admin_headers,worker_headers):
     from tests.template_work import upload_template_blank
     response=upload_template_blank(client,admin_headers,'6.11.6b',{'file':('unfilled-position.txt',b'empty form: password manager location','text/plain')})

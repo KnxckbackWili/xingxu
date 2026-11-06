@@ -18,16 +18,6 @@ export const userApi = {
   listActive: () => api.get('/users/all-active').then((r) => r.data),
 }
 
-// ===== 人员不可用时段=====
-export const availabilityApi = {
-  listUnavailability: (userId: string) => api.get(`/users/${userId}/unavailability`).then((r) => r.data),
-  createUnavailability: (userId: string, data: any) => api.post(`/users/${userId}/unavailability`, data).then((r) => r.data),
-  updateUnavailability: (userId: string, id: string, data: any) => api.put(`/users/${userId}/unavailability/${id}`, data).then((r) => r.data),
-  deleteUnavailability: (userId: string, id: string) => api.delete(`/users/${userId}/unavailability/${id}`).then((r) => r.data),
-  assignmentCheck: (params: { user_id: string; work_date: string; exclude_project_id?: string }) =>
-    api.get('/schedule/assignment-check', { params }).then((r) => r.data),
-}
-
 // ===== Projects =====
 // Private project reads always recheck the current server scope and actor.
 export const projectApi = {

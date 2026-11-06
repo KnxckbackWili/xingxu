@@ -53,46 +53,11 @@ def test_generate_tasks_with_vehicles(client, pm_headers):
     opening = tasks["到场点检"]
     assert opening["quantity_type"] == "per_vehicle"
     assert opening["vehicle_step_key"] == "arrival_inspection"
-    assert opening["target_quantity"] is None
     assert tasks["单车调试"]["vehicle_step_key"] == "single_commissioning"
     server_task = tasks["服务器与网络部署"]
-    assert server_task["kind"] != "vehicle" and server_task["target_quantity"] is None
+    assert server_task["kind"] != "vehicle"
     progress = client.get(f"/api/projects/{project_id}/vehicle-progress", headers=pm_headers)
     assert progress.status_code == 200, progress.text
-
-
-def test_project_preparation_is_reminder_only(client, pm_headers):
-    project_id = _new_project(client, pm_headers, "准备提醒隔离测试")
-    r = client.post(
-        f"/api/projects/{project_id}/tasks/generate",
-        headers=pm_headers,
-        json={"work_item_ids": default_work("mod-16", "mod-01")},
-    )
-    assert r.status_code == 200, r.json()
-    tree = client.get(f"/api/projects/{project_id}/tree", headers=pm_headers).json()
-    assert all(phase["name"] != "项目准备" for phase in tree)
-    assert "项目实施范围冻结" not in _tree_tasks(tree)
-    # 按天排程已退役：不能借旧入口把准备提醒排进日程。
-    assert client.post(f"/api/projects/{project_id}/schedule/generate", headers=pm_headers).status_code == 410
-    preparations = client.get(f"/api/projects/{project_id}/procurements", headers=pm_headers)
-    assert preparations.status_code == 200
-    assert preparations.json()['items'] == []
-
-
-def test_task_target_quantity_is_read_only(client, pm_headers):
-    """车辆数量变化不再回写工作目标；目标数量字段只读。"""
-    project_id = _new_project(client, pm_headers)
-    vid = client.post(f"/api/projects/{project_id}/vehicles", headers=pm_headers, json={
-        "vehicle_type": "前移式", "model_name": "Reach-2000", "quantity": 4}).json()["id"]
-    assert client.post(f"/api/projects/{project_id}/tasks/generate", headers=pm_headers,
-                       json={"work_item_ids": default_work("mod-03")}).status_code == 200
-    assert client.put(f"/api/projects/{project_id}/vehicles/{vid}", headers=pm_headers,
-                      json={"quantity": 10}).status_code == 200
-    task = _tree_tasks(client.get(f"/api/projects/{project_id}/tree", headers=pm_headers).json())["单车调试"]
-    assert task["target_quantity"] is None
-    r = client.put(f"/api/projects/{project_id}/tasks/{task['id']}", headers=pm_headers,
-                   json=versioned(task["id"], {"target_quantity": 10}, "Task"))
-    assert r.status_code == 400 and "只读" in r.json()["detail"]
 
 
 def test_per_vehicle_safety_checks_are_frozen_vehicle_definitions(client, pm_headers):
@@ -211,33 +176,12 @@ def test_move_task_to_same_phase_is_noop(client, pm_headers):
     assert task["name"] in names
 
 
-def test_move_task_phase_and_module_conflict_400(client, pm_headers):
-    pid, tree = _project_with_two_phases(client, pm_headers)
-    task = tree[0]["modules"][0]["tasks"][0]
-    target_mod = tree[1]["modules"][0]["id"]
-    r = client.put(f"/api/projects/{pid}/tasks/{task['id']}", headers=pm_headers,
-                   json=versioned(task['id'], {"phase_id": tree[1]["id"], "module_id": target_mod}, 'Task'))
-    assert r.status_code == 400
-
-
 def test_move_task_unknown_phase_404(client, pm_headers):
     pid, tree = _project_with_two_phases(client, pm_headers)
     task = tree[0]["modules"][0]["tasks"][0]
     r = client.put(f"/api/projects/{pid}/tasks/{task['id']}", headers=pm_headers,
                    json=versioned(task['id'], {"phase_id": "phase-does-not-exist"}, 'Task'))
     assert r.status_code == 404
-
-
-def test_move_task_by_module_id_is_read_only(client, pm_headers):
-    """历史模块只作来源，不能再作为工作归属移动；请改用项目阶段。"""
-    pid, tree = _project_with_two_phases(client, pm_headers)
-    task = tree[0]["modules"][0]["tasks"][0]
-    for module_id in (tree[1]["modules"][0]["id"], "mod-does-not-exist"):
-        r = client.put(f"/api/projects/{pid}/tasks/{task['id']}", headers=pm_headers,
-                       json=versioned(task['id'], {"module_id": module_id}, 'Task'))
-        assert r.status_code == 400 and "只读" in r.json()["detail"]
-    tree2 = client.get(f"/api/projects/{pid}/tree", headers=pm_headers).json()
-    assert any(t["id"] == task["id"] for m in tree2[0]["modules"] for t in m["tasks"])
 
 
 def test_move_task_worker_forbidden(client, pm_headers, worker_headers):

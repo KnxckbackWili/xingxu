@@ -439,7 +439,6 @@ class Task(Base):
     phase_id = Column(String(36), ForeignKey("phases.id", ondelete="SET NULL"), nullable=True, index=True)
     group_label = Column(String(200), nullable=True, default="")
     scope_conditions = Column(JSON, nullable=True, default=list)
-    legacy_work_snapshot = Column(JSON, nullable=True)  # immutable original hierarchy/quantity facts
     name = Column(String(200), nullable=False)
     description = Column(Text, default="")
     quantity_type = Column(String(20), nullable=False, default="per_vehicle")
@@ -458,9 +457,7 @@ class Task(Base):
     source_task_id = Column(String(36), nullable=True, index=True)
     vehicle_step_key = Column(String(80), nullable=True)  # explicit template/project step, never guessed
     source_vehicle_event_id = Column(String(36), ForeignKey("vehicle_lifecycle_events.id", ondelete="SET NULL"), nullable=True, unique=True)
-    # HYPE-71「直接完成」：独立于填报量的手动完成状态（PM/admin 直接把任务标记为已完成，
-    # 不伪造 DailyProgress；真实完成量/历史/排程/单位保持不变）。manually_completed=True 时
-    # 该任务在任务状态/项目计划进度/最终 100% 判定中按已完成处理，重新打开后恢复按实际完成量计算。
+    # 工作项完成：谁、以什么身份、什么时候、为什么标记完成。
     manually_completed = Column(Boolean, default=False)
     manual_completed_by = Column(String(36), nullable=True)
     manual_completed_role = Column(String(20), nullable=True)
@@ -470,33 +467,6 @@ class Task(Base):
 
     module = relationship("Module", backref=backref("tasks", passive_deletes=True, cascade="all, delete-orphan"))
     project = relationship("Project", backref=backref("tasks", passive_deletes=True, cascade="all, delete-orphan"))
-
-
-class ProjectSchedulePolicy(Base):
-    """Saved project scheduling choices; absent legacy rows mean scale 1."""
-    __tablename__ = "project_schedule_policies"
-    project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True)
-    duration_scale = Column(Float, nullable=False, default=1)
-    version = Column(Integer, nullable=False, default=0)
-    updated_by = Column(String(36), nullable=True)
-    updated_at = Column(DateTime, nullable=False, default=utcnow)
-
-
-class TaskDurationOverride(Base):
-    """Project task workday budget, independent of effort statistics or locks."""
-    __tablename__ = "task_duration_overrides"
-    task_id = Column(String(36), ForeignKey("tasks.id", ondelete="CASCADE"), primary_key=True)
-    project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
-    workdays = Column(Integer, nullable=False, default=1)
-    baseline_quantity = Column(Float, nullable=False, default=1)
-    baseline_unit = Column(String(20), nullable=False, default="项")
-    # An explicit automatic choice is retained as a tombstone. Old audit data
-    # must never resurrect an override the user has deliberately cleared.
-    is_active = Column(Boolean, nullable=False, default=True)
-    recovered_from_log_id = Column(String(36), nullable=True)
-    version = Column(Integer, nullable=False, default=0)
-    updated_by = Column(String(36), nullable=True)
-    updated_at = Column(DateTime, nullable=False, default=utcnow)
 
 
 class VehicleCheckDefinition(Base):
@@ -550,28 +520,6 @@ class CheckItem(Base):
     task = relationship("Task", backref=backref("check_items", passive_deletes=True, cascade="all, delete-orphan"))
 
 
-# ===== ScheduleEntry (日程条目) =====
-
-class ScheduleEntry(Base):
-    __tablename__ = "schedule_entries"
-
-    id = Column(String(36), primary_key=True, default=gen_uuid)
-    project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
-    task_id = Column(String(36), ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False, index=True)
-    work_date = Column(Date, nullable=False)
-    assignee_id = Column(String(36), ForeignKey("users.id"), nullable=True)
-    planned_quantity = Column(Float, default=0)
-    status = Column(String(20), default="planned")  # planned / done / skipped
-    notes = Column(Text, default="")
-    is_confirmed = Column(Boolean, default=False)  # PM confirmed
-    is_locked = Column(Boolean, default=False)  # PM hand-tuned, don't overwrite
-    version = Column(Integer, default=0)  # 乐观锁版本号
-
-    task = relationship("Task", backref=backref("schedule_entries", passive_deletes=True, cascade="all, delete-orphan"))
-
-
-# ===== WeeklyPlanCell (周计划，实际执行事实独立保存) =====
-
 class WeeklyPlanCell(Base):
     __tablename__ = "weekly_plan_cells"
 
@@ -605,30 +553,6 @@ class WeeklyPlanCell(Base):
 
     task = relationship("Task", backref=backref("weekly_plan_cells", passive_deletes=True, cascade="all, delete-orphan"))
 
-
-# ===== DailyProgress (每日填报) =====
-
-class DailyProgress(Base):
-    __tablename__ = "daily_progress"
-
-    id = Column(String(36), primary_key=True, default=gen_uuid)
-    project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
-    task_id = Column(String(36), ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False, index=True)
-    schedule_entry_id = Column(String(36), ForeignKey("schedule_entries.id", ondelete="SET NULL"), nullable=True)
-    work_date = Column(Date, nullable=False)
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
-    completed_quantity = Column(Float, default=0)
-    note = Column(Text, default="")
-    client_uuid = Column(String(36), nullable=False)  # for offline dedupe
-    source = Column(String(20), default="worker")  # HYPE-71：完成量填报来源 worker/pm/admin
-    created_at = Column(DateTime, default=utcnow)
-
-    __table_args__ = (
-        UniqueConstraint("task_id", "work_date", "user_id", "client_uuid", name="uq_progress_dedupe"),
-    )
-
-
-# ===== Issue (问题) =====
 
 class Issue(Base):
     __tablename__ = "issues"
@@ -668,9 +592,7 @@ class OfflineOpReceipt(Base):
     HYPE-99 复审：唯一键含 project_id——离线操作都作用在具体项目上下文上，问题台账的
     库级唯一是 (project_id, client_uuid)；若 receipt 只按 (user_id, op_type, client_uuid)
     去重，同一用户在不同项目复用同一 client_uuid 时会被误判为重复，吞掉第二个项目的
-    写入。纳入 project_id 后与 issues 的跨项目契约一致；project_id 为 NULL 的旧版
-    数量填报（兼容 reports 列表）不参与 receipt 级去重，仍由 DailyProgress 自身的
-    (task_id, work_date, user_id, client_uuid) 唯一约束兜底。
+    写入。纳入 project_id 后与 issues 的跨项目契约一致。
     """
 
     __tablename__ = "offline_op_receipts"
@@ -685,7 +607,6 @@ class OfflineOpReceipt(Base):
     client_uuid = Column(String(64), nullable=False)
     project_id = Column(String(36), nullable=True)
     created_at = Column(DateTime, default=utcnow)
-
 
 
 # ===== Template (模板) =====
@@ -949,94 +870,6 @@ class LoginFailureBucket(Base):
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
 
-class AiJob(Base):
-    """HYPE-99：AI 整理任务持久化（跨 worker / 重启可读）。
-
-    取代原进程内 job 注册表：job 创建/进度更新/结果查询全部落库，
-    WEB_CONCURRENCY>=2 时任意 worker 都能读到任意 worker 创建的 job；
-    进程重启后 completed 结果在 TTL 内仍可读；被中断的 queued/running job
-    在读取时按 updated_at 陈旧阈值自动置为 failed，绝不无限转圈。
-    """
-
-    __tablename__ = "ai_jobs"
-
-    id = Column(String(36), primary_key=True, default=gen_uuid)
-    user_id = Column(String(36), nullable=False, index=True)
-    kind = Column(String(30), nullable=False, default="generic")
-    status = Column(String(20), nullable=False, default="queued")  # queued/running/completed/failed
-    percent = Column(Integer, nullable=False, default=2)
-    stage = Column(String(40), nullable=False, default="queued")
-    message = Column(Text, nullable=False, default="")
-    result = Column(JSON, nullable=True)
-    error = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=utcnow)
-    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
-
-
-class AiRateLimitBucket(Base):
-    """HYPE-99：AI 限流 PostgreSQL 共享计数（与通用 rate_limit_buckets 分开）。
-
-    AI 结构化整理按 scope 保存库级共享计数。
-    SQLite 测试/本地仍走进程内滑动窗口。
-    """
-
-    __tablename__ = "ai_rate_limit_buckets"
-    __table_args__ = (
-        UniqueConstraint("user_id", "scope", "bucket", "window", name="uq_ai_rate_limit_user_scope_bucket_window"),
-    )
-
-    id = Column(String(36), primary_key=True, default=gen_uuid)
-    user_id = Column(String(36), nullable=False, index=True)
-    scope = Column(String(20), nullable=False)  # struct（结构化整理）
-    bucket = Column(Integer, nullable=False)  # int(time.time() // window)
-    window = Column(Integer, nullable=False)  # 窗口秒数
-    count = Column(Integer, nullable=False, default=0)
-    created_at = Column(DateTime, default=utcnow)
-    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
-
-
-class ProjectArchive(Base):
-    """T008: 物理清理前的不可变项目归档（快照 + 审计链 + 校验哈希）。
-
-    仅保留升级前旧归档，本版本不再写新快照；project_id 保留原 ID 但
-    不设外键（项目行已删除）。普通业务接口不提供任何写路径，仅管理员只读查询。
-    """
-
-    __tablename__ = "project_archives"
-
-    id = Column(String(36), primary_key=True, default=gen_uuid)
-    project_id = Column(String(36), nullable=False, index=True)  # 原 project_id
-    project_name = Column(String(200), default="")
-    snapshot = Column(JSON, nullable=False)  # 完整项目快照（import_export.project_to_json）
-    change_logs = Column(JSON, nullable=False)  # 项目全量变更记录（含操作者名/时间）
-    actor_ids = Column(JSON, default=list)  # 涉及的操作者 user_id 列表
-    checksum = Column(String(64), nullable=False)  # SHA-256 校验哈希
-    purged_at = Column(DateTime, nullable=False)  # 物理清理时间
-    created_at = Column(DateTime, default=utcnow)
-
-
-class ProjectGovernanceRequest(Base):
-    """Tracked approvals for project transfer and soft deletion."""
-    __tablename__ = "project_governance_requests"
-
-    id = Column(String(36), primary_key=True, default=gen_uuid)
-    project_id = Column(String(36), nullable=False, index=True)
-    project_name = Column(String(200), default="")
-    request_type = Column(String(20), nullable=False)  # transfer / delete
-    status = Column(String(20), default="pending")  # pending / approved / rejected / cancelled
-    requested_by = Column(String(36), ForeignKey("users.id"), nullable=False)
-    target_manager_id = Column(String(36), ForeignKey("users.id"), nullable=True)
-    source_manager_id = Column(String(36), nullable=True)
-    reason = Column(Text, nullable=False)
-    review_note = Column(Text, default="")
-    reviewed_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    reviewed_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=utcnow)
-
-
-
-# ===== ProjectPreparationItem (项目准备项) =====
-
 class ProjectPreparationItem(Base):
     __tablename__ = "project_preparation_items"
 
@@ -1137,40 +970,6 @@ class TemplateProcurementItem(Base):
     owner_party = Column(String(20), default="procurement")
     risk = Column(String(10), default="low")
     sort_order = Column(Integer, default=0)
-# ===== InboxDocument (文档收集箱：待 AI 归类整理的临时文件) =====
-
-# ===== AiUserMemory（AI 个人记忆：按用户保存长期偏好/事实） =====
-
-
-# ===== UserUnavailability (人员不可用时段：请假/出差/交接等，HYPE-47) =====
-
-class UserUnavailability(Base):
-    """某人某段时间不可排程（请假/出差/离职交接/其他）。
-
-    排程分配与人员看板消费：分配时检测目标人员在指派日期是否处于
-    不可用时段；看板展示当前不可用人数与近期不可用安排。
-    """
-
-    __tablename__ = "user_unavailability"
-
-    id = Column(String(36), primary_key=True, default=gen_uuid)
-    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    start_date = Column(Date, nullable=False)
-    end_date = Column(Date, nullable=False)
-    reason = Column(String(100), default="其他")
-    note = Column(Text, default="")
-    created_by = Column(String(36), nullable=True)
-    created_at = Column(DateTime, default=utcnow)
-    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
-
-# ===== AiChatSession / AiChatMessage（多轮对话持久化） =====
-# HYPE-58：AI 会话从进程内存改为数据库存储，切换页面/重启/多 worker 后仍能恢复。
-
-
-
-# ===== NotificationOutbox（外部渠道异步投递队列） =====
-# HYPE-58：notify() 只写站内通知 + 出站队列，外发由独立 scheduler 进程按批投递，
-# 失败带重试/退避；未配置外部渠道时队列直接标记 disabled，不积压。
 
 class NotificationOutbox(Base):
     __tablename__ = "notification_outbox"
@@ -1242,18 +1041,6 @@ class Feedback(Base):
 # ===== 个人临时日程（HYPE-88） =====
 # PM 端「我的日程」里的临时事项：不挂项目任务（如处理突发故障），单人读写。
 # 新表与结构变更通过 Alembic 版本迁移管理。
-
-class PersonalEvent(Base):
-    __tablename__ = "personal_events"
-
-    id = Column(String(36), primary_key=True, default=gen_uuid)
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
-    project_id = Column(String(36), ForeignKey("projects.id"), nullable=False, index=True)  # HYPE-89：记录归属项目（必填）
-    work_date = Column(Date, nullable=False, index=True)
-    title = Column(String(100), nullable=False)   # 标题（必填，≤100）
-    notes = Column(String(500), default="")       # 备注（选填，≤500）
-    created_at = Column(DateTime, default=utcnow)
-
 
 class ProjectCreationReceipt(Base):
     """一次创建请求的结果；与项目、车型、任务一起提交，重试不重复建项目。"""

@@ -335,9 +335,8 @@ def delete_template_task_doc(template_id: str, task_id: str, doc_id: str,
         raise HTTPException(status_code=404, detail="参考文档不存在")
     fname = d.filename
     path = UPLOAD_DIR / d.stored_name
-    from app.services.project_retention import is_retained_file
     from app.models import DocumentTemplateFile
-    retained = is_retained_file(db, d.stored_name) or db.query(DocumentTemplateFile.id).filter_by(stored_name=d.stored_name).first() is not None
+    retained = db.query(DocumentTemplateFile.id).filter_by(stored_name=d.stored_name).first() is not None
     db.delete(d)
     db.flush()
     log_change(db, None, "template", template_id, "update", user.id, f"模板任务参考文档删除：{fname}")

@@ -251,21 +251,6 @@ def test_retention_covers_nonempty_trigger_and_sla_receipts_before_permanent_pur
         assert db.get(DocumentTriggerEvent,event_id) is None and db.get(IssueSlaReceipt,receipt_id) is None
 
 
-def test_governance_transfer_confirms_and_materializes_only_actual_departing_manager(client,admin_headers,pm_headers):
-    from .test_governance_lifecycle_backup import _create_user
-    project=create(client,pm_headers);pid=project['id'];target=_create_user(client,admin_headers,'t24-receiver')
-    preview=client.get(f'/api/projects/{pid}/transfer-preview',headers=admin_headers)
-    assert preview.status_code==200 and [row['user_id'] for row in preview.json()['removed']]==[project['manager']]
-    payload={'target_manager_id':target,'reason':'真实岗位移交','version':preview.json()['version']}
-    assert client.post(f'/api/projects/{pid}/transfer',headers=admin_headers,json=payload).status_code==409
-    with SessionLocal() as db:
-        assert db.get(Project,pid).manager==project['manager'] and db.query(DocumentTriggerEvent).count()==0
-    result=client.post(f'/api/projects/{pid}/transfer',headers=admin_headers,json={**payload,'member_removal_confirmations':[project['manager']]})
-    assert result.status_code==200,result.text
-    row=next(row for row in view(client,admin_headers,pid)['documents'] if row['code']=='6.7')
-    assert row['trigger_event']['source_id']==project['manager']
-
-
 def test_portable_issue_keeps_original_nature_without_forging_new_incident_or_sla(client,admin_headers):
     pid=create(client,admin_headers)['id'];issue=report(client,admin_headers,pid,'quality')
     exported=client.get(f'/api/projects/{pid}/export/json',headers=admin_headers)

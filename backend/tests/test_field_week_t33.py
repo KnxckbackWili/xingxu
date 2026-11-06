@@ -110,61 +110,6 @@ def test_stale_actor_permission_and_audit_failure_roll_back(client,pm_headers,wo
     with SessionLocal() as db:assert db.query(FieldOperation).filter_by(project_id=pid).count()==db.query(VehicleProgress).filter_by(project_id=pid).count()==0
 
 
-def test_visible_personal_records_and_new_statistics_exclude_recycled_project(client,pm_headers,worker_headers):
-    pid,unit,_=prepared(client,pm_headers);assert save(client,worker_headers,operation(pid,unit)).status_code==200
-    assert client.get('/api/worker/records',headers=worker_headers).json()['records']
-    before=client.get('/api/dashboard/statistics',headers=pm_headers);assert before.status_code==200 and before.json()['projects']==1
-    p=client.get('/api/projects/'+pid,headers=pm_headers).json()
-    result=client.delete('/api/projects/'+pid,headers=pm_headers,params={'version':p['version']});assert result.status_code==200,result.text
-    assert client.get('/api/dashboard/statistics',headers=pm_headers).json()['projects']==0
-    assert client.get('/api/worker/records',headers=worker_headers).json()['records']==[]
-    assert client.get('/api/people/weeks',headers=pm_headers).json()['projects']==[]
-
-
-@pytest.mark.parametrize('path',['/api/dashboard/workload','/api/dashboard/stats','/api/dashboard/people-plan','/api/dashboard/team-schedule','/api/north-star','/api/worker/overdue'])
-def test_replaced_daily_projections_are_authenticated_retired(client,pm_headers,path):
-    assert client.get(path,headers=pm_headers).status_code==410
-    client.cookies.clear();assert client.get(path).status_code==401
-
-
-@pytest.mark.member_rules
-def test_personnel_week_matrix_uses_visible_published_plans_and_hides_peer_reasons(client,pm_headers,worker_headers,admin_headers,monkeypatch):
-    from app.services import field_week
-    from app.models import UserUnavailability
-    pid,unit,people=prepared(client,pm_headers)
-    second,_,_=prepared(client,pm_headers)
-    hidden=client.post('/api/projects',headers=admin_headers,json={'name':'HIDDEN-PROJECT','start_date':'2026-01-01','end_date':'2026-12-31'}).json()['id']
-    start=project_today('Asia/Shanghai');start-=timedelta(days=start.weekday())
-    from tests.test_weekly_plans import create_cell,publish
-    from tests.test_work_items_t34 import phase,create
-    def cell(project,assignees,headers,published=True):
-        work=create(client,headers,project,phase(client,headers,project))
-        row=create_cell(client,headers,project,work,week_start=start.isoformat(),assignee_ids=assignees)
-        if published:assert publish(client,headers,project,row).status_code==200
-        return row
-    first_cell=cell(pid,[people['worker1'],people['worker2']],pm_headers)
-    second_cell=cell(second,[people['worker1']],pm_headers)
-    cell(pid,[people['worker1']],pm_headers,False)
-    # A hidden project can have the same named people; project visibility still
-    # decides whether its plan is in the personnel view.
-    with SessionLocal() as db:
-        p=db.get(Project,hidden);p.members=[people['worker1']];db.commit()
-    hidden_cell=cell(hidden,[people['worker1']],admin_headers)
-    with SessionLocal() as db:
-        p=db.get(Project,hidden);p.members=[];db.commit()
-    with SessionLocal() as db:
-        db.get(User,people['worker1']).permission_overrides={'workspace.view':True}
-        db.add(UserUnavailability(user_id=people['worker2'],start_date=start,end_date=start+timedelta(days=2),reason='PRIVATE-MEDICAL',note='PRIVATE-NOTE'));db.commit()
-    response=client.get('/api/people/weeks',headers=worker_headers)
-    assert response.status_code==200,response.text
-    assert 'HIDDEN-PROJECT' not in response.text and 'PRIVATE-MEDICAL' not in response.text and 'PRIVATE-NOTE' not in response.text
-    first=next(p for p in response.json()['people'] if p['id']==people['worker1'])
-    assert {c['id'] for c in first['cells']}=={first_cell['id'],second_cell['id']}
-    assert first['conflicts']==[{'week_start':start.isoformat(),'project_ids':sorted([pid,second])}]
-    own=client.get('/api/people/weeks?scope=mine',headers=worker_headers).json()
-    assert [p['id'] for p in own['people']]==[people['worker1']]
-
-
 def test_week_and_project_report_use_actual_records_and_t26_visible_documents(client,pm_headers,worker_headers,monkeypatch):
     from app.services import field_week
     from tests.test_confidential_documents_t26 import policy
@@ -363,18 +308,6 @@ def test_intern_with_explicit_record_permission_uses_same_member_and_check_guard
     assert save(client,headers,operation(other,units[0])).status_code==404
 
 
-def test_own_week_permission_is_independent_of_team_workbench_permission(client,pm_headers,worker_headers):
-    _,_,people=prepared(client,pm_headers)
-    with SessionLocal() as db:
-        db.get(User,people['worker1']).permission_overrides={'workspace.view':False,'personal.schedule.read':True};db.commit()
-    assert client.get('/api/people/weeks?scope=mine',headers=worker_headers).status_code==200
-    assert client.get('/api/people/weeks?scope=team',headers=worker_headers).status_code==403
-    with SessionLocal() as db:
-        db.get(User,people['worker1']).permission_overrides={'workspace.view':True,'personal.schedule.read':False};db.commit()
-    assert client.get('/api/people/weeks?scope=team',headers=worker_headers).status_code==200
-    assert client.get('/api/people/weeks?scope=mine',headers=worker_headers).status_code==403
-
-
 def weekly_work(client,headers,*,vehicle=False,assignees=None,scope=None,published=True):
     from tests.test_weekly_plans import create_cell,publish
     from tests.test_work_items_t34 import phase,create
@@ -389,29 +322,6 @@ def weekly_work(client,headers,*,vehicle=False,assignees=None,scope=None,publish
         result=publish(client,headers,pid,row);assert result.status_code==200,result.text
         row=client.get(f'/api/projects/{pid}/weekly-plans',headers=headers,params={'week_start':start.isoformat(),'weeks':1}).json()['cells'][0]
     return pid,units,people,task,row
-
-
-@pytest.mark.member_rules
-def test_real_weekly_claim_then_actual_fact_and_report_share_canonical_completion(client,pm_headers,worker_headers):
-    pid,units,people,task,cell=weekly_work(client,pm_headers)
-    response=client.get('/api/worker/week',headers=worker_headers);assert response.status_code==200,response.text
-    view=response.json();assert not view['plans'] and [r['id'] for r in view['unassigned']]==[cell['id']]
-    assert not view['unassigned'][0]['completion']['is_complete'] and view['unassigned'][0]['permissions']['claim']
-    body=operation(pid,task['id'],kind='work',step_key='',weekly_cell_id=cell['id'])
-    assert save(client,worker_headers,body).status_code==409  # reading and reporting never implicitly claim
-    claimed=client.post(f"/api/projects/{pid}/weekly-plans/{cell['id']}/claim",headers=worker_headers,json={'version':cell['version']})
-    assert claimed.status_code==200,claimed.text
-    assert claimed.json()['assignee_ids']==[people['worker1']]
-    assert client.post(f"/api/projects/{pid}/weekly-plans/{cell['id']}/claim",headers=worker_headers,json={'version':cell['version']}).status_code==409
-    result=save(client,worker_headers,body);assert result.status_code==200,result.text
-    view=client.get('/api/worker/week',headers=worker_headers).json()
-    assert not view['unassigned'] and view['plans'][0]['completion']['completed_count']==1 and view['plans'][0]['completion']['is_complete']
-    team=client.get('/api/people/weeks',headers=pm_headers).json()
-    person=next(r for r in team['people'] if r['id']==people['worker1'])
-    assert person['cells'][0]['completion']==view['plans'][0]['completion']
-    with SessionLocal() as db:
-        rows=db.query(FieldOperation).filter_by(project_id=pid).all()
-        assert len(rows)==1 and rows[0].actor_id==people['worker1'] and rows[0].assisted_user_id is None
 
 
 @pytest.mark.member_rules

@@ -14,37 +14,6 @@ def _project_with_member(client, pm_headers, worker_headers):
     client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {'members': [*r.json()['members'], wid]}))
     return pid
 
-def test_daily_regeneration_preserves_original_reports(client, pm_headers, worker_headers):
-    """重排不能删除已有旧填报的条目，也不能改写原数量、日期及关联。"""
-    from datetime import date
-    from app.db import SessionLocal
-    from app.models import DailyProgress, ScheduleEntry, Task, Module, Phase
-    pid = _project_with_member(client, pm_headers, worker_headers)
-    worker_id = client.get('/api/auth/me', headers=worker_headers).json()['id']
-    with SessionLocal() as db:
-        phase = Phase(project_id=pid, name='旧实施工作'); db.add(phase); db.flush()
-        module = Module(project_id=pid, phase_id=phase.id, name='原日程模块'); db.add(module); db.flush()
-        task = Task(project_id=pid, module_id=module.id, name='旧数量工作',
-            quantity_type='fixed', target_quantity=3, unit='台', standard_hours=8)
-        db.add(task); db.flush()
-        entry = ScheduleEntry(project_id=pid, task_id=task.id, work_date=date(2026, 8, 10),
-            assignee_id=worker_id, planned_quantity=1.5, is_confirmed=False, notes='原未确认日程', version=4)
-        db.add(entry); db.flush()
-        report = DailyProgress(project_id=pid, task_id=task.id, schedule_entry_id=entry.id,
-            work_date=entry.work_date, user_id=worker_id, completed_quantity=1, note='原填报说明', client_uuid='replan-keep-01')
-        db.add(report); db.commit(); entry_id=entry.id; report_id=report.id
-        original_entry = (entry.task_id, entry.assignee_id, entry.work_date, entry.planned_quantity, entry.notes, entry.version)
-        original_report = (report.task_id, report.schedule_entry_id, report.work_date, report.user_id,
-            report.completed_quantity, report.note, report.client_uuid, report.created_at)
-    # 按日重排已退役：旧入口返回 410，原日程与填报只读保留。
-    response = client.post(f'/api/projects/{pid}/schedule/generate', headers=pm_headers)
-    assert response.status_code == 410, response.text
-    with SessionLocal() as db:
-        entry=db.get(ScheduleEntry, entry_id); report=db.get(DailyProgress, report_id)
-        assert (entry.task_id, entry.assignee_id, entry.work_date, entry.planned_quantity, entry.notes, entry.version) == original_entry
-        assert (report.task_id, report.schedule_entry_id, report.work_date, report.user_id,
-            report.completed_quantity, report.note, report.client_uuid, report.created_at) == original_report
-
 def test_generate_preserves_project_snapshot_no_duplicate(client, pm_headers):
     """C2-6：模板改名后再次带入 → 保留项目任务原名，不覆盖现场计划也不重复。"""
     pid = client.post('/api/projects', headers=pm_headers, json={'name': '改名幂等项目', 'start_date': '2026-08-10', 'new_vehicles': False, 'end_date': '2026-09-30'}).json()['id']

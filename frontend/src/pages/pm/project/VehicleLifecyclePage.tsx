@@ -2,7 +2,6 @@ import VehicleDocumentsPanel from '../../../components/VehicleDocumentsPanel'
 import VehicleProgressMatrix from '../../../components/VehicleProgressMatrix'
 import VehicleArrivalEditor from '../../../components/VehicleArrivalEditor'
 import { hasProjectCapability, useProjectWriteBlocked } from '../../../hooks/useProjectCapability'
-import { openWorkDetail } from '../../../stores/workDetail'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert, Button, Checkbox, DatePicker, Drawer, Empty, Form, Input, InputNumber, Modal, Select,
@@ -454,7 +453,6 @@ export default function VehicleLifecyclePage({ project, onReload, configurationO
             {!!event.replaced_parts?.length && <div><b>更换配件：</b>{event.replaced_parts.map((part: any) => `${part.name || '配件'}${part.model ? `(${part.model})` : ''} x${part.quantity || 1}`).join('；')}</div>}
             {event.downtime_hours != null && <div><b>停机：</b>{event.downtime_hours} 小时</div>}
             {event.verification && <div><b>验证：</b>{event.verification}</div>}
-            {!!event.assignments?.length && <div className="vehicle-repair-assignments"><strong>历史按日安排</strong>{event.assignments.map((entry: any) => <div key={entry.id}><button className="task-name-link" onClick={() => openWorkDetail({projectId,taskId:entry.task_id,entryId:entry.entry_id || entry.id,onChanged:()=>{load();if(selected)openHistory(selected)}})}>{entry.work_date} · {entry.assignee_name} · 查看工作与结果</button> <Tag color="blue">历史计划来源</Tag></div>)}</div>}
             {!!event.weekly_assignments?.length && <div className="vehicle-repair-assignments"><strong>维修周计划</strong>{event.weekly_assignments.map((cell:any)=><div key={cell.id}><a href={`/pm/projects/${projectId}/plan?view=weeks&week=${cell.week_start}&cell=${cell.id}`}>{cell.week_start}</a> <Tag>{cell.is_cancelled?'已取消':cell.published?'已发布':'草稿'}</Tag></div>)}</div>}
             {canSchedule && !event.is_closed && <Button size="small" style={{ marginTop: 8 }} onClick={() => setAssignment({ projectId, repair: { unitId: selected.id, eventId: event.id, title: event.title } })}>{event.assignments?.length ? '追加维修安排' : '安排维修'}</Button>}
             {!writeBlocked && (canManageEvents || event.operator_id === user?.id) && <Space size={0} wrap>

@@ -288,19 +288,6 @@ def test_ai_quick_import_preview_reports_structural_errors(client, pm_headers):
     assert len(preview["errors"]) >= 4
 
 
-def test_ai_assistant_is_text_only_and_structured_drafting_is_retired(client, pm_headers):
-    """D-5: AI only organizes text; structured project drafting and skill bundles are retired."""
-    status = client.get("/api/ai-projects/status", headers=pm_headers)
-    assert status.status_code == 200
-    body = status.json()
-    assert body["available"] is False and body["skills"] == [] and body["drafting_enabled"] is False
-    assert body["external_agent_readonly"] is True
-    assert {item["id"] for item in body["providers"]} == {"deepseek", "mimo", "minimax", "custom"}
-    for method, path in (("get", "/api/ai-projects/skill-bundle"), ("post", "/api/ai-projects/organize"),
-                         ("post", "/api/ai-projects/organize/jobs"), ("post", "/api/ai-projects/test-connection")):
-        assert getattr(client, method)(path, headers=pm_headers).status_code == 410
-
-
 def test_ai_response_parser_accepts_reasoning_wrapper():
     from app.services.ai_project_assistant import _extract_json
 

@@ -122,32 +122,6 @@ def test_worker_membership_system_permission_and_hidden_project(client,pm_header
     assert write(client,worker_headers,pid,ids,key='single_commissioning').status_code==403
 
 
-def test_progress_ignores_mixed_quantity_weights_and_curve_is_weekly(client,pm_headers):
-    from app.db import SessionLocal
-    from app.models import Module,Phase,Task,DailyProgress,Project,User
-    from app.services.progress import project_progress_tree,plan_vs_actual_timeline
-    pid,ids=setup_fleet(client,pm_headers,1)
-    assert write(client,pm_headers,pid,ids).status_code==200
-    with SessionLocal() as db:
-        phase=Phase(project_id=pid,name='实施',sort_order=1);db.add(phase);db.flush()
-        module=Module(project_id=pid,phase_id=phase.id,name='普通工作');db.add(module);db.flush()
-        t1=Task(project_id=pid,module_id=module.id,name='1000米线路',quantity_type='fixed',unit='米',target_quantity=1000,manually_completed=True)
-        t2=Task(project_id=pid,module_id=module.id,name='一次培训',quantity_type='fixed',unit='次',target_quantity=1)
-        db.add_all([t1,t2]);db.flush()
-        totals=project_progress_tree(db,pid)
-        assert totals['target']==6 and totals['completed']==2 and totals['percent']==33.3
-        from app.routers.dashboard import _project_progress_totals
-        portfolio=_project_progress_totals(db,[t1,t2],[pid])[pid]
-        assert (portfolio['target'],portfolio['completed'],portfolio['percent'])==(6,2,33.3)
-        timeline=plan_vs_actual_timeline(db,pid,None,None)
-        assert all(r['period']=='week' and r['unit']=='车辆环节' for r in timeline)
-        assert sum(r['actual'] for r in timeline)==1
-
-
-def test_adjust_quantity_api_is_retired(client,pm_headers):
-    assert client.post('/api/worker/reports/adjust',headers=pm_headers,json={}).status_code==404
-
-
 def test_portable_matrix_restores_real_vehicle_links_and_clone_has_no_actuals(client,pm_headers):
     from app.db import SessionLocal
     from app.models import Project,VehicleProgress
@@ -217,11 +191,4 @@ def test_state_and_membership_are_rechecked_after_waiting_for_project_lock(clien
     assert write(client,pm_headers,pid,ids).status_code==400
     assert matrix(client,pm_headers,pid)['summary']['completed']==0
 
-
-def test_portfolio_weekly_trend_is_retired_and_matrix_reads_cells(client,pm_headers):
-    """旧按周数量趋势已退役；车辆环节进度只从逐车格子读取。"""
-    pid,ids=setup_fleet(client,pm_headers,1)
-    assert write(client,pm_headers,pid,ids).status_code==200
-    assert client.get('/api/dashboard/trend',headers=pm_headers).status_code==410
-    assert matrix(client,pm_headers,pid)['summary']['completed']==1
 

@@ -83,8 +83,6 @@ def delete_attachment(attachment_id: str, user: User = Depends(get_current_user)
     if not shared_file:
         shared_file = any(isinstance(ref, dict) and ref.get("stored_name") == a.stored_name
                           for (refs,) in db.query(Task.reference_docs).all() for ref in refs or [])
-    from app.services.project_retention import is_retained_file
-    shared_file = shared_file or is_retained_file(db, a.stored_name)
     stored=a.stored_name
     path=UPLOAD_DIR/stored
     if not stored or Path(stored).name!=stored or "\\" in stored or path.is_symlink() or path.resolve().parent!=UPLOAD_DIR.resolve():

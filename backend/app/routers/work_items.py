@@ -122,8 +122,7 @@ def list_project_work(project_id:str,user:User=Depends(get_current_user),db:Sess
     caps=project_capabilities(user,project)
     can_plan=C_PLAN in caps and project.status in ACTIVE_PROJECT_STATUSES
     can_record=has_permission(user,'worker.report',default=True) and (C_PLAN in caps or user.id in (project.members or []) or user.id in (project.manager,project.technical_manager)) and project.status in EXECUTION_PROJECT_STATUSES
-    legacy=[service.item_dict(db,t,checks=True) for t in db.query(Task).filter_by(project_id=project_id) if (service.phase_of(db,t) is None or service.phase_of(db,t).name in REMINDER_ONLY_PHASE_NAMES)]
-    return {'legacy_work_items':legacy,'phases':_catalog(db,project_id=project_id),'permissions':{'plan':can_plan,'record':can_record,'override':C_PLAN in caps},'project_status':project.status}
+    return {'phases':_catalog(db,project_id=project_id),'permissions':{'plan':can_plan,'record':can_record,'override':C_PLAN in caps},'project_status':project.status}
 
 
 @router.post('/projects/{project_id}/work-items')
@@ -156,15 +155,6 @@ def complete_project_work(project_id:str,task_id:str,body:WorkCompletion,user:Us
     from app.services.cache import cache_clear
     cache_clear('dashboard:')
     return service.item_dict(db,task,checks=True)
-
-
-@router.get('/projects/{project_id}/work-items/{task_id}/history')
-@route_permission('project.read')
-def work_history(project_id:str,task_id:str,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-    ensure_project_visible(db,project_id,user)
-    task=db.get(Task,task_id)
-    if task is None or task.project_id!=project_id:raise HTTPException(404,'工作项不存在')
-    return service.legacy_quantity(db,task)
 
 
 @router.post('/projects/{project_id}/work-phases')

@@ -6,14 +6,6 @@ from app.services.system_permissions import has_permission
 from app.services.change_log import log_change
 
 
-def validate_positive_task_targets(tasks):
-    raise HTTPException(410, '按日目标数量已退休，请使用工作项与周计划')
-
-
-def create_assignment(*args, **kwargs):
-    raise HTTPException(410, '按天安排已退休，请使用明确的周计划')
-
-
 def create_repair_work(db, project, actor, event, unit, notes):
     if event.is_closed:
         raise HTTPException(400, '车辆问题已关闭，请先根据实际情况重新打开问题再安排处理')

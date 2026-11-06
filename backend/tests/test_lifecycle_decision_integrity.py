@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 import pytest
 from fastapi import HTTPException
 from app.db import SessionLocal
-from app.models import AcceptanceRecord, ArchiveChecklist, DailyProgress, Module, Phase, Project, ProjectPreparationItem, Task, User
+from app.models import AcceptanceRecord, ArchiveChecklist, Module, Phase, Project, ProjectPreparationItem, Task, User
 
 
 def _project(client, headers, status="preparing"):
@@ -64,9 +64,6 @@ def _completion_fixture(client, headers, status="acceptance"):
         task = Task(project_id=pid, phase_id=phase.id, module_id=module.id, name="设备调试", quantity_type="fixed",
                     target_quantity=1)
         db.add(task); db.flush()
-        db.add(DailyProgress(project_id=pid, task_id=task.id, user_id=p.manager,
-                             work_date=date(2026, 9, 30), completed_quantity=1,
-                             client_uuid="independent-complete"))
         for row in db.query(ArchiveChecklist).filter_by(project_id=pid):
             row.is_done = True
         db.commit()
@@ -204,15 +201,15 @@ def test_added_completed_work_still_requires_new_scope_acceptance(client, pm_hea
     first = _sign(client, pm_headers, pid)
     with SessionLocal() as db:
         old = db.get(Task, tid)
-        added = Task(project_id=pid, module_id=old.module_id, name="追加实施范围",
-                     target_quantity=1, manually_completed=True)
+        added = Task(project_id=pid, phase_id=old.phase_id, name="追加实施范围", quantity_type="fixed", manually_completed=True)
         db.add(added); db.commit()
     rows = client.get(f"/api/projects/{pid}/acceptance", headers=pm_headers).json()
     assert rows[0]["id"] == first and not rows[0]["scope_current"]
     result = _status(client, pm_headers, pid, "completed")
     assert result.status_code == 400, result.text
     _sign(client, pm_headers, pid)
-    assert _status(client, pm_headers, pid, "completed").status_code == 200
+    final = _status(client, pm_headers, pid, "completed")
+    assert final.status_code == 200, final.text
 
 
 def test_new_required_project_document_cannot_reuse_old_signature(client, pm_headers):
@@ -405,17 +402,6 @@ def test_stale_actor_loses_stage_authority_after_grant_revocation(client, pm_hea
         assert error.value.status_code == 403
         stale.rollback()
     _assert_status(pid, "executing")
-
-
-def test_legacy_confirm_ready_is_retired_and_cannot_grant_dispatch_authority(client, pm_headers):
-    from tests.test_dispatch_review_t29 import scope
-    pid, _ = scope(client, pm_headers)
-    path=f'/api/projects/{pid}/preparations/confirm-ready'
-    for body in ({'conclusion':'普通备注'}, {'risk_entry':True,'conclusion':'明确接受旧准备风险'}):
-        assert client.post(path,headers=pm_headers,json=body).status_code==410
-    assert _status(client,pm_headers,pid,'executing').status_code==400
-    assert _review(client,pm_headers,pid).status_code==200
-    assert _status(client,pm_headers,pid,'executing').status_code==200
 
 
 def test_explicit_member_stage_authority_is_honored(client, pm_headers, worker_headers):

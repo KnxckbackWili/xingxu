@@ -5,29 +5,8 @@ from threading import Barrier, Event
 import pytest
 from fastapi import HTTPException
 from app.db import SessionLocal, engine
-from app.models import (Project, User, Task, WeeklyPlanCell, VehicleUnit, Vehicle,
-    CheckItem, VehicleProgress, ProjectVehicleStep,
-    UserUnavailability, VehicleLifecycleEvent, Notification)
+from app.models import Project, User, Task, WeeklyPlanCell, VehicleUnit, Vehicle, CheckItem, VehicleProgress, ProjectVehicleStep, VehicleLifecycleEvent, Notification
 from tests.test_weekly_plans import setup, create_cell, publish
-
-
-def test_member_warnings_exclude_unpublished_targets_and_private_absence_details(client, pm_headers, worker_headers):
-    pid, units, ph, task = setup(client, pm_headers, vehicle=True)
-    with SessionLocal() as db:
-        worker = db.query(User).filter_by(username='worker1').one(); wid = worker.id
-        project = db.get(Project,pid); project.members = [wid]; manager = project.manager
-        db.add(UserUnavailability(user_id=manager,start_date=date(2001,1,1),end_date=date(2001,1,7),reason='私密原因',note='私密备注'))
-        db.commit()
-    visible = create_cell(client,pm_headers,pid,task,mode='finish',target_count=1,assignee_ids=[manager])
-    assert publish(client,pm_headers,pid,visible).status_code == 200
-    create_cell(client,pm_headers,pid,task,week_start='2001-01-08',mode='finish',target_count=99)
-    response = client.get(f'/api/projects/{pid}/weekly-plans?week_start=2001-01-01&weeks=2',headers=worker_headers)
-    assert response.status_code == 200,response.text
-    data=response.json(); assert len(data['cells']) == 1 and data['summary']['draft_count'] is None
-    assert next(w for w in data['warnings'] if w['code']=='target_mismatch')['planned_count'] == 1
-    unavailable=next(w['unavailability'] for w in data['warnings'] if w['code']=='unavailable')
-    assert 'reason' not in unavailable and 'note' not in unavailable
-    assert '私密原因' not in response.text and '私密备注' not in response.text
 
 
 def test_overlapping_scope_warns_and_explicit_cars_obey_work_applicability(client,pm_headers):
@@ -65,27 +44,6 @@ def test_plan_completion_rechecks_exact_required_and_safety_checks(client,pm_hea
     facts=client.get(path,headers=pm_headers).json()['cells'][0]['completion'];assert facts['completed_count']==1 and not facts['is_complete']
     with SessionLocal() as db:db.get(CheckItem,exact_id).is_done=True;db.commit()
     facts=client.get(path,headers=pm_headers).json()['cells'][0]['completion'];assert facts['completed_count']==2 and facts['is_complete']
-
-
-def test_repair_draft_is_visible_to_planner_without_changing_actual_handler(client,pm_headers,worker_headers):
-    pid,units,ph,task=setup(client,pm_headers)
-    with SessionLocal() as db:
-        worker=db.query(User).filter_by(username='worker1').one();wid=worker.id
-        db.get(Project,pid).members=[wid];db.commit()
-    base=f'/api/projects/{pid}/vehicle-units/{units[0]}'
-    event=client.post(base+'/events',headers=pm_headers,json={'event_type':'fault','event_date':'2001-01-03','title':'现场故障','handler':'实际原处理人'}).json();eid=event['id']
-    response=client.post(base+f'/events/{eid}/weekly-plans',headers=pm_headers,json={'week_start':'2001-01-01','assignee_ids':[wid],'mode':'finish','notes':'明确维修安排'})
-    assert response.status_code==200,response.text
-    row=response.json()['cell'];assert not row['published']
-    def read(headers):return next(e for e in client.get(base,headers=headers).json()['events'] if e['id']==eid)
-    assert read(pm_headers)['weekly_assignments'][0]['id']==row['id']
-    assert read(worker_headers)['weekly_assignments']==[]
-    assert publish(client,pm_headers,pid,row).status_code==200
-    assert read(worker_headers)['weekly_assignments'][0]['published']
-    assert client.post(base+f'/events/{eid}/schedule',headers=pm_headers,json={}).status_code==410
-    with SessionLocal() as db:
-        original=db.get(VehicleLifecycleEvent,eid);assert original.handler=='实际原处理人' and not original.is_closed
-        work=db.get(Task,row['task_id']);assert work.source_vehicle_event_id==eid and not work.manually_completed and work.target_quantity is None
 
 
 def test_retention_keeps_full_weekly_row_and_publish_retry_is_idempotent(client,pm_headers,worker_headers):

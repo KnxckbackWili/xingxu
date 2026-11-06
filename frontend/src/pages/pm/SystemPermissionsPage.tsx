@@ -28,9 +28,9 @@ const risks: Record<string, { name: string; color: string }> = {
 /** One-click bundles: each switch turns a whole job on or off instead of listing every permission. */
 const BUNDLES: { key: string; name: string; description: string; permissions: string[] }[] = [
   { key: 'projects', name: '新建和导入项目', description: '可以新建项目、从文件导入项目。', permissions: ['projects.create', 'system.import.create'] },
-  { key: 'all_projects', name: '查看全部项目和归档', description: '不是项目成员也能看到所有项目和历史归档（保密资料仍按原规则）。', permissions: ['projects.view_all', 'system.archives.read'] },
+  { key: 'all_projects', name: '查看全部项目', description: '不是项目成员也能看到所有项目（保密资料仍按原规则）。', permissions: ['projects.view_all'] },
   { key: 'templates', name: '维护模板和车型', description: '新建、修改、导入模板，维护车型字典。', permissions: ['system.templates.view', 'system.templates.manage', 'system.template_io.manage', 'system.vehicle_types.view', 'system.vehicle_types.manage'] },
-  { key: 'people', name: '管理人员账号', description: '新建和停用账号，安排人员可用时间。', permissions: ['system.users.read', 'system.users.manage', 'system.availability.manage'] },
+  { key: 'people', name: '管理人员账号', description: '新建、修改和停用账号。', permissions: ['system.users.read', 'system.users.manage'] },
   { key: 'backups', name: '备份、通知和节假日', description: '创建、下载、恢复系统备份，配置通知渠道和节假日。', permissions: ['system.backups.read', 'system.backups.configure', 'system.backups.create', 'system.backups.download', 'system.backups.delete', 'system.backups.restore', 'system.notifications.configure', 'system.holidays.manage'] },
   { key: 'feedback', name: '处理系统反馈', description: '查看并处理大家提交的使用反馈。', permissions: ['system.feedback.manage'] },
 ]

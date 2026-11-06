@@ -50,26 +50,6 @@ def test_director_can_change_status(client, admin_headers, pm_headers):
     assert result.status_code == 200, result.text
     assert client.get(f'/api/projects/{pid}', headers=director).json()['status'] == 'executing'
 
-def test_retired_transfer_request_does_not_notify_or_mutate(client, pm_headers, admin_headers):
-    """退役申请入口不得创建审批事实或通知；直接移交另有正向覆盖。"""
-    from app.db import SessionLocal
-    from app.models import Project, ProjectGovernanceRequest, Notification, NotificationOutbox, ChangeLog
-    pid = _project(client, pm_headers)
-    target = _create_user(client, admin_headers, 'notification-receiver')
-    def snapshot():
-        with SessionLocal() as db:
-            project = db.get(Project, pid)
-            return (project.manager, project.version, list(project.members),
-                db.query(ProjectGovernanceRequest).filter_by(project_id=pid).count(),
-                db.query(Notification).filter_by(project_id=pid).count(),
-                db.query(NotificationOutbox).filter_by(project_id=pid).count(),
-                db.query(ChangeLog).filter_by(project_id=pid).count())
-    before = snapshot()
-    result = client.post(f'/api/projects/{pid}/governance-requests', headers=pm_headers,
-        json={'request_type': 'transfer', 'target_manager_id': target, 'reason': '岗位调整，验证通知及时到达'})
-    assert result.status_code == 410, result.text
-    assert snapshot() == before
-
 def _login(client, username):
     response = client.post('/api/auth/login', json={'username': username, 'password': 'password123'})
     return {'Authorization': f'Bearer {response.json()['access_token']}'}
@@ -159,32 +139,3 @@ def test_transfer_keeps_old_manager_when_co_manager(client, admin_headers):
     assert client.get(f'/api/projects/{pid}', headers=old_headers).status_code == 200
     detail = client.get(f'/api/projects/{pid}', headers=old_headers).json()
     assert oldpm in (detail['members'] or [])
-
-def test_direct_transfer_preserves_daily_history_and_notifies_owners(client, admin_headers):
-    """旧日程是保留来源；负责人变化不重写它，两位负责人收到通知并有审计。"""
-    from datetime import date
-    from app.db import SessionLocal
-    from app.models import ScheduleEntry, Task, Phase, ChangeLog
-    oldpm = _create_user(client, admin_headers, 'oldpm4')
-    newpm = _create_user(client, admin_headers, 'newpm4')
-    old_headers = _login(client, 'oldpm4')
-    pid = _managed_project(client, old_headers, '移交通知项目', manager_id=oldpm)
-    with SessionLocal() as db:
-        phase = Phase(project_id=pid, name='实施工作'); db.add(phase); db.flush()
-        task = Task(project_id=pid, phase_id=phase.id, name='历史工作', quantity_type='fixed', target_quantity=2, unit='台')
-        db.add(task); db.flush()
-        entry = ScheduleEntry(project_id=pid, task_id=task.id, work_date=date(2026, 8, 10), assignee_id=oldpm,
-            planned_quantity=1.25, status='planned', notes='原日程说明', is_confirmed=False, version=3)
-        db.add(entry); db.commit(); identity=entry.id
-        before = (entry.task_id, entry.assignee_id, entry.work_date, entry.planned_quantity, entry.status, entry.notes, entry.version)
-    _transfer(client, admin_headers, pid, newpm, old_headers)
-    with SessionLocal() as db:
-        entry = db.get(ScheduleEntry, identity)
-        assert (entry.task_id, entry.assignee_id, entry.work_date, entry.planned_quantity, entry.status, entry.notes, entry.version) == before
-        audit = db.query(ChangeLog).filter_by(project_id=pid, action='transfer').one()
-        assert audit.old_value['manager'] == oldpm and audit.new_value['manager'] == newpm
-        assert audit.operator_id == client.get('/api/auth/me', headers=admin_headers).json()['id']
-    new_msgs = client.get('/api/notifications', headers=_login(client, 'newpm4')).json()
-    assert any('已成为项目' in (row.get('title') or '') for row in new_msgs)
-    old_msgs = client.get('/api/notifications', headers=old_headers).json()
-    assert any('负责人已更换' in (row.get('title') or '') for row in old_msgs)

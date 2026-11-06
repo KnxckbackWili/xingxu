@@ -128,16 +128,6 @@ def test_status_warning_preview_does_not_change_status(client, pm_headers):
     assert client.get(f"/api/projects/{pid}", headers=pm_headers).json()["status"] == "executing"
 
 
-def test_confirm_ready(client, pm_headers):
-    pid = _project(client, pm_headers)
-    assert client.post(f'/api/projects/{pid}/preparations/confirm-ready',headers=pm_headers,json={'risk_entry':True,'conclusion':'旧接口'}).status_code == 410
-    from tests.lifecycle_helpers import approve_risk_entry
-    approve_risk_entry(client,pm_headers,pid)
-    result=client.get(f'/api/projects/{pid}',headers=pm_headers).json()
-    assert result['prep_confirmed_by'] is not None
-    assert '具体说明' in result['prep_conclusion']
-
-
 @pytest.mark.member_rules
 def test_worker_read_only(client, pm_headers, worker_headers):
     pid = _project(client, pm_headers)

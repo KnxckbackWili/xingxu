@@ -211,30 +211,3 @@ def test_complete_json_preserves_exact_readonly_execution_evidence_and_reimport_
         checks=db.query(models.CheckItem).filter(models.CheckItem.task_id.in_([row.id for row in tasks])).all()
         assert checks and all(not row.is_done and not row.failed for row in checks)
 
-
-def test_portable_quantity_history_keeps_exact_original_fields_without_completing_new_work(client,admin_headers):
-    from app.services.progress import project_progress_tree
-    pid=create_project(client,admin_headers)
-    with SessionLocal() as db:
-        phase=models.Phase(project_id=pid,name='非车辆工作');db.add(phase);db.flush()
-        module=models.Module(project_id=pid,phase_id=phase.id,name='原模块');db.add(module);db.flush()
-        task=models.Task(project_id=pid,module_id=module.id,name='原1000米工作',quantity_type='fixed',target_quantity=1000,unit='米');db.add(task);db.flush()
-        report=models.DailyProgress(project_id=pid,task_id=task.id,user_id='user-admin-001',completed_quantity=1000,
-            work_date=date(2026,2,3),created_at=datetime(2026,2,5,8,9,10),client_uuid='portable-original-uuid',source='admin',note='原项目完整数量与备注')
-        db.add(report);db.commit()
-    payload=client.get(f'/api/projects/{pid}/export/json',headers=admin_headers).json()
-    original=payload['progress']
-    assert original[0]['client_uuid']=='portable-original-uuid'
-    assert original[0]['user_id']=='user-admin-001' and original[0]['created_at'].startswith('2026-02-05T08:09:10')
-    assert original[0]['work_date']=='2026-02-03' and original[0]['completed_quantity']==1000
-    imported=client.post('/api/projects/import/json',headers=admin_headers,json=payload)
-    assert imported.status_code==200,imported.text
-    target=imported.json()['id']
-    with SessionLocal() as db:
-        assert db.query(models.DailyProgress).filter_by(project_id=target).count()==0
-        assert project_progress_tree(db,target)['completed']==0
-        origin=db.get(models.Project,target).portable_unverified_snapshot
-        assert origin['legacy_quantity_reports']==original
-    forbidden=client.put(f'/api/projects/{target}',headers=admin_headers,json=versioned(target, {'portable_unverified_snapshot':{}}))
-    assert forbidden.status_code==422,forbidden.text
-    assert client.get(f'/api/projects/{target}/vehicle-progress/source',headers=admin_headers).json()['source']['legacy_quantity_reports']==original

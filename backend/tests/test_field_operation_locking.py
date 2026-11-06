@@ -3,7 +3,7 @@ from datetime import date
 from uuid import uuid4
 import pytest
 from app.db import SessionLocal
-from app.models import DailyProgress, FieldOperation, Project, ProjectMember, Task, VehicleProgress
+from app.models import FieldOperation, Project, ProjectMember, Task, VehicleProgress
 from app.time_utils import project_today, utcnow
 from tests.test_field_week_t33 import prepared, operation as vehicle_operation, save
 
@@ -26,12 +26,6 @@ def _request(client, pm_headers, worker_headers, pid, unit, tid, action):
         response = save(client, worker_headers, vehicle_operation(pid, unit))
         assert response.status_code == 200, response.text
         record = response.json()
-        # The independent original quantity source also remains untouched.
-        with SessionLocal() as db:
-            db.add(DailyProgress(project_id=pid, task_id=tid, user_id=record['actor_id'],
-                work_date=date.fromisoformat(today), completed_quantity=1.25,
-                client_uuid='locked-original-source', note='原数量来源，不是新操作'))
-            db.commit()
         return 'DELETE', '/api/worker/records/' + record['id'], {
             'version': record['version'], 'completion_date': today,
             'reason': '本人核对后撤回', 'client_uuid': str(uuid4())}, worker_headers
@@ -47,10 +41,8 @@ def _request(client, pm_headers, worker_headers, pid, unit, tid, action):
 def _snapshot(pid, unit, tid):
     with SessionLocal() as db:
         task = db.get(Task, tid)
-        reports = db.query(DailyProgress).filter_by(project_id=pid).order_by(DailyProgress.id).all()
         progress = db.query(VehicleProgress).filter_by(project_id=pid, vehicle_unit_id=unit).all()
         return (task.manually_completed, task.version,
-            [(r.id, r.task_id, r.work_date, r.user_id, r.completed_quantity, r.note, r.client_uuid, r.created_at) for r in reports],
             sorted((r.step_key, r.is_done, r.done_on, r.version) for r in progress),
             db.query(FieldOperation).filter_by(project_id=pid).count())
 

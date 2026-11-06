@@ -1,6 +1,6 @@
 import { ensureVerifiedAccount } from '../../../utils/verifiedAccount'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Button, Collapse, Drawer, Dropdown, Empty, Input, Modal, Select, Space, Tag, Typography } from 'antd'
+import { Alert, Button, Drawer, Dropdown, Empty, Input, Modal, Select, Space, Tag, Typography } from 'antd'
 import { STAGES, stageIndex, stageLabel } from '../../../constants/stages'
 import { CarOutlined, CheckCircleFilled, DownOutlined, EllipsisOutlined, PlusOutlined, RightOutlined, SearchOutlined } from '@ant-design/icons'
 import './TaskPlanPage.css'
@@ -33,7 +33,6 @@ export default function TaskPlanPage({ projectId, focusTaskId, onWorkChanged, de
   const [editor, setEditor] = useState<{ item?: WorkItem }>()
   const [phaseName, setPhaseName] = useState<string>()
   const [phaseStage, setPhaseStage] = useState<string>('6')
-  const [source, setSource] = useState<any>()
   const [append, setAppend] = useState(false)
   const [templates, setTemplates] = useState<{ id: string; name: string }[]>([])
   const [templateId, setTemplateId] = useState('default')
@@ -60,7 +59,7 @@ export default function TaskPlanPage({ projectId, focusTaskId, onWorkChanged, de
   }
   useEffect(() => {
     current.current = identity
-    let active = true; setData(undefined); setDetailId(focusTaskId || undefined); setEditor(undefined); setSource(undefined); setAppend(false); void load()
+    let active = true; setData(undefined); setDetailId(focusTaskId || undefined); setEditor(undefined); setAppend(false); void load()
     api.get(`/projects/${projectId}/vehicle-progress`).then(r => { if (active) setSteps(r.data.steps || []) }).catch(() => { if (active) setSteps([]) })
     return () => { active = false; generation.current++; scopeSequence.current++; workspaceSequence.current++; current.current = Symbol('closed') }
   }, [identity])
@@ -76,11 +75,6 @@ export default function TaskPlanPage({ projectId, focusTaskId, onWorkChanged, de
     api.get(`/projects/${projectId}/tasks/${detailId}/workspace`).then(r => { if (owner === current.current && seq === workspaceSequence.current) setWorkspace(r.data) }).catch(e => { if (owner === current.current && seq === workspaceSequence.current) setWorkspaceError(errMsg(e)) })
     return () => { workspaceSequence.current++ }
   }, [identity, detailId, data])
-  const history = async (item: WorkItem) => {
-    const id = projectId; const owner = identity; const seq = generation.current
-    try { const r = await api.get(`/projects/${id}/work-items/${item.id}/history`); if (current.current === owner && generation.current === seq) setSource(r.data) }
-    catch (e) { if (current.current === owner) setError(errMsg(e)) }
-  }
   const addPhase = async () => {
     if (lock.current || !canPlan || !phaseName?.trim()) return
     const owner = current.current; const seq = generation.current
@@ -123,7 +117,6 @@ export default function TaskPlanPage({ projectId, focusTaskId, onWorkChanged, de
         ] }}><Button loading={loading}>更多 <DownOutlined /></Button></Dropdown>
       </span>
     </div>}
-    {!!data?.legacy_work_items?.length && <Collapse items={[{ key: 'legacy', label: `历史准备工作来源（只读） ${data.legacy_work_items.length} 项`, children: data.legacy_work_items.map(item => <p key={item.id}>{item.name} {item.group_label && <Tag>{item.group_label}</Tag>}<Button onClick={() => void history(item)}>查看原记录</Button></p>) }]} />}
     {data && !data.phases.length && <Empty description="尚无工作分组，添加分组后即可维护工作项" />}
     {data && !!data.phases.length && (() => {
       const term = query.trim().toLocaleLowerCase()
@@ -147,7 +140,6 @@ export default function TaskPlanPage({ projectId, focusTaskId, onWorkChanged, de
           <Dropdown trigger={['click']} menu={{ items: [
             { key: 'detail', label: '查看详情与检查', onClick: () => setDetailId(item.id) },
             ...(canPlan ? [{ key: 'edit', label: '编辑', onClick: () => setEditor({ item }) }] : []),
-            ...(item.has_legacy_quantity ? [{ key: 'history', label: '历史来源', onClick: () => void history(item) }] : []),
           ] }}><Button type="text" size="small" aria-label={`${item.name}的更多操作`} icon={<EllipsisOutlined />} /></Dropdown>
         </span>
       </li>
@@ -183,6 +175,5 @@ export default function TaskPlanPage({ projectId, focusTaskId, onWorkChanged, de
       {workspace && <WorkContextPanel data={workspace} onRefresh={changed} />}
       {detail ? <><Typography.Paragraph>{detail.description || '尚无补充说明'}</Typography.Paragraph><Space><Tag>{detail.phase_name}</Tag>{detail.group_label && <Tag>{detail.group_label}</Tag>}</Space>{detail.completion?.reason && <p>状态说明：{detail.completion.reason}</p>}<h3>检查要求</h3>{detail.check_items.map(check => <article key={check.id} style={{ marginBottom: 12 }}><strong>{check.name}</strong> <Tag>{check.vehicle_label || '工作检查'}</Tag>{check.is_safety_critical && <Tag color="red">安全关键</Tag>}<p>{check.failed ? `不通过：${check.failed_reason}` : !check.is_applicable ? `不适用：${check.not_applicable_reason}` : check.is_done ? '已通过' : '待检查'}</p>{canRecord && (!workspace || workspace.can_check) && <WorkCheckAction projectId={projectId} item={check} onSaved={changed} />}</article>)}<h3>参考文档</h3>{detail.reference_docs.map((ref, index) => <p key={index}><Button onClick={() => void downloadDocumentResource(`/projects/${projectId}/tasks/${detail.id}/reference-docs/${index}/download`, ref.filename)}>{ref.filename}</Button></p>)}<Link to={`/pm/projects/${projectId}/documents`}>项目资料清单</Link></> : <Empty description={loading ? '正在读取工作' : '该工作不在当前实施范围；可在历史来源中核对'} />}
     </Drawer>
-    <Drawer title="原工作来源（只读）" open={source !== undefined} onClose={() => setSource(undefined)} width={760}><p>原名称、模块、描述、数量、日期和操作者保留用于追溯；当前工作按完成状态或真实车辆环节维护。</p><pre style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify(source, null, 2)}</pre></Drawer>
   </div>
 }

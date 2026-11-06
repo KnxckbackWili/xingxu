@@ -88,11 +88,9 @@ TOOLS=[ToolSpec(name,label,description,_param_schema(),scopes) for name,label,de
 )]
 TOOL_MAP={spec.name:spec for spec in TOOLS}
 ALL_TOOL_MAP=dict(TOOL_MAP)
-RETIRED_TOOLS=frozenset(('get_execution_plan','get_preparations_summary','get_schedule','preview_schedule'))
 
 
 def execute_ai_tool(name,arguments,fallback_project_id,user,db):
-    if name in RETIRED_TOOLS:raise HTTPException(410,'旧数量计划、准备评审与按天排程AI能力已退役')
     if name not in TOOL_MAP:raise HTTPException(400,'不支持的AI只读工具')
     user=db.get(User,user.id,populate_existing=True)
     if user is None or not user.is_active:raise HTTPException(401,'账号不存在或已停用')

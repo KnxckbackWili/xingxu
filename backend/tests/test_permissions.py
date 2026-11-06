@@ -132,14 +132,3 @@ def test_worker_project_co_manager_grant_is_scoped_and_expires(client, pm_header
                       json=versioned(project_id, {"description": "过期后不可管理"})).status_code == 403
 
 
-def test_ai_organize_drafts_are_retired_for_every_role(client, pm_headers, worker_headers):
-    """AI 整理草稿已退役：无论项目能力如何都返回 410，不生成草稿。"""
-    project_id = _project(client, pm_headers, "AI 权限项目")
-    client.put(f"/api/projects/{project_id}", headers=pm_headers, json=versioned(project_id, {"members": ["user-worker-001"]}))
-    for headers in (worker_headers, pm_headers):
-        assert client.post("/api/ai-projects/organize/jobs", headers=headers, json={
-            "skill": "issues", "project_id": project_id, "source_text": "整理现场问题",
-        }).status_code == 410
-        assert client.post("/api/ai-projects/organize/jobs", headers=headers, json={
-            "skill": "project", "source_text": "创建项目",
-        }).status_code == 410

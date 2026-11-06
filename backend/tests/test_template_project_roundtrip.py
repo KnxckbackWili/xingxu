@@ -77,56 +77,6 @@ def test_import_rejects_noninteger_vehicle_counts(client, pm_headers, quantity):
     assert client.post('/api/projects/import/json', headers=pm_headers, json=payload).status_code == 400
 
 
-def test_project_json_roundtrip_preserves_work_definition_and_timezone(client, pm_headers):
-    from app.db import SessionLocal
-    from app.models import Phase, Module, Task, CheckItem, ProjectPreparationItem
-    created = client.post('/api/projects', headers=pm_headers, json={
-        'name': 'Portable definition', 'timezone': 'America/Los_Angeles',
-        'start_date': '2026-01-01', 'end_date': '2026-12-31', 'new_vehicles': False}).json()
-    with SessionLocal() as db:
-        phase = Phase(project_id=created['id'], name='Portable phase', color='#123456', entry_criteria='entry', exit_criteria='exit')
-        db.add(phase); db.flush()
-        module = Module(project_id=created['id'], phase_id=phase.id, name='Portable module', description='module specification', preparation_conditions=['need_wms'])
-        db.add(module); db.flush()
-        first = Task(project_id=created['id'], module_id=module.id, name='First', quantity_type='fixed', target_quantity=1, applicable_vehicle_types=['潜伏式'])
-        db.add(first); db.flush()
-        second = Task(project_id=created['id'], module_id=module.id, name='Second', quantity_type='fixed', target_quantity=1, depends_on=[first.id])
-        db.add(second); db.flush()
-        # Represent a migrated current definition: old module fields remain
-        # immutable provenance, while group/scope are the current work fields.
-        preserved = {'kind': 'fixture_legacy_definition_source', 'module': {
-            'name': module.name, 'description': module.description,
-            'preparation_conditions': list(module.preparation_conditions)}}
-        for task in (first, second):
-            task.phase_id = phase.id
-            task.group_label = module.name
-            task.scope_conditions = list(module.preparation_conditions)
-            task.legacy_work_snapshot = preserved
-        db.add(CheckItem(project_id=created['id'], task_id=first.id, name='Check', description='numeric acceptance threshold'))
-        db.commit()
-    snapshot = client.get(f"/api/projects/{created['id']}/export/json", headers=pm_headers).json()
-    response = client.post('/api/projects/import/json', headers=pm_headers, json=snapshot)
-    assert response.status_code == 200, response.text
-    pid = response.json()['id']
-    assert client.get(f'/api/projects/{pid}', headers=pm_headers).json()['timezone'] == 'America/Los_Angeles'
-    with SessionLocal() as db:
-        phase = db.query(Phase).filter_by(project_id=pid).one()
-        assert (phase.color, phase.entry_criteria, phase.exit_criteria) == ('#123456', 'entry', 'exit')
-        assert db.query(Module).filter_by(project_id=pid).count() == 0
-        first = db.query(Task).filter_by(project_id=pid, name='First').one()
-        second = db.query(Task).filter_by(project_id=pid, name='Second').one()
-        assert first.module_id is None and first.phase_id == phase.id
-        assert first.group_label == 'Portable module'
-        assert first.scope_conditions == ['need_wms']
-        assert first.target_quantity is None and not first.manually_completed
-        assert first.legacy_work_snapshot['kind'] == 'portable_unverified_work_source'
-        assert first.legacy_work_snapshot['original']['module']['description'] == 'module specification'
-        assert first.legacy_work_snapshot['original']['module']['preparation_conditions'] == ['need_wms']
-        assert first.applicable_vehicle_types == ['潜伏式']
-        assert second.depends_on == [first.id]
-        assert db.query(CheckItem).filter_by(task_id=first.id).one().description == 'numeric acceptance threshold'
-
-
 def test_import_supports_existing_company_owned_preparation(client, pm_headers):
     payload = _minimal_import()
     payload['preparations'] = [{'name': '公司资源确认', 'owner_party': 'company'}]
@@ -188,24 +138,6 @@ def test_import_keeps_legacy_approval_as_readonly_source_without_submitted_evide
     assert all(row['status'] == 'pending' and not row['versions'] for row in state['documents'])
     with SessionLocal() as db:
         assert not db.query(Task).filter_by(project_id=response.json()['id']).one().deliverables
-
-
-def test_import_preserves_original_vehicle_target_as_readonly_source(client, pm_headers):
-    from app.db import SessionLocal
-    from app.models import Task, DailyProgress, VehicleProgress
-    payload = _minimal_import()
-    payload['vehicles'] = [{'vehicle_type': '潜伏式', 'model_name': 'AGV', 'quantity': 3}]
-    payload['modules'][0]['tasks'][0].update(quantity_type='per_vehicle', target_quantity=17)
-    response = client.post('/api/projects/import/json', headers=pm_headers, json=payload)
-    assert response.status_code == 200, response.text
-    with SessionLocal() as db:
-        task=db.query(Task).filter_by(project_id=response.json()['id']).one()
-        assert task.target_quantity is None and not task.manually_completed
-        assert task.legacy_work_snapshot['kind'] == 'portable_unverified_work_source'
-        assert task.legacy_work_snapshot['quantity']['target'] == 17
-        assert task.legacy_work_snapshot['quantity']['type'] == 'per_vehicle'
-        assert db.query(DailyProgress).filter_by(project_id=response.json()['id']).count() == 0
-        assert db.query(VehicleProgress).filter_by(project_id=response.json()['id']).count() == 0
 
 
 @pytest.mark.parametrize('dependencies', [['missing'], ['self']])

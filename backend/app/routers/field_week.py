@@ -98,13 +98,6 @@ def week(week_start:date|None=None,project_id:str|None=None,user:User=Depends(ge
     return week_view(db,user,week_start=week_start,project_id=project_id)
 
 
-@router.get('/people/weeks')
-@route_permission_contextual('workspace.view','personal.schedule.read',reason='mine仅核对本人周计划权限；team独立核对工作台权限和可见项目范围')
-def people(week_start:date|None=None,weeks:int=Query(default=4,ge=1,le=12),scope:Literal['mine','team']='team',user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-    from app.services.field_week import people_view
-    return people_view(db,user,week_start=week_start,weeks=weeks,scope=scope)
-
-
 @router.get('/worker/week-report')
 @route_permission('personal.records.read')
 def personal_week_report(week_start:date|None=None,user:User=Depends(get_current_user),db:Session=Depends(get_db)):

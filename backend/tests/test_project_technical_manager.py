@@ -16,63 +16,6 @@ def _project(client, pm_headers, technical_id):
     return response.json()['id']
 
 
-@pytest.mark.parametrize('editor_fixture', ['pm_headers', 'admin_headers'])
-def test_explicit_clear_preserves_member_grants_and_assigned_history(
-    client, pm_headers, worker_headers, editor_fixture, request,
-):
-    from app.db import SessionLocal
-    from app.models import DailyProgress, Module, Phase, ProjectMember, ScheduleEntry, Task
-    from app.services.permissions import C_EXPORT, C_PLAN
-
-    editor_headers = request.getfixturevalue(editor_fixture)
-    uid = client.get('/api/auth/me', headers=worker_headers).json()['id']
-    pid = _project(client, pm_headers, uid)
-    granted = client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, {
-        'member_permissions': [{'user_id': uid, 'capabilities': [C_EXPORT]}],
-    }))
-    assert granted.status_code == 200, granted.text
-    before = client.get(f'/api/projects/{pid}', headers=worker_headers).json()
-    assert C_PLAN in before['capabilities']
-
-    # An unrelated update must not interpret the omitted field as a clear.
-    omitted = client.put(f'/api/projects/{pid}', headers=editor_headers, json=versioned(pid, {'description': '只更新说明'}))
-    assert omitted.status_code == 200, omitted.text
-    assert omitted.json()['technical_manager'] == uid
-    with SessionLocal() as db:
-        phase = Phase(project_id=pid, name='实施'); db.add(phase); db.flush()
-        module = Module(project_id=pid, phase_id=phase.id, name='调试'); db.add(module); db.flush()
-        task = Task(project_id=pid, module_id=module.id, name='已有任务', target_quantity=2); db.add(task); db.flush()
-        entry = ScheduleEntry(project_id=pid, task_id=task.id, work_date=date(2026, 10, 5),
-                              assignee_id=uid, planned_quantity=2, is_confirmed=True)
-        db.add(entry); db.flush()
-        report = DailyProgress(project_id=pid, task_id=task.id, schedule_entry_id=entry.id,
-                               user_id=uid, work_date=date(2026, 10, 5), completed_quantity=1,
-                               client_uuid='technical-clear-history')
-        db.add(report); db.flush()
-        task_id, entry_id, report_id = task.id, entry.id, report.id
-        db.commit()
-
-    cleared = client.put(f'/api/projects/{pid}', headers=editor_headers, json={
-        'technical_manager_id': None, 'version': omitted.json()['version'],
-    })
-    assert cleared.status_code == 200, cleared.text
-    # A fresh GET is the persisted state, rather than trusting only the PUT response.
-    detail = client.get(f'/api/projects/{pid}', headers=worker_headers)
-    assert detail.status_code == 200
-    assert detail.json()['technical_manager'] is None
-    assert detail.json()['technical_manager_name'] == ''
-    assert uid in detail.json()['members']
-    assert detail.json()['capabilities'] == [C_EXPORT]
-    assert detail.json()['member_permissions'] == [{'user_id': uid, 'capabilities': [C_EXPORT]}]
-    assert client.post(f'/api/projects/{pid}/tasks/generate', headers=worker_headers,
-                       json={'work_item_ids': default_work('mod-01')}).status_code == 403
-    with SessionLocal() as db:
-        assert db.query(ProjectMember).filter_by(project_id=pid, user_id=uid).count() == 1
-        assert db.get(Task, task_id).target_quantity == 2
-        assert db.get(ScheduleEntry, entry_id).assignee_id == uid
-        assert db.get(DailyProgress, report_id).completed_quantity == 1
-
-
 @pytest.mark.parametrize('co_manager', [False, True])
 def test_technical_member_or_co_manager_cannot_clear_formal_duty(client, pm_headers, worker_headers, co_manager):
     uid = client.get('/api/auth/me', headers=worker_headers).json()['id']

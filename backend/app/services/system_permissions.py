@@ -220,14 +220,6 @@ _GROUPS = [
                 ("admin", "pm"),
             ),
             _p("system.projects.purge", "永久删除回收站项目", "仅系统管理员在加密项目备份成功后明确永久删除，保留鉴权下载凭据。", ADMIN, "system", "high"),
-            _p(
-                "system.archives.read",
-                "查阅历史归档库",
-                "读取系统历史归档库，保留归档记录的访问边界。",
-                ("admin", "director"),
-                "archives",
-                "high",
-            ),
         ],
     ),
     dict(
@@ -245,13 +237,6 @@ _GROUPS = [
                 "管理人员账号",
                 "包含维护所需账号读取；可维护普通账号资料、启停和重置密码，受托人员只能创建现场人员，不能改变角色或维护管理员。",
                 risk="high",
-            ),
-            _p(
-                "system.availability.manage",
-                "管理人员可用时间",
-                "维护允许管理的人员休假、不可用时间。",
-                ("admin", "pm"),
-                "visible_people",
             ),
             _p(
                 "system.templates.read",
@@ -414,7 +399,7 @@ READ_ONLY_ACTIONS = frozenset({
     "personal.messages.use", "personal.records.read", "project.read",
     "project.export", "projects.view_all", "system.templates.read",
     "system.holidays.read", "system.templates.view", "system.vehicle_types.view", "system.inventory.read",
-    "system.inventory.view", "system.archives.read", "system.audit.read",
+    "system.inventory.view", "system.audit.read",
     "system.agent.use", "system.skills.download",
 })
 for _key, _permission in PERMISSIONS.items():

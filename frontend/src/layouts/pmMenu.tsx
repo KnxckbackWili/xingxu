@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import {
-  DashboardOutlined, ProjectOutlined, DatabaseOutlined, TeamOutlined, AuditOutlined, UserOutlined, MessageOutlined, ApiOutlined,
+  DashboardOutlined, ProjectOutlined, DatabaseOutlined, AuditOutlined, UserOutlined, MessageOutlined, ApiOutlined,
   SoundOutlined, CarOutlined, CommentOutlined, AppstoreOutlined, WarningOutlined, CloudDownloadOutlined, SettingOutlined,
   CalendarOutlined, FolderOpenOutlined, DeleteOutlined, SafetyOutlined,
 } from '@ant-design/icons'
@@ -12,7 +12,7 @@ export type MenuGroup = { type: 'group'; key: string; label: string; children: M
 export type AppNavItem = MenuChild & { match: string[] }
 
 const ICONS: Record<string, ReactNode> = {
-  '/pm/dashboard': <DashboardOutlined />, '/pm/projects': <ProjectOutlined />, '/pm/people': <TeamOutlined />,
+  '/pm/dashboard': <DashboardOutlined />, '/pm/projects': <ProjectOutlined />,
   '/pm/messages': <MessageOutlined />, '/worker/week': <DashboardOutlined />, '/worker/my': <UserOutlined />,
   '/pm/inventory': <AppstoreOutlined />, '/pm/project-recycle-bin': <DeleteOutlined />, '/pm/permissions': <SafetyOutlined />,
   '/pm/users': <UserOutlined />, '/pm/templates': <FolderOpenOutlined />, '/pm/vehicle-types': <CarOutlined />,

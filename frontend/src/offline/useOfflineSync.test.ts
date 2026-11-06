@@ -23,7 +23,7 @@ describe('offline sync session isolation', () => {
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
     vi.mocked(api.post).mockResolvedValue({ data: { accepted: ['offline-progress'], rejected: [] } })
     const { result } = renderHook(() => useOfflineSync())
-    act(() => enqueue({ client_uuid: 'offline-progress', schedule_entry_id: 'entry-a' }, 'report'))
+    act(() => enqueue({ client_uuid: 'offline-progress', schedule_entry_id: 'entry-a' }, 'field'))
     expect(result.current.pendingCount).toBe(1)
     act(() => {
       Object.defineProperty(navigator, 'onLine', { configurable: true, value: true })
@@ -36,14 +36,14 @@ describe('offline sync session isolation', () => {
 
   it('ignores old-account sync responses after an account switch', async () => {
     setOfflineAccount('a')
-    enqueue({ client_uuid: 'a-rejected', task_id: 'private-a' }, 'report')
+    enqueue({ client_uuid: 'a-rejected', task_id: 'private-a' }, 'field')
     const pending = deferred()
     vi.mocked(api.post).mockReturnValue(pending.promise)
     const { result } = renderHook(() => useOfflineSync())
     await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1))
     act(() => {
       setOfflineAccount('b')
-      enqueue({ client_uuid: 'b-pending' }, 'report')
+      enqueue({ client_uuid: 'b-pending' }, 'field')
     })
     await act(async () => {
       pending.resolve({ data: { accepted: [], rejected: ['a-rejected'] } })
@@ -58,7 +58,7 @@ describe('offline sync session isolation', () => {
 
   it('shares an in-flight request across repeated flushes', async () => {
     setOfflineAccount('a')
-    enqueue({ client_uuid: 'same-op' })
+    enqueue({ client_uuid: 'same-op' }, 'field')
     const pending = deferred()
     vi.mocked(api.post).mockReturnValue(pending.promise)
     const { result } = renderHook(() => useOfflineSync())
@@ -76,7 +76,7 @@ describe('offline sync session isolation', () => {
 
   it('invalidates the bound account when another tab changes the session owner', async () => {
     setOfflineAccount('a')
-    enqueue({ client_uuid: 'a-pending' })
+    enqueue({ client_uuid: 'a-pending' }, 'field')
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
     const { result } = renderHook(() => useOfflineSync())
     act(() => {

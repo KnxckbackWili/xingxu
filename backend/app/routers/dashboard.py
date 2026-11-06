@@ -225,15 +225,3 @@ def overdue_projects(limit:int=Query(500,ge=1,le=1000),user:User=Depends(get_cur
             'this_week_count':summary['this_week_count'],'this_week':summary['this_week'],
             'estimated_past_due_count':summary['estimated_past_due_count']}
 
-
-@router.get("/dashboard/assignment-pool")
-@router.get("/dashboard/trend")
-@router.get("/dashboard/metrics")
-@router.get("/dashboard/people-workload")
-@router.get("/dashboard/people-overview")
-@router.get("/dashboard/people-summary")
-@router.get("/dashboard/stats")
-@router.get("/dashboard/decision-view")
-@route_permission_exempt('旧按日数量、日程或耗时统计已由周计划与当前事实替代；认证后只返回410')
-def retired_daily_projection(user:User=Depends(get_current_user)):
-    raise HTTPException(410,'该按日安排或数量统计已退役，请使用人员周计划、本周或当前统计')

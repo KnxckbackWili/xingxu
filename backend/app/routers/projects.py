@@ -804,16 +804,6 @@ def direct_transfer(project_id:str,body:DirectTransfer,user:User=Depends(get_cur
     return result
 
 
-@router.post('/{project_id}/governance-requests')
-@router.get('/governance/requests')
-@router.get('/governance/requests/{request_id}/member-removal-preview')
-@router.post('/governance/requests/{request_id}/review')
-@router.post('/governance/requests/{request_id}/withdraw')
-@route_permission_exempt('申请审批流程已退役；仅认证后返回410，不读取或改写历史行')
-def retired_governance(user:User=Depends(get_current_user)):
-    raise HTTPException(410,'申请审批流程已退役，请在项目设置中直接更换负责人；历史记录由私有加密备份保全')
-
-
 @router.put("/{project_id}", response_model=dict)
 @route_permission_contextual('project.update', 'project.manage_members', reason='处理器按提交字段分别校验项目资料和成员权限')
 def update_project(
@@ -1419,9 +1409,7 @@ def add_vehicle(
     db.add(v)
     db.flush()
     attached = _attach_imported_units(db, v)
-    from app.services.generate_tasks import recompute_per_vehicle_targets
 
-    recompute_per_vehicle_targets(db, project_id)
     sync_arrival_all(db, p, user.id, "车型配置变化后重新核对整批车辆")
     log_change(
         db,
@@ -1488,11 +1476,6 @@ def update_vehicle(
         from app.services.project_lifecycle import ensure_schedule_writable
 
         ensure_schedule_writable(p)
-        quantity_inputs_changed = True
-    from app.services.generate_tasks import recompute_per_vehicle_targets
-
-    if quantity_inputs_changed:
-        recompute_per_vehicle_targets(db, project_id)
     if v.vehicle_type != previous_type:
         from app.models import VehicleUnit
         from app.services.vehicle_checks import reconcile_vehicle_type
@@ -1552,9 +1535,7 @@ def delete_vehicle(
         log_change(db,project_id,"vehicle_check",vehicle_id,"generate_scope",user.id,
             f"车型删除后真实车辆类型待核对，新增{len(checks)}项适用性待检检查",
             {"vehicle_type":previous_type},{"vehicle_type":None,"check_ids":[c.id for c in checks]})
-    from app.services.generate_tasks import recompute_per_vehicle_targets
 
-    recompute_per_vehicle_targets(db, project_id)
     sync_arrival_all(db, p, user.id, "删除车型配置后重新核对整批车辆")
     log_change(db, project_id, "vehicle", vehicle_id, "delete", user.id, desc)
     db.commit()

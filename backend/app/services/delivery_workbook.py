@@ -258,7 +258,7 @@ def execution_evidence(db, project_id):
             not_applicable_set_by_name=users.get(check.not_applicable_set_by, '原操作人未记录') if check.not_applicable_set_by else '',
             last_operation=operations.get(check.id))
         by_task.setdefault(check.task_id, []).append(row)
-    fields = ('phase_id','group_label','scope_conditions','legacy_work_snapshot','vehicle_step_key', 'manually_completed', 'manual_completed_by', 'manual_completed_role', 'manual_completed_at', 'manual_completed_reason', 'manual_check_overrides')
+    fields = ('phase_id','group_label','scope_conditions','vehicle_step_key', 'manually_completed', 'manual_completed_by', 'manual_completed_role', 'manual_completed_at', 'manual_completed_reason', 'manual_check_overrides')
     from app.services.vehicle_progress import matrix
     return {'read_only': True, 'meaning': '来源执行事实，仅供核对；便携导入不继承完成、检查或验收资格。',
         'vehicle_progress_matrix':{**matrix(db,project_id),'read_only':True},

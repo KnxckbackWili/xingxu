@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from app.db import get_db
 from app.deps import get_current_user
-from app.models import WeeklyPlanCell, User, Task, ScheduleEntry
+from app.models import WeeklyPlanCell, User, Task
 from app.services.scope import ensure_project_visible, visible_projects
 from app.services.permissions import C_SCHEDULE, C_EXPORT, authorize_project, project_capabilities
 from app.services.system_permissions import route_permission
@@ -145,15 +145,6 @@ def personal_weekly(week_start: date | None = None, weeks: int = Query(1, ge=1, 
     begin = week_start or (service.local_today(projects[0]) if projects else date.today())
     return {'cells': cells, 'unassigned': unassigned, 'weeks': service.weeks_metadata(db, begin, weeks),
             'warnings': warnings, 'permissions': {'team': scope == 'team'}, 'scope': scope}
-
-
-@router.get('/projects/{project_id}/weekly-plans/legacy-source')
-@route_permission('project.read')
-def original_daily_source(project_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_project_visible(db, project_id, user)
-    from app.services.project_retention import _row
-    return {'read_only': True, 'meaning': '原按日日程与计划量仅作来源，当前完成资格来自工作项和真实车辆矩阵',
-            'entries': [_row(row) for row in db.query(ScheduleEntry).filter_by(project_id=project_id).order_by(ScheduleEntry.work_date, ScheduleEntry.id)]}
 
 
 @router.post('/projects/{project_id}/weekly-plans')

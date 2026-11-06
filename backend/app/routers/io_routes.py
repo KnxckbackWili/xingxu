@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import get_current_user, require_pm, require_admin
-from app.models import User, Project, Vehicle, Phase, Module, Task, CheckItem, VehicleUnit, VehicleLifecycleEvent, ProjectPreparationItem, ArchiveChecklist, Issue, ScheduleEntry, ProjectInventoryItem, ProjectInventoryMovement
+from app.models import User, Project, Vehicle, Phase, Module, Task, CheckItem, VehicleUnit, VehicleLifecycleEvent, ProjectPreparationItem, ArchiveChecklist, Issue, ProjectInventoryItem, ProjectInventoryMovement
 from app.routers.projects import get_project_or_404
 from app.routers.vehicle_types import normalize_vehicle_type
 from app.services.scope import ensure_project_visible
@@ -673,8 +673,6 @@ def import_project_json(
                 project_id=p.id, module_id=None, phase_id=pphase.id, name=t.get("name", "任务"), description=description,
                 group_label=t.get("group_label",m.get("source_group_label",m.get("name",""))), scope_conditions=t.get("scope_conditions",m.get("preparation_conditions",[])),
                 source_task_id=t.get("source_task_id"),
-                legacy_work_snapshot={"kind":"portable_unverified_work_source","source_task_id":t.get("source_id"),"original":t.get("legacy_work_snapshot"),
-                    "quantity":{"type":t.get("quantity_type"),"target":target,"unit":t.get("unit")},"source_group_label":m.get("name","")},
                 quantity_type="per_vehicle" if t.get("kind", "vehicle" if t.get("quantity_type")=="per_vehicle" else "other")=="vehicle" else "fixed", target_quantity=None,
                 vehicle_step_key=t.get("vehicle_step_key") or None,
                 unit="台" if t.get("kind", "vehicle" if t.get("quantity_type")=="per_vehicle" else "other")=="vehicle" else "项", standard_hours=None,
@@ -710,8 +708,6 @@ def import_project_json(
                 task_by_source[task_data["source_id"]].depends_on = [
                     task_by_source[source_id].id for source_id in task_data.get("depends_on", [])]
 
-    from app.services.generate_tasks import recompute_per_vehicle_targets
-    recompute_per_vehicle_targets(db, p.id)
     # Portable definitions may contain an explicit per-vehicle quantity override.
     # Only absent quantities are inferred; exporting/importing is not a fleet edit.
     # Original quantities remain in each read-only source snapshot; never become active targets.
@@ -919,9 +915,7 @@ def clone_project(
             name=old_task.name,description=old_task.description,quantity_type='per_vehicle' if old_task.quantity_type=='per_vehicle' else 'fixed',
             target_quantity=None,unit='台' if old_task.quantity_type=='per_vehicle' else '项',safety_flag=old_task.safety_flag,
             applicable_vehicle_types=deepcopy(old_task.applicable_vehicle_types or []),sort_order=old_task.sort_order,
-            source_task_id=old_task.source_task_id,vehicle_step_key=old_task.vehicle_step_key,
-            legacy_work_snapshot={'kind':'clone_unverified_work_source','source_task_id':old_task.id,'source_project_id':src.id,
-                'original':deepcopy(old_task.legacy_work_snapshot),'quantity':{'type':old_task.quantity_type,'target':old_task.target_quantity,'unit':old_task.unit}})
+            source_task_id=old_task.source_task_id,vehicle_step_key=old_task.vehicle_step_key)
         task.deliverables=[];db.add(task);db.flush();task_map[old_task.id]=task
         # Reference files must also be independent of the source project.
         from app.services.generate_tasks import _upload_dir

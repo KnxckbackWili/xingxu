@@ -13,7 +13,7 @@ from sqlalchemy import select, or_
 
 from app.models import (WeeklyPlanCell, Project, Task, Phase, User, Vehicle, VehicleUnit,
                         VehicleProgress, ProjectVehicleStep,
-                        UserUnavailability)
+)
 from app.services.permissions import C_SCHEDULE, authorize_project, project_capabilities
 from app.services.system_permissions import has_permission
 from app.services.project_lifecycle import ACTIVE_PROJECT_STATUSES
@@ -536,17 +536,6 @@ def project_warnings(db, project, cells, actor):
     if cells:
         start = min(cell.week_start for cell in cells)
         end = max(cell.week_start for cell in cells) + timedelta(days=6)
-        identities = {identity for cell in cells for identity in cell.assignee_ids or []}
-        from app.services.availability import unavailability_for_viewer
-        for unavailable in db.query(UserUnavailability).filter(UserUnavailability.user_id.in_(identities),
-                UserUnavailability.start_date <= end, UserUnavailability.end_date >= start):
-            affected = [cell for cell in cells if unavailable.user_id in (cell.assignee_ids or []) and
-                        unavailable.start_date <= cell.week_start + timedelta(days=6) and unavailable.end_date >= cell.week_start]
-            if affected:
-                person = db.get(User, unavailable.user_id)
-                result.append({'code': 'unavailable', 'cell_ids': [cell.id for cell in affected],
-                    'user_id': unavailable.user_id, 'message': f'{person.display_name if person else "原负责人"}在所排周内有不可用时段，请确认安排',
-                    'unavailability': unavailability_for_viewer(db, actor, unavailable, person.display_name if person else '')})
         # Dates/counts may be shared, private project names and task text may not.
         other_rows = db.query(WeeklyPlanCell, Project).join(Project, Project.id == WeeklyPlanCell.project_id).filter(
             WeeklyPlanCell.project_id != project.id, WeeklyPlanCell.week_start >= start,
@@ -746,21 +735,12 @@ STANDARD_PHASE_ORIGINS = {
 def _phase_origins(db, task):
     """Follow frozen definition identities; task/phase names never classify work."""
     result=set()
-    def walk(value, depth=0):
-        if not isinstance(value,dict) or depth>32:return
-        phase=value.get('phase')
-        if isinstance(phase,dict) and phase.get('id') in STANDARD_PHASE_ORIGINS:
-            result.add(phase['id'])
-        for key in ('original','source'):
-            walk(value.get(key),depth+1)
-    walk(task.legacy_work_snapshot)
     if task.phase_id in STANDARD_PHASE_ORIGINS:result.add(task.phase_id)
     if task.source_task_id:
         source=db.get(Task,task.source_task_id)
         if source is not None and source.project_id is None:
             phase=work.phase_of(db,source)
             if phase and phase.id in STANDARD_PHASE_ORIGINS:result.add(phase.id)
-            walk(source.legacy_work_snapshot)
     return result
 
 

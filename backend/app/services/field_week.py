@@ -2,7 +2,7 @@
 from datetime import date,timedelta
 from sqlalchemy import or_
 from fastapi import HTTPException
-from app.models import User,Task,Project,Issue,FieldOperation,UserUnavailability,ProjectDocument
+from app.models import User,Task,Project,Issue,FieldOperation,ProjectDocument
 from app.services.scope import visible_projects,ensure_project_visible
 from app.services.permissions import project_capabilities,C_PLAN
 from app.services.system_permissions import has_permission
@@ -77,54 +77,6 @@ def week_view(db,user,*,week_start=None,project_id=None):
             'severity':i.severity,'reporter_id':i.reporter_id,'assignee_id':i.assignee_id} for i in issues],
         'windows':windows,'warnings':warnings,'permissions':{'record':has_permission(user,'worker.report',default=True),
             'upload':has_permission(user,'worker.deliver',default=True),'issues':has_permission(user,'worker.issues',default=True),'plan_read':can_read_plan}}
-
-
-def people_view(db,user,*,week_start=None,weeks=4,scope='team'):
-    if scope=='team' and not has_permission(user,'workspace.view'):raise HTTPException(403,'没有团队人员周计划查看权限')
-    if scope=='mine' and not has_permission(user,'personal.schedule.read',default=True):raise HTTPException(403,'没有本人周计划查看权限')
-    projects=visible_projects(db,user);by_id={p.id:p for p in projects}
-    # A global week selector denotes calendar Mondays; each project's local
-    # current week is returned separately when no week was selected.
-    local_weeks={p.id:monday(project_today(p.timezone)) for p in projects}
-    common_start=monday(week_start) if week_start else min(local_weeks.values(),default=monday(date.today()))
-    starts={p.id:common_start for p in projects}
-    users={u.id:u for u in db.query(User).filter_by(is_active=True)};all_cells=[];warnings=[];metadata=[]
-    from app.services.holidays import calendar_in_range
-    for p in projects:
-        if week_start is None and local_weeks[p.id]!=common_start:
-            warnings.append({'project_id':p.id,'message':'项目当地当前周与统一人员表首周不同，请按标注周一日期核对'})
-        selected=plan_cells(db,[p],starts[p.id],weeks)
-        if selected is None:warnings.append({'project_id':p.id,'message':'周计划尚未读取'});continue
-        for cell in selected:
-            if cell.published and (scope!='mine' or user.id in (cell.assignee_ids or [])):all_cells.append(cell)
-        meta=calendar_in_range(starts[p.id],starts[p.id]+timedelta(days=weeks*7-1),db)
-        metadata.append({'project_id':p.id,'timezone':p.timezone,'week_start':starts[p.id].isoformat(),'current_week_start':local_weeks[p.id].isoformat(),**meta})
-    people_ids={uid for c in all_cells for uid in c.assignee_ids or []}
-    if scope=='mine':people_ids={user.id}
-    elif has_permission(user,'system.availability.manage',default=user.role in ('admin','pm')):
-        people_ids|={uid for p in projects for uid in (p.members or [])}|{p.manager for p in projects if p.manager}
-    task_names={r.id:r.name for r in db.query(Task).filter(Task.id.in_({c.task_id for c in all_cells}))}
-    rows=[]
-    from app.services.availability import unavailability_for_viewer
-    lower=min(starts.values(),default=monday(week_start or date.today()));upper=max((s+timedelta(days=weeks*7-1) for s in starts.values()),default=lower)
-    unavailable=db.query(UserUnavailability).filter(UserUnavailability.user_id.in_(people_ids),UserUnavailability.start_date<=upper,UserUnavailability.end_date>=lower).all()
-    conflicts=[]
-    for uid in sorted(people_ids):
-        person=users.get(uid)
-        if not person:continue
-        assigned=[c for c in all_cells if uid in (c.assignee_ids or [])]
-        by_week={}
-        for cell in assigned:by_week.setdefault(cell.week_start,set()).add(cell.project_id)
-        personal_conflicts=[{'week_start':start.isoformat(),'project_ids':sorted(ids)} for start,ids in sorted(by_week.items()) if len(ids)>1]
-        conflicts.extend({'user_id':uid,**item} for item in personal_conflicts)
-        rows.append({'id':uid,'name':person.display_name,'role':person.role,
-            'cells':[cell_dict(db,c,by_id[c.project_id],user) for c in assigned],
-            'unavailable':[unavailability_for_viewer(db,user,r,person.display_name) for r in unavailable if r.user_id==uid],
-            'conflicts':personal_conflicts})
-    return {'state':'unavailable' if any(w['message']=='周计划尚未读取' for w in warnings) else 'ready','people':rows,'projects':[{'id':p.id,'name':p.name,'timezone':p.timezone} for p in projects],
-            'weeks':weeks,'week_start':lower.isoformat(),'calendar':metadata,'conflicts':conflicts,'warnings':warnings,
-            'unassigned':[cell_dict(db,c,by_id[c.project_id],user) for c in all_cells if not c.assignee_ids],
-            'permissions':{'manage_unavailability':has_permission(user,'system.availability.manage',default=False)}}
 
 
 def personal_report(db,user,*,week_start=None):

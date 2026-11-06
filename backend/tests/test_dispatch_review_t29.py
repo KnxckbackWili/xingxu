@@ -4,7 +4,7 @@ from datetime import timedelta
 from uuid import uuid4
 import pytest
 from app.db import SessionLocal
-from app.models import Project, ProjectDocument, ProjectDocumentDefinition, ProjectPreparationItem, ProjectReadinessReview, Attachment, Task, CheckItem, DailyProgress, User
+from app.models import Project, ProjectDocument, ProjectDocumentDefinition, ProjectPreparationItem, ProjectReadinessReview, Attachment, Task, CheckItem, User
 from app.time_utils import utcnow
 from tests.test_project_documents import create, view, upload
 from tests.test_manual_lifecycle_t28 import state
@@ -115,33 +115,6 @@ def test_new_overdue_condition_needs_reapproval_and_legacy_review_grants_no_curr
     assert state(client, pm_headers, pid, 'executing').status_code == 400
 
 
-@pytest.mark.parametrize('status', ['preparing'])
-def test_before_execution_all_checks_and_manual_and_quantity_and_offline_ops_are_rejected(client, pm_headers, status):
-    pid, units = setup_fleet(client, pm_headers, 1, status=status)
-    tid = work(pid, units, safety=False, legacy=True)
-    with SessionLocal() as db:
-        check = db.query(CheckItem).filter_by(task_id=tid).one(); cid = check.id
-        assert check.vehicle_unit_id is None
-        db.get(Task, tid).quantity_type='fixed'; db.commit()
-    assert write(client, pm_headers, pid, units).status_code == 400
-    assert client.put(f'/api/projects/{pid}/check-items/{cid}', headers=pm_headers, json={'is_done': True, 'version': 0}).status_code == 400
-    with SessionLocal() as db: version = db.get(Task, tid).version or 0
-    early = client.put(f'/api/projects/{pid}/work-items/{tid}/completion', headers=pm_headers,
-                       json={'version': version, 'is_completed': True, 'reason': '不能提前填报'})
-    assert early.status_code == 400 and '现场实施前' in early.json()['detail']
-    body = {'task_id': tid, 'work_date': '2026-01-01', 'completed_quantity': 1, 'client_uuid': str(uuid4())}
-    assert client.post('/api/worker/reports', headers=pm_headers, json=body).status_code == 410  # 按日报量已退役
-    response = client.post('/api/worker/sync', headers=pm_headers, json={'ops': [{'type': 'checkitem', 'client_uuid': str(uuid4()), 'payload': {'project_id': pid, 'check_item_id': cid, 'body': {'is_done': True, 'version': 0}}}]})
-    assert response.status_code == 200 and len(response.json()['rejected']) == 1
-    with SessionLocal() as db:
-        assert not db.get(CheckItem, cid).is_done and not db.get(Task, tid).manually_completed
-        assert not db.query(DailyProgress).filter_by(task_id=tid).count()
-    # Documents and actual issue reports remain available before field execution.
-    assert upload(client, pm_headers, pid).status_code == 200
-    response = client.post(f'/api/projects/{pid}/issues', headers=pm_headers, json={'title': '提前发现问题', 'description': '', 'issue_type': 'hardware', 'client_uuid': str(uuid4())})
-    assert response.status_code == 200, response.text
-
-
 def test_private_document_names_and_review_notes_do_not_leak_through_manifest_history_or_project(client, pm_headers, admin_headers):
     pid, doc = scope(client, pm_headers)
     assert client.put(f'/api/projects/{pid}/documents/{doc["id"]}/confidentiality', headers=pm_headers, json={'confidential': True, 'confidential_user_ids': [], 'version': doc['version']}).status_code == 200
@@ -153,19 +126,6 @@ def test_private_document_names_and_review_notes_do_not_leak_through_manifest_hi
     assert response.status_code == 200 and doc['name'] not in response.text and '保密细节' not in response.text
     response = client.get(f'/api/projects/{pid}', headers=admin_headers)
     assert '保密细节' not in response.text
-
-
-def test_old_preparation_review_endpoints_are_retired_and_new_preview_writes_no_business_facts(client, pm_headers):
-    pid, doc = scope(client, pm_headers)
-    before = preview(client, pm_headers, pid)
-    for path, body in [('confirm-ready', {}), ('review', {}), ('review/confirm', {'conclusion': 'risky', 'notes': '旧接口'})]:
-        response = client.post(f'/api/projects/{pid}/preparations/{path}', headers=pm_headers, json=body)
-        assert response.status_code == 410, response.text
-    assert client.get(f'/api/projects/{pid}/preparations/reviews', headers=pm_headers).status_code == 410
-    assert preview(client, pm_headers, pid) == before
-    with SessionLocal() as db:
-        assert db.query(ProjectReadinessReview).filter_by(project_id=pid).count() == 0
-        assert db.get(Project, pid).status == 'preparing'
 
 
 def test_authorized_old_period_cleanup_retains_submission_but_normal_missing_original_does_not(client, admin_headers):

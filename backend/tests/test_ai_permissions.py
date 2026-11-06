@@ -64,11 +64,9 @@ def _seed_project(db, *, manager=None, technical_manager=None, members=None):
 def test_ai_endpoints_require_login(client):
     assert client.get("/api/ai-projects/status").status_code == 401
     assert client.get("/api/ai-projects/capabilities").status_code == 401
-    assert client.post("/api/ai-projects/organize", json={"skill": "project", "source_text": "x"}).status_code == 401
 
 
 # ===== B. 入口权限统一（不再 admin/pm 外层守卫）=====
-
 
 
 # ===== C. 能力清单 =====
@@ -118,7 +116,6 @@ def test_capabilities_lead_manager_full(client, admin_headers):
 # ===== D. 受控工具执行 =====
 
 
-
 def test_technician_technical_manager_has_schedule_but_not_update(client, admin_headers):
     tech_id, _ = _create_user(client, admin_headers, "tech2", "technician")
     db = SessionLocal()
@@ -140,7 +137,7 @@ def test_worker_member_read_ok_write_403(client, admin_headers):
         assert summary["name"] == "AI 权限测试项目"
         with pytest.raises(HTTPException) as exc:
             execute_ai_tool("preview_schedule", {}, project.id, worker, db)
-        assert exc.value.status_code == 410
+        assert exc.value.status_code == 400
     finally:
         db.close()
 
@@ -164,18 +161,6 @@ def test_tool_invisible_project_404_and_no_project_400(client, admin_headers):
 
 # ===== E. organize 外层守卫按能力（项目建档仍 admin/pm）=====
 
-def test_structured_drafts_are_retired_for_every_authenticated_role(client,admin_headers,worker_headers):
-    for headers in (admin_headers,worker_headers):
-        for skill in ('project','planning','inventory','issues','handover'):
-            response=client.post('/api/ai-projects/organize',headers=headers,json={'skill':skill,'project_id':'not-visible','source_text':'old work'})
-            assert response.status_code==410
-
-
-# ===== F. Codex 安全边界 =====
-
-
-
-# ===== G. 内部 Token / MCP scope 最小权限 =====
 
 def test_default_token_scopes_exclude_write_scopes(client, admin_headers):
     r = client.post("/api/ai/internal/tokens", headers=admin_headers, json={
