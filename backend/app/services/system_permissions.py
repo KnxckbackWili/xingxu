@@ -273,10 +273,9 @@ PERMISSIONS = {p["key"]: p for g in _GROUPS for p in g["permissions"]}
 PERMISSION_KEYS = frozenset(PERMISSIONS)
 # Administrator-only actions; everything else is open to every employee.
 ADMIN_ONLY = frozenset({
-    "system.projects.purge", "system.users.read", "system.users.manage", "system.templates.manage",
-    "system.template_io.manage", "system.holidays.manage", "system.vehicle_types.manage",
+    "system.projects.purge", "system.users.read", "system.users.manage", "system.holidays.manage",
     "system.notifications.configure", "system.backups.read", "system.backups.configure", "system.backups.create",
-    "system.backups.download", "system.backups.delete", "system.backups.restore", "system.feedback.manage",
+    "system.backups.download", "system.backups.delete", "system.backups.restore",
 })
 for _key, _permission in PERMISSIONS.items():
     _permission["default_roles"] = list(ADMIN if _key in ADMIN_ONLY else EVERYONE)

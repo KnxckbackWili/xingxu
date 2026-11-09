@@ -2,7 +2,7 @@
 
 - 提交：所有登录用户（任何角色）均可提交，必填问题描述、可选复现步骤；
   系统自动记录提交人（user_id）、提交时间（created_at）与处理状态（初始 pending）。
-- 读取与跟踪：管理角色（admin/director/pm）可读取反馈列表与详情，并更新处理状态。
+- 读取与跟踪：每个账号都可读取反馈列表与详情，并更新处理状态。
   普通用户只能提交——列表/详情/状态更新接口对非管理角色一律 403，杜绝横向越权读取。
 - 数据库迁移：feedback 表由 init_db 的 create_all 幂等创建（新建表无需 ALTER，
   容器重启数据仍保留在数据库中）。
@@ -16,12 +16,10 @@ from sqlalchemy.orm import Session
 
 from app.services.system_permissions import route_permission
 from app.db import get_db
-from app.deps import get_current_user, require_admin
+from app.deps import get_current_user
 from app.models import Feedback, User, FEEDBACK_STATUSES
 
 router = APIRouter(prefix="/feedback", tags=["系统问题反馈"])
-
-require_feedback_manage = require_admin
 
 MAX_DESCRIPTION_LEN = 2000
 MAX_STEPS_LEN = 5000
@@ -91,7 +89,7 @@ def list_feedback(
     status: Optional[str] = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
-    user: User = Depends(require_feedback_manage),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """管理角色读取反馈列表（分页 + 按处理状态筛选）。"""
@@ -120,7 +118,7 @@ def list_feedback(
 @route_permission('system.feedback.manage')
 def get_feedback(
     feedback_id: str,
-    user: User = Depends(require_feedback_manage),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """管理角色读取反馈详情。"""
@@ -135,7 +133,7 @@ def get_feedback(
 def update_feedback_status(
     feedback_id: str,
     body: FeedbackStatusUpdate,
-    user: User = Depends(require_feedback_manage),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """管理角色更新反馈处理状态（pending/processing/done）。"""

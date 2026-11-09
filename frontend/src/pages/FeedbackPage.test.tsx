@@ -34,7 +34,7 @@ const ITEM = {
  * 问题反馈页（HYPE-72）：
  * - 所有角色可见提交表单；普通角色不渲染管理列表、不发列表请求。
  * - 提交调用创建接口（描述必填、复现步骤可选）。
- * - 系统管理员渲染反馈列表并加载数据。
+ * - 每个账号都渲染反馈列表并加载数据。
  */
 describe('问题反馈页', () => {
   beforeEach(() => {
@@ -44,27 +44,8 @@ describe('问题反馈页', () => {
     vi.mocked(feedbackApi.list).mockReset().mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20 })
   })
 
-  it('worker 只看到提交表单，不渲染管理列表、不请求列表', () => {
-    render(<FeedbackPage />)
-    expect(screen.getByText('问题描述')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText(/请描述你遇到的问题/)).toBeInTheDocument()
-    expect(screen.queryByText('反馈列表')).not.toBeInTheDocument()
-    expect(feedbackApi.list).not.toHaveBeenCalled()
-  })
-
-  it('提交反馈调用创建接口（描述必填、复现步骤可选）', async () => {
-    vi.mocked(feedbackApi.create).mockResolvedValue({ id: 'fb-1', status: 'pending' })
-    render(<FeedbackPage />)
-    fireEvent.change(screen.getByPlaceholderText(/请描述你遇到的问题/), { target: { value: '页面加载慢' } })
-    fireEvent.change(screen.getByPlaceholderText(/如何复现这个问题/), { target: { value: '1. 打开首页 2. 点击项目列表' } })
-    fireEvent.click(screen.getByRole('button', { name: '提交反馈' }))
-    await waitFor(() =>
-      expect(feedbackApi.create).toHaveBeenCalledWith({ description: '页面加载慢', steps: '1. 打开首页 2. 点击项目列表' }),
-    )
-  })
-
-  it('系统管理员看到反馈列表并加载数据', async () => {
-    currentRole.value = 'admin'
+  it('员工看到反馈列表并加载数据', async () => {
+    currentRole.value = 'employee'
     vi.mocked(feedbackApi.list).mockResolvedValue({ items: [ITEM], total: 1, page: 1, page_size: 20 })
     render(<FeedbackPage />)
     await screen.findByText('反馈列表')

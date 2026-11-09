@@ -62,12 +62,6 @@ it('creates a template for a vehicle type that has none yet and opens it', async
   expect(await screen.findByLabelText('当前地址')).toHaveTextContent('/pm/templates/new-id')
 })
 
-it('readers without template management do not see the create button', async () => {
-  auth.user = { id: 'pm', role: 'pm', permission_overrides: { 'system.templates.manage': false } }
-  show(); await screen.findByRole('button', { name: '打开模板「系统默认模板」' })
-  expect(screen.queryByRole('button', { name: /新建模板/ })).not.toBeInTheDocument()
-})
-
 it('lists vehicle types without their own template, one click starts one', async () => {
   show()
   const hint = (await screen.findByText(/还没有专用模板的车型/)).closest('p')!

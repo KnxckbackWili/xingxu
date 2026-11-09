@@ -4,8 +4,7 @@ export type NavigationUser = PermissionUser | string | null | undefined
 export const navigationRole = (user: NavigationUser) => typeof user === 'string' ? user : user?.role
 
 /** Entries only a system administrator sees; every other entry is open to every employee. */
-export const ADMIN_NAV = new Set(['/pm/users', '/pm/storage', '/pm/backups', '/pm/system-updates', '/pm/templates',
-  '/pm/notification-channels', '/pm/vehicle-types'])
+export const ADMIN_NAV = new Set(['/pm/users', '/pm/storage', '/pm/backups', '/pm/system-updates', '/pm/notification-channels'])
 
 export const NAV_LABEL: Record<string, string> = {
   '/pm/dashboard': '工作台',

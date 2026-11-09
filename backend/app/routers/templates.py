@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.services.system_permissions import route_permission
 from app.db import get_db
-from app.deps import get_current_user, require_admin
+from app.deps import get_current_user
 from app.time_utils import utcnow
 from app.services.change_log import log_change
 from app.config import UPLOAD_DIR
@@ -91,7 +91,7 @@ def _vehicle_type(db: Session, value: Optional[str], template_id: Optional[str] 
 
 @router.post("")
 @route_permission('system.templates.manage')
-def create_template(data: TemplateCreate, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+def create_template(data: TemplateCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if data.copy_from and data.copy_from != DEFAULT_TEMPLATE_ID and db.get(Template, data.copy_from) is None:
         raise HTTPException(status_code=404, detail="来源模板不存在，请刷新后重试")
     t = Template(name=data.name, description=data.description, is_system=False, vehicle_type=_vehicle_type(db, data.vehicle_type))
@@ -119,7 +119,7 @@ class TemplateRename(BaseModel):
 
 @router.put("/{template_id}")
 @route_permission('system.templates.manage')
-def rename_template(template_id: str, data: TemplateRename, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+def rename_template(template_id: str, data: TemplateRename, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if template_id == DEFAULT_TEMPLATE_ID:
         raise HTTPException(status_code=400, detail="通用模板不能重命名")
     from app.services.document_requirements import lock_templates, recheck_authority
@@ -144,7 +144,7 @@ def rename_template(template_id: str, data: TemplateRename, user: User = Depends
 
 @router.post("/{template_id}/publish")
 @route_permission('system.templates.manage')
-def publish_template(template_id: str, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+def publish_template(template_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     from app.services.document_requirements import lock_templates, recheck_authority
     lock_templates(db, template_id)
     recheck_authority(db, user.id)
@@ -198,7 +198,7 @@ def _remove_template(db: Session, t: Template, user: User):
 
 @router.delete("/{template_id}")
 @route_permission('system.templates.manage')
-def delete_template(template_id: str, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+def delete_template(template_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if template_id == DEFAULT_TEMPLATE_ID:
         raise HTTPException(status_code=400, detail="通用模板不能删除")
     t = db.get(Template, template_id)
@@ -290,8 +290,8 @@ def list_template_task_docs(template_id: str, task_id: str,
 @route_permission('system.templates.manage')
 async def upload_template_task_doc(template_id: str, task_id: str,
                                    file: UploadFile = File(...), note: str = FastForm(default=""),
-                                   user: User = Depends(require_admin), db: Session = Depends(get_db)):
-    """模板任务上传参考文档（写=require_admin + 审计）。"""
+                                   user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """模板任务上传参考文档（写需要模板维护权限，留审计）。"""
     t = _check_template_task(db, template_id, task_id)
     from app.services.upload_safety import read_upload_limited
     data = await read_upload_limited(file, MAX_UPLOAD_SIZE)
@@ -322,7 +322,7 @@ async def upload_template_task_doc(template_id: str, task_id: str,
 @router.delete("/{template_id}/tasks/{task_id}/reference-docs/{doc_id}")
 @route_permission('system.templates.manage')
 def delete_template_task_doc(template_id: str, task_id: str, doc_id: str,
-                             user: User = Depends(require_admin), db: Session = Depends(get_db)):
+                             user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """删除模板任务参考文档（含物理文件）。"""
     _check_template_task(db, template_id, task_id)
     d = db.get(_TDoc, doc_id)

@@ -12,10 +12,9 @@ export const SYSTEM_PERMISSION_REFRESH_EVENT = 'agv:refresh-system-permissions'
 
 /** Actions only a system administrator may take (mirrors backend ADMIN_ONLY). */
 export const ADMIN_ONLY_PERMISSIONS = new Set([
-  'system.projects.purge', 'system.users.read', 'system.users.manage', 'system.templates.manage',
-  'system.template_io.manage', 'system.holidays.manage', 'system.vehicle_types.manage',
+  'system.projects.purge', 'system.users.read', 'system.users.manage', 'system.holidays.manage',
   'system.notifications.configure', 'system.backups.read', 'system.backups.configure', 'system.backups.create',
-  'system.backups.download', 'system.backups.delete', 'system.backups.restore', 'system.feedback.manage',
+  'system.backups.download', 'system.backups.delete', 'system.backups.restore',
 ])
 
 export function hasSystemPermission(user: PermissionUser | null | undefined, key: string): boolean {

@@ -182,7 +182,7 @@ export default function UsersPage() {
             <Input />
           </Form.Item>
           <Form.Item name="role" label="账号类型" initialValue="employee" rules={[{ required: true }]}
-            extra="员工可以做全部项目工作；系统管理员另外管理账号、模板、车型、备份和系统设置。">
+            extra="员工可以做全部项目工作，也能维护模板、车型库和使用反馈；系统管理员另外管理账号、节假日、通知、备份、存储和软件更新。">
             <Select aria-label="账号类型" disabled={!canManage || saving}
               options={[{ value: 'employee', label: '员工' }, { value: 'admin', label: '系统管理员' }]} />
           </Form.Item>

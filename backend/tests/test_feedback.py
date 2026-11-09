@@ -70,15 +70,15 @@ def test_validation_required_and_length_limits(client, worker_headers):
                        json={"description": "只填描述"}).status_code == 200
 
 
-# ===== 权限：普通角色只读接口一律 403 =====
+# ===== 权限：每个员工都能读取和处理 =====
 
-def test_regular_roles_cannot_read_or_update(client, worker_headers, tech_headers, lead_headers):
+def test_employees_can_read_and_update(client, worker_headers, tech_headers, lead_headers):
     fb = _create(client, worker_headers).json()
     for headers in (worker_headers, tech_headers, lead_headers):
-        assert client.get("/api/feedback", headers=headers).status_code == 403
-        assert client.get(f"/api/feedback/{fb['id']}", headers=headers).status_code == 403
-        assert client.patch(f"/api/feedback/{fb['id']}/status", headers=headers,
-                            json={"status": "processing"}).status_code == 403
+        assert client.get("/api/feedback", headers=headers).status_code == 200
+        assert client.get(f"/api/feedback/{fb['id']}", headers=headers).status_code == 200
+    assert client.patch(f"/api/feedback/{fb['id']}/status", headers=tech_headers,
+                        json={"status": "processing"}).status_code == 200
 
 
 # ===== 权限：管理角色读取与更新 =====

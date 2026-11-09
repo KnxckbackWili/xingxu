@@ -62,7 +62,7 @@ it('finds a function by purpose without exposing admin settings to an employee',
   auth.role = 'employee'
   render(<MemoryRouter initialEntries={['/pm/projects/project-a/overview']}><AppLayout /><LocationProbe /></MemoryRouter>)
   fireEvent.click(screen.getByRole('button', { name: '查找功能' })); const dialog = within(await screen.findByRole('dialog'))
-  expect(dialog.queryByRole('link', { name: '账号' })).toBeNull(); expect(dialog.queryByRole('link', { name: '项目模板' })).toBeNull()
+  expect(dialog.queryByRole('link', { name: '账号' })).toBeNull(); expect(dialog.getByRole('link', { name: '项目模板' })).toBeVisible()
   fireEvent.change(dialog.getByRole('textbox', { name: '查找功能' }), { target: { value: '消息' } })
   expect(dialog.queryByRole('link', { name: '人员' })).toBeNull()
   fireEvent.click(dialog.getByRole('link', { name: '消息' }))

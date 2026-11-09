@@ -47,8 +47,8 @@ def test_admin_create_validate_duplicate_empty_long(client, admin_headers, pm_he
     assert client.post("/api/vehicle-types", headers=admin_headers, json={"name": "双向车"}).status_code == 400
     assert client.post("/api/vehicle-types", headers=admin_headers, json={"name": "   "}).status_code == 400
     assert client.post("/api/vehicle-types", headers=admin_headers, json={"name": "长" * 51}).status_code == 400
-    # 普通用户（pm）不可新增
-    assert client.post("/api/vehicle-types", headers=pm_headers, json={"name": "x"}).status_code == 403
+    # 员工也能新增
+    assert client.post("/api/vehicle-types", headers=pm_headers, json={"name": "员工新增车型"}).status_code == 200
 
 
 def test_admin_enable_disable(client, admin_headers):

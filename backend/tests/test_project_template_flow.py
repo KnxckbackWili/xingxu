@@ -86,7 +86,7 @@ def test_one_template_per_vehicle_type(client, admin_headers, pm_headers):
     # Renaming without vehicle_type keeps it; an empty value makes the template general again.
     assert client.put(f'/api/templates/{other}', headers=admin_headers, json={'name': '潜伏式模板'}).json()['vehicle_type'] == '潜伏式'
     assert client.put(f'/api/templates/{other}', headers=admin_headers, json={'name': '潜伏式模板', 'vehicle_type': ''}).json()['vehicle_type'] is None
-    assert client.put(f'/api/templates/{other}', headers=pm_headers, json={'name': 'x', 'vehicle_type': '潜伏式'}).status_code == 403
+    assert client.put(f'/api/templates/{other}', headers=pm_headers, json={'name': '员工改名', 'vehicle_type': '潜伏式'}).status_code == 200
 
 
 def test_clone_keeps_project_scope_and_local_edits(client, pm_headers):

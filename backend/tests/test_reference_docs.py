@@ -30,11 +30,6 @@ def test_template_doc_upload_list_download(client, pm_headers, worker_headers, a
     t = _first_template_task(client, pm_headers)
     tid, task_id = "default", t["id"]
 
-    # worker 无上传权限
-    r = client.post(f"/api/templates/{tid}/tasks/{task_id}/reference-docs",
-                    headers=worker_headers, files={"file": ("x.pdf", b"x", "application/pdf")})
-    assert r.status_code == 403
-
     # pm 上传（带说明）
     r = client.post(f"/api/templates/{tid}/tasks/{task_id}/reference-docs",
                     headers=admin_headers, files={"file": ("点位表模板.xlsx", b"fake-excel", "application/vnd.ms-excel")},

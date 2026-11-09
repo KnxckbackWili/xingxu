@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.services.system_permissions import route_permission, route_permission_contextual, route_permission_exempt
 from app.db import get_db
-from app.deps import get_current_user, require_admin
+from app.deps import get_current_user
 from app.models import Task, User, Vehicle, VehicleType
 from app.services.change_log import log_change
 
@@ -119,7 +119,7 @@ def list_all_vehicle_types(
 @route_permission('system.vehicle_types.manage')
 def create_vehicle_type(
     data: VehicleTypeCreate,
-    user: User = Depends(require_admin),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """管理员新增车型（名称去首尾空格、非空、≤50、不可重复）。"""
@@ -147,7 +147,7 @@ def create_vehicle_type(
 @route_permission('system.vehicle_types.manage')
 def reorder_vehicle_types(
     data: VehicleTypeReorder,
-    user: User = Depends(require_admin),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """管理员调整车型排序：按 ids 顺序整体覆盖 sort_order。"""
@@ -171,7 +171,7 @@ def reorder_vehicle_types(
 def update_vehicle_type(
     vehicle_type_id: str,
     data: VehicleTypeUpdate,
-    user: User = Depends(require_admin),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """管理员修改车型（启停/排序；重命名仅限未被引用，否则拒绝并建议「新建 + 停用旧项」）。"""

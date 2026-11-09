@@ -68,7 +68,7 @@ def test_sections_are_free_titles_on_a_stage_and_rows_follow_their_stage(client,
     with SessionLocal() as db:
         assert db.get(Phase, section['id']).name == '交付培训' and db.get(Phase, section['id']).stage_key == '8'
         assert db.get(DocumentRequirement, created['files'][0]['id']).stage_key == '8'
-    assert client.put(f'/api/templates/{tid}/sections/{section["id"]}', headers=pm_headers, json={'title': '无权修改'}).status_code == 403
+    assert client.put(f'/api/templates/{tid}/sections/{section["id"]}', headers=pm_headers, json={'title': '员工也能改'}).status_code == 200
     removed = client.delete(f'/api/templates/{tid}/sections/{section["id"]}', headers=admin_headers)
     assert removed.status_code == 200 and all(row['id'] != section['id'] for row in removed.json()['sections'])
     with SessionLocal() as db:

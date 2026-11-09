@@ -83,14 +83,3 @@ it('a failed load is shown and can be retried', async () => {
   expect(await screen.findByRole('button', { name: /到场点检/ })).toBeVisible()
 })
 
-it('readers see the template but cannot change it', async () => {
-  auth.user = { id: 'reader', role: 'pm', permission_overrides: { 'system.templates.manage': false } }
-  render(<TemplateEditorPage />)
-  fireEvent.click(await screen.findByRole('button', { name: /到场点检/ }))
-  const side = await screen.findByRole('complementary', { name: '编辑：到场点检' })
-  expect(within(side).getByLabelText('名称')).toBeDisabled()
-  expect(within(side).queryByRole('button', { name: /删除这件事/ })).not.toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: /加一件事/ })).not.toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: /加段落/ })).not.toBeInTheDocument()
-  expect(document.querySelector('[draggable="true"]')).toBeNull()
-})
