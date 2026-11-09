@@ -12,7 +12,6 @@ import { saveBlob } from '../../../utils/download'
 import { api, errMsg } from '../../../api/client'
 import { projectDocumentsApi, uploadProjectFile, downloadProjectFile } from '../../../api/projectDocuments'
 import { isUploadQueued } from '../../../uploads/types'
-import { useAuth } from '../../../stores/auth'
 import { useSubmitLock } from '../../../hooks/useSubmitLock'
 import { useMediaQuery } from '../../../hooks/useMediaQuery'
 import { useProjectWriteBlocked } from '../../../hooks/useProjectCapability'
@@ -100,13 +99,12 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
   const [detailIssue, setDetailIssue] = useState<Issue | null>(null)
   const [form] = Form.useForm()
   const location = useLocation()
-  const { user } = useAuth()
   const contextWriteBlocked = useProjectWriteBlocked()
   const writeBlocked = archived || contextWriteBlocked
   const canEdit = canManage && !writeBlocked
-  const canClose = (issue: Issue) => !writeBlocked && user?.role !== 'readonly' && user?.permission_overrides?.['project.manage_issues'] !== false && issue.can_close === true
+  const canClose = (issue: Issue) => !writeBlocked && issue.can_close === true
   // No assignment: anyone on the project (everyone) may start and resolve; the first to start becomes the handler.
-  const canHandle = (_issue: Issue) => !writeBlocked && user?.role !== 'readonly' && user?.permission_overrides?.['worker.issues'] !== false
+  const canHandle = (_issue: Issue) => !writeBlocked
   const importLock = useSubmitLock()
   const [importing, setImporting] = useState(false)
   const submitLock = useSubmitLock()
@@ -177,9 +175,7 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
       if (!active) return
       const flat: { id: string; label: string; phase: string }[] = []
       for (const ph of r.data ?? []) {
-        for (const m of ph.modules ?? []) {
-          for (const t of m.tasks ?? []) flat.push({ id: t.id, label: t.name, phase: ph.name })
-        }
+        for (const t of ph.work_items ?? []) flat.push({ id: t.id, label: t.name, phase: ph.name })
       }
       setTasks(flat)
     }).catch(() => {})
@@ -510,7 +506,7 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
               </Button>
             )}
             {!writeBlocked && ['resolved', 'closed', 'cancelled'].includes(detailIssue.status)
-              && (canEdit || detailIssue.reporter_id === user?.id || user?.role !== 'readonly') && (
+              && (
               <Button size="small" loading={statusSaving} onClick={async () => {
                 if (!statusLock.tryAcquire()) return
                 setStatusSaving(true)

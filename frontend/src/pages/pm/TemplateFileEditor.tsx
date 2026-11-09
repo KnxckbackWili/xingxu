@@ -71,12 +71,10 @@ export default function TemplateFileEditor({ file, open, editable, saved, onTogg
       </div>}
       {kind === 'weekly' && <label className="tpl-field"><span>每周几交</span><Select aria-label="每周几交" value={file.timing_weekday ?? undefined} disabled={!editable} onChange={timing_weekday => set({ timing_weekday })} options={WEEKDAYS.map((label, index) => ({ value: index + 1, label }))} /></label>}
       <details className="tpl-more">
-        <summary>更多：平台、保密、外部查看</summary>
+        <summary>更多：平台、保密</summary>
         <label className="tpl-field"><span>只用于某个调度平台</span><Select aria-label="只用于平台" allowClear placeholder="所有平台都用" value={file.platform ?? undefined} disabled={!editable} onChange={platform => set({ platform: platform ?? null })} options={PLATFORMS} /></label>
         <div className="tpl-switches">
-          <label><Switch size="small" checked={file.confidential_default} disabled={!editable} onChange={value => set({ confidential_default: value, ...(value ? { external_visible_default: false } : {}) })} />默认保密</label>
-          <label><Switch size="small" checked={file.external_never_visible} disabled={!editable} onChange={value => set({ external_never_visible: value, ...(value ? { external_visible_default: false } : {}) })} />禁止外部查看</label>
-          <label><Switch size="small" checked={file.external_visible_default} disabled={!editable || file.confidential_default || file.external_never_visible} onChange={external_visible_default => set({ external_visible_default })} />默认对外可见</label>
+          <label><Switch size="small" checked={file.confidential_default} disabled={!editable} onChange={value => set({ confidential_default: value })} />默认保密</label>
         </div>
         <label className="tpl-field"><span>模板编号</span><Input aria-label="模板编号" value={file.template_no} maxLength={100} placeholder="可选，如模板16" disabled={!editable} onChange={e => set({ template_no: e.target.value })} /></label>
         <label className="tpl-field"><span>给提交人的说明</span><Input.TextArea aria-label="文件说明" value={file.note} maxLength={5000} autoSize={{ minRows: 1, maxRows: 6 }} disabled={!editable} onChange={e => set({ note: e.target.value })} /></label>

@@ -40,7 +40,6 @@ _login_lock = threading.Lock()
 
 
 def _user_payload(db: Session, user: User) -> dict:
-    from app.models import Project
     from app.services.system_permissions import effective_permissions
     return {
         "id": user.id,
@@ -51,8 +50,6 @@ def _user_payload(db: Session, user: User) -> dict:
         "email": user.email or "",
         "is_active": user.is_active,
         "system_permissions": effective_permissions(user),
-        "permission_overrides": dict(user.permission_overrides or {}),
-        "permission_version": user.permission_version or 0,
         "two_factor_enabled": bool(user.mfa_enabled),
         "two_factor_required": mfa.mandatory(user),
     }
@@ -277,7 +274,7 @@ def login(data: LoginRequest, request: Request, response: Response, db: Session 
 def refresh_token(data: RefreshRequest, response: Response, request: Request, db: Session = Depends(get_db)):
     import jwt
     from app.config import AUTH_SIGNING_KEY, ALGORITHM, COOKIE_REFRESH_NAME
-    from app.services.cookies import set_auth_cookies, clear_auth_cookies
+    from app.services.cookies import clear_auth_cookies
 
     def _reject(detail: str) -> JSONResponse:
         # HYPE-56：刷新失败说明会话确已失效。必须清掉 HttpOnly 会话 cookie——
@@ -325,7 +322,7 @@ def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
 
 
 @router.put("/password")
-@route_permission_exempt('本人改密，处理器校验当前密码并撤销旧令牌', readonly_session=True)
+@route_permission_exempt('本人改密，处理器校验当前密码并撤销旧令牌')
 def change_password(
     data: PasswordChangeRequest,
     user: User = Depends(get_current_user),
@@ -342,11 +339,11 @@ def change_password(
 
 
 @router.get('/2fa')
-@route_permission_exempt('本人二次验证状态，不返回密钥或恢复码', readonly_session=True)
+@route_permission_exempt('本人二次验证状态，不返回密钥或恢复码')
 def mfa_status(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     from app.models import MfaRecoveryCode
     return {'enabled': bool(user.mfa_enabled), 'required': mfa.mandatory(user),
-            'can_enroll': user.role in {'admin', 'pm'},
+            'can_enroll': True,
             'recovery_codes_remaining': db.query(MfaRecoveryCode).filter_by(user_id=user.id, used_at=None).count()}
 
 
@@ -371,7 +368,7 @@ def mfa_login(data: MfaVerifyRequest, response: Response, db: Session = Depends(
 def mfa_enrollment_start(data: MfaChallengeRequest, response: Response, db: Session = Depends(get_db)):
     token = data.challenge.get_secret_value()
     try:
-        keys = _challenge_limit(db, token)
+        _challenge_limit(db, token)
         result = mfa.enrollment_start(db, token)
     except mfa.MfaError as error:
         db.rollback(); raise HTTPException(401, str(error)) from None
@@ -396,7 +393,7 @@ def mfa_enrollment_confirm(data: MfaVerifyRequest, response: Response, db: Sessi
 
 
 @router.post('/2fa/setup')
-@route_permission_exempt('本人当前密码确认后开始可选二次验证登记', readonly_session=True)
+@route_permission_exempt('本人当前密码确认后开始可选二次验证登记')
 def mfa_setup(data: MfaPasswordProof, request: Request, response: Response,
               user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     key = _login_key(request, user.username)
@@ -412,7 +409,7 @@ def mfa_setup(data: MfaPasswordProof, request: Request, response: Response,
 
 
 @router.post('/2fa/disable')
-@route_permission_exempt('仅本人已验证会话及当前未使用TOTP可关闭，公开强制账号不能关闭', readonly_session=True)
+@route_permission_exempt('仅本人已验证会话及当前未使用TOTP可关闭，公开强制账号不能关闭')
 def mfa_disable(data: MfaProof, response: Response, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     key = _mfa_account_key(user.id); _check_login_limit(key, db)
     try: mfa.disable(db, user.id, data.otp.get_secret_value(), expected_version=user.token_version or 0)
@@ -423,7 +420,7 @@ def mfa_disable(data: MfaProof, response: Response, user: User = Depends(get_cur
 
 
 @router.post('/2fa/recovery-codes')
-@route_permission_exempt('本人当前未使用TOTP确认后替换恢复码，明文仅本次响应', readonly_session=True)
+@route_permission_exempt('本人当前未使用TOTP确认后替换恢复码，明文仅本次响应')
 def mfa_codes(data: MfaProof, response: Response, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     key = _mfa_account_key(user.id); _check_login_limit(key, db)
     try: codes = mfa.regenerate(db, user.id, data.otp.get_secret_value(), expected_version=user.token_version or 0)
@@ -433,7 +430,7 @@ def mfa_codes(data: MfaProof, response: Response, user: User = Depends(get_curre
 
 
 @router.post('/2fa/recover')
-@route_permission_exempt('本人密码及额外一次性恢复码确认后，仅发重新绑定challenge，旧二次验证持续生效', readonly_session=True)
+@route_permission_exempt('本人密码及额外一次性恢复码确认后，仅发重新绑定challenge，旧二次验证持续生效')
 def mfa_recover(data: MfaRecoveryProof, request: Request, response: Response,
                 user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     key = _mfa_account_key(user.id); _check_login_limit(key, db)

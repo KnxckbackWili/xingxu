@@ -16,7 +16,7 @@ def _director_headers(client, admin_headers):
     """测试库内创建 director 角色并登录。"""
     r = client.post("/api/users", headers=admin_headers, json={
         "username": "director1", "password": "Review123!",
-        "display_name": "总监-测试", "role": "director"})
+        "display_name": "总监-测试", "role": "employee"})
     assert r.status_code == 200, r.text
     r = client.post("/api/auth/login", json={"username": "director1", "password": "Review123!"})
     assert r.status_code == 200, r.text
@@ -82,36 +82,6 @@ def test_regular_roles_cannot_read_or_update(client, worker_headers, tech_header
 
 
 # ===== 权限：管理角色读取与更新 =====
-
-def test_manage_roles_can_list_detail_and_update(client, admin_headers, pm_headers):
-    fb = _create(client, admin_headers, description="管理角色读取测试").json()
-
-    for headers in (admin_headers, pm_headers):
-        lst = client.get("/api/feedback", headers=headers).json()
-        assert lst["total"] == 1
-        assert any(i["id"] == fb["id"] for i in lst["items"])
-
-        det = client.get(f"/api/feedback/{fb['id']}", headers=headers)
-        assert det.status_code == 200, det.text
-        assert det.json()["description"] == "管理角色读取测试"
-        assert det.json()["user_name"] == "系统管理员"
-
-    # pm 可更新处理状态；非法状态被拦截
-    r = client.patch(f"/api/feedback/{fb['id']}/status", headers=pm_headers, json={"status": "processing"})
-    assert r.status_code == 200 and r.json()["status"] == "processing"
-    r = client.patch(f"/api/feedback/{fb['id']}/status", headers=admin_headers, json={"status": "done"})
-    assert r.json()["status"] == "done"
-
-
-def test_director_is_manage_role(client, admin_headers, worker_headers):
-    headers = _director_headers(client, admin_headers)
-    fb = _create(client, worker_headers).json()
-
-    assert client.get("/api/feedback", headers=headers).status_code == 200
-    assert client.get(f"/api/feedback/{fb['id']}", headers=headers).status_code == 200
-    assert client.patch(f"/api/feedback/{fb['id']}/status", headers=headers,
-                        json={"status": "done"}).status_code == 200
-
 
 # ===== 列表：分页 + 状态筛选 =====
 

@@ -91,23 +91,18 @@ def test_filter_rejects_foreign_missing_car_and_hidden_project(client,admin_head
     assert client.get(f'/api/projects/{pid}/documents',headers=admin_headers,params={'vehicle_unit_id':''}).status_code==422
 
 
-def test_car_projection_and_download_preserve_confidential_acl_and_submit_revocation(client,admin_headers,worker_headers):
+def test_car_projection_and_download_preserve_confidential_acl(client,admin_headers,worker_headers):
     pid,ids=fleet(client,admin_headers)
     doc=inspection(vehicle_view(client,admin_headers,pid,ids[0]))
     response=upload(client,admin_headers,pid,[doc['id']])
     assert response.status_code==200,response.text
     with SessionLocal() as db:
         db.get(ProjectDocument,doc['id']).confidential=True
-        worker=db.query(User).filter_by(username='worker1').one()
-        worker.permission_overrides={'worker.deliver':False};db.commit()
+        db.commit()
     filtered=vehicle_view(client,worker_headers,pid,ids[0])
-    assert not filtered['permissions']['submit']
     assert not any(row['id']==doc['id'] for row in filtered['documents'])
     version=response.json()['documents'][0]['latest_version']
     assert client.get('/api'+version['download_url'],headers=worker_headers).status_code in (403,404)
-    other=inspection(vehicle_view(client,admin_headers,pid,ids[1]))
-    assert upload(client,worker_headers,pid,[other['id']]).status_code==403
-    assert inspection(vehicle_view(client,admin_headers,pid,ids[1]))['status']=='pending'
 
 
 def test_preentry_still_allows_car_documents_without_matrix_progress(client,admin_headers):

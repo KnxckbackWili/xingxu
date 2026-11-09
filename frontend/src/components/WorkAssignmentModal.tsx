@@ -12,7 +12,7 @@ const monday=(date:string)=>{const value=dayjs(date);return value.subtract((valu
 export default function WorkAssignmentModal({context,onClose,onSaved}:{context:Context|null;onClose:()=>void;onSaved:()=>void}) {
   const {user}=useAuth()
   const pid=context?.projectId||context?.entry?.project_id
-  const scope=JSON.stringify([pid,context?.repair?.unitId,context?.repair?.eventId,!!context,user?.id,user?.role,user?.permission_version,user?.permission_overrides])
+  const scope=JSON.stringify([pid,context?.repair?.unitId,context?.repair?.eventId,!!context,user?.id,user?.role])
   const [snapshot,setSnapshot]=useState<{scope:string;data?:WeeklyPlanView}>({scope:''})
   const data=snapshot.scope===scope?snapshot.data:undefined
   const [week,setWeek]=useState(()=>monday(todayInTimezone()))
@@ -23,7 +23,7 @@ export default function WorkAssignmentModal({context,onClose,onSaved}:{context:C
   const [loading,setLoading]=useState(false)
   const [saving,setSaving]=useState(false)
   const epoch=useRef(0),lock=useRef(false),weekEdited=useRef(false)
-  const allowed=!!data?.permissions.edit&&user?.role!=='readonly'&&user?.permission_overrides?.['project.manage_schedule']!==false&&user?.permission_overrides?.['project.read']!==false
+  const allowed=!!data?.permissions.edit
   const load=async()=>{
     if(!pid||!context?.repair)return
     const current=epoch.current;setLoading(true);setError('')

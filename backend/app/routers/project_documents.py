@@ -16,64 +16,16 @@ from app.services.document_requirements import RequirementInput, read_asset
 from app.services.scope import ensure_project_visible
 from app.services.permissions import C_PLAN
 from app.services.system_permissions import route_permission
-from app.services.change_log import log_change
 from app.services.upload_safety import read_upload_limited
 from app.services.optimistic import require_client_version
 from app.services.rate_limit import rate_limit_export
 from app.config import MAX_UPLOAD_SIZE
-from app.time_utils import utcnow
 
 def _private_response(response:Response):
     response.headers['Cache-Control']='private, no-store'
 
 
 router=APIRouter(prefix='/projects',tags=['项目资料'],dependencies=[Depends(_private_response)])
-
-
-class DispatchConfirmation(BaseModel):
-    model_config = {'extra': 'forbid'}
-    conclusion: Literal['not_ready', 'risky', 'ready']
-    notes: str = Field(default='', max_length=4000)
-    review_token: str = Field(min_length=64, max_length=64, pattern='^[a-f0-9]{64}$')
-
-
-@router.post('/{project_id}/documents/dispatch-review')
-@route_permission('project.manage_plan')
-def preview_dispatch(project_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    from app.services.dispatch_review import manifest, visible_manifest
-    from app.services.permissions import authorize_project
-    from app.services.project_lifecycle import ensure_project_writable
-    project = ensure_project_visible(db, project_id, user)
-    authorize_project(user, project, C_PLAN); ensure_project_writable(project)
-    result = visible_manifest(db, project, user, manifest(db, project))
-    # T26 permits only audit writes while reading; no business state is created.
-    from app.models import ProjectDocument, ProjectDocumentDefinition
-    shown = [item for key in ('met','not_applicable','unmet') for item in result[key] if not item.get('restricted')]
-    document_ids = {item['id'] for item in shown if item['kind']=='document'}
-    definition_ids = {item['definition_id'] for item in shown if item['kind']=='definition'}
-    docs.audit_access(db, project, user,
-        documents=db.query(ProjectDocument).filter(ProjectDocument.id.in_(document_ids)).all() if document_ids else [],
-        definitions=db.query(ProjectDocumentDefinition).filter(ProjectDocumentDefinition.id.in_(definition_ids)).all() if definition_ids else [])
-    db.commit()
-    return result
-
-
-@router.post('/{project_id}/documents/dispatch-review/confirm')
-@route_permission('project.manage_plan')
-def confirm_dispatch(project_id: str, body: DispatchConfirmation, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    from app.services.dispatch_review import confirm, summary
-    project = docs.writable(db, project_id, user, C_PLAN)
-    confirm(db, project, user, **body.model_dump())
-    db.commit()
-    return {'message': '发车前资料确认已记录', 'summary': summary(db, project)}
-
-
-@router.get('/{project_id}/documents/dispatch-review/history')
-@route_permission('project.read')
-def dispatch_history(project_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    from app.services.dispatch_review import history
-    project = ensure_project_visible(db, project_id, user)
-    return history(db, project, user)
 
 
 class ProjectRequirementInput(RequirementInput):
@@ -100,12 +52,6 @@ class StateChange(BaseModel):
     status:Literal['pending','waived']
     reason:str=Field(min_length=1,max_length=5000)
     version:int|None=Field(default=None,ge=1)
-
-
-class Review(BaseModel):
-    model_config={'extra':'forbid'}
-    decision:Literal['approved','rejected']
-    note:str=Field(default='',max_length=5000)
 
 
 class GeneratedNote(BaseModel):
@@ -297,32 +243,6 @@ def change_state(project_id:str,document_id:str,body:StateChange,user:User=Depen
     row=docs.owned_document(db,project_id,document_id)
     docs.update_state(db,project,row,user,body.status,body.reason,require_client_version(body.version))
     db.commit();return one_document(db,project,user,row.id)
-
-
-@router.post('/{project_id}/documents/{document_id}/versions/{version_id}/review')
-@route_permission('project.manage_plan')
-def review(project_id:str,document_id:str,version_id:str,body:Review,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-    project=docs.writable(db,project_id,user,C_PLAN)
-    row=docs.owned_document(db,project_id,document_id)
-    if not docs.can_read_document(user,project,row):raise HTTPException(403,'无权审核该保密资料')
-    version=db.get(DocumentVersion,version_id)
-    if version is None or version.project_document_id!=row.id:raise HTTPException(404,'资料版本不存在')
-    from app.models import Attachment
-    asset=db.get(Attachment,version.attachment_id)
-    if asset is None or asset.project_id!=project.id:raise HTTPException(404,'资料原件不存在')
-    if not docs.can_read_file(user,project,asset):raise HTTPException(403,'无权审核该保密附件版本')
-    if version.uploaded_by == user.id:
-        raise HTTPException(400,'该版本由你提交，不能自己审核，请由其他获授权人员复核')
-    if body.decision=='rejected' and not body.note.strip():raise HTTPException(400,'退回意见必须说明原因')
-    metadata=dict(version.review_metadata or {})
-    review={'decision':body.decision,'note':body.note.strip(),'by':user.id,'at':docs.iso(utcnow())}
-    metadata['review_history']=[*(metadata.get('review_history') or []),review]
-    metadata['latest_review']=review;version.review_metadata=metadata
-    log_change(db,project.id,'document_version',version.id,'review',user.id,f'资料版本审核：{row.name}',None,review)
-    if version.uploaded_by:
-        from app.routers.notifications import notify
-        notify(db,version.uploaded_by,f'资料评审意见：{row.name}'[:200],body.note.strip() or '资料版本已复核',ntype='document_reviewed',project_id=project.id,entity_id=row.id)
-    db.commit();return next(value for value in one_document(db,project,user,row.id)['versions'] if value['id']==version.id)
 
 
 @router.get('/{project_id}/documents/{document_id}/versions/{version_id}/download')

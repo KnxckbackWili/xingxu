@@ -1,12 +1,12 @@
 import {beforeEach,expect,it,vi} from 'vitest'
 import {render,screen,fireEvent,within,waitFor} from '@testing-library/react'
 import {ProjectMenuContent} from './ProjectMenu'
-const h=vi.hoisted(()=>({user:{id:'a',role:'admin',permission_overrides:{} as Record<string,boolean>}}))
+const h=vi.hoisted(()=>({user:{id:'a',role:'admin'} as {id:string;role:string}}))
 vi.mock('../../../stores/auth',()=>({useAuth:()=>({user:h.user})}))
 const nav=vi.fn()
 function show(overrides:Partial<Parameters<typeof ProjectMenuContent>[0]>={}){return render(<ProjectMenuContent projectId="p1" activeParent="overview" activeChild={null} onNavigate={nav} {...overrides}/>)}
 async function more(){fireEvent.click(screen.getByRole('button',{name:'更多'}));return within(await screen.findByRole('dialog'))}
-beforeEach(()=>{nav.mockClear();h.user={id:'a',role:'admin',permission_overrides:{}}})
+beforeEach(()=>{nav.mockClear();h.user={id:'a',role:'admin'}})
 it('shows exactly six daily destinations and More on every viewport',async()=>{
  const view=show();const common=within(screen.getByRole('navigation',{name:'项目常用功能'}))
  expect(common.getAllByRole('button').map(button=>button.textContent)).toEqual(['概况','计划','车辆','资料','问题','现场','更多'])
@@ -22,10 +22,10 @@ it('keeps vehicle progress separate from field inventory and contacts',()=>{
  fireEvent.click(field.getByRole('button',{name:'联系人'}));expect(nav).toHaveBeenLastCalledWith('/pm/projects/p1/handover')
 })
 it.each([['概况','overview'],['资料','documents'],['车辆','vehicles'],['计划','plan'],['问题','issues'],['现场','inventory']])('navigates %s to its current location',(name,path)=>{show();fireEvent.click(screen.getByRole('button',{name}));expect(nav).toHaveBeenCalledWith(`/pm/projects/p1/${path}`)})
-it('keeps readable settings while export and audit remain separately authorized',async()=>{
- h.user={id:'a',role:'worker',permission_overrides:{'system.audit.read':false}}
+it('hides export when the project grants no export capability',async()=>{
+ h.user={id:'a',role:'employee'}
  show({capabilities:[]});const extra=await more()
- expect(extra.getByRole('button',{name:'项目设置'})).toBeVisible();expect(extra.queryByRole('button',{name:'导出'})).toBeNull();expect(extra.queryByRole('button',{name:'操作记录'})).toBeNull()
+ expect(extra.getByRole('button',{name:'项目设置'})).toBeVisible();expect(extra.queryByRole('button',{name:'导出'})).toBeNull()
 })
 it('does not clear search when navigation is blocked and closes only after a committed route',async()=>{
  const view=show({navigationKey:'/pm/projects/p1/documents',activeParent:'delivery'})

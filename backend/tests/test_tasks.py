@@ -34,7 +34,7 @@ def test_template_has_optional_modules(client, pm_headers):
 
 
 def _tree_tasks(tree):
-    return {t["name"]: t for ph in tree for m in ph["modules"] for t in m["tasks"]}
+    return {t["name"]: t for ph in tree for t in ph["work_items"]}
 
 
 def test_generate_tasks_with_vehicles(client, pm_headers):
@@ -51,7 +51,7 @@ def test_generate_tasks_with_vehicles(client, pm_headers):
     tree = client.get(f"/api/projects/{project_id}/tree", headers=pm_headers).json()
     tasks = _tree_tasks(tree)
     opening = tasks["到场点检"]
-    assert opening["quantity_type"] == "per_vehicle"
+    assert opening["kind"] == "vehicle"
     assert opening["vehicle_step_key"] == "arrival_inspection"
     assert tasks["单车调试"]["vehicle_step_key"] == "single_commissioning"
     server_task = tasks["服务器与网络部署"]
@@ -68,7 +68,7 @@ def test_per_vehicle_safety_checks_are_frozen_vehicle_definitions(client, pm_hea
     client.post(f"/api/projects/{project_id}/tasks/generate", headers=pm_headers,
                 json={"work_item_ids": default_work("mod-03")})
     task = _tree_tasks(client.get(f"/api/projects/{project_id}/tree", headers=pm_headers).json())["单车调试"]
-    assert task["quantity_type"] == "per_vehicle" and task["check_items"] == []
+    assert task["kind"] == "vehicle" and task["check_items"] == []
     with SessionLocal() as db:
         definitions = {d.name: d for d in db.query(VehicleCheckDefinition).filter_by(task_id=task["id"])}
     assert definitions["急停、触边与失速保护"].is_safety_critical
@@ -107,12 +107,12 @@ def test_generation_is_idempotent(client, pm_headers):
     client.post(f"/api/projects/{project_id}/tasks/generate", headers=pm_headers,
                 json={"work_item_ids": default_work("mod-05")})
     r1 = client.get(f"/api/projects/{project_id}/tree", headers=pm_headers)
-    count1 = sum(len(m["tasks"]) for ph in r1.json() for m in ph["modules"])
+    count1 = sum(len(ph["work_items"]) for ph in r1.json())
 
     client.post(f"/api/projects/{project_id}/tasks/generate", headers=pm_headers,
                 json={"work_item_ids": default_work("mod-05")})
     r2 = client.get(f"/api/projects/{project_id}/tree", headers=pm_headers)
-    count2 = sum(len(m["tasks"]) for ph in r2.json() for m in ph["modules"])
+    count2 = sum(len(ph["work_items"]) for ph in r2.json())
 
     assert count1 == count2 == 1  # 服务器与网络部署 is one row
 
@@ -136,7 +136,7 @@ def test_move_task_across_phases(client, pm_headers):
     phase1, phase2 = tree[0], tree[1]
 
     # Pick the first task of phase 1
-    task = phase1["modules"][0]["tasks"][0]
+    task = phase1["work_items"][0]
     task_name = task["name"]
 
     r = client.put(f"/api/projects/{pid}/tasks/{task['id']}", headers=pm_headers,
@@ -148,10 +148,9 @@ def test_move_task_across_phases(client, pm_headers):
     new_tree = r.json()
     found = None
     for ph in new_tree:
-        for m in ph["modules"]:
-            for t in m["tasks"]:
-                if t["name"] == task_name:
-                    found = (ph, t)
+        for t in ph["work_items"]:
+            if t["name"] == task_name:
+                found = (ph, t)
     assert found is not None
     assert found[0]["id"] == phase2["id"]
     # Audit log records the old and new phase of the move
@@ -165,28 +164,21 @@ def test_move_task_across_phases(client, pm_headers):
 
 def test_move_task_to_same_phase_is_noop(client, pm_headers):
     pid, tree = _project_with_two_phases(client, pm_headers)
-    task = tree[0]["modules"][0]["tasks"][0]
+    task = tree[0]["work_items"][0]
     r = client.put(f"/api/projects/{pid}/tasks/{task['id']}", headers=pm_headers,
                    json=versioned(task['id'], {"phase_id": tree[0]["id"]}, 'Task'))
     assert r.status_code == 200
     # Still in phase 1
     r = client.get(f"/api/projects/{pid}/tree", headers=pm_headers)
     tree2 = r.json()
-    names = {t["name"] for m in tree2[0]["modules"] for t in m["tasks"]}
+    names = {t["name"] for t in tree2[0]["work_items"]}
     assert task["name"] in names
 
 
 def test_move_task_unknown_phase_404(client, pm_headers):
     pid, tree = _project_with_two_phases(client, pm_headers)
-    task = tree[0]["modules"][0]["tasks"][0]
+    task = tree[0]["work_items"][0]
     r = client.put(f"/api/projects/{pid}/tasks/{task['id']}", headers=pm_headers,
                    json=versioned(task['id'], {"phase_id": "phase-does-not-exist"}, 'Task'))
     assert r.status_code == 404
 
-
-def test_move_task_worker_forbidden(client, pm_headers, worker_headers):
-    pid, tree = _project_with_two_phases(client, pm_headers)
-    task = tree[0]["modules"][0]["tasks"][0]
-    r = client.put(f"/api/projects/{pid}/tasks/{task['id']}", headers=worker_headers,
-                   json=versioned(task['id'], {"phase_id": tree[1]["id"]}, 'Task'))
-    assert r.status_code in (403, 404)

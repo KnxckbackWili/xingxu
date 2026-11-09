@@ -80,28 +80,7 @@ services:
       - HEALTH_FAIL_THRESHOLD=${HEALTH_FAIL_THRESHOLD:-3}
       - HEALTH_WEB_RESTART_LIMIT=${HEALTH_WEB_RESTART_LIMIT:-2}
       - HEALTH_START_GRACE=${HEALTH_START_GRACE:-180}
-      # 可选：服务端 AI 项目助手；密钥绝不会发给浏览器。
-      - AI_PROVIDER=${AI_PROVIDER:-deepseek}
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
-      - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-v4-flash}
-      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
-      - MIMO_API_KEY=${MIMO_API_KEY:-}
-      - MIMO_MODEL=${MIMO_MODEL:-mimo-v2.5-pro}
-      - MIMO_BASE_URL=${MIMO_BASE_URL:-https://api.xiaomimimo.com/v1}
-      - MINIMAX_API_KEY=${MINIMAX_API_KEY:-}
-      - MINIMAX_MODEL=${MINIMAX_MODEL:-MiniMax-M2.7}
-      - MINIMAX_BASE_URL=${MINIMAX_BASE_URL:-https://api.minimaxi.com/v1}
-      - AI_PROVIDER_NAME=${AI_PROVIDER_NAME:-自建兼容服务}
-      - AI_BASE_URL=${AI_BASE_URL:-}
-      - AI_MODEL=${AI_MODEL:-}
-      - AI_API_KEY=${AI_API_KEY:-}
-      - AI_ALLOW_NO_KEY=${AI_ALLOW_NO_KEY:-0}
-      - AI_TIMEOUT_SECONDS=${AI_TIMEOUT_SECONDS:-180}
-      - INBOX_AUTO_ORGANIZE=${INBOX_AUTO_ORGANIZE:-0}
-      # AI 用量预算护栏：月度请求/token 上限（0=不限制）。超限后 AI 助手降级提示，
       # 不发起外部调用。见 app/services/ai_budget.py。
-      - AGVPM_AI_MONTHLY_REQUESTS=${AGVPM_AI_MONTHLY_REQUESTS:-0}
-      - AGVPM_AI_MONTHLY_TOKENS=${AGVPM_AI_MONTHLY_TOKENS:-0}
       # 外部通知渠道（HYPE-58）：钉钉机器人 Webhook / 通用 JSON webhook（加签/token 可选），
       # 密钥只从环境/文件读取。NOTIFY_CHANNELS 为空 = 只保留站内通知，不外发。接入说明见 docs/notifications.md。
       - NOTIFY_CHANNELS=${NOTIFY_CHANNELS:-}

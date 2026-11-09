@@ -23,7 +23,7 @@ export default function ProjectOwnerPanel({project,onReload,onDirtyChange}:{proj
   const [busy,setBusy]=useState(false)
   const [stale,setStale]=useState(false)
   const epoch=useRef(0);const lock=useRef(false)
-  useEffect(()=>{epoch.current++;lock.current=false;setOpen(false);setPreview(undefined);setTarget(undefined);setReason('');setAck([]);setError('');setBusy(false);setStale(false);onDirtyChange?.(false);return()=>{epoch.current++}},[project.id,project.manager,user?.id,user?.permission_version])
+  useEffect(()=>{epoch.current++;lock.current=false;setOpen(false);setPreview(undefined);setTarget(undefined);setReason('');setAck([]);setError('');setBusy(false);setStale(false);onDirtyChange?.(false);return()=>{epoch.current++}},[project.id,project.manager,user?.id])
   useEffect(()=>{onDirtyChange?.(!!target||!!reason.trim()||!!ack.length)},[target,reason,ack,onDirtyChange])
   const inspect=async()=>{
     if(!allowed||lock.current)return

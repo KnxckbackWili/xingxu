@@ -22,7 +22,7 @@ bash docker/scripts/manage.sh install
 
 ## 文档
 
-- [项目经理](docs/quickstart-project-manager.md)、[实施工程师](docs/quickstart-engineer.md)、[管理员](docs/quickstart-admin.md)、[外部人员](docs/quickstart-external.md)：各一页说明。
+- [员工](docs/quickstart-employee.md)、[系统管理员](docs/quickstart-admin.md)：各一页说明。
 - [文档入口](docs/index.md)与[术语表](docs/glossary.md)：查当前流程、资料、车辆、权限和运维规则。
 - [开发约定](CLAUDE.md)、[版本历史](CHANGELOG.md)、QA 证据归档与 SHA。
 

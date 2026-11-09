@@ -19,7 +19,7 @@ def test_generate_preserves_project_snapshot_no_duplicate(client, pm_headers):
     client.post(f'/api/projects/{pid}/vehicles', headers=pm_headers, json={'vehicle_type': '潜伏式', 'model_name': 'AGV-500', 'quantity': 2})
     client.post(f'/api/projects/{pid}/tasks/generate', headers=pm_headers, json={'work_item_ids': default_work('mod-03')})
     tree = client.get(f'/api/projects/{pid}/tree', headers=pm_headers).json()
-    names_before = {t['name'] for ph in tree for m in ph['modules'] for t in m['tasks']}
+    names_before = {t['name'] for ph in tree for t in ph['work_items']}
     assert '单车调试' in names_before
     from app.db import SessionLocal
     from app.models import Task
@@ -33,8 +33,8 @@ def test_generate_preserves_project_snapshot_no_duplicate(client, pm_headers):
         db.close()
     client.post(f'/api/projects/{pid}/tasks/generate', headers=pm_headers, json={'work_item_ids': default_work('mod-03')})
     tree2 = client.get(f'/api/projects/{pid}/tree', headers=pm_headers).json()
-    names_after = {t['name'] for ph in tree2 for m in ph['modules'] for t in m['tasks']}
+    names_after = {t['name'] for ph in tree2 for t in ph['work_items']}
     assert '单车调试（改名后）' not in names_after
     assert '单车调试' in names_after, '项目快照应保留，不随模板改名'
-    count_after = sum((1 for ph in tree2 for m in ph['modules'] for t in m['tasks']))
+    count_after = sum((1 for ph in tree2 for t in ph['work_items']))
     assert count_after == 1

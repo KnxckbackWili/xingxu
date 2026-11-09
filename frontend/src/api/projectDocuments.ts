@@ -77,8 +77,6 @@ export interface ProjectDocument extends ProjectDocumentRule {
   waived_reason: string
   confidential: boolean
   confidential_user_ids?: string[]
-  external_visible: boolean
-  external_never_visible: boolean
   submitted_at: string | null
   submitted_by: string | null
   version: number
@@ -95,8 +93,6 @@ export interface ProjectDocumentDefinition extends ProjectDocumentRule {
   effective_owner_name?: string
   owner_warning?: string
   confidential_default: boolean
-  external_visible_default: boolean
-  external_never_visible: boolean
   waiting_reason: string | null
   instance_count: number
   confidential_user_ids?: string[]
@@ -137,7 +133,7 @@ export type ProjectRequirementBody = Pick<ProjectDocumentRule,
   'stage_key' | 'code' | 'name' | 'template_no' | 'required' | 'scope' | 'platform' |
   'timing_type' | 'timing_event' | 'timing_offset_hours' | 'timing_weekday' |
   'trigger_type' | 'sort_order' | 'note'> & {
-  confidential_default: boolean; external_visible_default: boolean; external_never_visible: boolean
+  confidential_default: boolean
 }
 export interface DocumentUploadOptions {
   file: File
@@ -174,8 +170,6 @@ export const projectDocumentsApi = {
     (await api.post(`${base(projectId)}/submit`, { document_ids: documentIds, attachment_id: attachmentId, note, ...(Object.keys(milestoneDates).length ? { milestone_dates: milestoneDates } : {}) })).data,
   setStatus: async (projectId: string, row: ProjectDocument, status: 'pending' | 'waived', reason: string): Promise<ProjectDocument> =>
     (await api.put(`${base(projectId)}/${segment(row.id)}`, { status, reason, version: row.version })).data,
-  review: async (projectId: string, documentId: string, versionId: string, decision: 'approved' | 'rejected', note = ''): Promise<ProjectDocumentVersion> =>
-    (await api.post(`${base(projectId)}/${segment(documentId)}/versions/${segment(versionId)}/review`, { decision, note })).data,
   generateInventory: async (projectId: string, documentId: string, note = '', options: GeneratedFormOptions = {}): Promise<ProjectDocument> =>
     (await api.post(`${base(projectId)}/${segment(documentId)}/generate-inventory`, { ...generatedBody(options), note })).data,
   generateLifecycle: async (projectId: string, documentId: string, options: GeneratedFormOptions = {}): Promise<ProjectDocument> =>

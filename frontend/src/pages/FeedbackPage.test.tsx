@@ -34,12 +34,12 @@ const ITEM = {
  * 问题反馈页（HYPE-72）：
  * - 所有角色可见提交表单；普通角色不渲染管理列表、不发列表请求。
  * - 提交调用创建接口（描述必填、复现步骤可选）。
- * - 管理角色（pm）渲染反馈列表并加载数据。
+ * - 系统管理员渲染反馈列表并加载数据。
  */
 describe('问题反馈页', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    currentRole.value = 'worker'
+    currentRole.value = 'employee'
     viewport.mobile = false
     vi.mocked(feedbackApi.list).mockReset().mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20 })
   })
@@ -63,8 +63,8 @@ describe('问题反馈页', () => {
     )
   })
 
-  it('pm 管理角色看到反馈列表并加载数据', async () => {
-    currentRole.value = 'pm'
+  it('系统管理员看到反馈列表并加载数据', async () => {
+    currentRole.value = 'admin'
     vi.mocked(feedbackApi.list).mockResolvedValue({ items: [ITEM], total: 1, page: 1, page_size: 20 })
     render(<FeedbackPage />)
     await screen.findByText('反馈列表')
@@ -90,7 +90,7 @@ describe('问题反馈页', () => {
   })
 
   it('changing the status filter resets pagination to the first page', async () => {
-    currentRole.value = 'pm'
+    currentRole.value = 'admin'
     vi.mocked(feedbackApi.list).mockResolvedValue({ items: [ITEM], total: 45, page: 1, page_size: 20 })
     render(<FeedbackPage />)
     await screen.findByText('登录页崩溃')
@@ -103,7 +103,7 @@ describe('问题反馈页', () => {
   })
 
   it('手机初次加载失败不显示暂无反馈，重试后恢复卡片和详情', async () => {
-    currentRole.value = 'pm'
+    currentRole.value = 'admin'
     viewport.mobile = true
     vi.mocked(feedbackApi.list).mockRejectedValueOnce(new Error('network down'))
       .mockResolvedValueOnce({ items: [ITEM], total: 1, page: 1, page_size: 20 })
@@ -119,7 +119,7 @@ describe('问题反馈页', () => {
   })
 
   it('旧筛选的延迟失败不会清空新筛选成功返回的反馈', async () => {
-    currentRole.value = 'pm'
+    currentRole.value = 'admin'
     let rejectOld!: (error: Error) => void
     vi.mocked(feedbackApi.list).mockImplementationOnce(() => new Promise((_, reject) => { rejectOld = reject }))
       .mockResolvedValueOnce({ items: [{ ...ITEM, status: 'done' }], total: 1, page: 1, page_size: 20 })
@@ -133,7 +133,7 @@ describe('问题反馈页', () => {
   })
 
   it('新筛选加载失败时保持错误提示，旧请求成功不能回填旧记录', async () => {
-    currentRole.value = 'pm'
+    currentRole.value = 'admin'
     let resolveOld!: (result: { items: typeof ITEM[]; total: number; page: number; page_size: number }) => void
     vi.mocked(feedbackApi.list).mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve }))
       .mockRejectedValueOnce(new Error('current request failed'))

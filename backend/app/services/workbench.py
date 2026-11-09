@@ -33,7 +33,7 @@ def project_facts(db,projects,user,*,audit=True):
     by_id={row.id:row for row in rows};facts={};audited=set()
     # T23's batch owner map is enough for the same brief formatting; a second
     # bounded query handles the next fixed sign-off without raw row export.
-    owner_ids={identity for project in projects for identity in (project.manager,project.technical_manager)}
+    owner_ids={project.manager for project in projects}
     users={row.id:row for row in db.query(User).filter(User.id.in_(owner_ids))}
     for project in projects:
         summary=attention[project.id]

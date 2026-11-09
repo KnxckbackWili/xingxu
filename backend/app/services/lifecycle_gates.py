@@ -130,12 +130,6 @@ def check_transition(db: Session, project: Project, target: str) -> list[Blocker
         if archiving and not project.retrospective:
             add("retrospective", "归档前请填写项目复盘（成功经验、问题教训、改进建议）", "overview")
 
-    if target == "executing":
-        from app.services.dispatch_review import summary as dispatch_summary
-        summary = dispatch_summary(db, project, verify_files=True)
-        if (summary["entry_unmet"] or summary["missing"]) and not summary["entry_confirmed"]:
-            add("entry_conditions", "第5阶段发车前资料尚未齐备或原风险批准已失效，请核对资料，或明确批准风险进场并填写理由", "documents?review=1")
-
     return blockers
 
 

@@ -34,7 +34,7 @@ beforeEach(() => {
 })
 
 it('refreshes its unread badge immediately when the message center marks a notification read', async () => {
-  setUser('pm')
+  setUser('employee')
   let unread = 1
   vi.mocked(api.get).mockImplementation(async (url: string) => ({ data: url === '/notifications/unread-count' ? { count: unread } : [] }))
   const { container } = render(<NotificationBell />)
@@ -44,11 +44,10 @@ it('refreshes its unread badge immediately when the message center marks a notif
   await waitFor(() => expect(container.querySelector('.ant-badge-count')).toHaveAttribute('data-show', 'false'))
 })
 
-/** 「消息通知」入口对所有已登录角色可见：PM 端走侧栏，worker/intern 走顶栏铃铛「查看全部通知」。 */
+/** 「消息通知」入口对每个账号可见，「查看全部通知」都进同一个消息页。 */
 describe.each([
-  ['pm', '/pm/messages'],
-  ['worker', '/worker/messages'],
-  ['intern', '/worker/messages'],
+  ['admin', '/pm/messages'],
+  ['employee', '/pm/messages'],
 ])('NotificationBell 通知入口（%s）', (role, target) => {
   it('铃铛可见，且「查看全部通知」进入当前角色的消息通知路由', async () => {
     setUser(role as User['role'])
@@ -62,7 +61,7 @@ describe.each([
 
 
 it('failed mark-all does not strand an overlapping refresh spinner', async () => {
-  setUser('pm')
+  setUser('employee')
   let resolveCount!: (value: any) => void
   let resolveItems!: (value: any) => void
   let calls = 0
@@ -84,7 +83,7 @@ it('failed mark-all does not strand an overlapping refresh spinner', async () =>
 })
 
 it.each(['/notifications', '/notifications/unread-count'])('shows a retryable failure when %s cannot load instead of an empty inbox', async (failedUrl) => {
-  setUser('pm')
+  setUser('employee')
   vi.mocked(api.get).mockImplementation(async (url: string) => {
     if (url === failedUrl) throw new Error('network lost')
     return { data: url.includes('unread-count') ? { count: 0 } : [] }
@@ -101,7 +100,7 @@ it.each(['/notifications', '/notifications/unread-count'])('shows a retryable fa
 
 it('opens by keyboard, exposes actionable notification buttons, and restores focus after Escape', async () => {
   const keyboard = userEvent.setup()
-  setUser('pm')
+  setUser('employee')
   const notification = { id: 'n1', title: '准备工作有更新', content: '请查看项目', ntype: 'system', project_id: null, is_read: true, created_at: null }
   vi.mocked(api.get).mockImplementation(async (url: string) => ({ data: url.includes('unread-count') ? { count: 0 } : [notification] }))
   render(<NotificationBell />)
@@ -122,7 +121,7 @@ it('opens by keyboard, exposes actionable notification buttons, and restores foc
 })
 
 it('keeps the last inbox visible with a stale-data warning after a refresh failure', async () => {
-  setUser('pm')
+  setUser('employee')
   vi.mocked(api.get).mockImplementation(async (url: string) => ({ data: url.includes('unread-count') ? { count: 1 } : [
     { id: 'n1', title: '已加载的通知', content: '', ntype: 'system', project_id: null, is_read: false, created_at: null },
   ] }))
@@ -137,7 +136,7 @@ it('keeps the last inbox visible with a stale-data warning after a refresh failu
 })
 
 it('does not let an old account mark-read response alter the new account inbox', async () => {
-  setUser('pm')
+  setUser('employee')
   let finish!: (value: unknown) => void
   vi.mocked(api.post).mockReturnValue(new Promise(resolve => { finish = resolve }))
   vi.mocked(api.get).mockImplementation(async (url: string) => ({ data: url.includes('unread-count') ? { count: 1 } : [

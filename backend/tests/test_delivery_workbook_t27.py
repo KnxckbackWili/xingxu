@@ -115,7 +115,7 @@ def test_long_fields_continue_without_excel_cell_truncation_or_double_count_and_
 def test_actor_required_and_confidential_document_or_file_never_leaks_through_another_sheet(client,admin_headers,worker_headers):
     pid=create_project(client,admin_headers)
     with SessionLocal() as db:
-        worker=db.get(models.User,'user-worker-001');worker.permission_overrides={'project.export':True};db.commit()
+        db.commit()
         secret=models.Attachment(project_id=pid,filename='PRIVATE-FILE-NAME.bin',stored_name='private-delivery.bin',file_size=1,confidential=True,uploaded_by='user-admin-001')
         public=models.Attachment(project_id=pid,filename='PRIVATE-DOC-PUBLIC-FILE.bin',stored_name='private-doc-public-file.bin',file_size=1,confidential=False,uploaded_by='user-admin-001')
         allowed=models.Attachment(project_id=pid,filename='VISIBLE-VERSION.bin',stored_name='visible-delivery.bin',file_size=1,uploaded_by='user-admin-001')
@@ -158,10 +158,8 @@ def test_workbook_uses_project_scope_and_complete_package_keeps_canonical_json(c
 def test_complete_json_preserves_exact_readonly_execution_evidence_and_reimport_cannot_forge_completion(client,admin_headers):
     pid=create_project(client,admin_headers)
     with SessionLocal() as db:
-        from app.services.execution_scope import REMINDER_ONLY_PHASE_NAMES
-        phase=db.query(models.Phase).filter(models.Phase.project_id.is_(None),models.Phase.name.notin_(REMINDER_ONLY_PHASE_NAMES)).first()
-        module=models.Module(project_id=pid,phase_id=phase.id,name='执行事实模块');db.add(module);db.flush()
-        task=models.Task(project_id=pid,module_id=module.id,name='原直接完成任务',quantity_type='fixed',manually_completed=True,
+        phase=db.query(models.Phase).filter(models.Phase.project_id.is_(None)).first()
+        task=models.Task(project_id=pid,phase_id=phase.id,name='原直接完成任务',quantity_type='fixed',manually_completed=True,
             manual_completed_by='user-admin-001',manual_completed_role='admin',manual_completed_at=datetime(2026,2,3,4,5),manual_completed_reason='精确保留覆盖理由')
         db.add(task);db.flush()
         check=models.CheckItem(task_id=task.id,project_id=pid,name='保留失败检查',failed=True,failed_reason='原失败事实',is_done=False,version=7)

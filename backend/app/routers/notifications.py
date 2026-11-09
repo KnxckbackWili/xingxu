@@ -10,8 +10,7 @@ from app.services.system_permissions import route_permission
 from app.db import get_db
 from app.deps import get_current_user
 from app.models import User, Notification, Project, Issue
-from sqlalchemy import or_
-from app.services.notify import notify  # noqa: F401  (re-exported for legacy imports)
+
 
 router = APIRouter(tags=["通知"])
 

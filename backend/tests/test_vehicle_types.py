@@ -27,9 +27,9 @@ def test_enabled_list_requires_login(client):
     assert client.get("/api/vehicle-types").status_code == 401
 
 
-def test_all_list_requires_admin(client, pm_headers, worker_headers):
-    assert client.get("/api/vehicle-types/all", headers=pm_headers).status_code == 403
-    assert client.get("/api/vehicle-types/all", headers=worker_headers).status_code == 403
+def test_all_list_is_readable_by_employees_and_requires_login(client, pm_headers, worker_headers):
+    assert client.get("/api/vehicle-types/all", headers=pm_headers).status_code == 200
+    assert client.get("/api/vehicle-types/all", headers=worker_headers).status_code == 200
     # main 的登录接口会种 HttpOnly 会话 cookie（get_current_user 回退读 cookie）：
     # 清掉 pm/worker 登录留下的 cookie 后再验证「未登录 → 401」。
     client.cookies.clear()

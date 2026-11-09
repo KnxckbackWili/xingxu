@@ -6,9 +6,7 @@ and are what projects are generated from; they are not edited directly.
 """
 
 from fastapi import APIRouter, Depends, HTTPException
-from typing import Optional, Literal
-import os
-import shutil
+from typing import Optional
 from uuid import uuid4
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -18,9 +16,8 @@ from app.db import get_db
 from app.deps import get_current_user, require_admin
 from app.time_utils import utcnow
 from app.services.change_log import log_change
-from app.services.execution_scope import REMINDER_ONLY_PHASE_NAMES
 from app.config import UPLOAD_DIR
-from app.models import User, Phase, Module, Task, CheckItem, Template, TemplateDoc, TemplatePreparationItem
+from app.models import User, Phase, Task, CheckItem, Template, TemplateDoc
 
 router = APIRouter(prefix="/templates", tags=["模板"])
 
@@ -193,7 +190,6 @@ def _remove_template(db: Session, t: Template, user: User):
     clear_requirements(db, template_id)
     _delete_tree(db, template_id)
     from app.models import TemplateProcurementItem
-    db.query(TemplatePreparationItem).filter_by(template_id=template_id).delete()
     db.query(TemplateProcurementItem).filter_by(template_id=template_id).delete()
     from app.models import VehicleStep
     db.query(VehicleStep).filter_by(template_id=template_id).delete()
@@ -228,7 +224,6 @@ def _delete_tree(db: Session, template_id: Optional[str]):
         db.query(TemplateDoc).filter(TemplateDoc.task_id.in_(task_ids)).delete()
     db.query(CheckItem).filter(CheckItem.template_id == template_id, CheckItem.project_id.is_(None)).delete()
     db.query(Task).filter(Task.template_id == template_id, Task.project_id.is_(None)).delete()
-    db.query(Module).filter(Module.template_id == template_id, Module.project_id.is_(None)).delete()
     db.query(Phase).filter(Phase.template_id == template_id, Phase.project_id.is_(None)).delete()
 
 
@@ -259,7 +254,7 @@ def list_template_procurements(template_id: str, user: User = Depends(get_curren
 
 from fastapi import UploadFile, File, Form as FastForm
 from starlette.responses import FileResponse
-from app.config import UPLOAD_DIR, MAX_UPLOAD_SIZE
+from app.config import MAX_UPLOAD_SIZE
 import os as _os
 from app.models import TemplateDoc as _TDoc
 

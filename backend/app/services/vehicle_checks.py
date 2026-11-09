@@ -7,7 +7,7 @@ Legacy task-level rows remain facts and do not pretend to verify a named unit.
 from fastapi import HTTPException
 from sqlalchemy import or_
 from app.models import (Task, CheckItem, VehicleUnit, Vehicle, VehicleStep,
-                        ProjectVehicleStep, VehicleCheckDefinition, User, Module, Phase)
+                        ProjectVehicleStep, VehicleCheckDefinition, User)
 from app.services.manual_completion import covers
 
 
@@ -28,11 +28,6 @@ def validate_step(db, task, key):
         return None
     if task.quantity_type != 'per_vehicle':
         raise HTTPException(400, '只有按车辆的工作可以关联车辆环节')
-    from app.services.execution_scope import REMINDER_ONLY_PHASE_NAMES
-    from app.services.work_items import phase_of
-    phase=phase_of(db,task)
-    if phase is not None and phase.name in REMINDER_ONLY_PHASE_NAMES:
-        raise HTTPException(400,'准备提醒不作为车辆实施环节，请在实施工作中明确关联')
     if task.project_id:
         exists = db.query(ProjectVehicleStep.id).filter_by(project_id=task.project_id, key=key).first()
     else:
@@ -53,8 +48,6 @@ def bind_step(db, task, key):
     rows = db.query(CheckItem).filter_by(task_id=task.id).all()
     if task.vehicle_step_key and any(c.is_done or c.failed or not c.is_applicable or c.done_at for c in rows):
         raise HTTPException(400, '已有检查事实的工作不能改绑环节；请保留原来源并新增工作定义')
-    # An unbound legacy result may be explicitly linked once, but its original
-    # task-level identity/state is retained. It never becomes a per-unit pass.
     for row in rows:
         if row.vehicle_unit_id:
             if row.is_done or row.failed or not row.is_applicable or row.done_at:
@@ -93,8 +86,7 @@ def snapshot_definitions(db, task, source_checks):
 def generate_for_units(db, project_id, units, task=None):
     """Idempotently create pending rows, only for caller-selected real units.
 
-    New-unit and new-definition callers select automatically. Existing legacy
-    units are selected only by an explicit, audited planning action.
+    New-unit and new-definition callers select automatically.
     """
     tasks = _vehicle_tasks(db,project_id)
     if task is not None:tasks=[work for work in tasks if work.id==task.id]
@@ -157,13 +149,12 @@ def checks_for_unit(db, project_id, unit_id, step_key=None):
     if unit is None or unit.project_id != project_id:
         raise HTTPException(404, '车辆不属于当前项目')
     tasks = {t.id: t for t in _vehicle_tasks(db,project_id) if _applies(db, t, unit)}
-    rows = db.query(CheckItem).filter(CheckItem.task_id.in_(tasks),
-        or_(CheckItem.project_id == project_id, CheckItem.project_id.is_(None)),
-        or_(CheckItem.vehicle_unit_id == unit.id, CheckItem.vehicle_unit_id.is_(None))).populate_existing().order_by(CheckItem.sort_order, CheckItem.id).all() if tasks else []
+    rows = db.query(CheckItem).filter(CheckItem.task_id.in_(tasks), CheckItem.project_id == project_id,
+        CheckItem.vehicle_unit_id == unit.id).populate_existing().order_by(CheckItem.sort_order, CheckItem.id).all() if tasks else []
     result = []
     for row in rows:
         task = tasks[row.task_id]
-        key = row.vehicle_step_key if row.vehicle_unit_id else task.vehicle_step_key
+        key = row.vehicle_step_key
         if step_key and key and key != step_key:
             continue
         reason = _definition_error(db,row) or _reason(task, row)
@@ -171,7 +162,6 @@ def checks_for_unit(db, project_id, unit_id, step_key=None):
             reason = '按车工作尚未关联本项目车辆环节，请负责人明确关联'
         result.append({'id': row.id, 'task_id': task.id, 'task_name': task.name, 'task_version': task.version or 0,
             'vehicle_unit_id': row.vehicle_unit_id, 'vehicle_step_key': key,
-            'scope': 'vehicle' if row.vehicle_unit_id else 'legacy_task',
             'name': row.name, 'description': row.description, 'is_required': row.is_required,
             'is_safety_critical': row.is_safety_critical, 'is_applicable': row.is_applicable,
             'not_applicable_reason': row.not_applicable_reason, 'is_done': row.is_done,
@@ -193,7 +183,7 @@ def completion_blockers(db, project_id, cells):
             if row['blocker']:
                 blockers.append({'vehicle_unit_id': cell.vehicle_unit_id, 'vehicle_label':label, 'step_key': cell.step_key,
                     'check_id': row['id'], 'check_version': row['version'], 'task_id': row['task_id'],
-                    'name': row['name'], 'reason': row['blocker'], 'scope': row['scope']})
+                    'name': row['name'], 'reason': row['blocker']})
     return blockers
 
 
@@ -246,8 +236,7 @@ def vehicle_label(db, check):
 def reconcile_vehicle_type(db, project_id, units, previous_type):
     """Only newly-applicable scope gains pending checks on a fleet type change.
 
-    Always-applicable legacy NULL checks are not retroactively expanded. Deleting
-    a known type leaves a real unit's type unknown, which cannot prove exemption.
+    Deleting a known type leaves a real unit's type unknown, which cannot prove exemption.
     """
     if previous_type is None:
         return []

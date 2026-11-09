@@ -90,44 +90,6 @@ def test_crud_and_audit(client, pm_headers):
     assert any("准备项「自动充电桩」" in b for b in bodies)
 
 
-def test_status_warnings_on_executing(client, pm_headers):
-    pid = _project(client, pm_headers, status="preparing")
-    assert client.get(f"/api/projects/{pid}", headers=pm_headers).json()['status'] == 'preparing'
-    # 未满足条件必须先明确批准风险；批准后仍保留警告
-    from tests.lifecycle_helpers import approve_risk_entry
-    approve_risk_entry(client, pm_headers, pid)
-    r = client.post(f"/api/projects/{pid}/status", headers=pm_headers, json={"status": "executing"})
-    assert r.status_code == 200
-    assert len(r.json().get("warnings", [])) >= 1
-    assert "风险进场" in r.json()["warnings"][0]
-
-
-def test_status_warning_preview_does_not_change_status(client, pm_headers):
-    pid = _project(client, pm_headers, status="preparing")
-    assert client.get(f"/api/projects/{pid}", headers=pm_headers).json()['status'] == 'preparing'
-    r = client.post(
-        f"/api/projects/{pid}/status",
-        headers=pm_headers,
-        json={"status": "executing", "confirm_warnings": False},
-    )
-    assert r.status_code == 400
-    assert "风险" in r.json()["detail"]["message"]
-    assert client.get(f"/api/projects/{pid}", headers=pm_headers).json()["status"] == "preparing"
-
-    r = client.post(
-        f"/api/projects/{pid}/status",
-        headers=pm_headers,
-        json={"status": "executing", "confirm_warnings": True},
-    )
-    assert r.status_code == 400
-    from tests.lifecycle_helpers import approve_risk_entry
-    approve_risk_entry(client, pm_headers, pid)
-    r = client.post(f"/api/projects/{pid}/status", headers=pm_headers, json={"status": "executing"})
-    assert r.status_code == 200
-    assert r.json()["requires_confirmation"] is False
-    assert client.get(f"/api/projects/{pid}", headers=pm_headers).json()["status"] == "executing"
-
-
 # ===== 模板采购清单（v1.3 采购项模板化） =====
 
 
@@ -142,52 +104,6 @@ def test_template_list_exposes_single_system_default(client, pm_headers):
 
 
 # ===== 评审确认 → 已就绪（HYPE-36：_summary 状态机补齐 ready 分支） =====
-
-def test_review_confirm_summary_becomes_ready(client, pm_headers):
-    from tests.test_dispatch_review_t29 import scope, confirm
-    from tests.test_project_documents import upload
-    pid, doc=scope(client,pm_headers)
-    assert client.post(f'/api/projects/{pid}/procurements',headers=pm_headers,json={'name':'采购项'}).status_code == 200
-    base=f'/api/projects/{pid}/procurements'
-    for row in client.get(base,headers=pm_headers).json()['items']:
-        assert client.put(base+'/'+row['id'],headers=pm_headers,json={'status':'passed'}).status_code == 200
-    summary=client.get(base,headers=pm_headers).json()['summary']
-    assert summary['done'] == summary['total']
-    assert not summary['dispatch_readiness']['entry_confirmed']
-    assert upload(client,pm_headers,pid,[doc['id']]).status_code == 200
-    result=confirm(client,pm_headers,pid,conclusion='ready')
-    assert result.status_code == 200
-    assert result.json()['summary']['state_key']=='ready' and not result.json()['summary']['void']
-
-
-def test_material_change_reopens_preparation_and_preserves_review(client, pm_headers):
-    from tests.test_dispatch_review_t29 import preview, confirm
-    pid=_project(client,pm_headers);base=f'/api/projects/{pid}/procurements'
-    item=client.post(base,headers=pm_headers,json={'name':'追加采购','status':'passed','actual_date':'2026-09-10','extra':{'quantity':10,'unit':'件','spec':'A'}}).json()
-    assert confirm(client,pm_headers,pid).status_code == 200
-    token=preview(client,pm_headers,pid)['review_token']
-    changed=client.put(base+'/'+item['id'],headers=pm_headers,json={'extra':{'quantity':20},'status':'passed'})
-    assert changed.status_code==200 and changed.json()['status']=='pending' and changed.json()['actual_date'] is None
-    assert changed.json()['extra']=={'quantity':20,'unit':'件','spec':'A'}
-    assert client.get(base,headers=pm_headers).json()['summary']['dispatch_readiness']['entry_confirmed']
-    assert confirm(client,pm_headers,pid,token=token).status_code==200
-    from app.db import SessionLocal
-    from app.models import ProjectReadinessReview
-    with SessionLocal() as db:
-        assert all(row.get('id')!=item['id'] for review in db.query(ProjectReadinessReview).filter_by(project_id=pid) for row in review.snapshot)
-    logs=client.get(f'/api/projects/{pid}/logs',headers=pm_headers).json()
-    assert any('需求数量/规格/单位变化' in row['detail'] for row in logs)
-
-
-def test_spec_change_rechecks_procurement_without_changing_document_risk_approval(client, pm_headers):
-    from tests.test_dispatch_review_t29 import confirm
-    pid=_project(client,pm_headers);base=f'/api/projects/{pid}/procurements'
-    item=client.post(base,headers=pm_headers,json={'name':'电源','extra':{'quantity':1,'spec':'220V'}}).json()
-    assert confirm(client,pm_headers,pid).status_code==200
-    changed=client.put(base+'/'+item['id'],headers=pm_headers,json={'extra':{'spec':'380V'}})
-    assert changed.status_code==200 and changed.json()['extra']['spec']=='380V'
-    assert client.get(base,headers=pm_headers).json()['summary']['dispatch_readiness']['entry_confirmed']
-
 
 def test_preparation_owner_can_be_set_cleared_and_validated(client, pm_headers, worker_headers):
     pid = _project(client, pm_headers)
@@ -279,19 +195,3 @@ def test_inline_fields_keep_other_data_and_arrival_does_not_claim_readiness(clie
     assert cleared['owner_id'] is None and cleared['note'] == '保留验收要求'
     assert cleared['extra']['order_status'] == '已到货' and cleared['extra']['spec'] == 'A型'
 
-
-def test_legacy_future_procurement_completion_stays_visible_without_becoming_document_evidence(client, pm_headers):
-    from datetime import date,timedelta
-    from app.db import SessionLocal
-    from app.models import ProjectPreparationItem
-    from tests.test_dispatch_review_t29 import preview, confirm
-    pid=_project(client,pm_headers);base=f'/api/projects/{pid}/procurements'
-    original=client.get(base,headers=pm_headers).json();today=date.fromisoformat(original['summary']['today']);item=original['items'][0]
-    with SessionLocal() as db:
-        for row in db.query(ProjectPreparationItem).filter_by(project_id=pid):row.status='passed';row.actual_date=today
-        db.get(ProjectPreparationItem,item['id']).actual_date=today+timedelta(days=1);db.commit()
-    after=client.get(base,headers=pm_headers).json()
-    assert after['summary']['done']==after['summary']['total']-1
-    assert all(row.get('id')!=item['id'] for row in preview(client,pm_headers,pid)['entry_unmet'])
-    assert confirm(client,pm_headers,pid,conclusion='ready').status_code==400
-    assert next(row for row in after['items'] if row['id']==item['id'])['actual_date']==(today+timedelta(days=1)).isoformat()

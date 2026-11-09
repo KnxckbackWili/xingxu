@@ -1,9 +1,9 @@
 """Direct owner transfer; security identity and membership change in one transaction."""
 from fastapi import HTTPException
 from sqlalchemy import select
-from app.models import User,Project,ProjectDocumentDefinition
+from app.models import User,ProjectDocumentDefinition
 from app.services.scope import ensure_project_visible
-from app.services.permissions import authorize_project,C_UPDATE,C_MEMBERS
+from app.services.permissions import authorize_project,C_UPDATE
 from app.services.system_permissions import has_permission
 from app.services.record_lock import lock_record
 from app.services.optimistic import bump_version
@@ -13,9 +13,7 @@ from app.services import project_documents as docs
 
 
 def _authority(project,user):
-    if user.role in ('external','readonly') or (user.role!='admin' and user.id!=project.manager):
-        raise HTTPException(403,'仅当前项目负责人或系统管理员可直接更换负责人')
-    authorize_project(user,project,C_UPDATE);authorize_project(user,project,C_MEMBERS)
+    authorize_project(user,project,C_UPDATE)
     from app.services.project_lifecycle import ensure_project_writable
     ensure_project_writable(project)
 
@@ -41,8 +39,7 @@ def authorize(db,project_id,user,*,lock=False,target_id=None):
 
 
 def eligible(person):
-    return bool(person and person.is_active and person.role=='pm' and
-        has_permission(person,'project.read',default=True) and has_permission(person,'project.update',default=True))
+    return bool(person and person.is_active and has_permission(person,'project.update'))
 
 
 def preview(db,project,user):
@@ -56,7 +53,7 @@ def preview(db,project,user):
                 rule.update(name='保密资料留存要求',restricted=True)
     current=db.get(User,project.manager) if project.manager else None
     result['current_manager']={'id':project.manager,'name':current.display_name if current else '未指定'}
-    result['candidates']=[{'id':person.id,'name':person.display_name} for person in db.query(User).filter(User.role=='pm',User.is_active.is_(True)).order_by(User.display_name,User.id)
+    result['candidates']=[{'id':person.id,'name':person.display_name} for person in db.query(User).filter(User.is_active.is_(True)).order_by(User.display_name,User.id)
                           if person.id!=project.manager and eligible(person)]
     return result
 
@@ -65,7 +62,7 @@ def transfer(db,project_id,user,body):
     project=authorize(db,project_id,user,lock=True,target_id=body.target_manager_id)
     if (project.version or 0)!=body.version:raise HTTPException(409,'项目已变化，请刷新负责人和离场资料预览后重试')
     target=db.get(User,body.target_manager_id,populate_existing=True)
-    if not eligible(target):raise HTTPException(400,'请选择仍启用且有项目查看与维护权限的项目经理')
+    if not eligible(target):raise HTTPException(400,'请选择仍启用的账号')
     if target.id==project.manager:raise HTTPException(400,'接收人已经是当前负责人')
     removed=transfer_departures(db,project)
     try:confirm_removals(db,project,removed,body.member_removal_confirmations)
@@ -80,7 +77,7 @@ def transfer(db,project_id,user,body):
     member_events(db,project,removed,user.id)
     log_change(db,project.id,'project',project.id,'transfer',user.id,'直接更换项目负责人：'+body.reason.strip(),
         old,{'manager':target.id,'reason':body.reason.strip(),'removed_user_ids':sorted(removed)})
-    from app.routers.notifications import notify
+    from app.services.notify import notify
     notify(db,target.id,'你已成为项目「'+project.name+'」的负责人','请核对项目资料并接手后续工作',ntype='project_membership',project_id=project.id)
     old_person=db.get(User,previous) if previous else None
     if old_person and old_person.is_active and old_person.id!=user.id:

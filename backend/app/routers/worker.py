@@ -1,18 +1,15 @@
 """Account-bound offline dispatch."""
 
-import uuid
-from datetime import date
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional, Callable
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.services.system_permissions import route_permission_contextual, route_permission_exempt
+from app.services.system_permissions import route_permission_contextual
 from app.db import get_db, SessionLocal
 from app.deps import get_current_user
-from app.models import User, Task, OfflineOpReceipt
-from app.services.scope import ensure_project_visible
+from app.models import User, OfflineOpReceipt
 
 router = APIRouter(tags=["现场工作台"])
 
@@ -110,10 +107,8 @@ def _apply_offline_with_receipt(
         from app.services.system_permissions import has_permission
         current = op_db.get(User, user.id)
         action = {"checkitem": "worker.report", "issue": "worker.issues", "field":"worker.report"}.get(op_type)
-        if current is None or not current.is_active or (action and not has_permission(current, action, default=True)):
+        if current is None or not current.is_active or (action and not has_permission(current, action)):
             raise HTTPException(403, "该离线操作权限已被系统管理员撤销")
-        # Do not let an already-authorized batch retain an old policy snapshot.
-        user.permission_overrides = dict(current.permission_overrides or {})
         from app.services.two_factor import required
         if (current.token_version or 0)!=(user.token_version or 0) or (required(current) and (not required(user) or not current.mfa_enabled)):
             raise HTTPException(401,'账号验证已变化，请重新登录后核对原离线操作')

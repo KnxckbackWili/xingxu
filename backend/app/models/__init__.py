@@ -25,7 +25,7 @@ class User(Base):
     username = Column(String(50), unique=True, nullable=False, index=True)
     password_hash = Column(String(128), nullable=False)
     display_name = Column(String(100), nullable=False)
-    role = Column(String(20), nullable=False, default="worker")
+    role = Column(String(20), nullable=False, default="employee")  # admin 系统管理员 / employee 员工
     # 角色: admin/director/lead/pm/technician/worker/intern
     phone = Column(String(20), default="")
     email = Column(String(100), default="")
@@ -34,8 +34,6 @@ class User(Base):
     mfa_enabled = Column(Boolean, nullable=False, default=False, server_default=false())
     mfa_secret_encrypted = Column(Text, nullable=True)
     mfa_last_step = Column(BigInteger, nullable=False, default=-1, server_default="-1")
-    permission_overrides = Column(JSON, default=dict)  # 空对象继承角色；显式 false 优先
-    permission_version = Column(Integer, nullable=False, default=0, server_default="0")
     created_at = Column(DateTime, default=utcnow)
 
 
@@ -60,38 +58,6 @@ class MfaRecoveryCode(Base):
     used_at = Column(DateTime, nullable=True)
 
 
-# ===== AI 内部开放接口 Token =====
-
-class AiApiToken(Base):
-    __tablename__ = "ai_api_tokens"
-
-    id = Column(String(36), primary_key=True, default=gen_uuid)
-    name = Column(String(100), nullable=False)
-    token_hash = Column(String(128), unique=True, nullable=False, index=True)
-    token_prefix = Column(String(16), default="")
-    auth_version = Column(Integer, nullable=True)
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
-    scopes = Column(JSON, default=list)  # ["projects:read", "tasks:read", ...]
-    expires_at = Column(DateTime, nullable=True)
-    is_active = Column(Boolean, default=True)
-    last_used_at = Column(DateTime, nullable=True)
-    created_by = Column(String(36), nullable=True)
-    created_at = Column(DateTime, default=utcnow)
-
-
-# ===== AI 用量预算台账（月度请求/token 计数，按自然月滚动） =====
-
-class AiUsageLedger(Base):
-    __tablename__ = "ai_usage_ledger"
-    __table_args__ = (UniqueConstraint("month", name="uq_ai_usage_month"),)
-
-    id = Column(String(36), primary_key=True, default=gen_uuid)
-    month = Column(String(7), nullable=False, index=True)  # "YYYY-MM"
-    requests = Column(Integer, default=0)
-    tokens = Column(Integer, default=0)
-    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
-
-# ===== OrgGroup (组织：大组 → 小组) =====
 
 # ===== Project =====
 
@@ -104,7 +70,6 @@ class Project(Base):
     abbreviation = Column(String(50), default="")
     contract_no = Column(String(100), default="")  # 项目合同号（生命周期表等公司表单使用）
     manager = Column(String(100), default="")  # PM user_id
-    technical_manager = Column(String(36), nullable=True)  # 技术负责人（技术经理或技术工程师）
     client = Column(String(200), default="")
     location = Column(String(200), default="")
     timezone = Column(String(64), default="Asia/Shanghai")  # 项目现场时区（俄/越等海外现场按当地日历取"今天"）
@@ -116,17 +81,10 @@ class Project(Base):
     rest_mode = Column(String(10), default="none")  # none=不休息 one=休周日 two=休周六日
     rest_days = Column(JSON, default=list)  # 手动补充休息日 ["2026-10-01", ...]
     skip_holidays = Column(Boolean, default=False)  # 是否跳过法定节假日（默认不跳过，现场赶工照常排）
-    schedule_version = Column(Integer, default=0)  # 日程下达版本号（每次 confirm +1）
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     template_id = Column(String(36), nullable=True)  # 生成来源模板（P3：记录使用情况）
     template_version = Column(Integer, default=0)  # 生成时的模板版本
     dispatch_platform = Column(String(20), nullable=True)  # NDC / GRACE / integrated
-    readiness_state = Column(String(20), default="preparing")
-    # preparing 准备中 / risky 有风险 / pending_confirm 待确认 / ready 已就绪（独立准备状态，不干扰项目状态）
-    prep_conditions = Column(JSON, default=list)  # 创建时的准备清单条件选项（need_wms 等）
-    prep_confirmed_by = Column(String(36), nullable=True)  # 确认进场人
-    prep_confirmed_at = Column(DateTime, nullable=True)
-    prep_conclusion = Column(Text, default="")  # 确认结论/遗留项/风险说明
     client_contacts = Column(JSON, default=list)  # 甲方组织与联系人 [{department, team, name, ...}]
     entry_plan = Column(JSON, default=dict)  # 入场交接安排 {mode, entry_date, meeting_point, ...}
     suspension = Column(JSON, default=dict)  # 突发停工上下文 {status_before, reason, suspended_by, suspended_at, resumed_by, resumed_at}
@@ -387,28 +345,6 @@ def _phase_stage_default(mapper, connection, target):
         target.stage_key = infer_phase_stage(target.name)
 
 
-# ===== Module (实施模块) =====
-
-class Module(Base):
-    __tablename__ = "modules"
-
-    id = Column(String(36), primary_key=True, default=gen_uuid)
-    project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True)
-    template_id = Column(String(36), nullable=True, index=True)
-    source_module_id = Column(String(36), nullable=True, index=True)
-    phase_id = Column(String(36), ForeignKey("phases.id", ondelete="SET NULL"), nullable=True)
-    name = Column(String(200), nullable=False)
-    category = Column(String(20), default="core")  # core / extra
-    is_selected = Column(Boolean, default=True)
-    sort_order = Column(Integer, default=0)
-    description = Column(Text, default="")
-    preparation_conditions = Column(JSON, default=list)  # 选用实施模块时带入的准备事项组
-    applies_to_all_vehicles = Column(Boolean, default=True)
-
-    phase = relationship("Phase", backref=backref("modules", passive_deletes=True, cascade="all, delete-orphan"))
-    project = relationship("Project", backref=backref("modules", passive_deletes=True, cascade="all, delete-orphan"))
-
-
 # ===== Task =====
 
 class Task(Base):
@@ -417,10 +353,8 @@ class Task(Base):
     id = Column(String(36), primary_key=True, default=gen_uuid)
     project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True)
     template_id = Column(String(36), nullable=True, index=True)
-    module_id = Column(String(36), ForeignKey("modules.id", ondelete="CASCADE"), nullable=True, index=True)
     phase_id = Column(String(36), ForeignKey("phases.id", ondelete="SET NULL"), nullable=True, index=True)
     group_label = Column(String(200), nullable=True, default="")
-    scope_conditions = Column(JSON, nullable=True, default=list)
     name = Column(String(200), nullable=False)
     description = Column(Text, default="")
     quantity_type = Column(String(20), nullable=False, default="per_vehicle")
@@ -442,7 +376,6 @@ class Task(Base):
     manual_completed_reason = Column(Text, default="")
     manual_check_overrides = Column(JSON, default=list)
 
-    module = relationship("Module", backref=backref("tasks", passive_deletes=True, cascade="all, delete-orphan"))
     project = relationship("Project", backref=backref("tasks", passive_deletes=True, cascade="all, delete-orphan"))
 
 
@@ -509,7 +442,6 @@ class WeeklyPlanCell(Base):
     week_start = Column(Date, nullable=False, index=True)
     mode = Column(String(20), nullable=False, default="in_progress")
     target_count = Column(Integer, nullable=True)
-    intent_review_required = Column(Boolean, nullable=False, default=False)
     published = Column(Boolean, nullable=False, default=False)
     published_at = Column(DateTime, nullable=True)
     published_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
@@ -697,8 +629,6 @@ class DocumentRequirement(Base):
     timing_weekday = Column(Integer, nullable=True)
     trigger_type = Column(String(20), nullable=True)
     confidential_default = Column(Boolean, nullable=False, default=False)
-    external_visible_default = Column(Boolean, nullable=False, default=False)
-    external_never_visible = Column(Boolean, nullable=False, default=False)
     blank_file_id = Column(String(36), ForeignKey("document_template_files.id", ondelete="SET NULL"), nullable=True)
     sort_order = Column(Integer, nullable=False, default=0)
     note = Column(Text, default="")
@@ -830,12 +760,9 @@ class ProjectPreparationItem(Base):
 
     id = Column(String(36), primary_key=True, default=gen_uuid)
     project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
-    category = Column(String(20), nullable=False, default="scope")
-    # scope=范围与资料 / procurement=项目采购 / vehicle=车辆 / software=软件 / site=进场条件
+    category = Column(String(20), nullable=False, default="procurement")  # 只有 procurement 项目采购
     name = Column(String(200), nullable=False)
-    task_id = Column(String(36), nullable=True)  # 关联流程任务（模板「进场准备」阶段任务自动成为准备项）
     is_required = Column(Boolean, default=True)  # 必需项
-    blocks_entry = Column(Boolean, default=False)  # 阻塞进场
     status = Column(String(20), default="not_started")
     # not_started / in_progress / pending / passed / failed / na
     owner_id = Column(String(36), nullable=True)  # 内部跟进人（系统用户）
@@ -844,52 +771,15 @@ class ProjectPreparationItem(Base):
     required_date = Column(Date, nullable=True)  # 项目要求日期（最晚需要）
     committed_date = Column(Date, nullable=True)  # 责任方承诺日期
     forecast_date = Column(Date, nullable=True)  # 当前预计日期（最新情况）
-    planned_date = Column(Date, nullable=True)  # 兼容旧数据（= 要求日期）
     actual_date = Column(Date, nullable=True)  # 实际完成日期
     risk = Column(String(10), default="low")  # low/medium/high
-    affected_phase_id = Column(String(36), nullable=True)  # 影响阶段
-    affected_task_id = Column(String(36), nullable=True)  # 影响任务
     completed_by = Column(String(36), nullable=True)
     completed_at = Column(DateTime, nullable=True)
     note = Column(Text, default="")
-    extra = Column(JSON, default=dict)  # 分类专属：采购数量/车辆节点/软件版本/进场证据等
+    extra = Column(JSON, default=dict)  # 采购数量、单位、规格、下单状态和来源
     sort_order = Column(Integer, default=0)
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
-
-
-# ===== ProjectReadinessReview (进场准备评审) =====
-
-class ProjectReadinessReview(Base):
-    __tablename__ = "project_readiness_reviews"
-
-    id = Column(String(36), primary_key=True, default=gen_uuid)
-    project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
-    conclusion = Column(String(20), nullable=False)
-    # not_ready 暂不进场 / risky 有风险进场 / ready 确认具备进场条件
-    reviewer_id = Column(String(36), nullable=True)
-    reviewed_at = Column(DateTime, default=utcnow)
-    notes = Column(Text, default="")  # 结论说明（有风险进场：允许原因/未完成处理/跟踪人/预计解决日期）
-    remaining_risks = Column(JSON, default=list)  # [{item, owner, due, plan}]
-    snapshot = Column(JSON, default=list)  # 评审时全部准备项快照 [{name, status, required_date, forecast_date, blocks_entry}]
-
-
-# ===== TemplatePreparationItem (模板准备项：项目准备清单的模板定义) =====
-
-class TemplatePreparationItem(Base):
-    __tablename__ = "template_preparation_items"
-
-    id = Column(String(36), primary_key=True, default=gen_uuid)
-    template_id = Column(String(36), nullable=True)  # NULL = 系统默认模板
-    name = Column(String(200), nullable=False)
-    category = Column(String(20), default="scope")
-    is_required = Column(Boolean, default=True)
-    blocks_entry = Column(Boolean, default=False)
-    owner_party = Column(String(20), default="project")
-    risk = Column(String(10), default="low")
-    condition = Column(String(20), default="default")
-    # default 始终生成 / need_wms / need_charging / client_server / new_vehicles / overseas 按项目选项生成
-    sort_order = Column(Integer, default=0)
 
 
 # ===== TemplateDoc (模板任务参考文档：任务执行要参考的资料，与提交文件相反) =====
@@ -1032,7 +922,6 @@ class HolidayCalendar(Base):
     version = Column(Integer, nullable=False, default=1)
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
-from app.models.external_shares import ExternalShare, ExternalAccessLog  # noqa: E402,F401
 
 
 class FieldOperation(Base):
@@ -1048,7 +937,6 @@ class FieldOperation(Base):
     weekly_cell_id = Column(String(36),nullable=True)
     target_label = Column(String(400),nullable=False,default='')
     actor_id = Column(String(36),ForeignKey('users.id',ondelete='SET NULL'),nullable=True,index=True)
-    assisted_user_id = Column(String(36),ForeignKey('users.id',ondelete='SET NULL'),nullable=True)
     completion_date = Column(Date,nullable=False)
     recorded_at = Column(DateTime,nullable=False,default=utcnow)
     is_done = Column(Boolean,nullable=False)

@@ -17,7 +17,7 @@ it('edits description and group without target/module writes and retains a real 
   const p = props(); render(<WorkItemEditor {...p} item={work({ kind: 'vehicle', vehicle_step_key: 'arrival' })} />)
   fireEvent.change(screen.getByLabelText('工作说明'), { target: { value: '修订说明' } }); fireEvent.click(screen.getByRole('button', { name: '保存工作项' }))
   await waitFor(() => expect(p.onSaved).toHaveBeenCalledOnce())
-  expect(put).toHaveBeenCalledWith('/projects/p/work-items/w1', { name: '现场验证', description: '修订说明', phase_id: 'ph1', group_label: '原模块标签', vehicle_step_key: 'arrival', version: 7 })
+  expect(put).toHaveBeenCalledWith('/projects/p/work-items/w1', { name: '现场验证', description: '修订说明', phase_id: 'ph1', group_label: '现场分组', vehicle_step_key: 'arrival', version: 7 })
   expect(screen.queryByRole('spinbutton')).toBeNull()
 })
 it('keeps the draft on rejection and when edit authority is revoked', async () => {
@@ -28,5 +28,5 @@ it('keeps the draft on rejection and when edit authority is revoked', async () =
 })
 it('creates a non-vehicle work item without a module or quantity and with check definitions only', async () => {
   const p = props(); render(<WorkItemEditor {...p} />); fireEvent.change(screen.getByLabelText('工作项名称'), { target: { value: '现场清点' } }); fireEvent.click(screen.getByRole('button', { name: '保存工作项' }))
-  await waitFor(() => expect(post).toHaveBeenCalledOnce()); expect(post.mock.calls[0][1]).toEqual({ phase_id: 'ph1', name: '现场清点', kind: 'other', description: '', group_label: '', vehicle_step_key: null, applicable_vehicle_types: [], scope_conditions: [], checks: [] })
+  await waitFor(() => expect(post).toHaveBeenCalledOnce()); expect(post.mock.calls[0][1]).toEqual({ phase_id: 'ph1', name: '现场清点', kind: 'other', description: '', group_label: '', vehicle_step_key: null, applicable_vehicle_types: [], checks: [] })
 })

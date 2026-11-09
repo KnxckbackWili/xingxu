@@ -64,7 +64,7 @@ export default function TaskPlanPage({ projectId, focusTaskId, onWorkChanged, de
     return () => { active = false; generation.current++; scopeSequence.current++; workspaceSequence.current++; current.current = Symbol('closed') }
   }, [identity])
   useEffect(() => { if (focusTaskId) setDetailId(focusTaskId) }, [focusTaskId])
-  const canPlan = !!data?.permissions.plan && user?.role !== 'readonly' && user?.permission_overrides?.['project.manage_plan'] !== false
+  const canPlan = !!data?.permissions.plan
   const canRecord = !!data?.permissions.record && hasSystemPermission(user, 'worker.report')
   const work = data?.phases.flatMap(p => p.work_items) || []
   const detail = work.find(w => w.id === detailId)

@@ -191,18 +191,14 @@ def test_new_version_follows_an_undated_legacy_original_on_both_databases(client
 def test_confidential_reminder_respects_visibility_and_owner_failure_is_visible(client,admin_headers):
     pid=create(client,admin_headers)['id'];did=view(client,admin_headers,pid)['documents'][0]['id']
     with SessionLocal() as db:
-        project=db.get(Project,pid);project.status='preparing';project.technical_manager='user-worker-001'
+        project=db.get(Project,pid);project.status='preparing'
         row=db.get(ProjectDocument,did);row.confidential=True;row.due_at=datetime(2026,11,1)
         remind_project(db,project,datetime(2026,10,31,12));db.commit()
         recipients={item.user_id for item in db.query(Notification).filter_by(entity_id=did,ntype='document_deadline')}
         assert recipients=={project.manager}
         from app.services.document_deadlines import owner_details,_users
         effective=owner_details(project,row,_users(db,project,[row]))
-        assert effective['effective_owner_id']==project.manager
-        assert '保密' in effective['owner_warning']
-        db.get(User,'user-worker-001').is_active=False;db.commit()
-    item=next(row for row in view(client,admin_headers,pid)['documents'] if row['id']==did)
-    assert item['effective_owner_id']=='user-admin-001' and item['owner_warning']
+        assert effective['effective_owner_id']==project.manager and not effective['owner_warning']
 
 
 def test_two_scheduler_transactions_cannot_duplicate_reminder_receipts(client,admin_headers):
@@ -222,20 +218,6 @@ def test_two_scheduler_transactions_cannot_duplicate_reminder_receipts(client,ad
     with SessionLocal() as db:
         assert db.query(DocumentNoticeReceipt).filter_by(project_document_id=did).count()==1
         assert db.query(Notification).filter_by(entity_id=did,ntype='document_deadline').count()==1
-
-
-def test_unassigned_reminder_never_bypasses_explicit_read_denial(client,admin_headers):
-    pid=create(client,admin_headers)['id'];did=view(client,admin_headers,pid)['documents'][0]['id']
-    with SessionLocal() as db:
-        project=db.get(Project,pid);project.status='preparing';project.manager=None;project.technical_manager=None
-        row=db.get(ProjectDocument,did);row.owner_id=None;row.due_at=datetime(2026,11,1)
-        db.get(User,'user-admin-001').permission_overrides={'project.read':False}
-        db.flush()
-        assert remind_project(db,project,datetime(2026,10,31,12))=={'notified':0,'owner_missing':1}
-        db.commit()
-        assert db.query(Notification).filter_by(entity_id=did,ntype='document_deadline').count()==0
-        receipt=db.query(DocumentNoticeReceipt).filter_by(project_document_id=did).one()
-        assert receipt.recipient_id is None and receipt.kind=='owner_missing'
 
 
 def test_missing_report_manager_warns_once_and_retries_after_assignment(client,admin_headers):

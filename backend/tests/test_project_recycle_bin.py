@@ -9,7 +9,7 @@ from contextlib import nullcontext
 
 import pytest
 from app.db import SessionLocal
-from app.models import Project, User, ProjectDeletionRecord, Attachment, Task, Module, Phase, ChangeLog
+from app.models import Project, User, ProjectDeletionRecord, Attachment, Task, Phase, ChangeLog
 from app.time_utils import utcnow
 
 

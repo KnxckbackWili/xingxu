@@ -1,19 +1,15 @@
 """Template-level document definitions and immutable blank forms."""
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.config import MAX_UPLOAD_SIZE
 from app.db import get_db
-from app.deps import get_current_user, require_admin
+from app.deps import get_current_user
 from app.models import DocumentTemplateFile, User
 from app.services import document_requirements as docs
-from app.services.change_log import log_change
 from app.services.system_permissions import route_permission
-from app.services.upload_safety import read_upload_limited
 
 router = APIRouter(prefix="/templates", tags=["资料要求模板"])
 

@@ -112,7 +112,7 @@ def test_fleet_expansion_invalidates_derived_actual_without_changing_project_sta
     assert client.get(f'/api/projects/{pid}', headers=pm_headers).json()['status'] == 'preparing'
 
 
-def test_batch_does_not_write_foreign_vehicle_and_member_cannot_change_events(client, pm_headers, worker_headers):
+def test_batch_does_not_write_foreign_vehicle(client, pm_headers, worker_headers):
     p, vid = fleet(client, pm_headers, quantity=1); pid = p['id']
     own = unit(client, pm_headers, pid, vid, 'AGV-1')
     other = project(client, pm_headers)
@@ -121,10 +121,6 @@ def test_batch_does_not_write_foreign_vehicle_and_member_cannot_change_events(cl
                    json=versioned(pid, {'unit_ids': [own, foreign], 'arrived_at': '2026-10-01'}))
     assert r.status_code == 404
     assert client.get(f'/api/projects/{pid}/vehicle-units', headers=pm_headers).json()[0]['arrived_at'] is None
-    assert client.put(f'/api/projects/{pid}/events/ship', headers=worker_headers,
-                      json=versioned(pid, {'actual_at': '2026-10-01T10:30:00Z'})).status_code == 403
-    assert client.put(f'/api/projects/{pid}/vehicle-arrivals', headers=worker_headers,
-                      json=versioned(pid, {'unit_ids': [own], 'arrived_at': '2026-10-01'})).status_code == 403
     for payload in ({'entry_plan': {'entry_date': '2026-10-01'}},):
         assert client.put(f'/api/projects/{pid}', headers=pm_headers, json=versioned(pid, payload)).status_code == 422
 

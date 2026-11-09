@@ -13,7 +13,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import HTTPException
-from sqlalchemy.orm import Session, object_session
+from sqlalchemy.orm import object_session
 from sqlalchemy import or_
 
 from app.config import UPLOAD_DIR, MAX_UPLOAD_SIZE
@@ -25,12 +25,12 @@ from app.services.system_permissions import has_permission
 from app.services.record_lock import lock_writable_project
 from app.services.scope import ensure_project_visible
 from app.services.optimistic import bump_version
-from app.services.document_requirements import RequirementInput, track_new_file, read_asset
+from app.services.document_requirements import track_new_file, read_asset
 from app.time_utils import utcnow
 
 RULE_FIELDS = ('stage_key','code','name','template_no','required','scope','platform','timing_type','timing_event',
     'timing_offset_hours','timing_weekday','trigger_type','blank_file_id','sort_order','note','source_metadata')
-DEFAULT_FIELDS = ('confidential_default','external_visible_default','external_never_visible')
+DEFAULT_FIELDS = ('confidential_default',)
 DEFERRED_TYPES = {'weekly','on_trigger'}
 IDENTITY_FIELDS = ('scope','platform','timing_type','timing_event','timing_weekday','trigger_type')
 
@@ -44,7 +44,7 @@ def applicable(project, rule):
 
 
 def can_submit(user, project):
-    return _internal_actor(user) and has_permission(user, 'worker.deliver', default=True)
+    return _internal_actor(user) and has_permission(user, 'worker.deliver')
 
 
 def writable(db, project_id, user, capability):
@@ -58,14 +58,14 @@ def writable(db, project_id, user, capability):
     project = ensure_project_visible(db, project_id, user)
     if capability == 'worker.deliver':
         if not can_submit(user,project):
-            raise HTTPException(403,'仅有资料提交权限的项目成员可操作')
+            raise HTTPException(403,'当前账号没有提交资料的权限')
     else:
         authorize_project(user,project,capability)
     return project
 
 
 def _internal_actor(user):
-    return user is not None and getattr(user, 'is_active', True) is not False and user.role != 'external'
+    return user is not None and getattr(user, 'is_active', True) is not False
 
 
 def _active_actor(user):
@@ -80,14 +80,12 @@ def _in_confidential_scope(user, project, row):
 def can_read_document(user, project, document):
     if document.project_id!=project.id:return False
     if not _active_actor(user):return False
-    if user.role=='external':return not document.confidential and not document.external_never_visible
     return not document.confidential or _in_confidential_scope(user, project, document)
 
 
 def can_read_definition(user, project, definition):
     if definition.project_id!=project.id:return False
     if not _active_actor(user):return False
-    if user.role=='external':return not definition.confidential_default and not definition.external_never_visible
     return not definition.confidential_default or _in_confidential_scope(user, project, definition)
 
 
@@ -112,8 +110,6 @@ def can_read_file(user, project, asset, *, _references=None):
     references = _file_documents(asset) if _references is None else _references
     private = [row for row in references if row.confidential]
     explicit = asset.confidential_explicit or (asset.confidential and not private)
-    if user.role=='external' and (explicit or private or asset.confidential or any(row.external_never_visible for row in references)):
-        return False
     if explicit and not _in_confidential_scope(user, project, asset):
         return False
     db = object_session(asset)
@@ -202,7 +198,7 @@ def audit_access(db, project, user, *, documents=(), definitions=(), files=(), a
 def confidentiality_members(db, project):
     from app.services.scope import visible_project_ids
     return [row for row in db.query(User).filter_by(is_active=True).order_by(User.display_name, User.id)
-            if row.role != 'external' and project.id in visible_project_ids(db, row)]
+            if project.id in visible_project_ids(db, row)]
 
 
 def _validate_confidential_scope(db, project, user, user_ids):
@@ -273,10 +269,6 @@ def change_confidentiality(db, project, user, row, *, confidential, user_ids, ex
     for target in targets or [row]:
         setattr(target, 'confidential_default' if isinstance(target, ProjectDocumentDefinition) else 'confidential', confidential)
         target.confidential_user_ids = sorted(set(user_ids)-{project.manager}) if confidential else []
-        if confidential:
-            if isinstance(target, ProjectDocumentDefinition):target.external_visible_default = False
-            elif isinstance(target, ProjectDocument):target.external_visible = False
-            if not isinstance(target, Attachment):target.external_never_visible = True
     if isinstance(row, Attachment):row.confidential_explicit = confidential
     db.flush()
     affected = ([row] if isinstance(row, Attachment) else db.query(Attachment).join(
@@ -332,8 +324,7 @@ def instantiate(db, project, definition, *, vehicle=None, period_key=None, trigg
         instance_key=key,vehicle_unit_id=vehicle.id if vehicle else None,vehicle_label=vehicle.asset_code if vehicle else '',
         period_key=period_key,trigger_ref=trigger_ref,triggered_at=triggered_at.astimezone(timezone.utc).replace(tzinfo=None) if triggered_at and triggered_at.tzinfo else triggered_at,confidential=definition.confidential_default,
         confidential_user_ids=deepcopy(definition.confidential_user_ids or []),
-        external_visible=definition.external_visible_default and not definition.confidential_default and not definition.external_never_visible,
-        external_never_visible=definition.external_never_visible, **{key:deepcopy(getattr(definition,key)) for key in RULE_FIELDS})
+        **{key:deepcopy(getattr(definition,key)) for key in RULE_FIELDS})
     db.add(row);db.flush()
     return row
 
@@ -489,8 +480,6 @@ def save_definition(db, project, body, user, definition_id=None):
             for key in RULE_FIELDS:
                 if key not in {'source_metadata','blank_file_id'}:setattr(document,key,deepcopy(getattr(row,key)))
             document.confidential=row.confidential_default
-            document.external_never_visible=row.external_never_visible
-            document.external_visible=row.external_visible_default and not row.confidential_default and not row.external_never_visible
             bump_version(document,None,db=db)
     materialize_static(db,project,actor_id=user.id)
     log_change(db,project.id,'project_document_definition',row.id,'update' if before else 'create',user.id,
@@ -553,7 +542,7 @@ def submit(db, project, document_ids, attachment_id, user, note=''):
         log_change(db,project.id,'project_document',document.id,'submit',user.id,f'提交资料：{document.code} {document.name}',before,
             {'status':'submitted','version_id':version.id,'attachment_id':asset.id,'sha256':asset.sha256})
     if project.manager and project.manager!=user.id:
-        from app.routers.notifications import notify
+        from app.services.notify import notify
         for document in documents:
             notify(db,project.manager,f'资料已提交：{document.name}'[:200],f'{user.display_name}提交了新版本',ntype='document_submitted',project_id=project.id,entity_id=document.id)
     return documents

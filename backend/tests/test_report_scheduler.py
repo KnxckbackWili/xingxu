@@ -148,7 +148,7 @@ def test_scheduler_skips_missing_pm(client, pm_headers, admin_headers):
     # 建一个临时负责人，指定后再停用（模拟负责人离职/账号停用；坏 ID 已被 C1-2 校验拦截）
     r = client.post("/api/users", headers=admin_headers, json={
         "username": "temp_pm", "password": "pw123456",
-        "display_name": "临时负责人", "role": "pm",
+        "display_name": "临时负责人", "role": "employee",
     })
     assert r.status_code == 200, r.text
     tmp_id = r.json()["id"]

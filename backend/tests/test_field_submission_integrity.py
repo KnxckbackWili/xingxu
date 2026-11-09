@@ -21,40 +21,6 @@ def test_document_submission_preserves_requirement_snapshots_and_other_rows(clie
     assert len(uploaded['versions']) == 1
 
 
-def test_worker_submits_next_document_without_mutating_prior_review(client, worker_headers, pm_headers):
-    from tests.document_helpers import requirement, documents, upload_documents
-    pid, _, _ = _execution(client)
-    first = requirement(client, pm_headers, pid, name='第一单', code='6.99')
-    second = requirement(client, pm_headers, pid, name='第二单', code='6.98')
-    prior = upload_documents(client, worker_headers, pid, [first['id']])['documents'][0]
-    version = prior['versions'][0]
-    review = client.post(f'/api/projects/{pid}/documents/{first["id"]}/versions/{version["id"]}/review', headers=pm_headers, json={'decision': 'approved'})
-    assert review.status_code == 200, review.text
-    upload_documents(client, worker_headers, pid, [second['id']])
-    after = {row['id']: row for row in documents(client, pm_headers, pid)['documents']}
-    assert after[first['id']]['versions'][0] == review.json()
-    assert after[second['id']]['status'] == 'submitted'
-
-
-def test_replacement_file_creates_unreviewed_version_and_preserves_approved_original(client, worker_headers, pm_headers):
-    from tests.document_helpers import requirement, documents, upload_documents
-    pid, _, _ = _execution(client)
-    row = requirement(client, pm_headers, pid)
-    first = upload_documents(client, worker_headers, pid, [row['id']], content=b'first')['documents'][0]
-    version = first['versions'][0]
-    reviewed = client.post(f'/api/projects/{pid}/documents/{row["id"]}/versions/{version["id"]}/review', headers=pm_headers, json={'decision': 'approved'})
-    assert reviewed.status_code == 200, reviewed.text
-    next_file = upload_documents(client, worker_headers, pid, content=b'next')['file']
-    result = client.post(f'/api/projects/{pid}/documents/submit', headers=worker_headers, json={'document_ids': [row['id']], 'attachment_id': next_file['id']})
-    assert result.status_code == 200, result.text
-    current = next(value for value in documents(client, pm_headers, pid)['documents'] if value['id'] == row['id'])
-    assert len(current['versions']) == 2
-    kept = next(value for value in current['versions'] if value['id'] == version['id'])
-    assert kept == reviewed.json()
-    assert not current['latest_version']['review_metadata']
-    assert client.get('/api' + kept['download_url'], headers=pm_headers).content == b'first'
-
-
 @pytest.mark.parametrize('target', ['missing', 'another-project'])
 def test_document_attachment_must_belong_to_project(client, worker_headers, pm_headers, target):
     from tests.document_helpers import requirement, upload_documents

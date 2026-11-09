@@ -23,7 +23,7 @@ def test_material_requirement_edit_preserves_submitted_snapshot_and_file(client,
     submitted = upload_documents(client, worker_headers, pid, [row['id']])['documents'][0]
     state = documents(client, pm_headers, pid)
     definition = next(value for value in state['definitions'] if value['id'] == row['definition_id'])
-    fields = ('stage_key', 'code', 'name', 'template_no', 'required', 'scope', 'platform', 'timing_type', 'timing_event', 'timing_offset_hours', 'timing_weekday', 'trigger_type', 'confidential_default', 'external_visible_default', 'external_never_visible', 'sort_order', 'note')
+    fields = ('stage_key', 'code', 'name', 'template_no', 'required', 'scope', 'platform', 'timing_type', 'timing_event', 'timing_offset_hours', 'timing_weekday', 'trigger_type', 'confidential_default', 'sort_order', 'note')
     body = {key: definition[key] for key in fields}
     body.update(required=False, note='选填')
     result = client.put(f'/api/projects/{pid}/documents/requirements/{definition["id"]}', headers=pm_headers, json=body)
@@ -51,7 +51,7 @@ def test_vehicle_event_attachment_must_be_current_project_evidence(client, pm_he
 
 
 @pytest.mark.parametrize('operation', ['create', 'edit'])
-@pytest.mark.parametrize('transition', ['completed', 'archived', 'revoked'])
+@pytest.mark.parametrize('transition', ['completed', 'archived'])
 def test_task_plan_rechecks_lifecycle_and_permission_after_waiting(client, pm_headers, monkeypatch, operation, transition):
     from app.models import Phase
     from app.services import record_lock
@@ -67,10 +67,7 @@ def test_task_plan_rechecks_lifecycle_and_permission_after_waiting(client, pm_he
         if isinstance(entity, Project) and entity.id == pid and not seen:
             with SessionLocal() as other:
                 project = other.get(Project, pid)
-                if transition == 'revoked':
-                    project.manager = 'user-admin-001'
-                else:
-                    project.status = transition
+                project.status = transition
                 other.commit()
             seen.append(True)
         return original(db, entity, **kwargs)
@@ -81,7 +78,7 @@ def test_task_plan_rechecks_lifecycle_and_permission_after_waiting(client, pm_he
     else:
         result = client.put(f'/api/projects/{pid}/work-items/{tid}', headers=pm_headers, json={'version': 0, 'name': '迟到改名'})
     assert seen == [True]
-    assert result.status_code in ((403, 404) if transition == 'revoked' else (400,)), result.text
+    assert result.status_code == 400, result.text
     with SessionLocal() as db:
         assert db.get(Task, tid).name == '调试'
         assert db.query(Task).filter_by(project_id=pid).count() == 1

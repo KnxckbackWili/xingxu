@@ -43,12 +43,6 @@ def test_overview_stats(client, pm_headers):
     assert p["critical_issues"] == 1
 
 
-def test_field_worker_has_no_management_workbench(client, pm_headers, worker_headers):
-    _project_with_data(client, pm_headers)  # no members
-    r = client.get("/api/dashboard/overview", headers=worker_headers)
-    assert r.status_code == 403, r.text
-
-
 def test_scoped_issues_preserve_creation_time_and_date_trend(client, pm_headers):
     pid = _project_with_data(client, pm_headers)
     issue = client.get(f"/api/projects/{pid}/issues", headers=pm_headers).json()[0]

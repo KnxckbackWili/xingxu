@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Alert, DatePicker, Form, Input, Modal, Select, Typography } from 'antd'
+import { Alert, DatePicker, Form, Input, Modal, Typography } from 'antd'
 import dayjs from 'dayjs'
 import { fieldWeekApi, type Window } from '../api/fieldWeek'
 import { api, errMsg } from '../api/client'
@@ -7,7 +7,7 @@ import { useAuth } from '../stores/auth'
 import { enqueue, getQueue, getOfflineAccount } from '../offline/queue'
 import { ensureVerifiedAccount } from '../utils/verifiedAccount'
 
-export type FieldTarget = { project_id: string; kind: 'work' | 'vehicle' | 'check'; target_id: string; step_key?: string; version: number; is_done: boolean; weekly_cell_id?: string; name: string; window: Window; assisted?: { id: string; name: string }[]; record_id?: string; retract?: boolean; note?: string; completion_date?: string }
+export type FieldTarget = { project_id: string; kind: 'work' | 'vehicle' | 'check'; target_id: string; step_key?: string; version: number; is_done: boolean; weekly_cell_id?: string; name: string; window: Window; record_id?: string; retract?: boolean; note?: string; completion_date?: string }
 export default function FieldOperationModal({ target, onClose, onSaved }: { target: FieldTarget; onClose: () => void; onSaved: () => void }) {
   const { user } = useAuth(); const owner = useRef(user?.id); const current = useRef(user?.id); current.current = user?.id
   const [form] = Form.useForm(); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [uncertain, setUncertain] = useState(false)
@@ -19,7 +19,7 @@ export default function FieldOperationModal({ target, onClose, onSaved }: { targ
     let values
     try { values = await form.validateFields() } catch { return }
     try { ensureVerifiedAccount(owner.current) } catch (e) { setError(errMsg(e)); return }
-    const payload = exact.current || { project_id: target.project_id, kind: target.kind, target_id: target.target_id, step_key: target.step_key || '', weekly_cell_id: target.weekly_cell_id, is_done: target.is_done, version: target.version, client_uuid: uuid.current, reason: values.reason, note: values.note || '', completion_date: values.completion_date.format('YYYY-MM-DD'), ...(values.assisted_user_id ? { assisted_user_id: values.assisted_user_id } : {}) }
+    const payload = exact.current || { project_id: target.project_id, kind: target.kind, target_id: target.target_id, step_key: target.step_key || '', weekly_cell_id: target.weekly_cell_id, is_done: target.is_done, version: target.version, client_uuid: uuid.current, reason: values.reason, note: values.note || '', completion_date: values.completion_date.format('YYYY-MM-DD') }
     exact.current = payload; lock.current = true; setBusy(true); setError('')
     try {
       ensureVerifiedAccount(owner.current)
@@ -46,7 +46,6 @@ export default function FieldOperationModal({ target, onClose, onSaved }: { targ
     {error && <Alert type="error" message={error} />}
     <Form form={form} layout="vertical" disabled={busy || uncertain}>
       <Form.Item name="completion_date" label="实际完成日期" rules={[{ required: true }]}><DatePicker disabledDate={day => day.format('YYYY-MM-DD') < target.window.earliest || day.format('YYYY-MM-DD') > target.window.latest} /></Form.Item>
-      {!!target.assisted?.length && <Form.Item name="assisted_user_id" label="协助登记（必须明确被协助人）" rules={[{ required: true, message: '请选择被协助人' }]}><Select options={target.assisted.map(p => ({ value: p.id, label: p.name }))} /></Form.Item>}
       <Form.Item name="reason" label="实际情况 / 修订理由" rules={[{ required: true, whitespace: true }]}><Input.TextArea maxLength={4000} autoSize={{ minRows: 2, maxRows: 6 }} /></Form.Item>
       <Form.Item name="note" label="附注"><Input.TextArea maxLength={4000} disabled={target.retract} /></Form.Item>
     </Form>

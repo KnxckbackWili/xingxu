@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 import pytest
 from fastapi import HTTPException
 from app.db import SessionLocal
-from app.models import AcceptanceRecord, Module, Phase, Project, ProjectPreparationItem, Task, User
+from app.models import AcceptanceRecord, Phase, Project, ProjectPreparationItem, Task, User
 
 
 def _project(client, headers, status="preparing"):
@@ -29,18 +29,9 @@ def _project(client, headers, status="preparing"):
 
 def _preparation(client, headers, pid, **values):
     response = client.post(f"/api/projects/{pid}/procurements", headers=headers,
-                           json={"name": "现场必要条件", "is_required": True,
-                                 "blocks_entry": True, **values})
+                           json={"name": "现场必要条件", "is_required": True, **values})
     assert response.status_code == 200, response.text
     return response.json()["id"]
-
-
-def _review(client, headers, pid, conclusion="risky", notes="已核对当前风险，由项目负责人接收"):
-    manifest = client.post(f"/api/projects/{pid}/documents/dispatch-review", headers=headers)
-    assert manifest.status_code == 200, manifest.text
-    return client.post(f"/api/projects/{pid}/documents/dispatch-review/confirm", headers=headers,
-                       json={"conclusion": conclusion, "notes": notes,
-                             "review_token": manifest.json()["review_token"]})
 
 
 def _status(client, headers, pid, target, **values):
@@ -59,9 +50,7 @@ def _completion_fixture(client, headers, status="acceptance"):
         p = db.get(Project, pid)
         phase = Phase(project_id=pid, name="现场实施")
         db.add(phase); db.flush()
-        module = Module(project_id=pid, phase_id=phase.id, name="执行范围")
-        db.add(module); db.flush()
-        task = Task(project_id=pid, phase_id=phase.id, module_id=module.id, name="设备调试", quantity_type="fixed")
+        task = Task(project_id=pid, phase_id=phase.id, name="设备调试", quantity_type="fixed")
         db.add(task); db.flush()
         db.commit()
         tid = task.id
@@ -87,52 +76,6 @@ def _sign(client, headers, pid, conclusion="accepted", day="2026-09-30"):
     })
     assert response.status_code == 200, response.text
     return response.json()["id"]
-
-
-@pytest.mark.parametrize("legacy_flag", [None, False, True])
-def test_entry_needs_current_risk_review_not_legacy_warning_flag(client, pm_headers, legacy_flag):
-    pid = _project(client, pm_headers)
-    _preparation(client, pm_headers, pid)
-    extra = {} if legacy_flag is None else {"confirm_warnings": legacy_flag}
-    response = _status(client, pm_headers, pid, "executing", reason="任意状态备注", **extra)
-    assert response.status_code == 400, response.text
-    _assert_status(pid, "preparing")
-    assert _review(client, pm_headers, pid, notes="  ").status_code == 400
-    assert _review(client, pm_headers, pid).status_code == 200
-    assert _status(client, pm_headers, pid, "executing", **extra).status_code == 200
-
-
-@pytest.mark.parametrize("mandatory,blocking", [(True, False), (False, True)])
-def test_either_mandatory_or_blocking_prerequisite_needs_risk_decision(client, pm_headers, mandatory, blocking):
-    pid = _project(client, pm_headers)
-    _preparation(client, pm_headers, pid, is_required=mandatory, blocks_entry=blocking)
-    assert _status(client, pm_headers, pid, "executing").status_code == 400
-
-
-@pytest.mark.parametrize("origin", ["preparing", "suspended"])
-def test_every_executing_entry_path_rechecks_current_risk(client, pm_headers, origin):
-    """Entering or resuming execution rechecks the current stage-5 risk approval."""
-    from tests.test_dispatch_review_t29 import scope, confirm, requirement
-    pid, _ = scope(client, pm_headers, status="executing" if origin == "suspended" else origin)
-    assert confirm(client, pm_headers, pid).status_code == 200
-    if origin == "suspended":
-        assert _status(client, pm_headers, pid, "suspended", reason="暂停等待现场").status_code == 200
-    requirement(client, pm_headers, pid, "批准后新增的发车资料")
-    denied = _status(client, pm_headers, pid, "executing", confirm_warnings=True)
-    assert denied.status_code == 400, denied.text
-    _assert_status(pid, origin)
-    assert confirm(client, pm_headers, pid).status_code == 200
-    assert _status(client, pm_headers, pid, "executing").status_code == 200
-
-
-def test_later_not_ready_supersedes_earlier_risky_decision(client, pm_headers):
-    pid = _project(client, pm_headers)
-    _preparation(client, pm_headers, pid)
-    assert _review(client, pm_headers, pid).status_code == 200
-    assert _review(client, pm_headers, pid, conclusion="not_ready", notes="风险暂不接受").status_code == 200
-    response = _status(client, pm_headers, pid, "executing")
-    assert response.status_code == 400, response.text
-    _assert_status(pid, "preparing")
 
 
 @pytest.mark.parametrize("later", ["rejected", "conditionally_accepted"])
@@ -242,7 +185,7 @@ def test_empty_optional_material_definition_text_is_not_new_scope(client, pm_hea
     upload_documents(client, pm_headers, pid, [row['id']])
     _sign(client, pm_headers, pid)
     definition = next(value for value in documents(client, pm_headers, pid)['definitions'] if value['id'] == row['definition_id'])
-    keys = ('stage_key', 'code', 'name', 'template_no', 'required', 'scope', 'platform', 'timing_type', 'timing_event', 'timing_offset_hours', 'timing_weekday', 'trigger_type', 'confidential_default', 'external_visible_default', 'external_never_visible', 'sort_order', 'note')
+    keys = ('stage_key', 'code', 'name', 'template_no', 'required', 'scope', 'platform', 'timing_type', 'timing_event', 'timing_offset_hours', 'timing_weekday', 'trigger_type', 'confidential_default', 'sort_order', 'note')
     body = {key: definition[key] for key in keys}; body[empty_field] = ''
     changed = client.put(f'/api/projects/{pid}/documents/requirements/{definition["id"]}', headers=pm_headers, json=body)
     assert changed.status_code == 200, changed.text
@@ -280,20 +223,6 @@ def test_percentage_helpers_cannot_advance_or_regress_manual_stage(client, pm_he
             db.commit()
 
 
-@pytest.mark.parametrize("stage,target", [("executing", "preparing")])
-def test_stage_requires_authorized_human_action_not_percentage(client, pm_headers, worker_headers, stage, target):
-    pid = _project(client, pm_headers, stage)
-    worker = client.get("/api/auth/me", headers=worker_headers).json()["id"]
-    with SessionLocal() as db:
-        p = db.get(Project, pid); db.commit()
-    denied = _status(client, worker_headers, pid, target)
-    assert denied.status_code == 403, denied.text
-    _assert_status(pid, stage)
-    allowed = _status(client, pm_headers, pid, target)
-    assert allowed.status_code == 200, allowed.text
-    _assert_status(pid, target)
-
-
 @pytest.mark.parametrize("stage", ["executing", "acceptance"])
 def test_manual_completion_round_trip_preserves_stage(client, pm_headers, stage):
     pid, tid = _completion_fixture(client, pm_headers, stage)
@@ -303,18 +232,6 @@ def test_manual_completion_round_trip_preserves_stage(client, pm_headers, stage)
         response = client.put(path, headers=pm_headers, json={"version": version, "is_completed": completed, "reason": "独立业务纠错验证"})
         assert response.status_code == 200, response.text
         _assert_status(pid, stage)
-
-
-def test_generic_project_and_agent_tools_cannot_write_stage(client, pm_headers):
-    from app.services.ai_tools import ALL_TOOL_MAP
-    pid = _project(client, pm_headers, "executing")
-    from tests.lifecycle_helpers import project_version
-    response = client.put(f"/api/projects/{pid}", headers=pm_headers,
-                          json={"status": "acceptance", "description": "普通资料更新",
-                                "version": project_version(client, pm_headers, pid)})
-    assert response.status_code == 200, response.text
-    _assert_status(pid, "executing")
-    assert not {"project_status", "change_status", "advance_project_status"} & set(ALL_TOOL_MAP)
 
 
 @pytest.mark.parametrize("state", ["executing", "commissioning", "pilot", "acceptance", "completed", "archived", "suspended"])
@@ -390,18 +307,6 @@ def test_same_clock_acceptance_recordings_preserve_correction_order(client, pm_h
     assert _status(client, pm_headers, pid, "completed").status_code == 400
 
 
-def test_same_clock_review_recordings_preserve_revocation_order(client, pm_headers, monkeypatch):
-    pid = _project(client, pm_headers)
-    _preparation(client, pm_headers, pid)
-    monkeypatch.setattr("app.services.dispatch_review.utcnow", lambda: datetime(2026, 10, 1, 9, 0))
-    assert _review(client, pm_headers, pid).status_code == 200
-    assert _review(client, pm_headers, pid, "not_ready", "当前风险不可接受").status_code == 200
-    rows = client.get(f"/api/projects/{pid}/documents/dispatch-review/history", headers=pm_headers).json()
-    assert [row["conclusion"] for row in rows] == ["not_ready", "risky"]
-    assert rows[0]["reviewed_at"] > rows[1]["reviewed_at"]
-    assert _status(client, pm_headers, pid, "executing").status_code == 400
-
-
 @pytest.mark.parametrize("tz,day,expected", [
     ("Asia/Shanghai", "2026-10-02", 200),
     ("America/Los_Angeles", "2026-10-02", 400),
@@ -443,18 +348,4 @@ def test_legacy_future_record_is_visible_but_cannot_supply_current_decision(clie
     assert summary["eligible"] is (expected == 200)
     result = _status(client, pm_headers, pid, "completed")
     assert result.status_code == expected, result.text
-
-
-def test_agent_token_cannot_be_used_as_a_human_status_session(client, pm_headers, admin_headers):
-    from tests.test_agent_api import token, call
-    pid = _project(client, pm_headers, "executing")
-    _, agent_headers = token(client, admin_headers, scopes=["projects:read"])
-    assert call(client, agent_headers, "project_get", project_id=pid).json()["ok"]
-    response = _status(client, agent_headers, pid, "commissioning")
-    assert response.status_code == 401, response.text
-    denied = call(client, agent_headers, "change_set_propose", project_id=pid,
-                  title="试图绕过人工阶段决定", description="独立负向边界测试",
-                  changes={"status": "commissioning"})
-    assert denied.status_code == 404, denied.text
-    _assert_status(pid, "executing")
 

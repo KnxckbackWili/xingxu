@@ -4,7 +4,7 @@
 from datetime import date
 import pytest
 from app.db import SessionLocal
-from app.models import AcceptanceRecord, Module, Phase, Project, Task, User
+from app.models import AcceptanceRecord, Phase, Project, Task, User
 
 
 def project(client, headers, name='生命周期复核'):
@@ -21,40 +21,9 @@ def task_entry(pid, *, name='现场检查', confirmed=False, status='planned', l
     with SessionLocal() as db:
         phase = Phase(project_id=pid, name='现场实施', sort_order=1)
         db.add(phase); db.flush()
-        module = Module(project_id=pid, phase_id=phase.id, name='执行', sort_order=1)
-        db.add(module); db.flush()
         task = Task(project_id=pid, phase_id=phase.id, name=name)
         db.add(task); db.commit()
         return task.id, None, phase.id
-
-
-@pytest.mark.parametrize('field', ['affected_task_id', 'affected_phase_id'])
-@pytest.mark.parametrize('method', ['post', 'put'])
-def test_preparation_rejects_foreign_execution_reference(client, pm_headers, field, method):
-    pid, other = project(client, pm_headers), project(client, pm_headers, '外部项目')
-    tid, _, phase_id = task_entry(other)
-    path = f'/api/projects/{pid}/procurements'
-    data = {'name': '准备核查', field: tid if field == 'affected_task_id' else phase_id}
-    if method == 'put':
-        created = client.post(path, headers=pm_headers, json={'name': '准备核查'}).json()
-        path += '/' + created['id']
-    response = getattr(client, method)(path, headers=pm_headers, json=data)
-    assert response.status_code == 400, response.text
-
-
-def test_preparation_can_clear_impact_links(client, pm_headers):
-    pid = project(client, pm_headers)
-    tid, _, phase_id = task_entry(pid)
-    path = f'/api/projects/{pid}/procurements'
-    created = client.post(path, headers=pm_headers, json={
-        'name': '准备核查', 'affected_task_id': tid, 'affected_phase_id': phase_id,
-    })
-    assert created.status_code == 200, created.text
-    response = client.put(path + '/' + created.json()['id'], headers=pm_headers,
-                          json={'affected_task_id': None, 'affected_phase_id': None})
-    assert response.status_code == 200, response.text
-    assert response.json()['affected_task_id'] is None
-    assert response.json()['affected_phase_id'] is None
 
 
 @pytest.mark.parametrize('kind', ['acceptance', 'documents'])

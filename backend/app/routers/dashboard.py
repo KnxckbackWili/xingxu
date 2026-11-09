@@ -3,7 +3,7 @@
 from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
-from app.services.system_permissions import route_permission,route_permission_exempt
+from app.services.system_permissions import route_permission
 from app.db import get_db
 from app.deps import get_current_user
 from app.services.system_permissions import has_permission
@@ -125,7 +125,7 @@ def scope_issues(
                 "asset_code": unit.asset_code,
             }
         )
-    from datetime import date, timedelta
+    from datetime import timedelta
 
     today = date.today()
     as_of = today - timedelta(days=7)

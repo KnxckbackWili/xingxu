@@ -193,17 +193,6 @@ def test_password_audit_failure_restores_the_previous_configuration(client, admi
     assert codec.get_passphrase(DATA_DIR) == PASSWORD
 
 
-def test_backup_configuration_requires_permission_even_for_real_admin(client, admin_headers):
-    from app.db import SessionLocal
-    from app.models import User
-    with SessionLocal() as db:
-        actor = db.query(User).filter_by(username="admin").one()
-        actor.permission_overrides = {"system.backups.configure": False}
-        db.commit()
-    assert client.put("/api/system/backup-encryption", headers=admin_headers,
-                      json={"passphrase": PASSWORD}).status_code == 403
-
-
 def test_sqlite_web_restore_refuses_a_postgres_archive_before_changing_pending(client, admin_headers, monkeypatch, tmp_path):
     from app.config import DATA_DIR
     from app.routers import system

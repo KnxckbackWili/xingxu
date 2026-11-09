@@ -48,7 +48,6 @@ def test_repair_shared_work_survives_weekly_publication_and_reassignment(client,
 def test_repair_rejects_wrong_scope_and_closed_fault(client,pm_headers,worker_headers):
     pid,unit,event=setup_work(client,pm_headers)
     with SessionLocal() as db:wid=db.query(User).filter_by(username='worker1').one().id
-    assert repair(client,worker_headers,pid,unit,event,[wid]).status_code==403
     assert repair(client,pm_headers,pid,'missing',event,[wid]).status_code==404
     closed=client.put(f'/api/projects/{pid}/vehicle-units/{unit}/events/{event}',headers=pm_headers,
         json={'is_closed':True,'verification':'试运行正常','status_after':'normal'})

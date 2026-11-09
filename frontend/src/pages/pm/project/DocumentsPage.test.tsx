@@ -21,7 +21,7 @@ async function rowMenu(item: string | RegExp) {
 }
 
 function row(id = 'd1', patch: Partial<ProjectDocument> = {}): ProjectDocument {
-  return { id, requirement_id: null, definition_id: 'r1', stage_key: '4', code: id === 'd1' ? '4.1' : '4.2', name: `项目资料${id}`, template_no: '', required: true, scope: 'project', platform: null, timing_type: 'on_demand', timing_event: null, timing_offset_hours: null, timing_weekday: null, trigger_type: null, blank_file_id: null, sort_order: 0, note: '', source_metadata: null, vehicle_unit_id: null, vehicle_label: '', period_key: null, trigger_ref: null, due_at: null, due_is_estimated: false, status: 'pending', waived_reason: '', confidential: false, external_visible: false, external_never_visible: false, submitted_at: null, submitted_by: null, version: 7, versions: [], latest_version: null, applicable: true, ...patch }
+  return { id, requirement_id: null, definition_id: 'r1', stage_key: '4', code: id === 'd1' ? '4.1' : '4.2', name: `项目资料${id}`, template_no: '', required: true, scope: 'project', platform: null, timing_type: 'on_demand', timing_event: null, timing_offset_hours: null, timing_weekday: null, trigger_type: null, blank_file_id: null, sort_order: 0, note: '', source_metadata: null, vehicle_unit_id: null, vehicle_label: '', period_key: null, trigger_ref: null, due_at: null, due_is_estimated: false, status: 'pending', waived_reason: '', confidential: false, submitted_at: null, submitted_by: null, version: 7, versions: [], latest_version: null, applicable: true, ...patch }
 }
 const response = (documents = [row()]): ProjectDocumentsResponse => ({ documents, definitions: [], unclassified_files: [], permissions: { manage: true, submit: true }, timezone: 'Asia/Shanghai', version: 1 })
 function show(capabilities = ['project.manage_plan', 'project.update'], initialPath = '/p1') {
@@ -108,14 +108,6 @@ it('requires an explanation and current row version for waiver', async () => {
   const modal = within(screen.getByRole('dialog')); expect(modal.getByRole('button', { name: '保存理由' })).toBeDisabled()
   fireEvent.change(modal.getByLabelText('资料状态修改理由'), { target: { value: '客户合同明确不要求' } }); fireEvent.click(modal.getByRole('button', { name: '保存理由' }))
   await waitFor(() => expect(h.status).toHaveBeenCalledWith('p1', expect.objectContaining({ id: 'd1', version: 7 }), 'waived', '客户合同明确不要求'))
-})
-it('shows all versions and historical optional review while preventing self review', async () => {
-  const v = { id: 'v1', attachment_id: 'a1', filename: '已交证据.pdf', file_size: 12, sha256: null, uploaded_by: 'me', uploaded_by_name: '本人', uploaded_at: '2026-10-01T00:00:00Z', note: '第一版', review_metadata: { latest_review: { decision: 'rejected', note: '补充说明', by_name: '复核人员', at: '2026-10-02T00:00:00Z' }, review_history: [] }, download_url: '/projects/p1/documents/d1/versions/v1/download' }
-  h.list.mockResolvedValue(response([row('d1', { status: 'submitted', versions: [v], latest_version: v })]))
-  show(); fireEvent.click(await rowMenu(/版本记录 1/))
-  const drawer = within(await screen.findByRole('dialog')); await waitFor(() => expect(drawer.getByText('已退回')).toBeVisible()); expect(drawer.queryByRole('button', { name: '审核通过' })).toBeNull()
-  fireEvent.click(drawer.getByRole('button', { name: /下载此版本/ })); expect(h.download).toHaveBeenCalledWith(v.download_url, v.filename)
-  expect(screen.getByText(/已提交 1/)).toBeVisible()
 })
 it('retains platform history without making it selectable or pending for the current platform', async () => {
   h.list.mockResolvedValue(response([row('d1', { applicable: false, platform: 'NDC' })])); show()

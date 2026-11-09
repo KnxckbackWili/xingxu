@@ -4,22 +4,22 @@ import { DeleteOutlined } from '@ant-design/icons'
 import { projectApi, type Project } from '../api'
 import { errMsg } from '../api/client'
 import { useAuth } from '../stores/auth'
-import type { PermissionUser } from '../constants/systemPermissions'
+import { hasSystemPermission, type PermissionUser } from '../constants/systemPermissions'
 import './ProjectDeleteButton.css'
 import { IconAction } from './IconAction'
 
 type DeletableProject = Pick<Project, 'id' | 'name' | 'manager' | 'capabilities' | 'version' | 'can_delete'>
 export function canDeleteProject(project: DeletableProject, user: PermissionUser | null | undefined) {
-  if (!user || user.permission_overrides?.['project.delete'] === false || user.permission_overrides?.['project.read'] === false) return false
+  if (!user) return false
   if (typeof project.can_delete === 'boolean') return project.can_delete
   if (Array.isArray(project.capabilities)) return project.capabilities.includes('project.delete')
-  return user.role === 'admin' || (!!user.id && project.manager === user.id && ['pm', 'lead'].includes(user.role ?? '')) || user.permission_overrides?.['project.delete'] === true || !!user.system_permissions?.includes('project.delete')
+  return hasSystemPermission(user, 'project.delete')
 }
 
 /** One explicit confirmation; the server backs up before any soft deletion. */
 export default function ProjectDeleteButton({ project, onDeleted }: { project: DeletableProject; onDeleted: () => void }) {
   const { user } = useAuth()
-  const scopeKey = JSON.stringify([project.id, project.version, project.can_delete, project.capabilities, user?.id, user?.role, user?.permission_version, user?.permission_overrides, user?.system_permissions])
+  const scopeKey = JSON.stringify([project.id, project.version, project.can_delete, project.capabilities, user?.id, user?.role, user?.system_permissions])
   const scope = useRef({ key: scopeKey, generation: 0 })
   if (scope.current.key !== scopeKey) scope.current = { key: scopeKey, generation: scope.current.generation + 1 }
   const generation = scope.current.generation

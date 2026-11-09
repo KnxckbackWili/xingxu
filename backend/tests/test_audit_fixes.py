@@ -99,24 +99,6 @@ def _add_worker(client, pm_headers, worker_headers, pid):
 
 
 
-def test_document_review_requires_manage_plan_and_real_submitted_version(client, pm_headers, worker_headers):
-    from tests.document_helpers import documents, upload_documents
-    pid = _project(client, pm_headers, '资料版本审核门禁')
-    wid = _add_worker(client, pm_headers, worker_headers, pid)
-    row = documents(client, pm_headers, pid)['documents'][0]
-    path = f'/api/projects/{pid}/documents/{row["id"]}/versions/missing/review'
-    assert client.post(path, headers=pm_headers, json={'decision': 'approved'}).status_code == 404
-    submitted = upload_documents(client, worker_headers, pid, [row['id']])['documents'][0]
-    version = submitted['versions'][0]
-    path = f'/api/projects/{pid}/documents/{row["id"]}/versions/{version["id"]}/review'
-    assert client.post(path, headers=worker_headers, json={'decision': 'approved'}).status_code == 403
-    reviewed = client.post(path, headers=pm_headers, json={'decision': 'approved'})
-    assert reviewed.status_code == 200, reviewed.text
-    assert reviewed.json()['uploaded_by'] == wid
-    metadata = reviewed.json()['review_metadata']['latest_review']
-    assert metadata['decision'] == 'approved' and metadata['by'] == client.get('/api/auth/me', headers=pm_headers).json()['id']
-
-
 # ===== 5. 生命周期表导入写审计行（此前 log_change 后缺 db.commit 被丢弃） =====
 
 def _lifecycle_xlsx() -> bytes:
@@ -151,15 +133,3 @@ def test_lifecycle_import_writes_audit_row(client, pm_headers):
 
 
 # ===== 6. AI Token expires_at 字符串解析（此前直接赋给 DateTime 列导致 500） =====
-
-def test_ai_token_create_parses_expiry_and_rejects_invalid(client, admin_headers, pm_headers):
-    pm_id = client.get("/api/auth/me", headers=pm_headers).json()["id"]
-    r = client.post("/api/ai/internal/tokens", headers=admin_headers, json={
-        "name": "限时Token", "user_id": pm_id, "scopes": ["projects:read"],
-        "expires_at": "2026-12-31T23:59:59Z"})
-    assert r.status_code == 200, r.text
-    assert r.json()["expires_at"] is not None, "expires_at 应被解析并落库为时间"
-    r2 = client.post("/api/ai/internal/tokens", headers=admin_headers, json={
-        "name": "坏Token", "user_id": pm_id, "scopes": ["projects:read"],
-        "expires_at": "not-a-date"})
-    assert r2.status_code == 400, r2.text

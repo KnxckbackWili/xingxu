@@ -1,23 +1,19 @@
-"""Project task tree routes: modules, generation, tasks, check items."""
+"""Project task tree routes: generation, tasks, check items."""
 
-from app.services.system_permissions import route_permission, route_permission_contextual
+from app.services.system_permissions import route_permission
 from app.time_utils import utcnow
-from typing import Optional, Annotated
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.deps import get_current_user, require_pm
+from app.deps import get_current_user
 from app.services.vehicle_checks import vehicle_label
 from app.services.work_items import item_dict as work_item_dict
-from app.models import User, Project, Phase, Module, Task, CheckItem
-from app.routers.projects import get_project_or_404
+from app.models import User, Project, Phase, Task, CheckItem
 from app.services.permissions import require_project_capability, authorize_project, C_PLAN
 from app.services.scope import ensure_project_visible
-from app.services.generate_tasks import generate_tasks_for_modules, selected_execution_module_ids
-from app.services.execution_scope import REMINDER_ONLY_PHASE_NAMES
 from app.services.project_lifecycle import TERMINAL_PROJECT_STATUSES
 from app.services.change_log import log_change
 from app.services.system_permissions import has_permission
@@ -25,15 +21,10 @@ from app.services.system_permissions import has_permission
 router = APIRouter(tags=["任务"])
 
 
-# ===== Modules =====
-
 class GenerateTasksBody(BaseModel):
-    module_ids: list[str] = Field(default_factory=list, max_length=500)
     work_item_ids: list[str] = Field(default_factory=list, max_length=2000)
     template_id: Optional[str] = Field(default=None, min_length=1, max_length=100)
     exclude_task_ids: list[str] = Field(default_factory=list, max_length=2000)
-    exclude_task_names: list[str] = Field(default_factory=list)
-    task_quantities: dict[str, Annotated[float, Field(ge=0, allow_inf_nan=False)]] = Field(default_factory=dict)
 
 
 @router.post("/projects/{project_id}/tasks/generate")
@@ -45,39 +36,19 @@ def generate_tasks(
     p: Project = Depends(require_project_capability("project.manage_plan")),
     db: Session = Depends(get_db),
 ):
-    """Generate project tasks from selected template modules."""
+    """Add the chosen template work items to the project."""
     _lock_task_plan(db, p, user)
-    # 已完成/已归档的项目不再添加工作。
     if p.status in TERMINAL_PROJECT_STATUSES:
         raise HTTPException(status_code=400, detail=f"项目状态为「{p.status}」，不能再生成任务")
     from app.services.project_templates import project_template_info
-    source = project_template_info(db, p)
-    template_id = body.template_id or source['id'] or 'default'
-    exclude_task_names = body.exclude_task_names
-    task_quantities = body.task_quantities
+    from app.services.work_items import selected_template_work, generate
+    template_id = body.template_id or project_template_info(db, p)['id'] or 'default'
     try:
-        from app.services.work_items import selected_template_work
-        selected=selected_template_work(db,template_id,body.work_item_ids or body.module_ids,body.exclude_task_ids,exclude_task_names)
-        module_ids=[t.id for t in selected]
+        result = generate(db, p, selected_template_work(db, template_id, body.work_item_ids, body.exclude_task_ids))
     except ValueError as error:
         raise HTTPException(400, str(error))
-    if not module_ids:
-        return {"message": "所选模块均为「仅准备项」，未生成执行任务",
-                "tasks": 0, "check_items": 0, "modules": [], "prep_only": True}
-    try:
-        result = generate_tasks_for_modules(db, p, module_ids, template_id, [], task_quantities, [])
-        # 独立准备清单只负责提醒，不生成执行任务。
-        from app.routers.preparations import sync_preparation_items
-        from app.services.preparation_scope import conditions_for_scope
-        added_conditions = conditions_for_scope(db, template_id, module_ids, [], [])
-        p.prep_conditions = sorted(set(p.prep_conditions or []) | set(added_conditions))
-        sync_preparation_items(db, p.id)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    db.flush()
     log_change(db, project_id, "task", project_id, "generate", user.id,
                f"生成实施任务：{result['tasks']} 个任务，{result['check_items']} 个检查项")
-    # 生成任务不改变项目状态：草稿/准备中等初始状态由用户选定，仅在日程确认后推进。
     db.commit()
     from app.services.cache import cache_clear
     cache_clear("dashboard:")
@@ -89,7 +60,6 @@ def generate_tasks(
 def _task_dict(t: Task, completed: float = 0, db: Session | None = None) -> dict:
     d = {
         "id": t.id,
-        "module_id": t.module_id,
         "phase_id": t.phase_id, "group_label": t.group_label or "",
         "kind": "vehicle" if t.quantity_type=="per_vehicle" else "other",
         "is_completed": bool(t.manually_completed),
@@ -120,48 +90,19 @@ def _task_dict(t: Task, completed: float = 0, db: Session | None = None) -> dict
 @router.get("/projects/{project_id}/tree")
 @route_permission('project.read')
 def get_project_tree(project_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Return the project's full task tree: phases → modules → tasks → check items."""
-    p = ensure_project_visible(db,project_id,user)
-    from collections import defaultdict
-    from sqlalchemy import or_
-    from app.models import VehicleUnit
-    from app.services.work_items import phase_of,group_of,item_dicts
+    """The project's stages with their work items and checks."""
+    ensure_project_visible(db,project_id,user)
+    from app.services.work_items import phase_of,item_dicts
     tasks=db.query(Task).filter_by(project_id=project_id).order_by(Task.sort_order,Task.id).all()
-    from app.services.progress import task_progress_maps
-    completed=task_progress_maps(db,tasks)[0]
-    # Load the few phases/modules up front so per-task phase_of/group_of lookups hit the identity map.
-    module_ids={t.module_id for t in tasks if t.module_id}
-    modules=db.query(Module).filter(Module.id.in_(module_ids)).all() if module_ids else []
-    phase_ids={t.phase_id for t in tasks if t.phase_id}|{m.phase_id for m in modules if m.phase_id}
     # Keep a strong reference: the session's identity map only holds objects weakly.
-    phases=db.query(Phase).filter(Phase.id.in_(phase_ids)).all() if phase_ids else []
+    phase_ids={t.phase_id for t in tasks if t.phase_id}
+    _phases=db.query(Phase).filter(Phase.id.in_(phase_ids)).all() if phase_ids else []
     items=item_dicts(db,tasks,checks=True)
-    task_checks=defaultdict(list)
-    if tasks:
-        for c in db.query(CheckItem).filter(CheckItem.task_id.in_([t.id for t in tasks]),or_(CheckItem.project_id==project_id,CheckItem.project_id.is_(None))).order_by(CheckItem.sort_order,CheckItem.id):
-            task_checks[c.task_id].append(c)
-    unit_ids={c.vehicle_unit_id for rows in task_checks.values() for c in rows if c.vehicle_unit_id}
-    units={u.id:u for u in db.query(VehicleUnit).filter(VehicleUnit.id.in_(unit_ids))} if unit_ids else {}
-    def label(check):
-        if not check.vehicle_unit_id:return '任务级检查（未逐车核验）'
-        unit=units.get(check.vehicle_unit_id)
-        return (unit.fleet_no or unit.asset_code) if unit else '车辆来源待核对'
     grouped={}
     for task in tasks:
         phase=phase_of(db,task)
         if phase is None:continue
-        row=grouped.setdefault(phase.id,{'id':phase.id,'name':phase.name,'sort_order':phase.sort_order or 0,'color':phase.color,'entry_criteria':phase.entry_criteria,'exit_criteria':phase.exit_criteria,'modules':[],'work_items':[]})
-        scope=group_of(db,task)
-        group=next((m for m in row['modules'] if m['name']==scope),None)
-        if group is None:
-            group={'id':task.module_id,'name':scope,'category':'source','sort_order':0,'read_only_source':True,'tasks':[]}
-            row['modules'].append(group)
-        checks=task_checks[task.id]
-        group['tasks'].append({**_task_dict(task,completed.get(task.id,0),db),'check_items':[{'id':c.id,'name':c.name,'description':c.description or '',
-            'vehicle_unit_id':c.vehicle_unit_id,'vehicle_step_key':c.vehicle_step_key,'vehicle_label':label(c),
-            'is_required':c.is_required,'is_safety_critical':c.is_safety_critical,'is_applicable':c.is_applicable,'is_done':c.is_done,
-            'failed':c.failed,'failed_reason':c.failed_reason,'not_applicable_reason':c.not_applicable_reason,'done_by':c.done_by,
-            'done_at':c.done_at.isoformat() if c.done_at else None,'version':c.version or 0} for c in checks]})
+        row=grouped.setdefault(phase.id,{'id':phase.id,'name':phase.name,'sort_order':phase.sort_order or 0,'color':phase.color,'entry_criteria':phase.entry_criteria,'exit_criteria':phase.exit_criteria,'work_items':[]})
         row['work_items'].append(items[task.id])
     return sorted(grouped.values(),key=lambda phase:(phase['sort_order'],phase['id']))
 
@@ -199,19 +140,17 @@ def handover_summary(project_id: str, user: User = Depends(get_current_user), db
 def task_workspace(project_id: str, task_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """One work item with its arrangements and execution history, from any view."""
     from app.models import VehicleLifecycleEvent, VehicleUnit
-    from app.services.permissions import project_capabilities, C_PLAN, C_SCHEDULE, C_ISSUES
+    from app.services.permissions import project_capabilities, C_PLAN, C_SCHEDULE
     from app.services.project_lifecycle import EXECUTION_PROJECT_STATUSES
     from app.services.progress import task_completed
     p = ensure_project_visible(db, project_id, user)
     task = db.get(Task, task_id)
     if task is None or task.project_id != project_id:
         raise HTTPException(404, "任务不存在")
-    module = db.get(Module, task.module_id) if task.module_id else None
     from app.services.work_items import phase_of
     phase = phase_of(db,task)
     caps = project_capabilities(user, p)
-    from app.services.execution_scope import REMINDER_ONLY_PHASE_NAMES
-    active = p.status in EXECUTION_PROJECT_STATUSES and phase is not None and phase.name not in REMINDER_ONLY_PHASE_NAMES
+    active = p.status in EXECUTION_PROJECT_STATUSES and phase is not None
     checks = db.query(CheckItem).filter_by(project_id=project_id, task_id=task_id).order_by(CheckItem.sort_order).all()
     event = db.get(VehicleLifecycleEvent, task.source_vehicle_event_id) if task.source_vehicle_event_id else None
     if event and event.project_id != project_id:
@@ -221,22 +160,20 @@ def task_workspace(project_id: str, task_id: str, user: User = Depends(get_curre
         from app.routers.vehicle_lifecycle import _event_dict
         unit = db.get(VehicleUnit, event.vehicle_unit_id)
         repair = {**_event_dict(db, event,user), "unit_id": event.vehicle_unit_id, "asset_code": unit.asset_code if unit else "", "current_status": unit.current_status if unit else ""}
-    member = user.role not in ("readonly", "external")
-    recorder = member
     return {
         "project": {"id": p.id, "name": p.name, "status": p.status, "timezone": p.timezone or "Asia/Shanghai", "capabilities": sorted(caps)},
         "work_item": work_item_dict(db,task,checks=True),
         "can_override": C_PLAN in caps,
-        "can_complete": active and has_permission(user,"worker.report",default=True) and (C_PLAN in caps or member),
-        "task": {**_task_dict(task, task_completed(db, task_id), db), "phase_name": phase.name if phase else "", "module_name": module.name if module else "",
+        "can_complete": active and has_permission(user,"worker.report"),
+        "task": {**_task_dict(task, task_completed(db, task_id), db), "phase_name": phase.name if phase else "",
                  "check_items": [{"id": c.id, "name": c.name, "vehicle_unit_id": c.vehicle_unit_id, "vehicle_label": vehicle_label(db,c), "vehicle_step_key": c.vehicle_step_key, "source_definition_id": c.vehicle_check_definition_id, "definition_version": c.definition_version, "description": c.description or "", "is_required": c.is_required,
                    "is_safety_critical": c.is_safety_critical, "is_applicable": c.is_applicable, "not_applicable_reason": c.not_applicable_reason,
                    "is_done": c.is_done, "failed": c.failed, "failed_reason": c.failed_reason, "version": c.version or 0} for c in checks]},
         "repair": repair,
         "can_schedule": active and C_SCHEDULE in caps,
-        "can_report": active and (member or user.role in ("pm", "admin")) and has_permission(user, "worker.report", default=True),
-        "can_check": active and (C_PLAN in caps or (user.role == "worker" and member)) and has_permission(user, "worker.report", default=True),
-        "can_update_repair": bool(active and event and recorder and has_permission(user, "worker.issues", default=True) and (event.operator_id == user.id or user.role in ("admin", "director") or user.id in (p.manager, p.technical_manager) or C_ISSUES in caps)),
+        "can_report": active and has_permission(user, "worker.report"),
+        "can_check": active and has_permission(user, "worker.report"),
+        "can_update_repair": bool(active and event and has_permission(user, "worker.issues")),
     }
 
 
@@ -246,7 +183,7 @@ def _lock_task_plan(db: Session, project: Project, user: User) -> None:
     lock_writable_project(db, project, user)
     db.refresh(user)
     from app.services.system_permissions import has_permission
-    if not has_permission(user, "project.manage_plan", default=True):
+    if not has_permission(user, "project.manage_plan"):
         raise HTTPException(403, "工作计划维护权限已变化")
     authorize_project(user, project, C_PLAN)
     if project.status in TERMINAL_PROJECT_STATUSES:
@@ -308,12 +245,11 @@ class CheckItemUpdate(BaseModel):
 
 def _apply_check(project_id,cid,data,user,db):
     p = ensure_project_visible(db, project_id, user)
-    from app.services.project_lifecycle import ensure_project_writable
     from app.services.record_lock import lock_writable_project
     lock_writable_project(db, p, user)
     db.refresh(user)
     from app.services.system_permissions import has_permission
-    if not user.is_active or not has_permission(user, "worker.report", default=True):
+    if not user.is_active or not has_permission(user, "worker.report"):
         raise HTTPException(403, "检查登记权限已变化")
     ci = db.get(CheckItem, cid, populate_existing=True)
     if ci is None or ci.project_id not in (None, project_id) or db.get(Task, ci.task_id).project_id != project_id:
@@ -321,10 +257,7 @@ def _apply_check(project_id,cid,data,user,db):
     from app.services.project_lifecycle import EXECUTION_PROJECT_STATUSES
     if p.status not in EXECUTION_PROJECT_STATUSES:
         raise HTTPException(400, '现场实施之前或项目结束后，不能登记检查项')
-    from app.services.work_items import phase_of
-    from app.services.execution_scope import REMINDER_ONLY_PHASE_NAMES
-    phase=phase_of(db,db.get(Task,ci.task_id))
-    if phase is None or phase.name in REMINDER_ONLY_PHASE_NAMES:raise HTTPException(400,'历史准备检查来源只读，资料要求请到清单维护')
+    if not db.get(Task,ci.task_id).phase_id:raise HTTPException(400,'检查项所属工作没有阶段，请先在计划里归入阶段')
     if ci.vehicle_unit_id:
         from app.models import VehicleUnit
         unit=db.get(VehicleUnit,ci.vehicle_unit_id)
@@ -346,10 +279,6 @@ def _apply_check(project_id,cid,data,user,db):
 
     # 三态（优化-1）：通过 is_done / 不通过 failed（必填原因）/ 不适用 is_applicable=False
     if data.is_done is not None or data.failed is not None or data.is_applicable is not None:
-        from app.services.permissions import authorize_project, C_PLAN
-        from app.services.permissions import project_capabilities
-        if user.role in ('readonly','external') and C_PLAN not in project_capabilities(user,p):
-            raise HTTPException(status_code=403,detail='只读账号不能登记检查')
         if data.failed is True and not (data.failed_reason or "").strip():
             raise HTTPException(status_code=400, detail="设为不通过时必须填写原因")
         if ((data.failed is True and data.is_done is True)

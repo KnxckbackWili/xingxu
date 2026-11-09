@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 from fastapi import HTTPException
 from sqlalchemy import select, or_
 
-from app.models import (WeeklyPlanCell, Project, Task, Phase, User, Vehicle, VehicleUnit,
+from app.models import (WeeklyPlanCell, Task, User, Vehicle, VehicleUnit,
                         VehicleProgress, ProjectVehicleStep,
 )
 from app.services.permissions import C_SCHEDULE, authorize_project, project_capabilities
@@ -61,7 +61,7 @@ def select_cells(db, project_ids, week_start, weeks, *, published_only=True):
 
 def can_edit(project, actor):
     return (project.status in ACTIVE_PROJECT_STATUSES and
-            has_permission(actor, 'project.manage_schedule', default=True) and
+            has_permission(actor, 'project.manage_schedule') and
             C_SCHEDULE in project_capabilities(actor, project))
 
 
@@ -77,7 +77,7 @@ def lock_authority(db, project, actor):
     db.refresh(actor)
     if not actor.is_active or (actor.token_version or 0) != old_token:
         raise HTTPException(401, '账号或会话已变化，请重新登录')
-    if not has_permission(actor, 'project.manage_schedule', default=True):
+    if not has_permission(actor, 'project.manage_schedule'):
         raise HTTPException(403, '周计划维护权限已变化')
     authorize_project(actor, project, C_SCHEDULE)
     if project.status not in ACTIVE_PROJECT_STATUSES:
@@ -89,9 +89,8 @@ def task_for(db, project, task_id):
     task = db.get(Task, task_id, populate_existing=True)
     if task is None or task.project_id != project.id:
         raise HTTPException(404, '工作项不存在')
-    phase = work.phase_of(db, task)
-    if phase is None or phase.name == '项目准备':
-        raise HTTPException(400, '请选择真实实施工作，历史准备来源不进入周计划')
+    if work.phase_of(db, task) is None:
+        raise HTTPException(400, '这项工作没有阶段，请先在计划里归入阶段')
     return task
 
 
@@ -480,7 +479,7 @@ def project_view(db, project, actor, start, weeks, *, include_cancelled=False):
     return {'cells': data, 'work_items': sorted(phases.values(), key=lambda row: (stage_order(row['stage_key']), row['sort_order'], row['id'])),
         'weeks': metadata, 'warnings': warnings, 'timezone': project.timezone or 'Asia/Shanghai',
         'permissions': {'read': True, 'edit': editing, 'publish': editing,
-            'export': has_permission(actor, 'project.export', default=True) and 'project.export' in project_capabilities(actor, project)},
+            'export': has_permission(actor, 'project.export') and 'project.export' in project_capabilities(actor, project)},
         'vehicles': [{'id': unit.id, 'label': unit.fleet_no or unit.asset_code, 'vehicle_id': unit.vehicle_id} for unit in db.query(VehicleUnit).filter_by(project_id=project.id).order_by(VehicleUnit.asset_code)],
         'vehicle_types': sorted({row.vehicle_type for row in db.query(Vehicle).filter_by(project_id=project.id)}),
         'settings': {'rest_mode': project.rest_mode, 'rest_days': project.rest_days or [], 'skip_holidays': bool(project.skip_holidays)},
@@ -546,7 +545,7 @@ def draft_preview(db, project, actor, rules, *, first_week=None):
     tasks = work.tasks_query(db, [project.id]).order_by(Task.id).all()
     rows = db.query(WeeklyPlanCell).filter_by(project_id=project.id).order_by(WeeklyPlanCell.id).all()
     fingerprint = {'project_id': project.id, 'version': project.version or 0,
-        'actor': actor.id, 'permission_version': actor.permission_version or 0,
+        'actor': actor.id,
         'rules': rules, 'first_week': first_week.isoformat() if first_week else None,
         'tasks': [(task.id, task.version or 0, task.phase_id, task.vehicle_step_key) for task in tasks],
         'existing': [(row.id, row.version or 0, row.is_cancelled) for row in rows], 'proposals': proposals, 'warnings': warnings}
@@ -619,26 +618,6 @@ def project_summary(db, project, actor):
         'meaning':'真实周计划'}
 
 
-STANDARD_PHASE_ORIGINS = {
-    'phase-01': ('5', '进场准备'), 'phase-02': ('6', '到货检查'),
-    'phase-03': ('6', '单车调试'), 'phase-04': ('6', '地图与站点'),
-    'phase-05': ('6', '系统部署'), 'phase-06': ('6', '联调工作'),
-    'phase-07': ('6', '试运行工作'), 'phase-08': ('6', '培训验收'),
-}
-
-
-def _phase_origins(db, task):
-    """Follow frozen definition identities; task/phase names never classify work."""
-    result=set()
-    if task.phase_id in STANDARD_PHASE_ORIGINS:result.add(task.phase_id)
-    if task.source_task_id:
-        source=db.get(Task,task.source_task_id)
-        if source is not None and source.project_id is None:
-            phase=work.phase_of(db,source)
-            if phase and phase.id in STANDARD_PHASE_ORIGINS:result.add(phase.id)
-    return result
-
-
 def _event_date(project, event, *, planned_only=False):
     if event is None:return None
     if not planned_only:
@@ -649,30 +628,23 @@ def _event_date(project, event, *, planned_only=False):
 
 
 def default_draft_rules(db, project, actor):
-    """Reviewable calendar suggestions from exact standard definition origins.
+    """Reviewable calendar suggestions from each stage's place on the backbone.
 
-    These are planning heuristics, not durations or execution evidence. Unknown
-    custom/mixed definitions remain explicitly unclassified for manual choice.
+    Stages 4–5 finish before dispatch; stage 6 onward spreads between arrival and
+    acceptance. These are planning heuristics, not durations or execution evidence.
     """
     if not can_edit(project,actor):raise HTTPException(403,'当前项目或账号不能维护周计划')
     from app.models import ProjectEvent
+    from app.services.template_stages import STAGE_NAMES
     events={row.event_key:row for row in db.query(ProjectEvent).filter_by(project_id=project.id)}
     grouped={}
     for task in work.tasks_query(db,[project.id]).order_by(Task.sort_order,Task.id):
         phase=work.phase_of(db,task)
-        group=grouped.setdefault(phase.id,{'phase':phase,'origins':set(),'tasks':[],'unknown_source':False})
-        origins=_phase_origins(db,task)
-        group['origins'].update(origins);group['tasks'].append(task.id)
-        group['unknown_source'] = group['unknown_source'] or not origins
+        grouped.setdefault(phase.id,{'phase':phase})
     groups=sorted(grouped.values(),key=lambda row:(row['phase'].sort_order or 0,row['phase'].id))
-    before=[];after=[];warnings=[]
-    for group in groups:
-        keys={STANDARD_PHASE_ORIGINS[origin][0] for origin in group['origins']}
-        if len(keys)!=1 or group['unknown_source']:
-            warnings.append({'code':'unknown_phase_origin' if not keys else 'mixed_phase_origin','phase_id':group['phase'].id,
-                'message':f'「{work.stage_label(group["phase"].name)}」缺少一致的标准阶段来源；请明确选择发车前或到场后规则，系统未按名称或sort数字猜测'})
-            continue
-        (before if next(iter(keys))=='5' else after).append(group)
+    before=[g for g in groups if g['phase'].stage_key in ('4','5')]
+    after=[g for g in groups if g['phase'].stage_key not in ('4','5')]
+    warnings=[]
     ship=_event_date(project,events.get('ship'))
     arrival=_event_date(project,events.get('arrival_all'))
     # The end of the planning window is an explicit plan, not an inferred actual.
@@ -680,16 +652,15 @@ def default_draft_rules(db, project, actor):
     finish=acceptance or project.end_date
     rules=[];suggestions=[]
     def add(group,anchor,offset,begin,end,goal,reason):
-        origins=sorted(group['origins'])
-        rule={'phase_id':group['phase'].id,'anchor':anchor,'offset_weeks':offset,'mode':'finish'}
+        phase=group['phase']
+        rule={'phase_id':phase.id,'anchor':anchor,'offset_weeks':offset,'mode':'finish'}
         rules.append(rule)
-        suggestions.append({**rule,'phase_name':work.stage_label(group['phase'].name),
-            'source_phase_id':origins[0] if len(origins)==1 else None,
-            'source_label':'、'.join(f'{identity} {STANDARD_PHASE_ORIGINS[identity][1]}' for identity in origins),
+        suggestions.append({**rule,'phase_name':work.stage_label(phase.name),
+            'source_label':f"{phase.stage_key or '6'} {STAGE_NAMES.get(phase.stage_key or '6','')}",
             'window_start':begin.isoformat() if begin else None,'window_end':end.isoformat() if end else None,
             'week_start':goal.isoformat() if goal else None,'reason':reason})
     if before and ship is None:
-        warnings.append({'code':'missing_ship_date','message':'标准发车前阶段缺少实际或计划发车日期，未编造默认计划周'})
+        warnings.append({'code':'missing_ship_date','message':'发车前阶段缺少实际或计划发车日期，未编造默认计划周'})
     elif before:
         ship_week=monday(ship)
         try:
@@ -699,11 +670,11 @@ def default_draft_rules(db, project, actor):
                 offset=len(before)-index
                 goal=ship_week-timedelta(weeks=offset)
                 add(group,'before_ship',offset,first,end,goal,
-                    f'按冻结标准来源建议发车前完成：以发车周 {ship_week} 倒推，当前阶段顺序偏移 {offset} 周（至少1周）；这是可调整初稿，不代表工时或实际发生')
+                    f'发车前完成：以发车周 {ship_week} 倒推，当前阶段顺序偏移 {offset} 周（至少1周）；这是可调整初稿，不代表工时或实际发生')
         except OverflowError:
             warnings.append({'code':'invalid_before_ship_window','message':'发车日期倒推超出有效日期范围，请先核对关键日期'})
     if after and (arrival is None or finish is None):
-        warnings.append({'code':'missing_arrival_window','message':'标准现场阶段缺少全部到场日期或计划验收/结束日期，未编造默认窗口'})
+        warnings.append({'code':'missing_arrival_window','message':'现场阶段缺少全部到场日期或计划验收/结束日期，未编造默认窗口'})
     elif after:
         start=monday(arrival);end=monday(finish)
         if end<start:

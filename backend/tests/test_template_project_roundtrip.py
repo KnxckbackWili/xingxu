@@ -10,13 +10,13 @@ def _new_template(client, headers):
     tid = response.json()['id']
     rows = client.get(f'/api/templates/{tid}/items', headers=headers).json()
     # A work row's id is the template task its reference documents hang on.
-    return tid, [{'modules': [{'tasks': [item for section in rows['sections'] for item in section['items'] if item['kind'] == 'work']}]}]
+    return tid, [{'work_items': [item for section in rows['sections'] for item in section['items'] if item['kind'] == 'work']}]
 
 
 def test_reference_delete_failure_does_not_destroy_file(client, admin_headers, monkeypatch):
     from app.routers import templates
     tid, tree = _new_template(client, admin_headers)
-    task = tree[0]['modules'][0]['tasks'][0]
+    task = tree[0]['work_items'][0]
     base = f"/api/templates/{tid}/tasks/{task['id']}/reference-docs"
     uploaded = client.post(base, headers=admin_headers, files={'file': ('atomic.txt', b'must survive', 'text/plain')}).json()
     def fail(*args, **kwargs):
@@ -88,7 +88,7 @@ def test_clone_preserves_project_planning_context_but_resets_execution(client, p
     from app.models import Project
     original = client.post('/api/projects', headers=pm_headers, json={
         'name': 'Clone context', 'timezone': 'America/Los_Angeles', 'description': 'Scope matters',
-        'start_date': '2026-01-01', 'end_date': '2026-12-31', 'need_wms': True, 'new_vehicles': False}).json()
+        'start_date': '2026-01-01', 'end_date': '2026-12-31'}).json()
     settings = client.put(f"/api/projects/{original['id']}/weekly-plans/settings", headers=pm_headers,
                           json=versioned(original['id'], {'rest_mode': 'two', 'skip_holidays': True}))
     assert settings.status_code == 200, settings.text
@@ -99,14 +99,13 @@ def test_clone_preserves_project_planning_context_but_resets_execution(client, p
         assert copied.timezone == 'America/Los_Angeles'
         assert copied.description == 'Scope matters'
         assert copied.rest_mode == 'two' and copied.skip_holidays
-        assert 'need_wms' in copied.prep_conditions
         assert copied.status == 'preparing'
 
 
 def test_template_upload_audit_failure_removes_uncommitted_file(client, admin_headers, monkeypatch):
     from app.routers import templates
     tid, tree = _new_template(client, admin_headers)
-    task = tree[0]['modules'][0]['tasks'][0]
+    task = tree[0]['work_items'][0]
     before = set(templates.UPLOAD_DIR.iterdir())
     def fail(*args, **kwargs): raise RuntimeError('upload audit failure')
     monkeypatch.setattr(templates, 'log_change', fail)

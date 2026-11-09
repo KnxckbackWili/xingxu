@@ -30,18 +30,10 @@ def _check_put(client, headers, pid, check_id, body):
 def _find_task(client, pm_headers, pid, name):
     r = client.get(f"/api/projects/{pid}/tree", headers=pm_headers)
     for ph in r.json():
-        for m in ph["modules"]:
-            for t in m["tasks"]:
-                if t["name"] == name:
-                    return t
+        for t in ph["work_items"]:
+            if t["name"] == name:
+                return t
     return None
-
-
-def test_worker_cannot_edit_task(client, pm_headers, worker_headers):
-    pid = _project(client, pm_headers)
-    task = _find_task(client, pm_headers, pid, "场地勘测")
-    r = client.put(f"/api/projects/{pid}/tasks/{task['id']}", headers=worker_headers, json=versioned(task['id'], {"name": "改名"}, 'Task'))
-    assert r.status_code in (403, 404)
 
 
 def test_worker_ticks_check_item(client, pm_headers, worker_headers):

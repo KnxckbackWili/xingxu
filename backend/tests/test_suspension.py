@@ -185,23 +185,6 @@ def test_json_export_preserves_suspension_but_new_project_import_cannot_bypass_l
 # ===================== 项目经理计划与资料审核 =====================
 
 
-def test_pm_manages_plan_and_reviews_another_members_document_version(client, pm_headers, worker_headers):
-    from tests.document_helpers import documents, upload_documents
-    pid = _setup_active(client, pm_headers, worker_headers)
-    from app.db import SessionLocal
-    from app.models import Task
-    with SessionLocal() as db:
-        task = db.query(Task).filter_by(project_id=pid).first()
-        task_id, task_version = task.id, task.version or 0
-    result = client.put(f'/api/projects/{pid}/work-items/{task_id}', headers=pm_headers, json={'name': '场地勘测（PM改名）', 'version': task_version})
-    assert result.status_code == 200, result.text
-    row = documents(client, pm_headers, pid)['documents'][0]
-    version = upload_documents(client, worker_headers, pid, [row['id']])['documents'][0]['versions'][0]
-    reviewed = client.post(f'/api/projects/{pid}/documents/{row["id"]}/versions/{version["id"]}/review', headers=pm_headers, json={'decision': 'approved'})
-    assert reviewed.status_code == 200, reviewed.text
-    assert reviewed.json()['review_metadata']['latest_review']['decision'] == 'approved'
-
-
 # ===================== 导出文件名 =====================
 
 def _export_filename(client, headers, url):

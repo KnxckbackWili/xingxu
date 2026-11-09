@@ -44,10 +44,9 @@ def timeline(
 @route_permission('project.read')
 def project_overview(project_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """聚合端点：一次返回项目总览页所需数据，避免前端 8 个请求打满浏览器。
-    返回结构：progress / timeline / overdue / issues / tree / logs / preparations / weekly_plans。
+    返回结构：progress / timeline / overdue / issues / tree / logs / weekly_plans。
     """
-    from app.models import Issue, Task, ChangeLog, User as UserModel
-    from app.routers.preparations import _summary
+    from app.models import Issue, ChangeLog, User as UserModel
     from app.routers.tasks import get_project_tree
 
     project = ensure_project_visible(db, project_id, user)
@@ -57,7 +56,6 @@ def project_overview(project_id: str, user: User = Depends(get_current_user), db
     from app.services.weekly_plans import project_summary
     weekly_summary=project_summary(db,project,user)
     tree = get_project_tree(project_id, user, db)
-    prep_summary = _summary(db, project)
     from app.services.project_documents import progress_summary
     from app.services.document_deadlines import action_summary
 
@@ -67,7 +65,6 @@ def project_overview(project_id: str, user: User = Depends(get_current_user), db
     overdue_data={"count":document_actions["overdue_count"],"items":document_actions["overdue"]}
     overdue = [{**item, "id": item["document_id"]} for item in overdue_data["items"]]
     logs = db.query(ChangeLog).filter(ChangeLog.project_id == project_id, ChangeLog.action.notin_(ACCESS_AUDIT_ACTIONS), ~((ChangeLog.entity_type == 'attachment') & (ChangeLog.action == 'create')), ~((ChangeLog.entity_type == 'project_document') & (ChangeLog.action == 'generate'))).order_by(ChangeLog.created_at.desc()).limit(20).all() if has_permission(user, "system.audit.read") else []
-    task_names = {t.id: t.name for t in db.query(Task).filter(Task.project_id == project_id).all()}
 
     reporter_ids = {i.reporter_id for i in issues}
     user_ids = reporter_ids | {l.operator_id for l in logs if l.operator_id}
@@ -113,7 +110,6 @@ def project_overview(project_id: str, user: User = Depends(get_current_user), db
         "logs": log_dicts,
         "document_progress": progress_summary(db,project,user,documents=document_rows),
         "document_actions":document_actions,
-        "preparations": {"summary": prep_summary},
         "weekly_plans": weekly_summary,
         "project": {
             "id": project.id,

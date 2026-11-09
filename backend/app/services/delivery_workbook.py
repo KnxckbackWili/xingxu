@@ -116,7 +116,7 @@ def _overview(db, book, project, documents, visible_assets, users):
     info = [('项目名称', project.name), ('项目缩写', project.abbreviation), ('客户', project.client),
             ('实施地点', project.location), ('项目状态', project.status), ('开始日期', _iso(project.start_date)),
             ('结束日期', _iso(project.end_date)), ('现场时区', project.timezone), ('调度平台', project.dispatch_platform),
-            ('项目负责人', users.get(project.manager, project.manager or '')), ('技术负责人', users.get(project.technical_manager, project.technical_manager or '')),
+            ('项目负责人', users.get(project.manager, project.manager or '')),
             ('整体进度 %', project_progress_tree(db, project.id)['percent']), ('执行任务数', len(tasks)),
             ('已完成任务数', sum(percent.get(row.id, 0) >= 100 for row in tasks)),
             ('未闭环问题', sum(row.status not in {'closed', 'cancelled'} for row in issues)),
@@ -252,7 +252,7 @@ def execution_evidence(db, project_id):
             not_applicable_set_by_name=users.get(check.not_applicable_set_by, '原操作人未记录') if check.not_applicable_set_by else '',
             last_operation=operations.get(check.id))
         by_task.setdefault(check.task_id, []).append(row)
-    fields = ('phase_id','group_label','scope_conditions','vehicle_step_key', 'manually_completed', 'manual_completed_by', 'manual_completed_role', 'manual_completed_at', 'manual_completed_reason', 'manual_check_overrides')
+    fields = ('phase_id','group_label','vehicle_step_key', 'manually_completed', 'manual_completed_by', 'manual_completed_role', 'manual_completed_at', 'manual_completed_reason', 'manual_check_overrides')
     from app.services.vehicle_progress import matrix
     return {'read_only': True, 'meaning': '来源执行事实，仅供核对；便携导入不继承完成、检查或验收资格。',
         'vehicle_progress_matrix':{**matrix(db,project_id),'read_only':True},

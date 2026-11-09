@@ -33,15 +33,15 @@ export default function ProjectRecycleBinPage() {
   const alive = useRef(true)
   const actor = useRef(user?.id)
   actor.current = user?.id
-  const allowed = !!user && user.permission_overrides?.['project.delete'] !== false && user.permission_overrides?.['project.read'] !== false
+  const allowed = !!user
   const allowedRef = useRef(allowed)
   allowedRef.current = allowed
-  const exportAllowed = !!user && user.permission_overrides?.['project.export'] !== false
+  const exportAllowed = !!user
   const exportAllowedRef = useRef(exportAllowed)
   exportAllowedRef.current = exportAllowed
-  const signature = JSON.stringify([user?.id, user?.role, user?.permission_version, user?.permission_overrides])
+  const signature = JSON.stringify([user?.id, user?.role])
   const policy = useRef(signature); policy.current = signature
-  const purgeAllowed = user?.role === 'admin' && ['project.read', 'project.delete', 'project.export', 'system.projects.purge'].every(key => user.permission_overrides?.[key] !== false)
+  const purgeAllowed = user?.role === 'admin'
   const purgeAllowedRef = useRef(purgeAllowed); purgeAllowedRef.current = purgeAllowed
   const loadBackups = async () => {
     if (!purgeAllowedRef.current) return

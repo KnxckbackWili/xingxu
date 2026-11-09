@@ -13,9 +13,6 @@ it('reads only current aggregate statistics with its own permission',async()=>{
   expect(screen.getByText('现场实施')).toBeVisible();expect(h.statistics).toHaveBeenCalledOnce()
   expect(screen.queryByText(/工时|人天|单位耗时/)).toBeNull()
 })
-it('does not fetch or display aggregates when statistics is explicitly denied',()=>{
-  h.user.permission_overrides={'insights.view':false};render(<WorkspaceStatistics/>);expect(h.statistics).not.toHaveBeenCalled();expect(screen.queryByLabelText('统计')).toBeNull()
-})
 it('clears a prior account immediately and ignores its delayed response',async()=>{
   let finish!:(value:typeof data)=>void
   h.statistics.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve})).mockResolvedValue({...data,projects:1,vehicle_progress:{...data.vehicle_progress,completed:1,percent:10}})

@@ -16,7 +16,7 @@ export default function StorageSettingsPage() {
   const [loading, setLoading] = useState(false)
   const [project, setProject] = useState<StorageProject>()
   const load = async () => { const ticket = ++epoch.current; setLoading(true); setError(''); try { const next = await storageApi.overview(); if (ticket === epoch.current) setData(next) } catch (failure) { if (ticket === epoch.current) setError(errMsg(failure)) } finally { if (ticket === epoch.current) setLoading(false) } }
-  useEffect(() => { setData(undefined); setProject(undefined); void load(); return () => { epoch.current++ } }, [user?.id, user?.permission_version])
+  useEffect(() => { setData(undefined); setProject(undefined); void load(); return () => { epoch.current++ } }, [user?.id])
   return <div>
     <WorkPageHeader title="存储管理" description="文件存放在 NAS，不限容量；这里查看各项目占用，需要时清理旧的周期文件。" tools={<RefreshAction label="刷新占用" onClick={load} loading={loading} />}
       meta={data && <Space wrap size={[16, 4]}><span>共 {data.file_count} 个文件 · {storageSize(data.bytes)}</span>{data.temporary_bytes > 0 && <span>未完成的上传 {storageSize(data.temporary_bytes)}</span>}{data.removed_bytes > 0 && <span>已清理 {storageSize(data.removed_bytes)}</span>}</Space>} />

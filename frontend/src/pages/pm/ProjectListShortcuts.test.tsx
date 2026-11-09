@@ -19,7 +19,7 @@ vi.mock('../../hooks/useVehicleTypes', () => ({
 
 let accountSequence = 0
 const account = (id: string): User => ({
-  id, role: 'pm', username: id, display_name: '隔离测试经理', phone: '', email: '', is_active: true,
+  id, role: 'employee', username: id, display_name: '隔离测试经理', phone: '', email: '', is_active: true,
 })
 const project = (id: string, name: string): Project => ({
   id, name, abbreviation: '', manager: 'manager', client: 'QA客户', location: 'QA地点',
@@ -120,19 +120,6 @@ describe('account-scoped project shortcuts in the real project list', () => {
     expect(table().queryByText('revoked')).not.toBeInTheDocument()
   })
 
-  it('falls back to overview for an old activity shortcut when audit reading is explicitly denied', async () => {
-    auth.user = { ...auth.user!, permission_overrides: { 'system.audit.read': false }, permission_version: 1 }
-    seedShortcuts(auth.user.id, ['alpha'], [{ id: 'alpha', section: 'activity' }])
-    vi.mocked(projectApi.list).mockResolvedValue([project('alpha', 'Alpha项目')])
-    setup()
-    const recent = await screen.findByRole('region', { name: '最近浏览的项目' })
-    expect(recent).toHaveTextContent('继续查看概况')
-    expect(recent).not.toHaveTextContent('操作记录')
-    fireEvent.click(within(recent).getByRole('button', { name: /Alpha项目.*继续查看概况/ }))
-    expect(navigate).toHaveBeenCalledWith('/pm/projects/alpha/overview')
-    expect(screen.getByRole('button', { name: '取消收藏：Alpha项目' })).toHaveAttribute('aria-pressed', 'true')
-  })
-
   it('does not let the previous account pending list overwrite the current account or its favorites', async () => {
     const first = auth.user!.id, second = `${first}-other`
     seedShortcuts(first, ['alpha'], [{ id: 'alpha', section: 'schedule' }])
@@ -153,18 +140,4 @@ describe('account-scoped project shortcuts in the real project list', () => {
     expect(navigate).not.toHaveBeenCalled()
   })
 
-  it('does not restore a removed project when an older permission-scope request completes late', async () => {
-    seedShortcuts(auth.user!.id, [], [{ id: 'revoked', section: 'schedule' }])
-    const old = deferred<Project[]>()
-    vi.mocked(projectApi.list).mockReturnValueOnce(old.promise).mockResolvedValueOnce([project('alpha', 'Alpha项目')])
-    const view = setup()
-    await waitFor(() => expect(projectApi.list).toHaveBeenCalledTimes(1))
-    auth.user = { ...auth.user!, permission_version: 1, permission_overrides: { 'projects.view_all': false } }
-    view.rerender(<ConfigProvider theme={{ token: { motion: false } }}><ProjectListPage /></ConfigProvider>)
-    expect(await screen.findByRole('button', { name: '收藏项目：Alpha项目' })).toBeVisible()
-    await act(async () => { old.resolve([project('revoked', '已经失权的项目')]); await old.promise })
-    expect(screen.queryByText('已经失权的项目')).not.toBeInTheDocument()
-    expect(screen.queryByRole('region', { name: '最近浏览的项目' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '收藏项目：Alpha项目' })).toBeVisible()
-  })
 })

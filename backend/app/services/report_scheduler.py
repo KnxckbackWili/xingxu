@@ -8,7 +8,7 @@
 """
 
 import logging
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, time, timedelta
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -31,7 +31,7 @@ def _pm_user(db: Session, project: Project) -> Optional[User]:
     if not project.manager:
         return None
     u = db.get(User, project.manager)
-    return u if (u and u.is_active and has_permission(u,'project.read',default=True)) else None
+    return u if (u and u.is_active and has_permission(u,'project.read')) else None
 
 
 def _deliver(
@@ -80,7 +80,7 @@ def _run(db: Session, period: str, ref: date, label: str) -> dict:
     ):
         pm=db.get(User,p.manager) if p.manager else None
         from app.services.system_permissions import has_permission
-        if pm is None or not pm.is_active or not has_permission(pm,'project.read',default=True):
+        if pm is None or not pm.is_active or not has_permission(pm,'project.read'):
             skipped.append(p.name);continue
         r = generate_project_report(db,p,period,ref,user=pm)
         s = r["summary"]
@@ -159,15 +159,15 @@ def generate_and_notify_weekly_report(db: Session, ref_date: Optional[date] = No
         if pm is None:
             if receipt is None:
                 db.add(ProjectReportReceipt(project_id=project.id,period_key=key,delivery_pending=True,delivered_at=null(),
-                    summary={'delivery_pending':True,'warning':'没有活跃项目经理','attempted_at':now.isoformat()}))
+                    summary={'delivery_pending':True,'warning':'没有活跃项目负责人','attempted_at':now.isoformat()}))
                 for admin in db.query(User).filter_by(role='admin',is_active=True):
-                    if not has_permission(admin,'project.read',default=True):continue
+                    if not has_permission(admin,'project.read'):continue
                     notify(db,admin.id,f'「{project.name}」周报负责人需核对'[:200],
-                           f'{key}周报尚未投递：没有活跃项目经理。请修正项目负责人后重试。',
+                           f'{key}周报尚未投递：没有活跃项目负责人。请更换项目负责人后重试。',
                            ntype='system',project_id=project.id,channels=False)
-                log_change(db,project.id,'project',project.id,'report_unassigned',None,'周报因缺少活跃项目经理等待投递',None,{'period_key':key})
+                log_change(db,project.id,'project',project.id,'report_unassigned',None,'周报因缺少活跃项目负责人等待投递',None,{'period_key':key})
                 db.flush()
-            result['skipped'].append({'project_id':project.id,'reason':'没有活跃项目经理，尚未投递'})
+            result['skipped'].append({'project_id':project.id,'reason':'没有活跃项目负责人，尚未投递'})
             continue
         label=f'{current.isoformat()} ~ {end.isoformat()}'
         previous=db.query(Notification).filter(Notification.project_id==project.id,Notification.ntype=='report',
@@ -227,13 +227,12 @@ def scan_overdue_issues(db: Session, ref_date: Optional[date] = None, now=None) 
         rows=db.query(Issue).filter(Issue.project_id==project.id,
             (Issue.status.notin_(['closed','cancelled']) | Issue.status.is_(None))).order_by(Issue.id).all()
         sources=issue_events(db,rows)
-        recipients={person.id:person for person in db.query(User).filter(User.is_active.is_(True),User.role=='director')
-                    if has_permission(person,'project.read',default=True)}
+        recipients={}
         pm=_pm_user(db,project)
         if pm:recipients[pm.id]=pm
         if not recipients:
             recipients={person.id:person for person in db.query(User).filter_by(is_active=True,role='admin')
-                        if has_permission(person,'project.read',default=True)}
+                        if has_permission(person,'project.read')}
         for issue in rows:
             sla=issue_sla(db,issue,sources)
             if sla['due_at'] is None or now<sla['due_at']:continue

@@ -35,11 +35,11 @@ def test_creation_is_atomic_and_replayable(client, pm_headers):
 def test_failed_generation_rolls_back_project_and_vehicles(client, pm_headers, monkeypatch):
     from app.db import SessionLocal
     from app.models import Project, Vehicle, ProjectCreationReceipt
-    import app.services.generate_tasks as generator
+    import app.services.work_items as generator
     data = body(client, pm_headers)
     def fail(*args, **kwargs):
         raise ValueError('模拟生成失败')
-    monkeypatch.setattr(generator, 'generate_tasks_for_modules', fail)
+    monkeypatch.setattr(generator, 'generate', fail)
     r = client.post('/api/projects', json=data, headers=pm_headers)
     assert r.status_code == 400
     with SessionLocal() as db:
@@ -49,16 +49,16 @@ def test_failed_generation_rolls_back_project_and_vehicles(client, pm_headers, m
 
 
 @pytest.mark.parametrize('invalid', [None, 'not-a-list', [None], {'bad': 'id'}])
-def test_generate_rejects_malformed_modules(client, pm_headers, invalid):
+def test_generate_rejects_malformed_work_items(client, pm_headers, invalid):
     data = body(client, pm_headers)
     project = client.post('/api/projects', json=data, headers=pm_headers).json()
-    r = client.post(f"/api/projects/{project['id']}/tasks/generate", json={'module_ids': invalid}, headers=pm_headers)
+    r = client.post(f"/api/projects/{project['id']}/tasks/generate", json={'work_item_ids': invalid}, headers=pm_headers)
     assert r.status_code == 422
 
 
-def test_creation_rejects_partially_invalid_module_selection(client, pm_headers):
+def test_creation_rejects_partially_invalid_work_selection(client, pm_headers):
     data = body(client, pm_headers)
-    data['work_item_ids'].append('missing-module')
+    data['work_item_ids'].append('missing-work')
     r = client.post('/api/projects', json=data, headers=pm_headers)
     assert r.status_code == 400
     assert '模板' in r.json()['detail']
@@ -68,14 +68,6 @@ def test_creation_rejects_partially_invalid_module_selection(client, pm_headers)
 def test_status_rejects_bad_parameter_types(client, pm_headers, fields):
     pid = client.post('/api/projects', json=body(client, pm_headers), headers=pm_headers).json()['id']
     assert client.post(f'/api/projects/{pid}/status', json=fields, headers=pm_headers).status_code == 422
-
-
-@pytest.mark.parametrize('value', ['Infinity', '-Infinity', 'NaN'])
-def test_numeric_schemas_reject_non_finite_quantities(value):
-    from pydantic import ValidationError
-    from app.routers.tasks import GenerateTasksBody
-    with pytest.raises(ValidationError):
-        GenerateTasksBody(module_ids=['m'], task_quantities={'任务': value})
 
 
 def test_all_business_operations_require_authentication(client):

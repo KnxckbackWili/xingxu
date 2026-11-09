@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom'
 import { useAuth } from '../../stores/auth'
 import { hasSystemPermission } from '../../constants/systemPermissions'
 import { WorkPageHeader } from '../../components/WorkPage'
@@ -9,7 +8,7 @@ import { Alert, Tag, Button, Modal, Form, Input, Select, message, Popconfirm, Em
 import {
   PlusOutlined, EditOutlined, StopOutlined, PlayCircleOutlined, UserOutlined, SearchOutlined,
 } from '@ant-design/icons'
-import { userApi, ROLE_MAP } from '../../api'
+import { userApi } from '../../api'
 import { errMsg } from '../../api/client'
 import { useSubmitLock } from '../../hooks/useSubmitLock'
 import { ROLE_NAME } from '../../constants/roles'
@@ -26,10 +25,7 @@ interface UserRow {
   created_at: string | null
 }
 
-const ROLE_COLOR: Record<string, string> = {
-  admin: 'red', director: 'magenta', lead: 'purple', pm: 'blue',
-  technician: 'cyan', worker: 'green', intern: 'default', readonly: 'default',
-}
+const ROLE_COLOR: Record<string, string> = { admin: 'red', employee: 'blue' }
 
 export default function UsersPage() {
   const { user: currentUser } = useAuth()
@@ -104,10 +100,6 @@ export default function UsersPage() {
     setSaving(true)
     try {
       const rest = { ...values }
-      // Delegated managers create from the worker/readonly presets; only administrators set any role directly.
-      if (!editing) rest.permission_preset = ['pm', 'worker', 'readonly'].includes(rest.role) ? rest.role : undefined
-      if (!isAdmin) { if (editing) delete rest.role; else rest.role = 'worker' }
-      if (!rest.permission_preset) delete rest.permission_preset
       if (editing && !rest.password) delete rest.password
       if (!editing && !rest.username?.trim()) {
         rest.username = rest.display_name?.trim()  // 登录用户名留空 = 用姓名
@@ -144,7 +136,7 @@ export default function UsersPage() {
     <div className="settings-work-page">
       <WorkPageHeader title={NAV_LABEL['/pm/users']} description={NAV_DESCRIPTION['/pm/users']}
         meta={`${users.filter((u) => u.is_active).length} 个启用账号 · 共 ${users.length} 个账号`}
-        primary={canManage && <Button disabled={saving || !!loadError} type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.resetFields(); setModalOpen(true) }}>新建用户</Button>} tools={isAdmin && <Link to="/pm/permissions"><Button>管理成员权限</Button></Link>} />
+        primary={canManage && <Button disabled={saving || !!loadError} type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.resetFields(); setModalOpen(true) }}>新建用户</Button>} />
 
       {loadError && <Alert type="error" showIcon message="账号加载失败" description={loadError} action={<Button onClick={() => void load()}>重试</Button>} style={{ marginBottom: 12 }} />}
       {/* One list for desktop and phone: who, role, login name; edit and enable/disable on the right. Disabled accounts sink to the bottom. */}
@@ -189,11 +181,10 @@ export default function UsersPage() {
           <Form.Item name="display_name" label="姓名" rules={[{ required: true, message: '请输入姓名' }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="role" label="角色" initialValue="worker" rules={[{ required: true }]}
-            extra={isAdmin ? <>角色决定默认能做什么；个别人要多开权限，到 <Link to="/pm/permissions">成员权限</Link> 里一键开通。</> : editing ? '角色仅由系统管理员调整。' : '可以新建实施工程师或只读账号。'}>
-            <Select aria-label="角色" disabled={(!isAdmin && !!editing) || !canManage || saving}
-              options={isAdmin ? Object.entries({ ...ROLE_MAP, ...(editing && !ROLE_MAP[editing.role] ? { [editing.role]: ROLE_NAME[editing.role] ?? editing.role } : {}) }).map(([v, l]) => ({ label: ROLE_NAME[v] ?? l, value: v }))
-                : editing ? [{ value: editing.role, label: ROLE_NAME[editing.role] ?? editing.role }] : [{ value: 'worker', label: '实施工程师' }, { value: 'readonly', label: '只读' }]} />
+          <Form.Item name="role" label="账号类型" initialValue="employee" rules={[{ required: true }]}
+            extra="员工可以做全部项目工作；系统管理员另外管理账号、模板、车型、备份和系统设置。">
+            <Select aria-label="账号类型" disabled={!canManage || saving}
+              options={[{ value: 'employee', label: '员工' }, { value: 'admin', label: '系统管理员' }]} />
           </Form.Item>
           {editing && (
             <Form.Item name="password" label="重置密码（留空不修改）">

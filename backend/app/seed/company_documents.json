@@ -15,8 +15,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 0,
     "note": ""
   },
@@ -36,8 +34,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 1,
     "note": ""
   },
@@ -57,8 +53,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 2,
     "note": ""
   },
@@ -78,8 +72,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 3,
     "note": "关联项目采购明细"
   },
@@ -99,8 +91,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 4,
     "note": ""
   },
@@ -120,8 +110,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 5,
     "note": ""
   },
@@ -141,8 +129,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 6,
     "note": ""
   },
@@ -162,8 +148,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 7,
     "note": ""
   },
@@ -183,8 +167,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 8,
     "note": ""
   },
@@ -204,8 +186,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 9,
     "note": ""
   },
@@ -225,8 +205,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 10,
     "note": ""
   },
@@ -246,8 +224,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 11,
     "note": ""
   },
@@ -267,8 +243,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 12,
     "note": ""
   },
@@ -288,8 +262,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 13,
     "note": ""
   },
@@ -309,8 +281,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 14,
     "note": "完成标志：生命周期表已建立车辆清单"
   },
@@ -330,8 +300,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 15,
     "note": ""
   },
@@ -351,8 +319,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 16,
     "note": ""
   },
@@ -372,8 +338,6 @@
     "timing_weekday": 7,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 17,
     "note": ""
   },
@@ -393,8 +357,6 @@
     "timing_weekday": 7,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 18,
     "note": ""
   },
@@ -414,8 +376,6 @@
     "timing_weekday": 7,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 19,
     "note": ""
   },
@@ -435,8 +395,6 @@
     "timing_weekday": 7,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 20,
     "note": ""
   },
@@ -456,8 +414,6 @@
     "timing_weekday": null,
     "trigger_type": "accident",
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 21,
     "note": ""
   },
@@ -477,8 +433,6 @@
     "timing_weekday": null,
     "trigger_type": "member_leave",
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 22,
     "note": "离开项目前完成文档交接"
   },
@@ -498,8 +452,6 @@
     "timing_weekday": null,
     "trigger_type": "quality",
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 23,
     "note": ""
   },
@@ -519,8 +471,6 @@
     "timing_weekday": null,
     "trigger_type": "quality",
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 24,
     "note": ""
   },
@@ -540,8 +490,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 25,
     "note": "由组长按需抽查"
   },
@@ -561,8 +509,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 26,
     "note": ""
   },
@@ -582,8 +528,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 27,
     "note": "可由内部联系单 / 物品申请生成"
   },
@@ -603,8 +547,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 28,
     "note": ""
   },
@@ -624,8 +566,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 29,
     "note": ""
   },
@@ -645,8 +585,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 30,
     "note": ""
   },
@@ -666,8 +604,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 31,
     "note": ""
   },
@@ -687,8 +623,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 32,
     "note": "下属运行文件均按周更新"
   },
@@ -708,8 +642,6 @@
     "timing_weekday": 7,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 33,
     "note": ""
   },
@@ -729,8 +661,6 @@
     "timing_weekday": 7,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 34,
     "note": ""
   },
@@ -750,8 +680,6 @@
     "timing_weekday": 7,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 35,
     "note": ""
   },
@@ -771,8 +699,6 @@
     "timing_weekday": 7,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 36,
     "note": ""
   },
@@ -792,8 +718,6 @@
     "timing_weekday": 7,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 37,
     "note": ""
   },
@@ -813,8 +737,6 @@
     "timing_weekday": 7,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 38,
     "note": ""
   },
@@ -834,8 +756,6 @@
     "timing_weekday": 7,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 39,
     "note": ""
   },
@@ -855,8 +775,6 @@
     "timing_weekday": 7,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 40,
     "note": ""
   },
@@ -876,8 +794,6 @@
     "timing_weekday": 7,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 41,
     "note": ""
   },
@@ -897,8 +813,6 @@
     "timing_weekday": 7,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 42,
     "note": "无 PLC 的项目可标为不适用"
   },
@@ -918,8 +832,6 @@
     "timing_weekday": 7,
     "trigger_type": null,
     "confidential_default": true,
-    "external_visible_default": false,
-    "external_never_visible": true,
     "sort_order": 43,
     "note": ""
   },
@@ -939,8 +851,6 @@
     "timing_weekday": 7,
     "trigger_type": null,
     "confidential_default": true,
-    "external_visible_default": false,
-    "external_never_visible": true,
     "sort_order": 44,
     "note": ""
   },
@@ -960,8 +870,6 @@
     "timing_weekday": 7,
     "trigger_type": null,
     "confidential_default": true,
-    "external_visible_default": false,
-    "external_never_visible": true,
     "sort_order": 45,
     "note": ""
   },
@@ -981,8 +889,6 @@
     "timing_weekday": 7,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 46,
     "note": ""
   },
@@ -1002,8 +908,6 @@
     "timing_weekday": 7,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 47,
     "note": ""
   },
@@ -1023,8 +927,6 @@
     "timing_weekday": 7,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 48,
     "note": ""
   },
@@ -1044,8 +946,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 49,
     "note": "同时作为验收记录的附件"
   },
@@ -1065,8 +965,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 50,
     "note": "交付客户项目资料"
   },
@@ -1086,8 +984,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 51,
     "note": "交接售后"
   },
@@ -1107,8 +1003,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 52,
     "note": ""
   },
@@ -1128,8 +1022,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 53,
     "note": ""
   },
@@ -1149,8 +1041,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 54,
     "note": "之后按需更新，归档前必须存在"
   },
@@ -1170,8 +1060,6 @@
     "timing_weekday": null,
     "trigger_type": null,
     "confidential_default": false,
-    "external_visible_default": false,
-    "external_never_visible": false,
     "sort_order": 55,
     "note": "可由物品流水生成；归档前必须存在"
   }

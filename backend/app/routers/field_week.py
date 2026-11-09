@@ -1,13 +1,13 @@
 """The field week: explicit actual facts, authenticated personal history."""
 from datetime import date
 from typing import Literal
-from fastapi import APIRouter,Depends,HTTPException,Query,Response
+from fastapi import APIRouter,Depends,HTTPException,Response
 from pydantic import BaseModel,Field
 from sqlalchemy.orm import Session
 from app.db import get_db
 from app.deps import get_current_user
 from app.models import User,FieldOperation
-from app.services.system_permissions import route_permission,route_permission_contextual,has_permission
+from app.services.system_permissions import route_permission,has_permission
 from app.services.scope import visible_projects,ensure_project_visible
 from app.services import field_operations as service
 
@@ -23,7 +23,6 @@ class FieldChange(BaseModel):
     target_id:str
     step_key:str=Field(default='',max_length=80)
     weekly_cell_id:str|None=None
-    assisted_user_id:str|None=None
     is_done:bool
     completion_date:date
     reason:str=Field(min_length=1,max_length=4000)
@@ -69,7 +68,7 @@ def revise(db,user,record_id,body,*,retract=False):
     if not old or old.actor_id!=user.id:raise HTTPException(404,'本人记录不存在')
     ensure_project_visible(db,old.project_id,user)
     data={**body.model_dump(),'kind':old.kind,'target_id':old.target_id,'step_key':old.step_key,
-          'weekly_cell_id':old.weekly_cell_id,'assisted_user_id':old.assisted_user_id,'is_done':old.is_done}
+          'weekly_cell_id':old.weekly_cell_id,'is_done':old.is_done}
     row=service.apply(db,old.project_id,user,data,record_id=record_id,retract=retract);db.commit()
     return service.serialize(db,row,user)
 
@@ -77,7 +76,7 @@ def revise(db,user,record_id,body,*,retract=False):
 @router.get('/worker/records')
 @route_permission('personal.records.read')
 def records(week_start:date|None=None,project_id:str|None=None,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-    if not has_permission(user,'personal.records.read',default=True):raise HTTPException(403,'没有本人记录查看权限')
+    if not has_permission(user,'personal.records.read'):raise HTTPException(403,'没有本人记录查看权限')
     projects=visible_projects(db,user)
     if project_id:
         ensure_project_visible(db,project_id,user);projects=[p for p in projects if p.id==project_id]

@@ -22,7 +22,7 @@ export default function ProjectStoragePanel({ projectId, canCleanup = false, onC
     setInfo(undefined); setPreview(undefined); setError(''); setReason(''); setKeep(8); setBusy(false); lock.current = false
     void storageApi.project(projectId).then(data => { if (ticket === epoch.current) setInfo(data) }).catch(failure => { if (ticket === epoch.current) setError(errMsg(failure)) })
     return () => { epoch.current++ }
-  }, [projectId, user?.id, user?.permission_version])
+  }, [projectId, user?.id])
   const act = async (confirm: boolean) => {
     if (lock.current || !canCleanup) return
     if (confirm && (!preview || stale || !reason.trim() || !preview.candidates.length)) return

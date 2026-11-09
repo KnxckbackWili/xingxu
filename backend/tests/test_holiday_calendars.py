@@ -111,14 +111,9 @@ def test_invalid_import_does_not_partially_write(client, admin_headers, changes)
         assert db.query(ChangeLog).filter_by(entity_type='holiday_calendar').count() == 0
 
 
-def test_target_year_and_explicit_permission_denial(client, admin_headers, pm_headers):
+def test_target_year_and_employee_cannot_edit(client, admin_headers, pm_headers):
     assert client.put('/api/holiday-calendars/2028', headers=admin_headers, json=payload()).status_code == 422
-    from app.models import User
-    with SessionLocal() as db:
-        admin = db.query(User).filter_by(username='admin').one()
-        admin.permission_overrides = {'system.holidays.manage': False}
-        db.commit()
-    assert client.put('/api/holiday-calendars/2027', headers=admin_headers, json=payload()).status_code == 403
+    assert client.put('/api/holiday-calendars/2027', headers=pm_headers, json=payload()).status_code == 403
 
 
 def test_audit_failure_rolls_back_annual_data(client, admin_headers, monkeypatch):

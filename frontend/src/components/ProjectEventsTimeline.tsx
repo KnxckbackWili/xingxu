@@ -68,7 +68,7 @@ export default function ProjectEventsTimeline({ projectId, canEdit, onChanged, i
               <strong>{event.label}</strong>
               <span className="events-dates">{dates}</span>
               {event.derived && summary && <small>计划 {summary.expected} 台 · 已建档 {summary.registered} 台 · 到场 {summary.arrived} 台{summary.registry_complete ? '' : '（车辆档案未齐）'}</small>}
-              {(event.actual_date || event.actual_source?.kind === 'legacy_status_transition') && <small>{event.source_description}</small>}
+              {event.actual_date && <small>{event.source_description}</small>}
               {event.note && <small>{event.note}</small>}
             </div>
             {canEdit && !event.derived && <span className="events-actions">

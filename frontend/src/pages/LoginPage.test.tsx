@@ -17,9 +17,8 @@ vi.mock('../../api/client', () => ({
 import { useAuth } from '../stores/auth'
 import LoginPage from './LoginPage'
 
-const internUser = { id: 'u-intern', role: 'intern', username: 'intern1', display_name: '实习1' } as any
-const pmUser = { id: 'u-pm', role: 'pm', username: 'pm1', display_name: 'PM1' } as any
-const workerUser = { id: 'u-w', role: 'worker', username: 'w1', display_name: '现场1' } as any
+const pmUser = { id: 'u-pm', role: 'admin', username: 'pm1', display_name: 'PM1' } as any
+const workerUser = { id: 'u-w', role: 'employee', username: 'w1', display_name: '现场1' } as any
 
 function loginAs(user: any) {
   useAuth.setState({ user, login: async () => user })
@@ -45,28 +44,13 @@ describe('login next destination safety', () => {
   it.each(['https://qa-redirect.invalid', '//qa-redirect.invalid', '/\\qa-redirect.invalid', '/login?next=/pm', '/\n/qa-redirect.invalid'])('rejects unsafe or looping next %j', async target => {
     mockLocation.search = `?${new URLSearchParams({ next: target })}`
     loginAs(pmUser)
-    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/pm', { replace: true }))
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/pm/dashboard', { replace: true }))
   })
 })
 
-/**
- * 登录落地回归（二审必改 #1）：原逻辑按 `role === 'worker'` 硬编码，
- * 导致 intern 被导向无权访问的 /pm 直接进 403。
- * 现改为按 PM_ROLES 判权：无管理端权限的角色（worker/intern）→ /worker。
- */
-describe('登录后按角色落地', () => {
-  it('intern 登录后落 /worker（原 bug：被导向 /pm 403）', async () => {
-    loginAs(internUser)
-    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/worker/week', { replace: true }))
-  })
-
-  it('worker 登录后落 /worker', async () => {
-    loginAs(workerUser)
-    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/worker/week', { replace: true }))
-  })
-
-  it('pm 登录后落 /pm（管理端角色不受影响）', async () => {
-    loginAs(pmUser)
-    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/pm', { replace: true }))
+describe('登录后进入工作台', () => {
+  it.each([['员工', workerUser], ['系统管理员', pmUser]])('%s 登录后进入工作台', async (_, user) => {
+    loginAs(user)
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/pm/dashboard', { replace: true }))
   })
 })

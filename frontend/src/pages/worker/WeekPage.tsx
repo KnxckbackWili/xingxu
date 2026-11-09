@@ -12,7 +12,6 @@ import { useOfflineSync } from '../../offline/useOfflineSync'
 import { useAuth } from '../../stores/auth'
 import { ensureVerifiedAccount } from '../../utils/verifiedAccount'
 import { hasSystemPermission } from '../../constants/systemPermissions'
-import { canAccessNav } from '../../constants/nav'
 import { deadlineLabel } from '../../utils/documentDeadlines'
 import { ISSUE_STATUS_MAP } from '../../constants/issues'
 import './worker.css'
@@ -78,7 +77,7 @@ export default function WeekPage({ projectId = '' }: { projectId?: string }) {
   const documents = data?.this_week_documents ?? []
   const documentLine = (doc: Week['this_week_documents'][number]) => <p key={doc.document_id}><Link to={`/pm/projects/${doc.project_id}/documents?document=${doc.document_id}`}>{doc.project_name} · {doc.code} {doc.name}{doc.vehicle_label ? ` · ${doc.vehicle_label}` : ''}</Link><br /><Typography.Text type="secondary">{deadlineLabel(doc.due_at, doc.timezone || 'Asia/Shanghai')}</Typography.Text> {data?.permissions.upload && hasSystemPermission(user, 'worker.deliver') && <Button onClick={() => { setUploading(doc); setFile(undefined); setEventDate(''); setUploadError('') }}>上传当期资料</Button>}</p>
   return <div className="worker-work-page">
-    <WorkPageHeader title={canAccessNav('/pm/dashboard', user) ? '我的本周' : '工作台'} description="这周已发布的工作、要交的资料和未解决的问题。谁做完谁登记，不用认领。" tools={<Space wrap><DatePicker picker="week" aria-label="计划周" value={week ? dayjs(week) : dayjs()} allowClear={false} onChange={value => setWeek(value?.subtract((value.day() + 6) % 7, 'day').format('YYYY-MM-DD'))} /><RefreshAction onClick={load} loading={loading} /></Space>} />
+    <WorkPageHeader title="我的本周" description="这周已发布的工作、要交的资料和未解决的问题。谁做完谁登记。" tools={<Space wrap><DatePicker picker="week" aria-label="计划周" value={week ? dayjs(week) : dayjs()} allowClear={false} onChange={value => setWeek(value?.subtract((value.day() + 6) % 7, 'day').format('YYYY-MM-DD'))} /><RefreshAction onClick={load} loading={loading} /></Space>} />
     {error && <Alert type="error" message="本周信息未能读取" description={error} />}
     {warningGroups.size > 0 && <details className="week-notice week-notice-fold"><summary>{data!.warnings.length} 条计划提醒</summary>
       <ul className="week-notice-list">{[...warningGroups].map(([message, count]) => <li key={message}>{message}{count > 1 ? `（${count} 处）` : ''}</li>)}</ul></details>}

@@ -39,19 +39,3 @@ it('keeps other projects available when the dashboard lacks one progress value',
 })
 
 
-it('filters overdue documents from the project DTO without workspace permission', async () => {
-  params.delete('create');localStorage.setItem('agvpm_proj_view','table')
-  auth.user={role:'pm',id:'scoped',permission_overrides:{'workspace.view':false}}
-  const base={id:'due',name:'资料逾期项目',status:'executing',members:[],document_attention:{overdue_count:2}} as any
-  vi.mocked(projectApi.list).mockResolvedValue([base,{...base,id:'clear',name:'资料齐备项目',document_attention:{overdue_count:0}}])
-  vi.mocked(api.get).mockReset();vi.mocked(api.get).mockResolvedValue({data:[]})
-  try {
-    render(<ConfigProvider theme={{token:{motion:false}}}><ProjectListPage/></ConfigProvider>)
-    await screen.findByText('资料齐备项目')
-    // No progress filter: the overdue project carries its own tag in the list.
-    expect(screen.queryByRole('combobox',{name:'按进度筛选'})).toBeNull()
-    expect(screen.getByText('资料逾期项目').closest('tr')).toHaveTextContent('2')
-    expect(vi.mocked(api.get).mock.calls.some(([url])=>url==='/dashboard/overview')).toBe(false)
-    expect(screen.queryByRole('button',{name:'更多操作'})).toBeNull()
-  } finally {auth.user={role:'pm'}}
-})

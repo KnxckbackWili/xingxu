@@ -16,14 +16,12 @@ from sqlalchemy.orm import Session
 
 from app.services.system_permissions import route_permission
 from app.db import get_db
-from app.deps import get_current_user, require_roles
+from app.deps import get_current_user, require_admin
 from app.models import Feedback, User, FEEDBACK_STATUSES
 
 router = APIRouter(prefix="/feedback", tags=["系统问题反馈"])
 
-# 管理角色：管理员（admin）+ 项目管理（director 全局治理、pm 项目管理层）
-MANAGE_ROLES = ("admin", "director", "pm")
-require_feedback_manage = require_roles(*MANAGE_ROLES)
+require_feedback_manage = require_admin
 
 MAX_DESCRIPTION_LEN = 2000
 MAX_STEPS_LEN = 5000

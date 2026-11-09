@@ -1,4 +1,3 @@
-import ExternalSharePanel from './ExternalSharePanel'
 import VehicleLifecyclePage from './VehicleLifecyclePage'
 import { useLocation } from 'react-router-dom'
 import { DISPATCH_PLATFORMS, PLAN_EVENTS, PROJECT_EVENT_LABELS, planFormValues, planPayload, plannedDate } from '../../../constants/projectEvents'
@@ -10,12 +9,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Card, Form, Input, DatePicker, Button, Select, message, Row, Col, Modal } from 'antd'
 import { SaveOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import { projectApi, userApi, type Project } from '../../../api'
-import { api, errMsg } from '../../../api/client'
+import { projectApi, type Project } from '../../../api'
+import { errMsg } from '../../../api/client'
 import { projectDocumentsApi } from '../../../api/projectDocuments'
-import { useAuth } from '../../../stores/auth'
 import { TIMEZONE_OPTIONS, DEFAULT_TIMEZONE } from '../../../constants/timezones'
-import { ROLE_NAME } from '../../../constants/roles'
 import { useUnsavedNavigation } from '../../../hooks/useUnsavedNavigation'
 import { WorkPageHeader } from '../../../components/WorkPage'
 
@@ -25,7 +22,6 @@ const infoSnapshot = (values: any) => JSON.stringify({
   range: (values.range ?? []).map((date: any) => date?.format('YYYY-MM-DD') ?? ''),
   event_plans: planPayload(values.event_plans), dispatch_platform: values.dispatch_platform ?? null,
   description: values.description ?? '', staffing_notes: values.staffing_notes ?? '',
-  technical_manager_id: values.technical_manager_id ?? '',
 })
 const projectInfoFields = (project: Project) => ({
   name: project.name, abbreviation: project.abbreviation, contract_no: project.contract_no ?? '', client: project.client,
@@ -33,31 +29,21 @@ const projectInfoFields = (project: Project) => ({
   range: [dayjs(project.start_date), dayjs(project.end_date)],
   event_plans: planFormValues(project), dispatch_platform: project.dispatch_platform ?? null,
   description: project.description, staffing_notes: project.staffing_notes,
-  technical_manager_id: project.technical_manager || undefined,
 })
 const fieldsFromSnapshot = (snapshot: string) => {
   const values = JSON.parse(snapshot)
   return { ...values,
     range: values.range.map((value: string) => value ? dayjs(value) : null),
     event_plans: Object.fromEntries(PLAN_EVENTS.map(key => [key, values.event_plans?.[key] ? dayjs(values.event_plans[key]) : null])),
-    technical_manager_id: values.technical_manager_id || undefined,
   }
 }
 
-/**
- * 项目编辑：精细调整中心（简洁分组）
- * 基本信息 / 成员 / 任务调整（目标数量、追加任务、适用性）
- */
+/** 项目设置：基本信息、关键日期、车型与负责人。 */
 export default function EditPage({ project, onReload }: { project: Project; onReload: () => void }) {
-  const { user } = useAuth()
   const location = useLocation()
-  const isOwner = user?.role === 'admin' || (user?.role === 'pm' && project.manager === user.id)
   const writeBlocked = useProjectWriteBlocked(project.status)
-  const hasEditPermission = useProjectCapability('project.update', isOwner)
+  const hasEditPermission = useProjectCapability('project.update', true)
   const canEdit = !writeBlocked && hasEditPermission
-    && user?.permission_overrides?.['project.update'] !== false
-    && user?.permission_overrides?.['project.read'] !== false
-  const [users, setUsers] = useState<any[]>([])
   const [infoForm] = Form.useForm()
   const [saving, setSaving] = useState(false)
   const [infoDirty, setInfoDirty] = useState(false)
@@ -74,13 +60,12 @@ export default function EditPage({ project, onReload }: { project: Project; onRe
   }, [])
   useEffect(() => closeTabDialog, [closeTabDialog])
   const [, setDirty] = useUnsavedNavigation({ title: '项目设置有未保存的修改', beforeConfirm: closeTabDialog })
-  const dirtyAreas = useRef({ info: false, external: false, vehicles: false, owner: false, schedule: false })
-  const updateDirty = useCallback((area: 'info' | 'external' | 'vehicles' | 'owner' | 'schedule', value: boolean) => {
+  const dirtyAreas = useRef({ info: false, vehicles: false, owner: false, schedule: false })
+  const updateDirty = useCallback((area: 'info' | 'vehicles' | 'owner' | 'schedule', value: boolean) => {
     dirtyAreas.current[area] = value
     if (area === 'info') setInfoDirty(value)
     setDirty(Object.values(dirtyAreas.current).some(Boolean))
   }, [setDirty])
-  const externalDirty = useCallback((value: boolean) => updateDirty('external', value), [updateDirty])
   const vehiclesDirty = useCallback((value:boolean)=>updateDirty('vehicles',value),[updateDirty])
   const ownerDirty = useCallback((value:boolean)=>updateDirty('owner',value),[updateDirty])
   const scheduleDirty = useCallback((value:boolean)=>updateDirty('schedule',value),[updateDirty])
@@ -99,7 +84,6 @@ export default function EditPage({ project, onReload }: { project: Project; onRe
       updateDirty('info', false)
     }
     formProject.current = project.id
-    ;(project.capabilities !== undefined ? api.get(`/projects/${project.id}/people`, { params: isOwner ? { include_candidates: true } : undefined }).then(r => r.data) : userApi.listActive()).then(setUsers).catch(() => {})
   }, [project, infoForm, updateDirty])
 
   const switchSettingsTab = (next: string) => {
@@ -120,7 +104,7 @@ export default function EditPage({ project, onReload }: { project: Project; onRe
         infoForm.setFieldsValue(fields)
         infoBaseline.current = infoSnapshot(fields)
         infoBaselineVersion.current = project.version
-        dirtyAreas.current = { info: false, external: false, vehicles: false, owner: false, schedule: false }
+        dirtyAreas.current = { info: false, vehicles: false, owner: false, schedule: false }
         setInfoDirty(false)
         setDirty(false)
         setDraftEpoch(value => value + 1)
@@ -141,7 +125,6 @@ export default function EditPage({ project, onReload }: { project: Project; onRe
         start_date: values.range[0].format('YYYY-MM-DD'), end_date: values.range[1].format('YYYY-MM-DD'),
         description: values.description,
         staffing_notes: values.staffing_notes,
-        ...(isOwner ? { technical_manager_id: values.technical_manager_id ?? null } : {}),
       })
       infoBaseline.current = infoSnapshot(values)
       infoBaselineVersion.current = saved?.version ?? (infoBaselineVersion.current === undefined ? undefined : infoBaselineVersion.current + 1)
@@ -181,7 +164,7 @@ export default function EditPage({ project, onReload }: { project: Project; onRe
 
   return (
     <>
-    <WorkPageHeader title="项目设置" description="维护项目资料、成员、车型与负责人；工作项及周计划到「计划」调整。" />
+    <WorkPageHeader title="项目设置" description="维护项目资料、车型与负责人；工作项及周计划到「计划」调整。" />
     <Tabs
       className="project-settings-tabs"
       activeKey={settingsTab}
@@ -208,17 +191,13 @@ export default function EditPage({ project, onReload }: { project: Project; onRe
                 <Form.Item name="dispatch_platform" label="调度平台"><Select aria-label="调度平台" allowClear options={DISPATCH_PLATFORMS} placeholder="选择 NDC / GRACE / 集成" /></Form.Item>
                 <Row gutter={12}>{PLAN_EVENTS.map(key => <Col xs={24} md={8} key={key}><Form.Item name={["event_plans", key]} label={`${PROJECT_EVENT_LABELS[key]}计划日期`}><DatePicker style={{ width: "100%" }} /></Form.Item></Col>)}</Row>
                 <Form.Item name="range" label="实施周期" rules={[{ required: true, message: '请选择实施开始和结束日期' }]}><DatePicker.RangePicker style={{ width: '100%' }} /></Form.Item>
-                <Form.Item name="technical_manager_id" label="技术负责人" extra="可选：技术负责人和项目负责人一样能维护工作项和周计划。">
-                  <Select aria-label="技术负责人" allowClear showSearch optionFilterProp="label" disabled={!isOwner || !canEdit || saving} placeholder="选择技术负责人"
-                    options={users.filter((u) => ['lead', 'technician', 'pm', 'worker'].includes(u.role)).map((u) => ({ label: `${u.display_name}（${ROLE_NAME[u.role] ?? u.role}）`, value: u.id }))} />
-                </Form.Item>
                 <Form.Item name="description" label="说明"><Input.TextArea rows={2} /></Form.Item>
                 <details className="work-detail-summary project-info-extra"><summary>其他资料：简称、合同号、时区与人员备注</summary>
                   <Row gutter={12}><Col xs={24} md={12}><Form.Item name="abbreviation" label="项目简称"><Input /></Form.Item></Col>
                   <Col xs={24} md={12}><Form.Item name="contract_no" label="项目合同号" tooltip="生命周期表等公司表单使用"><Input maxLength={100} placeholder="如 XX-2026-001" /></Form.Item></Col></Row>
                   <Row gutter={12}>
                   <Col xs={24} md={12}><Form.Item name="timezone" label="现场时区" tooltip="今日任务与撤回期限按现场时区判定。"><Select aria-label="现场时区" options={TIMEZONE_OPTIONS} /></Form.Item></Col></Row>
-                  <Form.Item name="staffing_notes" label="人员安排参考" extra="记录姓名、能力或驻场建议；实际参与人员请在本页「成员」维护。"><Input.TextArea rows={3} /></Form.Item>
+                  <Form.Item name="staffing_notes" label="人员安排参考" extra="记录姓名、能力或驻场建议。"><Input.TextArea rows={3} /></Form.Item>
                 </details>
                 {canEdit && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   <Button type="primary" htmlType="submit" loading={saving} icon={<SaveOutlined />}>保存</Button>
@@ -235,12 +214,6 @@ export default function EditPage({ project, onReload }: { project: Project; onRe
         },
         { key:'vehicles',label:'车型',disabled:saving,children:<VehicleLifecyclePage key={`${project.id}:${draftEpoch}`} project={project} onReload={onReload} configurationOnly onDirtyChange={vehiclesDirty} /> },
         { key:'schedule',label:'工作日',disabled:saving,children:<WeeklyPlanSettings key={`${project.id}:${draftEpoch}`} project={project} onReload={onReload} onDirtyChange={scheduleDirty}/> },
-        {
-          key: 'external',
-          disabled: saving,
-          label: '外部查看',
-          children: <ExternalSharePanel key={`${project.id}:${draftEpoch}`} projectId={project.id} enabled={user?.id === project.manager && hasEditPermission && user?.permission_overrides?.['project.read'] !== false} onDirtyChange={externalDirty} />,
-        },
       ]}
     />
 

@@ -23,6 +23,3 @@ it('keeps changes after a stale refusal and requires an explicit fresh read',asy
  h.saveSettings.mockRejectedValueOnce({response:{status:409,data:{detail:'项目已变化'}}});show();await screen.findByLabelText('手动休息日');fireEvent.change(screen.getByLabelText('手动休息日'),{target:{value:'2026-11-01'}});fireEvent.click(screen.getByRole('button',{name:'保存排期设置'}))
  expect(await screen.findByText('设置预览已失效，请重新读取后保存')).toBeVisible();expect(screen.getByLabelText('手动休息日')).toHaveValue('2026-11-01');expect(screen.getByRole('button',{name:'保存排期设置'})).toBeDisabled();expect(h.settings).toHaveBeenCalledOnce()
 })
-it('does not request or mutate settings after an explicit system denial',()=>{
- h.user={...h.user,permission_overrides:{'project.manage_schedule':false}};show();expect(screen.getByText('本账号当前没有周计划维护权限')).toBeVisible();expect(h.settings).not.toHaveBeenCalled();expect(h.saveSettings).not.toHaveBeenCalled()
-})

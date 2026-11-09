@@ -31,9 +31,6 @@ export const projectApi = {
     const response = await api.delete(`/projects/${encodeURIComponent(id)}`, { params: data, timeout: 600000 })
     return response.data
   },
-  governanceRequests: (status?: string) => api.get('/projects/governance/requests', { params: { status } }).then((r) => r.data),
-  requestGovernance: (id: string, data: any) => api.post(`/projects/${id}/governance-requests`, data).then((r) => r.data),
-  reviewGovernance: (id: string, data: any) => api.post(`/projects/governance/requests/${id}/review`, data).then((r) => r.data),
 
   // Vehicles
   vehicles: (id: string) => api.get(`/projects/${id}/vehicles`).then((r) => r.data),
@@ -102,15 +99,13 @@ export interface User {
   id: string
   username: string
   display_name: string
-  role: 'admin' | 'pm' | 'worker' | 'director' | 'lead' | 'technician' | 'intern' | 'readonly'
+  role: 'admin' | 'employee'
   phone: string
   email: string
   is_active: boolean
   two_factor_enabled?: boolean
   two_factor_required?: boolean
   system_permissions?: string[]
-  permission_overrides?: Record<string, boolean>
-  permission_version?: number
 }
 
 export interface Project {
@@ -118,7 +113,6 @@ export interface Project {
   document_attention?: import('./projectDocuments').DocumentAttention
   next_signoff?: import('./workbench').WorkbenchAction | null
   can_delete?: boolean
-  member_details?: Array<{ id: string; display_name: string; role: string }>
   capabilities?: string[]
   id: string
   name: string
@@ -126,8 +120,6 @@ export interface Project {
   contract_no?: string
   manager: string
   manager_name?: string
-  technical_manager?: string
-  technical_manager_name?: string
   client: string
   location: string
   timezone?: string
@@ -158,12 +150,6 @@ export interface Project {
   created_at: string
 }
 
-export const ROLE_MAP: Record<string, string> = {
-  admin: '系统管理员',
-  pm: '项目经理',
-  worker: '实施工程师',
-  readonly: '只读',
-}
 
 // ===== AI 内部开放接口 =====
 export const aiInternalApi = {

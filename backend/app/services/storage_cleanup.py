@@ -148,7 +148,7 @@ def build_preview(db,project,user,keep_periods=8):
                 'document_status':document.status,'identity':{key:getattr(document,key) for key in IDENTITY}} for version,document in refs]
         candidates.append({'attachment_id':asset.id,'filename':asset.filename,'stored_name':asset.stored_name,'file_size':asset.file_size,
             'sha256':sha,'versions':proof,'documents':[{'id':document.id,'code':document.code,'name':document.name,'period_key':document.period_key} for _,document in refs]})
-    evidence={'project':_row(project),'actor':[user.id,user.role,user.permission_version,user.token_version],
+    evidence={'project':_row(project),'actor':[user.id,user.role,user.token_version],
         'documents':[_row(row) for row in documents],'versions':[_row(row) for row in versions],
         'attachments':[_row(row) for row in assets],'all_refs':[[_row(version),_row(document)] for version,document in all_refs],
         'events':[_row(row) for row in db.query(models.ProjectEvent).filter_by(project_id=project.id).order_by(models.ProjectEvent.id)],
@@ -199,7 +199,7 @@ def apply_cleanup(db,project,user,keep_periods,fingerprint,reason):
     if preview['fingerprint']!=fingerprint:raise HTTPException(409,'资料、文件、权限、事件或引用已变化，请重新预览后确认')
     if not reason.strip():raise HTTPException(400,'请填写历史原件清理原因')
     if not candidates:raise HTTPException(400,'没有可按本次策略清理的历史文件')
-    actor_version=(user.token_version,user.permission_version)
+    actor_version=user.token_version
     paths=[]
     for candidate in candidates:
         asset=db.get(models.Attachment,candidate['attachment_id'])
@@ -207,7 +207,7 @@ def apply_cleanup(db,project,user,keep_periods,fingerprint,reason):
         if asset.sha256!=candidate['sha256']:raise HTTPException(409,'原件SHA-256已变化，未执行清理，请重新核对')
         paths.append((asset,path,candidate))
     db.query(models.User.id).filter_by(id=user.id).with_for_update().all();db.refresh(user)
-    if (user.token_version,user.permission_version)!=actor_version:raise HTTPException(409,'账号会话或授权在预览确认期间已变化，请重新登录并预览')
+    if user.token_version!=actor_version:raise HTTPException(409,'账号会话或授权在预览确认期间已变化，请重新登录并预览')
     authorize_project(user,project,C_UPDATE)
     if any(not docs.can_read_file(user,project,asset) for asset,_,_ in paths):raise HTTPException(403,'当前已无候选文件完整查看权限，未执行清理')
     now=utcnow();receipt=models.FileCleanupReceipt(project_id=project.id,actor_id=user.id,actor_name=user.display_name,

@@ -85,7 +85,7 @@ export default function ProcurementPanel({ projectId, templateId, onDirtyChange 
     const extraDefaults: Record<string, unknown> = { quantity: 1, unit: '件', spec: '', order_status: '未申请' }
     const extra = Object.fromEntries(['quantity', 'unit', 'spec', 'order_status'].filter(key => !old || values[key] !== (old.extra?.[key] ?? extraDefaults[key])).map(key => [key, values[key]]))
     if (Object.keys(extra).length) body.extra = extra
-    if (!old) { body.category = 'procurement'; body.blocks_entry = false }
+    if (!old) body.category = 'procurement'
     await act(() => old ? api.put(`${path}/${encodeURIComponent(old.id)}`, body) : api.post(path, body), () => { setEditing(null); onDirtyChange?.(false) })
   }
   const openCatalog = async () => {

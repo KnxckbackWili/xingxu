@@ -1,10 +1,8 @@
 """Read projections for field work and the personnel-by-week matrix."""
-from datetime import date,timedelta
-from sqlalchemy import or_
+from datetime import timedelta
 from fastapi import HTTPException
-from app.models import User,Task,Project,Issue,FieldOperation,ProjectDocument
+from app.models import Task,Issue,FieldOperation,ProjectDocument
 from app.services.scope import visible_projects,ensure_project_visible
-from app.services.permissions import project_capabilities,C_PLAN
 from app.services.system_permissions import has_permission
 from app.services.field_operations import date_window,serialize
 from app.time_utils import project_today
@@ -33,10 +31,10 @@ def _work(db,task_id):
 def week_view(db,user,*,week_start=None,project_id=None):
     projects=visible_projects(db,user)
     if project_id:projects=[ensure_project_visible(db,project_id,user)]
-    by_id={p.id:p for p in projects};users={u.id:u for u in db.query(User).filter_by(is_active=True)}
+    by_id={p.id:p for p in projects}
     planned=[];warnings=[];matrices={};windows={}
     # 本周已发布的工作都列在“要做的工作”里，谁做完谁登记。
-    can_read_plan=has_permission(user,'personal.schedule.read',default=True)
+    can_read_plan=has_permission(user,'personal.schedule.read')
     if not can_read_plan:warnings.append({'project_id':'','message':'本人周计划查看权限已关闭'})
     for project in projects:
         start=monday(week_start or project_today(project.timezone));windows[project.id]=date_window(project)
@@ -53,7 +51,7 @@ def week_view(db,user,*,week_start=None,project_id=None):
             if not work:continue
             from app.services.project_lifecycle import EXECUTION_PROJECT_STATUSES
             row={**cell_dict(db,cell,project,user,cache=cache),'work_item':work,'date_window':windows[project.id],
-                 'can_record':has_permission(user,'worker.report',default=True) and project.status in EXECUTION_PROJECT_STATUSES and user.role not in ('readonly','external')}
+                 'can_record':has_permission(user,'worker.report') and project.status in EXECUTION_PROJECT_STATUSES}
             planned.append(row)
         from app.services.vehicle_progress import matrix
         matrices[project.id]=matrix(db,project.id)
@@ -71,12 +69,12 @@ def week_view(db,user,*,week_start=None,project_id=None):
         'vehicle_matrices':matrices,'this_week_documents':documents,
         'my_issues':[{'id':i.id,'project_id':i.project_id,'project_name':by_id[i.project_id].name,'title':i.title,'status':i.status,
             'severity':i.severity,'reporter_id':i.reporter_id} for i in issues],
-        'windows':windows,'warnings':warnings,'permissions':{'record':has_permission(user,'worker.report',default=True),
-            'upload':has_permission(user,'worker.deliver',default=True),'issues':has_permission(user,'worker.issues',default=True),'plan_read':can_read_plan}}
+        'windows':windows,'warnings':warnings,'permissions':{'record':has_permission(user,'worker.report'),
+            'upload':has_permission(user,'worker.deliver'),'issues':has_permission(user,'worker.issues'),'plan_read':can_read_plan}}
 
 
 def personal_report(db,user,*,week_start=None):
-    if not has_permission(user,'personal.records.read',default=True):raise HTTPException(403,'没有本人记录查看权限')
+    if not has_permission(user,'personal.records.read'):raise HTTPException(403,'没有本人记录查看权限')
     from app.services.field_operations import effective_records,text_redactor
     projects=visible_projects(db,user);rows=[];current=[];periods=[]
     for project in projects:
@@ -86,5 +84,4 @@ def personal_report(db,user,*,week_start=None):
         redact=text_redactor(db,project,user)
         rows.extend(serialize(db,row,user,text_filter=redact) for row in all_records if start<=row.completion_date<=end)
         current.extend(row for row in effective_records(all_records) if start<=row.completion_date<=end)
-    return {'periods':periods,'records':rows,'summary':{'actual_records':len(current),'completed':sum(r.is_done for r in current),
-        'assisted':sum(bool(r.assisted_user_id) for r in current)},'generated_from':'actual_field_operations'}
+    return {'periods':periods,'records':rows,'summary':{'actual_records':len(current),'completed':sum(r.is_done for r in current)},'generated_from':'actual_field_operations'}

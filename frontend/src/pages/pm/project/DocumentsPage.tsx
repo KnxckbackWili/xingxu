@@ -23,7 +23,6 @@ import ProjectStoragePanel from '../../../components/ProjectStoragePanel'
 import DocumentConfidentialityModal, { type ConfidentialityTarget } from './DocumentConfidentialityModal'
 import ProcurementPanel from './ProcurementPanel'
 import AcceptanceRecordsPanel from './AcceptanceRecordsPanel'
-import EntryReviewPanel from './EntryReviewPanel'
 import GeneratedFormControl from './GeneratedFormControl'
 import './FieldWorkPages.css'
 import './DocumentsPage.css'
@@ -31,16 +30,8 @@ import './DocumentsPage.css'
 const stageName = (key: string) => DOCUMENT_STAGES.find(stage => stage.value === key)?.label ?? key
 const sizeLabel = (bytes: number) => bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.ceil(bytes / 1024))} KB`
 const statusName = { pending: '待提交', submitted: '已提交', waived: '不适用' }
-const reviewName: Record<string, string> = { approved: '审核通过', rejected: '已退回', submitted: '原记录已提交', pending: '待核对' }
 function late(row: ProjectDocument) { return row.status === 'pending' && row.applicable !== false && !row.due_is_estimated && !!row.due_at && parseDateTime(row.due_at).isBefore(new Date()) }
 function rowName(row: ProjectDocument) { return `${row.code} ${row.name}${row.vehicle_label ? ` · ${row.vehicle_label}` : ''}${row.period_key ? ` · ${row.period_key}` : ''}` }
-
-function ReviewTrail({ metadata }: { metadata: Record<string, unknown> }) {
-  const history = Array.isArray(metadata.review_history) ? metadata.review_history.filter((value): value is Record<string, unknown> => !!value && typeof value === 'object') : []
-  const latest = metadata.latest_review && typeof metadata.latest_review === 'object' ? metadata.latest_review as Record<string, unknown> : metadata
-  const line = (record: Record<string, unknown>) => <><span>{reviewName[String(record.decision ?? record.status)] || '原审核信息保留'}</span>{typeof record.note === 'string' && `：${record.note}`}{typeof record.reject_reason === 'string' && `：${record.reject_reason}`}{typeof record.at === 'string' && <small> · {typeof record.by_name === 'string' && record.by_name ? record.by_name : '原审核人未记录'} · {formatDateTime(record.at)}</small>}</>
-  return <><Typography.Paragraph type="secondary">{line(latest)}</Typography.Paragraph>{history.length > 1 && <details><summary>审核历史（{history.length}）</summary>{history.map((record, index) => <Typography.Paragraph key={index}>{line(record)}</Typography.Paragraph>)}</details>}</>
-}
 
 export default function DocumentsPage({ projectId, templateId, onProjectChange }: { projectId: string; templateId?: string; onProjectChange?: () => void }) {
   const { user } = useAuth()
@@ -64,17 +55,13 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
   const [requirementDirty, setRequirementDirty] = useState(false)
   const [procurementDirty, setProcurementDirty] = useState(false)
   const [acceptanceDirty, setAcceptanceDirty] = useState(false)
-  const [entryDirty, setEntryDirty] = useState(false)
   const [confidentialityDirty, setConfidentialityDirty] = useState(false)
   const [confidentialityTarget, setConfidentialityTarget] = useState<ConfidentialityTarget | null>(null)
   const [procurementOpen, setProcurementOpen] = useState(false)
   const [acceptanceOpen, setAcceptanceOpen] = useState(false)
-  const [entryOpen, setEntryOpen] = useState(false)
   const [historyId, setHistoryId] = useState<string | null>(null)
   const [statusChange, setStatusChange] = useState<{ row: ProjectDocument; status: 'pending' | 'waived' } | null>(null)
   const [reason, setReason] = useState('')
-  const [review, setReview] = useState<{ documentId: string; versionId: string; decision: 'approved' | 'rejected' } | null>(null)
-  const [reviewNote, setReviewNote] = useState('')
   const [uploadOpen, setUploadOpen] = useState(false)
   const [uploadEpoch, setUploadEpoch] = useState(0)
   const [uploadMode, setUploadMode] = useState<'upload' | 'existing'>('upload')
@@ -100,7 +87,7 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
   const [, setNavigationDirty] = useUnsavedNavigation({ title: '资料有尚未保存的修改' })
   const documents = data?.documents ?? []
   const definitions = data?.definitions ?? []
-  const canExport = exportCapability && user?.permission_overrides?.['project.export'] !== false && !loadError && !loading
+  const canExport = exportCapability && !loadError && !loading
   const canSubmit = !!data?.permissions.submit && hasSystemPermission(user, 'worker.deliver') && !writeBlocked && !loadError
   const canManage = !!data?.permissions.manage && manageCapability && !writeBlocked && !loadError
   const canManageConfidentiality = data?.permissions.manage_confidentiality === true && canManage && !loading
@@ -119,16 +106,14 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
   }, [projectId])
   useEffect(() => {
     setData(null); setSearch(''); setStatus('all'); setStage(undefined); setVehicle(undefined); setSelected([]); setActionError('')
-    setEditing(null); setHistoryId(null); setStatusChange(null); setReview(null); setUploadOpen(false); setUploadFile(null); setUploadNote(''); setSignatureDates({}); setExistingFileId(undefined)
+    setEditing(null); setHistoryId(null); setStatusChange(null); setUploadOpen(false); setUploadFile(null); setUploadNote(''); setSignatureDates({}); setExistingFileId(undefined)
     setConfidentialityTarget(null); setConfidentialityDirty(false)
-    setProcurementOpen(false); setAcceptanceOpen(false); setEntryOpen(false); setRequirementDirty(false); setProcurementDirty(false); setAcceptanceDirty(false); setEntryDirty(false)
+    setProcurementOpen(false); setAcceptanceOpen(false); setRequirementDirty(false); setProcurementDirty(false); setAcceptanceDirty(false);
     mutation.current = false; setBusy(false); void load()
     return () => { sequence.current++; fileSequence.current++; generation.current++ }
   }, [projectId, user?.id, load])
   useEffect(() => { const refresh = () => { void load(); onProjectChange?.() }; window.addEventListener(UPLOAD_COMPLETE_EVENT, refresh); return () => window.removeEventListener(UPLOAD_COMPLETE_EVENT, refresh) }, [load, onProjectChange])
-  const policyVersion = useRef(user?.permission_version)
-  useEffect(() => { if (policyVersion.current !== user?.permission_version) { policyVersion.current = user?.permission_version; void load() } }, [user?.permission_version, load])
-  useEffect(() => { setNavigationDirty(requirementDirty || procurementDirty || acceptanceDirty || entryDirty || confidentialityDirty || (uploadOpen && (!!uploadFile || !!existingFileId || !!uploadNote.trim() || uploadConfidential || Object.values(signatureDates).some(Boolean)))) }, [requirementDirty, procurementDirty, acceptanceDirty, entryDirty, confidentialityDirty, uploadOpen, uploadFile, existingFileId, uploadNote, uploadConfidential, signatureDates, setNavigationDirty])
+  useEffect(() => { setNavigationDirty(requirementDirty || procurementDirty || acceptanceDirty || confidentialityDirty || (uploadOpen && (!!uploadFile || !!existingFileId || !!uploadNote.trim() || uploadConfidential || Object.values(signatureDates).some(Boolean)))) }, [requirementDirty, procurementDirty, acceptanceDirty, confidentialityDirty, uploadOpen, uploadFile, existingFileId, uploadNote, uploadConfidential, signatureDates, setNavigationDirty])
   useEffect(() => {
     let current = true
     if (!uploadOpen || !uploadConfidential) { setUploadPeopleLoading(false); return }
@@ -141,7 +126,7 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
       .finally(() => { if (current) setUploadPeopleLoading(false) })
     return () => { current = false }
   }, [uploadOpen, uploadConfidential, canManageConfidentiality, loading, projectId])
-  useEffect(() => { const query = new URLSearchParams(location.search); setVehicle(query.get('vehicle') || undefined); setSelected([]); if (query.get('procurements') === '1') setProcurementOpen(true); if (query.get('acceptance') === '1') setAcceptanceOpen(true); if (query.get('review') === '1') setEntryOpen(true); if (query.get('filter') === 'week') setStatus('week'); const targetStage = query.get('stage'); if (DOCUMENT_STAGES.some(item => item.value === targetStage)) setStage(targetStage!) }, [location.search, projectId])
+  useEffect(() => { const query = new URLSearchParams(location.search); setVehicle(query.get('vehicle') || undefined); setSelected([]); if (query.get('procurements') === '1') setProcurementOpen(true); if (query.get('acceptance') === '1') setAcceptanceOpen(true); if (query.get('filter') === 'week') setStatus('week'); const targetStage = query.get('stage'); if (DOCUMENT_STAGES.some(item => item.value === targetStage)) setStage(targetStage!) }, [location.search, projectId])
   useEffect(() => { const id = new URLSearchParams(location.search).get('document'); if (id && documents.some(row => row.id === id)) setHistoryId(id) }, [location.search, data])
 
   const act = async (operation: () => Promise<unknown>, success: string) => {
@@ -265,7 +250,7 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
   const STATUS_OPTIONS = [{ value: 'all', label: '全部' }, { value: 'pending', label: '待提交' }, { value: 'week', label: `本周待交${data?.document_actions?.this_week_count ? ` ${data.document_actions.this_week_count}` : ''}` }, { value: 'overdue', label: `逾期${data?.document_actions?.overdue_count ? ` ${data.document_actions.overdue_count}` : ''}` }, { value: 'submitted', label: '已提交' }]
   const onDefinitionSaved = useCallback(() => { void load() }, [load])
   return <div className="field-work-page project-documents-page">
-    <WorkPageHeader title="资料" description={`按阶段提交文件，保留每次版本；同一文件可以同时满足多项要求。${data ? `截止按现场时区 ${data.timezone} 显示；“预计”截止由计划日期推算。` : ''}账号密码类信息请放在密码管理工具中，这里只写位置说明；保密资料不会向外部人员展示。`}
+    <WorkPageHeader title="资料" description={`按阶段提交文件，保留每次版本；同一文件可以同时满足多项要求。${data ? `截止按现场时区 ${data.timezone} 显示；“预计”截止由计划日期推算。` : ''}账号密码类信息请放在密码管理工具中，这里只写位置说明。`}
       meta={data ? `${current.length} 项资料 · 待交 ${current.filter(row => row.status === 'pending').length} · 已提交 ${current.filter(row => row.status === 'submitted').length} · 不适用 ${current.filter(row => row.status === 'waived').length}` : loadError ? '资料状态尚未读取' : '正在读取资料状态'}
       primary={canSubmit && <Button type="primary" icon={<UploadOutlined />} disabled={busy || loading} onClick={() => openUpload()}>上传资料或文件</Button>}
       tools={<Dropdown trigger={['click']} menu={{ items: [
@@ -363,22 +348,15 @@ export default function DocumentsPage({ projectId, templateId, onProjectChange }
           {version.storage_state === 'removed_by_policy' && <Alert type="info" message="文件已按保留策略清理，版本记录仍保留" description={version.removal ? `${version.removal.removed_by_name} · ${formatDateTime(version.removal.removed_at)} · ${version.removal.reason}` : undefined} />}
           {version.note && <Typography.Paragraph style={{ whiteSpace: 'pre-wrap' }}>{version.note}</Typography.Paragraph>}
           {!!version.review_metadata?.generated && <Typography.Paragraph type="secondary">系统生成 · 原记录与日期保留</Typography.Paragraph>}
-          {version.review_metadata && Object.keys(version.review_metadata).some(key => key !== 'generated') && <ReviewTrail metadata={version.review_metadata} />}
           <Space wrap><Button icon={<DownloadOutlined />} disabled={!version.download_url || version.storage_state === 'removed_by_policy'} onClick={() => void download(version.download_url, version.filename)}>下载此版本</Button>
             {canManageConfidentiality && version.file && <Button disabled={busy} onClick={() => setConfidentialityTarget({ kind: 'file', row: version.file! })}>附件保密范围</Button>}
-            {canManage && !!version.download_url && version.uploaded_by !== user?.id && <><Button disabled={busy} onClick={() => { setReview({ documentId: history.id, versionId: version.id, decision: 'approved' }); setReviewNote('') }}>审核通过</Button><Button disabled={busy} onClick={() => { setReview({ documentId: history.id, versionId: version.id, decision: 'rejected' }); setReviewNote('') }}>退回说明</Button></>}
           </Space>
         </article>)}
       </> : <Empty description="此资料已不可见，请刷新资料清单" />}
     </Drawer>
-    <Modal title={review?.decision === 'approved' ? '记录可选审核' : '记录退回说明'} open={review !== null} okText="保存审核记录" cancelText="取消" onCancel={() => !busy && setReview(null)} confirmLoading={busy} okButtonProps={{ disabled: !canManage || (review?.decision === 'rejected' && !reviewNote.trim()) }} onOk={async () => {
-      if (!review) return
-      if (await act(() => projectDocumentsApi.review(projectId, review.documentId, review.versionId, review.decision, reviewNote.trim()), '审核信息已保存，资料提交状态保持')) setReview(null)
-    }}><Typography.Paragraph>审核为可选记录，不改变资料已提交事实或门禁口径。</Typography.Paragraph>{actionError && <Alert type="error" message={actionError} />}<Input.TextArea aria-label="审核说明" value={reviewNote} onChange={event => setReviewNote(event.target.value)} placeholder={review?.decision === 'rejected' ? '退回必须填写说明' : '审核说明（可选）'} rows={3} maxLength={2000} /></Modal>
     <Drawer title="4.4 · 采购明细" open={procurementOpen} onClose={() => closePanel(procurementDirty, () => setProcurementOpen(false), () => setProcurementDirty(false))} width={mobile ? '100%' : 960} destroyOnHidden>
       {procurementOpen && <ProcurementPanel key={projectId} projectId={projectId} templateId={templateId} onDirtyChange={setProcurementDirty} />}
     </Drawer>
-    <Drawer title="发车前资料确认" open={entryOpen} onClose={() => closePanel(entryDirty, () => setEntryOpen(false), () => setEntryDirty(false))} width={mobile ? '100%' : 720} destroyOnHidden>{entryOpen && <EntryReviewPanel key={projectId} projectId={projectId} onConfirmed={() => { void load(); onProjectChange?.() }} onDirtyChange={setEntryDirty} />}</Drawer>
     <Drawer title="7.1 · 验收记录" open={acceptanceOpen} onClose={() => closePanel(acceptanceDirty, () => setAcceptanceOpen(false), () => setAcceptanceDirty(false))} width={mobile ? '100%' : 760} destroyOnHidden>
       {acceptanceOpen && <AcceptanceRecordsPanel key={projectId} projectId={projectId} refreshToken={data?.version} onChanged={() => { void load(); onProjectChange?.() }} onDirtyChange={setAcceptanceDirty} onUpload={canSubmit ? () => openUpload(documents.filter(row => row.code === '7.1' && row.applicable !== false).map(row => row.id)) : undefined} />}
     </Drawer>

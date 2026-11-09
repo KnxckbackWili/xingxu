@@ -2,18 +2,6 @@
 from tests.template_work import default_work
 
 
-def approve_risk_entry(client, headers, project_id):
-    path = f'/api/projects/{project_id}/documents/dispatch-review'
-    manifest = client.post(path, headers=headers)
-    assert manifest.status_code == 200, manifest.text
-    response = client.post(path + '/confirm', headers=headers, json={
-        'conclusion': 'risky', 'notes': '测试项目负责人已核对当前条件，接受遗留风险并负责跟进',
-        'review_token': manifest.json()['review_token'],
-    })
-    assert response.status_code == 200, response.text
-    assert response.json()['summary']['entry_confirmed']
-
-
 def sign_current_scope(client, headers, project_id):
     response = client.post(f'/api/projects/{project_id}/acceptance', headers=headers, json={
         'accepted_by_name': '客户验收代表', 'accepted_at': '2026-09-30',
@@ -92,13 +80,8 @@ def submit_kickoff_documents(client, headers, project_id):
 
 
 def enter_execution(client, headers, project_id):
-    """Walk a new (preparing) project through the real v3 gates into on-site execution.
-
-    Stage-4 kickoff documents are submitted and the current stage-5 risk is
-    explicitly approved; preparation then enters execution in one checked step.
-    """
+    """Walk a new (preparing) project through the real gate into on-site execution."""
     submit_kickoff_documents(client, headers, project_id)
-    approve_risk_entry(client, headers, project_id)
     response = client.post(f'/api/projects/{project_id}/status', headers=headers, json={'status': 'executing'})
     assert response.status_code == 200, response.text
 
@@ -129,14 +112,14 @@ def complete_all_work(client, headers, project_id, *, recorder_headers=None):
 
 def read_tasks(client, headers, pid):
     tree = client.get(f'/api/projects/{pid}/tree', headers=headers).json()
-    return [task for phase in tree for module in phase['modules'] for task in module['tasks']]
+    return [task for phase in tree for task in phase['work_items']]
 
 
 def setup_project(client, headers):
-    """Project created from the default template with module mod-01; returns (pid, work items)."""
+    """Project created from the default template's first work group; returns (pid, work items)."""
     response = client.post('/api/projects', headers=headers, json={
         'name': '开工安排测试', 'client': '客户', 'start_date': '2026-09-16',
-        'end_date': '2026-10-30', 'new_vehicles': False,
+        'end_date': '2026-10-30',
         'template_id': 'default', 'work_item_ids': default_work('mod-01'),
     })
     assert response.status_code == 200, response.text
@@ -164,8 +147,8 @@ def transfer_manager(client, headers, pid, target_id, reason='负责人交接，
 
 
 def second_pm(client, admin_headers, username='pm-successor'):
-    """An additional active PM (transfer targets must be PMs)."""
+    """An additional active employee to take over a project."""
     created = client.post('/api/users', headers=admin_headers, json={
-        'username': username, 'password': 'successor12345', 'display_name': '接任项目经理', 'role': 'pm'})
+        'username': username, 'password': 'successor12345', 'display_name': '接任负责人', 'role': 'employee'})
     assert created.status_code == 200, created.text
     return created.json()['id']

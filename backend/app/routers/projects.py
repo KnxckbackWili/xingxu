@@ -1,9 +1,9 @@
-from typing import Literal, Optional, Annotated
+from typing import Literal, Optional
 
 """Project CRUD routes + vehicles."""
 
 from datetime import date
-from app.services.system_permissions import route_permission, route_permission_contextual, route_permission_exempt
+from app.services.system_permissions import route_permission
 from app.time_utils import utcnow
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field, model_validator
@@ -17,12 +17,9 @@ from app.models import (
     User,
     Project,
     Vehicle,
-    Phase,
-    Module,
     AcceptanceRecord,
 )
 from app.services.change_log import log_change
-from app.services.system_permissions import has_permission
 from app.services.project_lifecycle import (
     INITIAL_PROJECT_STATUSES,
     PROJECT_STATUSES,
@@ -66,26 +63,13 @@ class ProjectCreate(EventPlanInput):
     status: str = Field(default="preparing", max_length=20)
     description: str = ""
     manager_id: Optional[str] = None
-    technical_manager_id: Optional[str] = None
     dispatch_platform: DispatchPlatform | None = None
-    # 实施准备从 module_ids 自动推导；need_* 保留给旧客户端显式补充。
-    need_wms: bool = False
-    need_charging: bool = False
-    client_server: bool = False
-    new_vehicles: bool = True  # AGV 项目默认新造车辆
-    overseas: bool = False
-
-    # 可选，兼容只创建项目的旧客户端；创建向导一次提交完整配置。
     vehicles: list[VehicleCreate] = Field(default_factory=list, max_length=100)
-    module_ids: Optional[list[str]] = Field(default=None, max_length=500)  # legacy source adapter
     work_item_ids: Optional[list[str]] = Field(default=None, max_length=2000)
     # Optional template rows chosen for this project; when given, every required row comes in
     # (work, files and purchases) and work_item_ids is not needed.
     optional_item_ids: Optional[list[str]] = Field(default=None, max_length=2000)
     template_id: str = Field(default="default", min_length=1, max_length=100)
-    task_quantities: dict[str, Annotated[float, Field(gt=0, allow_inf_nan=False)]] = (
-        Field(default_factory=dict)
-    )
     exclude_task_ids: list[str] = Field(default_factory=list, max_length=2000)
     client_uuid: Optional[str] = Field(default=None, min_length=8, max_length=64)
 
@@ -138,7 +122,6 @@ class ProjectUpdate(EventPlanInput):
     description: Optional[str] = None
     staffing_notes: Optional[str] = Field(default=None, max_length=5000)
     manager_id: Optional[str] = None
-    technical_manager_id: Optional[str] = None
     dispatch_platform: DispatchPlatform | None = None
     rest_mode: Optional[str] = Field(default=None, pattern="^(none|one|two)$")
     rest_days: Optional[list[str]] = None
@@ -185,12 +168,12 @@ def _valid_timezone(tz: str) -> str:
 # Field names a reader recognises in the project log; anything else shows as "项目信息".
 PROJECT_FIELD_LABELS = {
     'name': '名称', 'abbreviation': '简称', 'contract_no': '合同号', 'client': '客户', 'location': '地点', 'timezone': '时区', 'description': '说明',
-    'start_date': '开始日期', 'end_date': '计划结束日期', 'manager': '负责人', 'technical_manager': '技术负责人',
+    'start_date': '开始日期', 'end_date': '计划结束日期', 'manager': '负责人',
     'client_contacts': '联系人',
     'entry_plan': '入场信息', 'rest_days': '休息日', 'rest_mode': '休息日规则',
     'skip_holidays': '节假日规则', 'staffing_notes': '人员说明',
 }
-IGNORED_PROJECT_FIELDS = {'version', 'schedule_version', 'manager_name', 'technical_manager_name', 'id', 'status'}
+IGNORED_PROJECT_FIELDS = {'version', 'manager_name', 'id', 'status'}
 
 
 def _update_summary(name, old, new):
@@ -214,12 +197,6 @@ def _project_dict(db: Session, p: Project, event_rows=None) -> dict:
         "contract_no": p.contract_no or "",
         "manager": p.manager,
         "manager_name": _mgr.display_name if _mgr else "",
-        "technical_manager": p.technical_manager,
-        "technical_manager_name": (
-            db.get(User, p.technical_manager).display_name
-            if p.technical_manager and db.get(User, p.technical_manager)
-            else ""
-        ),
         "client": p.client,
         "location": p.location,
         "timezone": p.timezone or "Asia/Shanghai",
@@ -232,13 +209,7 @@ def _project_dict(db: Session, p: Project, event_rows=None) -> dict:
         "rest_mode": p.rest_mode or "none",
         "rest_days": p.rest_days or [],
         "skip_holidays": bool(p.skip_holidays),
-        "schedule_version": p.schedule_version or 0,
         "version": p.version or 0,
-        "prep_confirmed_by": p.prep_confirmed_by,
-        "prep_confirmed_at": (
-            p.prep_confirmed_at.isoformat() if p.prep_confirmed_at else None
-        ),
-        "prep_conclusion": p.prep_conclusion or "",
         "client_contacts": p.client_contacts or [],
         "entry_plan": p.entry_plan or {},
         "dispatch_platform": p.dispatch_platform,
@@ -430,20 +401,7 @@ def _create_project(data: ProjectCreate, user: User, db: Session):
         raise HTTPException(status_code=400, detail=f"新项目状态只能选择：{allowed}")
     # 成员 ID 合法性：坏 ID 在 SQLAlchemy 层会炸 FK 500，这里提前 400（C1-2/D2）
     if data.manager_id:
-        _validate_user_ids(db, [data.manager_id], label="项目经理")
-    if data.technical_manager_id:
-        _validate_user_ids(db, [data.technical_manager_id], label="技术负责人")
-    if data.technical_manager_id:
-        technical = db.get(User, data.technical_manager_id)
-        if technical is None or technical.role not in (
-            "lead",
-            "technician",
-            "pm",
-            "worker",
-        ):
-            raise HTTPException(
-                status_code=400, detail="技术负责人必须是项目经理或实施工程师"
-            )
+        _validate_user_ids(db, [data.manager_id], label="项目负责人")
     from app.models import Template
 
     template = (
@@ -465,7 +423,6 @@ def _create_project(data: ProjectCreate, user: User, db: Session):
         name=data.name.strip(),
         abbreviation=data.abbreviation,
         manager=data.manager_id or user.id,
-        technical_manager=data.technical_manager_id,
         client=data.client,
         location=data.location,
         timezone=_valid_timezone(data.timezone),
@@ -481,22 +438,6 @@ def _create_project(data: ProjectCreate, user: User, db: Session):
     from app.services.vehicle_progress import initialize_project
     initialize_project(db, p, data.template_id)
     update_plans(db, p, data.event_plans, user.id)
-    # 创建即生成默认准备清单（准备 Tab；按条件选项增补）+ 保存条件供任务生成时同步
-
-    conditions = {}
-    for k in ("need_wms", "need_charging", "client_server", "new_vehicles", "overseas"):
-        if getattr(data, k, False):
-            conditions[k] = True
-    from app.services.preparation_scope import conditions_for_scope
-
-    try:
-        for condition in conditions_for_scope(
-            db, data.template_id, data.work_item_ids if data.work_item_ids is not None else data.module_ids or [], data.exclude_task_ids
-        ):
-            conditions[condition] = True
-    except ValueError as error:
-        raise HTTPException(400, str(error))
-    p.prep_conditions = [k for k, v in conditions.items() if v]
     log_change(
         db,
         p.id,
@@ -533,31 +474,10 @@ def _create_project(data: ProjectCreate, user: User, db: Session):
         from app.services.template_items import add_purchases
         add_purchases(db, p, scope["purchases"], user.id)
     result = _project_dict(db, p)
-    if data.module_ids is not None or data.work_item_ids is not None:
-        from app.services.generate_tasks import (
-            generate_tasks_for_modules,
-            selected_execution_module_ids,
-        )
-
+    if data.work_item_ids is not None:
+        from app.services.work_items import selected_template_work, generate
         try:
-            from app.services.work_items import selected_template_work
-            selected=selected_template_work(db,data.template_id,data.work_item_ids if data.work_item_ids is not None else data.module_ids or [],data.exclude_task_ids)
-            execution_ids=[t.id for t in selected]
-            generated = (
-                generate_tasks_for_modules(
-                    db,
-                    p,
-                    execution_ids,
-                    data.template_id,
-                    task_quantities=data.task_quantities,
-                    exclude_task_ids=[],
-                )
-                if execution_ids
-                else {"tasks": 0, "check_items": 0, "check_definitions": 0, "vehicle_check_definitions": 0, "modules": []}
-            )
-            from app.routers.preparations import sync_preparation_items
-
-            sync_preparation_items(db, p.id)
+            generated = generate(db, p, selected_template_work(db, data.template_id, data.work_item_ids, data.exclude_task_ids))
         except ValueError as error:
             raise HTTPException(400, str(error))
         db.flush()
@@ -661,14 +581,14 @@ class DirectTransfer(BaseModel):
 
 
 @router.get('/{project_id}/transfer-preview')
-@route_permission('project.update','project.manage_members')
+@route_permission('project.update')
 def transfer_preview(project_id:str,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
     from app.services import project_transfer
     return project_transfer.preview(db,project_transfer.authorize(db,project_id,user),user)
 
 
 @router.post('/{project_id}/transfer')
-@route_permission('project.update','project.manage_members')
+@route_permission('project.update')
 def direct_transfer(project_id:str,body:DirectTransfer,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
     from app.services import project_transfer
     project=project_transfer.transfer(db,project_id,user,body)
@@ -703,20 +623,12 @@ def update_project(
     field_keys = set(data.model_dump(exclude_unset=True).keys())
     if "manager_id" in field_keys:
         raise HTTPException(status_code=400,detail="请使用项目设置的更换负责人入口，填写理由并核对版本与离场资料")
-    if "technical_manager_id" in field_keys and (
-        not (user.role == "admin" or (user.role == "pm" and p.manager == user.id))
-    ):
-        raise HTTPException(
-            status_code=403, detail="只有项目经理或系统管理员可以指定技术负责人"
-        )
     if not field_keys - {"version"}:
         raise HTTPException(400, "请提供需要修改的项目字段")
     authorize_project(user, p, C_UPDATE)
     from app.services.optimistic import bump_version, require_client_version
 
     bump_version(p, require_client_version(data.version), db=db)
-    if data.technical_manager_id is not None:
-        _validate_user_ids(db, [data.technical_manager_id], label="技术负责人")
     old = _project_dict(db, p)
     fields = [
         "name",
@@ -734,19 +646,6 @@ def update_project(
         v = getattr(data, f)
         if v is not None:
             setattr(p, f, _valid_timezone(v) if f == "timezone" else v)
-    if "technical_manager_id" in data.model_fields_set:
-        if data.technical_manager_id is not None:
-            technical = db.get(User, data.technical_manager_id)
-            if technical is None or technical.role not in (
-                "lead",
-                "technician",
-                "pm",
-                "worker",
-            ):
-                raise HTTPException(
-                    status_code=400, detail="技术负责人必须是项目经理或实施工程师"
-                )
-        p.technical_manager = data.technical_manager_id
     if "dispatch_platform" in data.model_fields_set:
         p.dispatch_platform = data.dispatch_platform
     if "event_plans" in data.model_fields_set:
@@ -821,23 +720,10 @@ def _status_change_project(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """状态流转校验：C_UPDATE（PM/管理员）或 C_ARCHIVE（总监治理）均可（C8-2）。"""
-    from app.services.permissions import (
-        project_capabilities,
-        inherited_project_capabilities,
-        C_UPDATE,
-        C_ARCHIVE,
-    )
-    from app.services.system_permissions import permission_override
+    from app.services.permissions import authorize_project, C_UPDATE
 
     p = ensure_project_visible(db, project_id, user)
-    # Explicit archive grants manage the checklist only; retain existing director governance.
-    inherited_governance = (
-        C_ARCHIVE in inherited_project_capabilities(user, p)
-        and permission_override(user, C_ARCHIVE) is not False
-    )
-    if C_UPDATE not in project_capabilities(user, p) and not inherited_governance:
-        raise HTTPException(status_code=403, detail="没有权限执行此操作")
+    authorize_project(user, p, C_UPDATE)
     return p
 
 
@@ -853,11 +739,10 @@ class ProjectStatusChange(BaseModel):
     status: str = Field(..., min_length=1, max_length=20)
     reason: str = Field(default="", max_length=5000)
     retrospective: str = Field(default="", max_length=10000)
-    confirm_warnings: Optional[bool] = None
 
 
 @router.post("/{project_id}/status")
-@route_permission_contextual('project.update', 'project.archive', reason='处理器按项目资料权限或既有治理资格及目标状态校验')
+@route_permission('project.update')
 def change_status(
     project_id: str,
     body: ProjectStatusChange,
@@ -865,7 +750,6 @@ def change_status(
     p: Project = Depends(_status_change_project),
     db: Session = Depends(get_db),
 ):
-    from app.services.system_permissions import permission_override
     from app.services.record_lock import lock_record
 
     lock_record(db, p, conflict_detail="项目状态正由另一操作更新，请刷新后重试")
@@ -874,11 +758,6 @@ def change_status(
     if not user.is_active:
         raise HTTPException(401, "账号已停用，请重新登录")
     p = _status_change_project(project_id, user, db)
-    if (
-        body.status == "archived"
-        and permission_override(user, "project.archive") is False
-    ):
-        raise HTTPException(403, "归档操作已被系统管理员禁止")
     # Invalidate project edits that read an active state before this transition.
     from app.services.optimistic import bump_version
 
@@ -938,17 +817,6 @@ def change_status(
             "message": "；".join(blocker.message for blocker in blockers),
             "blockers": [asdict(blocker) for blocker in blockers],
         })
-    # Every route into execution (including restart/backstep) uses the current
-    # risk review. Legacy confirm_warnings is accepted in the schema, never authority.
-    warnings = []
-    if new_status == "executing":
-        from app.routers.preparations import _summary
-
-        summ = _summary(db, p)
-        if summ["entry_unmet"] or summ["missing"]:
-            warnings.append(f"已批准风险进场，仍有 {summ['entry_unmet']} 项进场条件未满足" if not summ["missing"] else "已批准风险进场，准备清单为空")
-        if summ["overdue"]:
-            warnings.append(f"{summ['overdue']} 项准备项已逾期")
     old_status = p.status
     p.status = new_status
     db.flush()
@@ -970,8 +838,6 @@ def change_status(
     return {
         "message": f"状态已更新为「{status_label(new_status)}」",
         "status": new_status,
-        "warnings": warnings,
-        "requires_confirmation": False,
     }
 
 

@@ -1,5 +1,4 @@
 """Raw bounded chunks; private staging is never mounted or directly downloadable."""
-from pathlib import Path
 from uuid import uuid4
 import errno,hashlib,os
 from fastapi import APIRouter,Depends,HTTPException,Request,Header,Response
@@ -39,7 +38,7 @@ def current(db,pid,identity,user,*,write=True,context=True):
 @router.get('/storage/limits')
 @route_permission('project.read')
 def limits(user:User=Depends(get_current_user)):
-    if not has_permission(user,'project.read',default=True):raise HTTPException(403,'没有项目读取权限')
+    if not has_permission(user,'project.read'):raise HTTPException(403,'没有项目读取权限')
     return {'max_upload_size':config.MAX_UPLOAD_BYTES,'chunk_size':config.UPLOAD_CHUNK_SIZE,
         'session_ttl_days':config.UPLOAD_SESSION_TTL_DAYS,'buffered_upload_limit':config.MAX_UPLOAD_SIZE}
 

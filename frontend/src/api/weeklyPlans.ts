@@ -25,7 +25,7 @@ export type WeeklyPlanView = {
 export type DraftRule = { phase_id: string; anchor: 'before_ship' | 'after_arrival'; offset_weeks: number; mode: 'finish' | 'in_progress' }
 export type DraftRules = {
   rules: DraftRule[]; warnings: PlanWarning[];
-  suggestions: (DraftRule & { phase_name: string; source_phase_id: string | null; source_label: string; window_start: string | null; window_end: string | null; week_start: string | null; reason: string })[]
+  suggestions: (DraftRule & { phase_name: string; source_label: string; window_start: string | null; window_end: string | null; week_start: string | null; reason: string })[]
 }
 export type DraftRequest = { phase_rules: DraftRule[]; first_week?: string }
 export type DraftPreview = { proposals: (PlanInput & { task_name: string; phase_name: string; kind: 'vehicle' | 'other' })[]; warnings: PlanWarning[]; preview_token: string }

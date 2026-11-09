@@ -24,13 +24,13 @@ def operation(pid,unit,**extra):
 def save(client,headers,data):return client.post('/api/worker/operations',headers=headers,json=data)
 
 
-def test_actual_dates_operator_assistance_and_append_only_revision(client,pm_headers,worker_headers):
+def test_actual_dates_operator_and_append_only_revision(client,pm_headers,worker_headers):
     pid,unit,people=prepared(client,pm_headers)
     yesterday=(project_today('Asia/Shanghai')-timedelta(days=1)).isoformat()
-    body=operation(pid,unit,completion_date=yesterday,assisted_user_id=people['worker2'])
+    body=operation(pid,unit,completion_date=yesterday)
     response=save(client,worker_headers,body);assert response.status_code==200,response.text
     row=response.json();assert row['completion_date']==yesterday and row['actor_id']==people['worker1']
-    assert row['assisted_user_id']==people['worker2'] and row['recorded_at'][:10]>=yesterday
+    assert row['recorded_at'][:10]>=yesterday
     assert response.headers['cache-control']=='private, no-store'
     edit={'version':row['version'],'completion_date':yesterday,'reason':'更正实际记录附注','note':'修订后原件一致','client_uuid':str(uuid.uuid4())}
     changed=client.put('/api/worker/records/'+row['id'],headers=worker_headers,json=edit)
@@ -83,8 +83,6 @@ def test_concurrent_replay_and_other_actor_cannot_modify_or_retract(client,pm_he
     assert [r.status_code for r in responses]==[200,200],[r.text for r in responses]
     record=responses[0].json();second=client.post('/api/auth/login',json={'username':'worker2','password':'worker123'}).json()
     headers={'Authorization':'Bearer '+second['access_token']}
-    # A same-state date rewrite is a correction of another operator's fact.
-    assert save(client,headers,operation(pid,unit,version=record['version'],completion_date=(project_today('Asia/Shanghai')-timedelta(days=1)).isoformat(),assisted_user_id=people['worker1'])).status_code==403
     revision={'version':record['version'],'completion_date':body['completion_date'],'reason':'越权修改应被拒绝','client_uuid':str(uuid.uuid4())}
     assert client.put('/api/worker/records/'+record['id'],headers=headers,json=revision).status_code==404
     assert client.request('DELETE','/api/worker/records/'+record['id'],headers=headers,json=revision).status_code==404
@@ -97,9 +95,10 @@ def test_stale_actor_permission_and_audit_failure_roll_back(client,pm_headers,wo
     pid,unit,people=prepared(client,pm_headers);original=service.lock_writable_project
     def revoke(db,project,user):
         value=original(db,project,user)
-        db.execute(update(User).where(User.id==people['worker1']).values(permission_overrides={'worker.report':False}).execution_options(synchronize_session=False));return value
+        db.execute(update(User).where(User.id==people['worker1']).values(is_active=False).execution_options(synchronize_session=False));return value
     monkeypatch.setattr(service,'lock_writable_project',revoke)
-    assert save(client,worker_headers,operation(pid,unit)).status_code==403
+    assert save(client,worker_headers,operation(pid,unit)).status_code==401
+    with SessionLocal() as db:db.get(User,people['worker1']).is_active=True;db.commit()
     monkeypatch.setattr(service,'lock_writable_project',original)
     def fail(*args,**kwargs):raise RuntimeError('isolated audit failure')
     monkeypatch.setattr(service,'log_change',fail)
@@ -119,14 +118,14 @@ def test_week_and_project_report_use_actual_records_and_t26_visible_documents(cl
     with SessionLocal() as db:
         row=db.get(ProjectDocument,secret['id']);row.timing_type='after_event';row.timing_event='internal_kickoff';row.due_at=utcnow()+timedelta(hours=1);row.due_is_estimated=False;db.commit()
     monkeypatch.setattr(field_week,'plan_cells',lambda *args,**kwargs:[])
-    assert save(client,worker_headers,operation(pid,unit,assisted_user_id=people['worker2'])).status_code==200
+    assert save(client,worker_headers,operation(pid,unit)).status_code==200
     response=client.get('/api/worker/week',headers=worker_headers)
     assert response.status_code==200,response.text
     assert 'SECRET-WEEK-DOCUMENT' not in response.text and response.json()['state']=='ready'
     report=client.get('/api/projects/'+pid+'/report',headers=worker_headers)
     assert report.status_code==200,report.text
     value=report.json();assert value['summary']['actual_records']==1 and value['summary']['vehicle_completions']==1
-    assert value['completed_items'][0]['actor_id']==people['worker1'] and value['completed_items'][0]['assisted_user_id']==people['worker2']
+    assert value['completed_items'][0]['actor_id']==people['worker1']
     assert 'SECRET-WEEK-DOCUMENT' not in report.text and 'completed_quantity' not in report.text
 
 

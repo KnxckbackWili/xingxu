@@ -74,7 +74,7 @@ export default function AppLayout() {
   const accountItems: MenuProps['items'] = [
     ...(canAccessNav('/worker/my', user) ? [{ key: 'records', icon: <HistoryOutlined />, label: '我的记录', onClick: close(() => navigate('/worker/my')) }] : []),
     ...(MENU_GROUPS(user).length ? [{ key: 'settings', icon: <SettingOutlined />, label: '设置', onClick: close(() => navigate('/pm/settings')) }] : []),
-    ...((['admin', 'pm'].includes(user?.role ?? '') || user?.two_factor_enabled) ? [{ key: 'mfa', icon: <SafetyOutlined />, label: '二次验证', onClick: close(() => setMfaOpen(true)) }] : []),
+    { key: 'mfa', icon: <SafetyOutlined />, label: '二次验证', onClick: close(() => setMfaOpen(true)) },
     { key: 'pwd', icon: <LockOutlined />, label: '修改密码', onClick: close(() => setPwdOpen(true)) },
     { key: 'theme', icon: <BulbOutlined />, label: themeMode === 'dark' ? '切换到浅色模式' : '切换到深色模式', onClick: close(toggleTheme) },
     ...(feedback ? [{ key: 'feedback', icon: <CommentOutlined />, label: '使用反馈', onClick: close(() => navigate(feedback)) }] : []),
@@ -82,7 +82,7 @@ export default function AppLayout() {
     { type: 'divider' as const },
     { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', onClick: close(signOut) },
   ]
-  const roleName = ROLE_NAME[user?.role ?? ''] ?? '项目成员'
+  const roleName = ROLE_NAME[user?.role ?? ''] ?? '员工'
   const account = <Dropdown trigger={['click']} open={accountOpen} onOpenChange={setAccountOpen} placement="topLeft" menu={{ items: accountItems }}>
     <button ref={accountTrigger} className="app-account" type="button"
       aria-label={`账户菜单：${user?.display_name ?? '当前用户'}`} aria-haspopup="menu" aria-expanded={accountOpen}>

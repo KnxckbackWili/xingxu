@@ -19,7 +19,7 @@ export default function RecordsPage() {
   return <section className="records-section" aria-label="按周查看实际记录">
     <div className="records-toolbar">
       <DatePicker picker="week" aria-label="记录周" value={week ? dayjs(week) : dayjs()} allowClear={false} onChange={value => setWeek(value?.subtract((value.day() + 6) % 7, 'day').format('YYYY-MM-DD'))} />
-      {!loading && !error && <span className="records-summary">这周 {effective.length} 条记录 · 完成 {effective.filter(record => record.is_done).length} 条 · 协助 {effective.filter(record => record.assisted_user_name).length} 条</span>}
+      {!loading && !error && <span className="records-summary">这周 {effective.length} 条记录 · 完成 {effective.filter(record => record.is_done).length} 条</span>}
     </div>
     <Typography.Paragraph type="secondary" className="records-note">完成日期和登记时间分开保存。补记窗口内、后面没人改过的记录可以修改或撤回，原始版本一直保留。</Typography.Paragraph>
     {error && <Alert type="error" message={error} action={<Button onClick={() => setRevision(value => value + 1)}>重试</Button>} />}
@@ -27,7 +27,7 @@ export default function RecordsPage() {
       : <ul className="records-list">{records.map(record => <li key={record.id}>
         <div className="records-main">
           <strong>{record.target_name}</strong><Tag>{actionLabel(record)}</Tag>
-          <small className="records-meta"><span>{record.project_name}</span><span>完成日期 {record.completion_date}</span><span>登记时间 {record.recorded_at} · 操作人 {record.actor_name}{record.assisted_user_name ? ` · 协助 ${record.assisted_user_name}` : ''}</span></small>
+          <small className="records-meta"><span>{record.project_name}</span><span>完成日期 {record.completion_date}</span><span>登记时间 {record.recorded_at} · 操作人 {record.actor_name}</span></small>
           {record.note && <p>{record.note}</p>}{record.operation_reason && record.operation_reason !== record.note && <p>操作理由：{record.operation_reason}</p>}
         </div>
         {canReport && (record.can_edit || record.can_retract) && <span className="records-actions">{record.can_edit && <Button size="small" onClick={() => open(record)}>修改</Button>}{record.can_retract && <Button size="small" danger onClick={() => open(record, true)}>撤回</Button>}</span>}

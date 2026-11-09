@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import ProjectLayout from './ProjectLayout'
 
 const { useAuthMock, navigateMock, route } = vi.hoisted(() => ({ useAuthMock: vi.fn(), navigateMock: vi.fn(), route: { pathname: '/pm/projects/p1/overview', projectId: 'p1' } }))
@@ -285,50 +285,20 @@ it('refreshes header after a phase action without removing the current page or d
   expect(apiGet).toHaveBeenCalledTimes(2)
 })
 
-it('refreshes project capabilities after permission changes without resetting the current page input or directory', async () => {
-  route.projectId = 'p1'; route.pathname = '/pm/projects/p1/overview'
-  useAuthMock.mockReturnValue({ user: { id: 'pm', role: 'pm', permission_version: 0 } })
-  let resolveRefresh!: (value: any) => void
-  apiGet.mockResolvedValueOnce({ data: { ...PROJECT, capabilities: ['project.manage_plan'] } }).mockImplementationOnce(() => new Promise(resolve => { resolveRefresh = resolve }))
-  const page = render(<ProjectLayout />)
-  const input = await screen.findByRole('textbox', { name: '测试本页未保存输入' })
-  const directory = screen.getByRole('navigation', { name: '项目常用功能' })
-  fireEvent.change(input, { target: { value: '保留本页草稿' } })
-  useAuthMock.mockReturnValue({ user: { id: 'pm', role: 'pm', permission_version: 1, permission_overrides: { 'project.manage_plan': false } } })
-  page.rerender(<ProjectLayout />)
-  expect(input).toHaveValue('保留本页草稿')
-  expect(screen.queryByText('正在加载项目...')).toBeNull()
-  expect(screen.getByRole('navigation', { name: '项目常用功能' })).toBe(directory)
-  await act(async () => resolveRefresh({ data: { ...PROJECT, capabilities: [] } }))
-  expect(screen.getByRole('textbox', { name: '测试本页未保存输入' })).toBe(input)
-  expect(input).toHaveValue('保留本页草稿')
-})
-
-describe('explicit archive and audit permission denials', () => {
+describe('status and archive follow the project capabilities', () => {
   beforeEach(() => {
     vi.clearAllMocks(); route.projectId = 'p1'; route.pathname = '/pm/projects/p1/overview'
   })
   it.each([
-    ['director', ['project.archive'], undefined, true, true],
-    ['director', ['project.archive'], false, false, false],
-    ['pm', ['project.update'], false, true, false],
-    ['pm', ['project.update'], undefined, true, true],
-    ['worker', ['project.archive'], true, false, true],
-  ])('keeps %s status qualification separate from archive override %s', async (role, capabilities, archive, statusAllowed, archiveAllowed) => {
-    useAuthMock.mockReturnValue({ user: { id: role, role, permission_overrides: archive === undefined ? {} : { 'project.archive': archive } } })
+    [['project.update', 'project.archive'], true, true],
+    [['project.update'], true, false],
+    [['project.read'], false, false],
+  ])('capabilities %s', async (capabilities, statusAllowed, archiveAllowed) => {
+    useAuthMock.mockReturnValue({ user: { id: 'u1', role: 'employee' } })
     apiGet.mockResolvedValue({ data: { ...PROJECT, capabilities } })
     render(<ProjectLayout />)
     const overview = await screen.findByTestId('mock-overview')
     expect(overview).toHaveAttribute('data-manage-status', String(statusAllowed))
     expect(overview).toHaveAttribute('data-can-archive', String(archiveAllowed))
-  })
-  it.each(['history'])('blocks the %s audit route while project reads remain allowed', async path => {
-    useAuthMock.mockReturnValue({ user: { id: 'pm', role: 'pm', permission_overrides: { 'system.audit.read': false } } })
-    route.pathname = `/pm/projects/p1/${path}`
-    apiGet.mockResolvedValue({ data: { ...PROJECT, capabilities: ['project.read'] } })
-    render(<ProjectLayout />)
-    expect(await screen.findByText('403', { selector: '.ant-result-title' })).toBeVisible()
-    expect(screen.queryByText('动态占位 history')).not.toBeInTheDocument()
-    expect(apiGet.mock.calls.map(([url]) => url)).toEqual(['/projects/p1'])
   })
 })

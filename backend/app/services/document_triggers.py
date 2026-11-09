@@ -138,7 +138,6 @@ def transfer_departures(db,project):
     """The outgoing manager leaves unless they stay on as technical lead."""
     identity=project.manager
     if not identity:return set()
-    if project.technical_manager==identity:return set()
     return {identity}
 
 

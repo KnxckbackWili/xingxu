@@ -1,4 +1,4 @@
-from typing import Optional, Literal
+from typing import Optional
 
 """User management routes (admin only)."""
 
@@ -20,7 +20,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 router = APIRouter(prefix="/users", tags=["用户管理"])
 
 
-_ROLE_RE = "^(admin|director|lead|pm|technician|worker|intern|readonly)$"
+_ROLE_RE = "^(admin|employee)$"
 
 
 class UserCreate(BaseModel):
@@ -29,8 +29,7 @@ class UserCreate(BaseModel):
     )  # 留空 = 用姓名作为登录用户名
     password: str = Field(..., min_length=6, max_length=128)
     display_name: str = Field(..., min_length=1, max_length=100)
-    role: str = Field(default="worker", pattern=_ROLE_RE)
-    permission_preset: Literal["pm", "worker", "readonly"] | None = None
+    role: str = Field(default="employee", pattern=_ROLE_RE)
     phone: str = ""
     email: str = ""
 
@@ -68,17 +67,10 @@ def _audit_fields(user: User) -> dict:
 @router.get("", response_model=list)
 @route_permission_contextual('system.users.read', 'system.users.manage', reason='处理器按查看或维护权限返回人员目录')
 def list_users(admin: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    full = has_permission(
-        admin, "system.users.read", default=admin.role == "admin"
-    ) or has_permission(admin, "system.users.manage", default=admin.role == "admin")
+    full = has_permission(admin, "system.users.read") or has_permission(admin, "system.users.manage")
     if not full:
         raise HTTPException(403, "没有人员列表查看权限")
-    users = db.query(User).order_by(User.created_at).all()
-    items = [_user_dict(u) for u in users]
-    if not full:
-        for item in items:
-            item.update(username="", phone="", email="")
-    return items
+    return [_user_dict(u) for u in db.query(User).order_by(User.created_at).all()]
 
 
 @router.post("", response_model=dict)
@@ -88,11 +80,7 @@ def create_user(
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    role = data.permission_preset or data.role
-    if admin.role != "admin" and role not in {"worker", "readonly"}:
-        raise HTTPException(
-            403, "只有系统管理员可以指定账号角色；受委托成员只能创建实施工程师或只读账号"
-        )
+    role = data.role
     username = (data.username or data.display_name).strip()
     if db.query(User).filter(User.username == username).first():
         raise HTTPException(
@@ -140,9 +128,7 @@ def _lock_account_changes(
         anchor = db.query(User).order_by(User.id).first()
     lock_record(db, anchor, conflict_detail="账号正在更新，请刷新后重试")
     db.refresh(admin)
-    if not admin.is_active or not has_permission(
-        admin, capability, default=admin.role == "admin"
-    ):
+    if not admin.is_active or not has_permission(admin, capability):
         raise HTTPException(status_code=403, detail="管理员权限已变更，请重新登录")
 
 
@@ -177,7 +163,7 @@ def update_user(
     db: Session = Depends(get_db),
 ):
     capability = "system.users.manage"
-    if not has_permission(admin, capability, default=admin.role == "admin"):
+    if not has_permission(admin, capability):
         raise HTTPException(403, "没有该人员维护权限")
     _lock_account_changes(db, admin, capability)
     u = db.get(User, user_id)

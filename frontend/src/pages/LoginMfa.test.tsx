@@ -37,7 +37,7 @@ it('stays outside business after password, handles wrong OTP, then enters only a
   expect(navigate).not.toHaveBeenCalled()
   await waitFor(() => expect(otp).not.toBeDisabled())
   fireEvent.change(otp, { target: { value: '123456' } }); fireEvent.click(screen.getByRole('button', { name: /验证并登录/ }))
-  await waitFor(() => expect(navigate).toHaveBeenCalledWith('/pm', { replace: true }))
+  await waitFor(() => expect(navigate).toHaveBeenCalledWith('/pm/dashboard', { replace: true }))
 })
 it('mandatory enrollment displays local key and requires saving one-time recovery codes before navigation', async () => {
   vi.mocked(authApi.login).mockResolvedValue({ ...step, setup_required: true })
@@ -47,7 +47,7 @@ it('mandatory enrollment displays local key and requires saving one-time recover
   fireEvent.change(screen.getByLabelText('六位验证码'), { target: { value: '123456' } }); fireEvent.click(screen.getByRole('button', { name: '确认启用' }))
   await screen.findByDisplayValue('only-shown-once'); expect(navigate).not.toHaveBeenCalled()
   fireEvent.click(screen.getByRole('button', { name: '我已安全保存' }))
-  expect(navigate).toHaveBeenCalledWith('/pm', { replace: true })
+  expect(navigate).toHaveBeenCalledWith('/pm/dashboard', { replace: true })
 })
 it('lost authenticator uses last recovery code to enter only replacement enrollment', async () => {
   vi.mocked(authApi.login).mockResolvedValue(step)
@@ -65,6 +65,6 @@ it('lost authenticator uses last recovery code to enter only replacement enrollm
 it('ordinary login with explicit false policy fields still navigates immediately', async () => {
   vi.mocked(authApi.login).mockResolvedValue({ ...session, user: { ...user, two_factor_enabled: false, two_factor_required: false } })
   await password(false)
-  await waitFor(() => expect(navigate).toHaveBeenCalledWith('/pm', { replace: true }))
+  await waitFor(() => expect(navigate).toHaveBeenCalledWith('/pm/dashboard', { replace: true }))
   expect(useAuth.getState().pendingMfa).toBeNull()
 })

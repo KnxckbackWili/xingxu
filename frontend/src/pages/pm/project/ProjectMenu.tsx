@@ -29,7 +29,7 @@ export function ProjectMenuContent({ projectId, activeParent, activeChild, activ
   const restore=useRef(false)
   useDrawerReturnFocus(open,restore,'project-navigation-drawer',()=>trigger.current)
   const close=()=>{restore.current=true;setOpen(false)}
-  const canExport=user?.permission_overrides?.['project.export']!==false && (capabilities!==undefined ? capabilities.includes('project.export') : !['worker','intern','readonly'].includes(user?.role ?? ''))
+  const canExport=capabilities!==undefined ? capabilities.includes('project.export') : true
   const canAudit=hasSystemPermission(user,'system.audit.read')
   const leaves=useMemo(()=>PROJECT_NAV_ITEMS.flatMap(item=>(item.children ?? [{key:item.key,label:item.label,path:item.path}]).map(child=>({...child,parent:item.key,more:!!item.more})))
     .filter(item=>(item.key!=='export'||canExport)&&(item.key!=='history'||canAudit)),[canExport,canAudit])

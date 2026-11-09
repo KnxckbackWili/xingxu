@@ -1,7 +1,7 @@
 """Attachment routes: upload, list, download, delete.
 
 附件可挂载到 project / task / issue（entity_type + entity_id），
-上传权限：项目成员或 PM/admin（现场人员可传问题照片、交付文件）。
+上传权限：能看到项目的在职账号（问题照片、交付文件等）。
 """
 
 from pathlib import Path

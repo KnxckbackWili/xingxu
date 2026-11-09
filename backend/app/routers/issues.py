@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.deps import get_current_user, require_pm
+from app.deps import get_current_user
 from app.models import User, Issue, Task, VehicleLifecycleEvent, VehicleUnit, Project
 from app.services.scope import ensure_project_visible
 from app.services.record_lock import lock_writable_project
@@ -65,8 +65,8 @@ def _validate_issue_task(db: Session, project_id: str, task_id: Optional[str]) -
 def _issue_dict(db: Session, i: Issue, actor: User | None = None,events=None) -> dict:
     project = db.get(Project, i.project_id)
     from app.services.system_permissions import has_permission
-    can_close = bool(actor and actor.is_active and actor.role != 'readonly' and project
-        and has_permission(actor, 'project.manage_issues', default=True)
+    can_close = bool(actor and actor.is_active and project
+        and has_permission(actor, 'project.manage_issues')
         and (actor.role == 'admin' or actor.id in {project.manager, i.reporter_id}))
     reporter = db.get(User, i.reporter_id)
     task = db.get(Task, i.task_id) if i.task_id else None
@@ -190,7 +190,7 @@ def create_issue(
                    f"上报问题：{data.title}（{data.severity}）")
         # The project manager hears about every new issue.
         if p.manager and p.manager != user.id:
-            from app.routers.notifications import notify
+            from app.services.notify import notify
             manager = db.get(User, p.manager)
             if manager:
                 notify(db, manager.id, f"新问题上报：{data.title}",
@@ -274,7 +274,7 @@ def import_issues(
             log_change(db, project_id, "issue", project_id, "import", user.id,
                        f"AI 辅助导入问题 {len(created)} 条")
             if p.manager and p.manager != user.id:
-                from app.routers.notifications import notify
+                from app.services.notify import notify
                 notify(db, p.manager, f"AI 辅助导入 {len(created)} 条项目问题",
                        f"操作人：{user.display_name}", ntype="issue_reported", project_id=project_id)
             db.commit()
@@ -300,7 +300,6 @@ def update_issue(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    from app.services.permissions import authorize_project, C_ISSUES
     i = db.get(Issue, issue_id)
     if i is None:
         raise HTTPException(status_code=404, detail="问题不存在")
@@ -317,11 +316,11 @@ def update_issue(
     is_closure = data.status in {"closed", "cancelled"}
     may_close = user.role == 'admin' or user.id in {p.manager, i.reporter_id}
     if is_closure and not may_close:
-        raise HTTPException(403, "仅项目经理或报告人可关闭或作废问题")
+        raise HTTPException(403, "只有项目负责人、报告人或系统管理员可以关闭或作废问题")
     personal_fields = {"status", "resolution", "version"}
     from app.services.system_permissions import has_permission as _has
-    # 谁都可以开始处理、提交解决结果；关闭仍由报告人或项目经理确认。
-    member_update = user.role != 'readonly' and _has(user, 'worker.issues', default=True) and not is_closure
+    # 谁都可以开始处理、提交解决结果；关闭由报告人、项目负责人或系统管理员确认。
+    member_update = _has(user, 'worker.issues') and not is_closure
     reporter_closure = i.reporter_id == user.id and is_closure
     if not ((member_update or reporter_closure) and not (fields_requested - personal_fields)):
         authorize_project(user, p, C_ISSUES)
@@ -376,13 +375,13 @@ def update_issue(
                old_value=changed_fields, new_value=changed_fields)
     # Notify reporter on resolve
     if data.status == "resolved" and i.reporter_id != user.id:
-        from app.routers.notifications import notify
+        from app.services.notify import notify
         notify(db, i.reporter_id, f"问题已解决：{i.title}",
                f"解决方案：{data.resolution or '（未填写）'} · 处理人：{user.display_name}",
                ntype="issue_resolved", project_id=i.project_id, entity_id=i.id)
     # Notify reporter on cancel（C6-7：作废有独立状态 + 通知，附原因）
     if data.status == "cancelled" and i.reporter_id != user.id:
-        from app.routers.notifications import notify
+        from app.services.notify import notify
         notify(db, i.reporter_id, f"问题已作废：{i.title}",
                f"作废原因：{data.resolution or '（未填写）'} · 操作人：{user.display_name}",
                ntype="issue_cancelled", project_id=i.project_id, entity_id=i.id)
@@ -404,15 +403,12 @@ def reopen_issue(
 
     解决不等于结束：报告人验收不满意可一键重开，回到 open 让处理人继续跟进。
     """
-    from app.services.permissions import authorize_project, C_ISSUES
     i = db.get(Issue, issue_id)
     if i is None:
         raise HTTPException(status_code=404, detail="问题不存在")
     p = ensure_project_visible(db, i.project_id, user)
     lock_writable_project(db, p, user)
-    # 报告人和其他非只读账号都可重开；只读账号需 C_ISSUES
-    if not (i.reporter_id == user.id or user.role != 'readonly'):
-        authorize_project(user, p, C_ISSUES)
+    authorize_project(user, p, C_ISSUES)
     if i.status not in ("resolved", "closed", "cancelled"):
         raise HTTPException(status_code=400, detail=f"仅可重开已解决/已作废的问题（当前 {i.status}）")
     from app.services.optimistic import bump_version
@@ -423,7 +419,7 @@ def reopen_issue(
     db.flush()
     log_change(db, i.project_id, "issue", i.id, "update", user.id,
                f"报告人重开问题：{i.title}")
-    from app.routers.notifications import notify
+    from app.services.notify import notify
     if p.status == "completed" and p.manager:
         notify(db, p.manager, f"已完成项目的问题被重开：{i.title}",
                "请确认是否需要返工；如需执行安排或报工，请先将项目从已完成恢复到验收中。",
@@ -438,7 +434,6 @@ def reopen_issue(
 @router.delete("/issues/{issue_id}")
 @route_permission('project.manage_issues')
 def delete_issue(issue_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    from app.services.permissions import authorize_project, C_ISSUES
     i = db.get(Issue, issue_id)
     if i is None:
         raise HTTPException(status_code=404, detail="问题不存在")

@@ -28,7 +28,7 @@ from pydantic import BaseModel, Field, StrictInt, field_validator, model_validat
 from sqlalchemy.orm import Session
 
 from app.config import UPLOAD_DIR
-from app.models import (CheckItem, DocumentRequirement, DocumentTemplateFile, Module, Phase, Task, Template,
+from app.models import (CheckItem, DocumentRequirement, DocumentTemplateFile, Phase, Task, Template,
                         TemplateDoc, TemplateItem, TemplateProcurementItem, TemplateSection, VehicleStep)
 from app.services.change_log import log_change
 from app.services.template_stages import STAGE_NAMES, STAGE_KEYS
@@ -40,7 +40,7 @@ KIND_NAMES = {'work': '工作', 'file': '资料', 'purchase': '采购'}
 SECTION_STAGES = STAGE_KEYS
 FILE_RULE_KEYS = ('code', 'name', 'template_no', 'required', 'scope', 'platform', 'timing_type', 'timing_event',
                   'timing_offset_hours', 'timing_weekday', 'trigger_type', 'confidential_default',
-                  'external_visible_default', 'external_never_visible', 'note')
+                  'note')
 TIMINGS = ('before_event', 'after_event', 'weekly', 'on_trigger', 'after_milestone', 'on_demand', 'lifetime')
 
 
@@ -93,8 +93,6 @@ class FileIn(BaseModel):
     timing_weekday: Optional[StrictInt] = Field(default=None, ge=1, le=7)
     trigger_type: Optional[Literal['accident', 'quality', 'member_leave']] = None
     confidential_default: bool = False
-    external_visible_default: bool = False
-    external_never_visible: bool = False
     note: str = Field(default='', max_length=5000)
 
     @model_validator(mode='after')
@@ -599,8 +597,8 @@ def compile_template(db: Session, tid):
         if row.kind == 'work':
             per_vehicle = bool(row.per_vehicle)
             wanted_tasks[row.id] = {
-                'project_id': None, 'template_id': tid, 'module_id': None, 'phase_id': row.section_id,
-                'group_label': extra.get('group_label') or '', 'scope_conditions': list(extra.get('scope_conditions') or []),
+                'project_id': None, 'template_id': tid, 'phase_id': row.section_id,
+                'group_label': extra.get('group_label') or '',
                 'name': row.name, 'description': row.note or '',
                 'quantity_type': 'per_vehicle' if per_vehicle else extra.get('quantity_type') or 'fixed',
                 'safety_flag': bool(extra.get('safety_flag')), 'applicable_vehicle_types': list(extra.get('applicable_vehicle_types') or []),
@@ -629,8 +627,6 @@ def compile_template(db: Session, tid):
                 'scope': document.get('scope') or 'project', 'is_group': False, 'parent_id': None,
                 'required': document.get('required', True) is not False,
                 'confidential_default': bool(document.get('confidential_default')),
-                'external_visible_default': bool(document.get('external_visible_default')),
-                'external_never_visible': bool(document.get('external_never_visible')),
                 'blank_file_id': document.get('blank_file_id'), 'sort_order': order, 'source_metadata': metadata}
             order += 1
 
@@ -646,7 +642,6 @@ def compile_template(db: Session, tid):
         for row in stale_tasks:
             db.delete(row)
     db.flush()
-    db.query(Module).filter(_scope(Module.template_id, tid), Module.project_id.is_(None)).delete(synchronize_session=False)
     for row in stale_phases:
         db.delete(row)
 
@@ -714,7 +709,7 @@ def add_purchases(db: Session, project, purchases, actor_id) -> int:
         if row.name in existing:
             continue
         db.add(ProjectPreparationItem(
-            project_id=project.id, category='procurement', name=row.name, is_required=not row.optional, blocks_entry=False,
+            project_id=project.id, category='procurement', name=row.name, is_required=not row.optional,
             owner_party=(row.extra or {}).get('owner_party') or 'procurement',
             required_date=planned_event_date(db, project.id) if stage in ('4', '5') else None,
             risk=(row.extra or {}).get('risk') or 'low', note=row.note or '',
@@ -733,7 +728,7 @@ def add_purchases(db: Session, project, purchases, actor_id) -> int:
 SHEET_ITEMS, SHEET_FILES = '事项', '文件'
 ITEM_COLUMNS = ['段落', '阶段', '类型', '名称', '可选', '每台车', '检查要点', '要交的文件', '数量', '单位', '规格', '说明']
 FILE_COLUMNS = ['编号', '名称', '必交', '每台车一份', '什么时候交', '事件', '相隔天数', '星期', '触发情况', '只用于平台',
-                '默认保密', '禁止外部查看', '默认对外可见', '模板编号', '说明']
+                '默认保密', '模板编号', '说明']
 TIMING_NAMES = {'on_demand': '需要时交', 'weekly': '每周交', 'before_event': '事件之前', 'after_event': '事件之后',
                 'after_milestone': '节点完成后', 'on_trigger': '发生情况后', 'lifetime': '项目期间更新'}
 EVENT_NAMES = {'internal_kickoff': '内部启动会', 'ship': '发车', 'arrival_all': '全部到场', 'vehicle_arrival': '该车到场',
@@ -784,8 +779,7 @@ def export_workbook(db: Session, template_id) -> bytes:
                     EVENT_NAMES.get(document.get('timing_event') or '', ''), None if offset is None else round(offset / 24, 2),
                     WEEKDAY_NAMES[document['timing_weekday'] - 1] if document.get('timing_weekday') else '',
                     TRIGGER_NAMES.get(document.get('trigger_type') or '', ''), PLATFORM_NAMES.get(document.get('platform') or '', ''),
-                    '是' if document.get('confidential_default') else '', '是' if document.get('external_never_visible') else '',
-                    '是' if document.get('external_visible_default') else '', document.get('template_no') or '', document.get('note') or ''])
+                    '是' if document.get('confidential_default') else '', document.get('template_no') or '', document.get('note') or ''])
     note = book.create_sheet('说明')
     for line in ('一行一件事。「段落」相同的行在同一段落里，段落和行的顺序按表格顺序。',
                  '阶段：内部启动会 / 发车前 / 实施 / 验收 / 交付 / 全项目周期，决定这一段要交的文件在哪个门禁前交齐。',
@@ -849,8 +843,7 @@ def parse_workbook(content: bytes) -> dict:
                     'timing_weekday': (WEEKDAY_NAMES.index(str(_cell(row, 7))) + 1) if str(_cell(row, 7)) in WEEKDAY_NAMES else None,
                     'trigger_type': _reverse(TRIGGER_NAMES, _cell(row, 8), '触发情况'),
                     'platform': _reverse(PLATFORM_NAMES, _cell(row, 9), '平台'),
-                    'confidential_default': _yes(_cell(row, 10)), 'external_never_visible': _yes(_cell(row, 11)),
-                    'external_visible_default': _yes(_cell(row, 12)), 'template_no': str(_cell(row, 13)), 'note': str(_cell(row, 14))}
+                    'confidential_default': _yes(_cell(row, 10)), 'template_no': str(_cell(row, 11)), 'note': str(_cell(row, 12))}
                 if rules[code]['timing_type'] == 'lifetime' and not rules[code]['timing_event']:
                     rules[code]['timing_event'] = 'internal_kickoff'
             except (ValueError, TypeError) as error:

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import { ConfigProvider } from 'antd'
 import type { PermissionUser } from '../constants/systemPermissions'
@@ -45,15 +45,6 @@ it('backup failure keeps the project and never submits permanent deletion', asyn
   expect(projectRecycleApi.permanentlyDelete).not.toHaveBeenCalled(); expect(screen.queryByRole('button', { name: '确认永久删除' })).not.toBeInTheDocument()
 })
 it.each(['pm', 'readonly'])('never enables administrator deletion for %s with explicit grants', role => {
-  auth.user = { id: 'other', role, permission_overrides: { 'system.projects.purge': true, 'project.delete': true } }
+  auth.user = { id: 'other', role }
   show(); expect(screen.getByRole('button', { name: '生成加密项目备份' })).toBeDisabled()
-})
-it('does not publish a late download after permission revocation', async () => {
-  let resolve!: (value: Blob) => void
-  vi.mocked(projectRecycleApi.downloadPermanent).mockReturnValue(new Promise(done => { resolve = done }))
-  const view = show(); await prepare(); fireEvent.click(screen.getByRole('button', { name: /下载加密项目备份/ }))
-  auth.user = { id: 'admin', role: 'admin', permission_overrides: { 'system.projects.purge': false } }
-  view.rerender(<ConfigProvider theme={{ token: { motion: false } }}><PermanentProjectDeleteModal project={row} onClose={vi.fn()} onPurged={vi.fn()} /></ConfigProvider>)
-  await act(async () => resolve(new Blob(['old-private-ciphertext'])))
-  expect(createUrl).not.toHaveBeenCalled(); expect(projectRecycleApi.permanentlyDelete).not.toHaveBeenCalled()
 })

@@ -13,6 +13,6 @@ export const FEEDBACK_STATUS_OPTIONS = Object.entries(FEEDBACK_STATUS_MAP).map((
 
 /** 可读取/管理反馈的角色（与后端 feedback.MANAGE_ROLES 一致）。
  *  普通用户只能提交，不得看到管理列表/详情入口。 */
-export const FEEDBACK_MANAGE_ROLES = ['admin', 'director', 'pm']
+export const FEEDBACK_MANAGE_ROLES = ['admin']
 
 export const canManageFeedback = (role?: string) => !!role && FEEDBACK_MANAGE_ROLES.includes(role)

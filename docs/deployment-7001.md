@@ -42,7 +42,7 @@ docker exec -i agv-pm-7001 python - < docker/scripts/verify_live_reads.py
 
 首次初始化仅创建 `admin`，初始密码存于本机登录资料文件。未迁移 8002 的账号或项目。
 
-读接口验收脚本检查现有管理员 / 项目经理的页面数据，并对非空申请列表并发重复读取；空列表会明确提示未覆盖本次故障。它不替代浏览器操作与隔离副本的写入流程验证。日志不输出凭据或响应正文。
+读接口验收脚本用一个在职系统管理员和一个在职员工，读取应用当前全部无参数页面接口和每个项目的页面接口；任何 5xx、超时或管理员被拒都算失败。它不替代浏览器操作与隔离副本的写入流程验证。日志不输出凭据或响应正文。
 
 **数据库操作必须在容器内执行。** 禁止用 macOS SQLite 直接打开运行中的数据库。备份使用 `AGV_CONTAINER=agv-pm-7001 BACKUP_DIR=/absolute/backup/path bash docker/scripts/backup.sh`；宿主机只能检查已导出的离线备份。
 
@@ -53,9 +53,3 @@ docker exec -i agv-pm-7001 python - < docker/scripts/verify_live_reads.py
 - 重新拉取官方 Python 3.12 与 Node 20 基础镜像，纠正本机已有镜像标签与实际版本不一致的问题。
 - 为 Supervisor 4.2.5 固定 `setuptools==80.9.0`，并在 Docker 构建阶段验证进程管理器与调度器可导入。新版 setuptools 已移除旧接口，参见 [setuptools 官方记录](https://github.com/pypa/setuptools/issues/5174)。
 - SQLite 启动配置停用 PostgreSQL 子进程，兼容容器的最小权限设置。
-
-## 2026-09-16 Agent 与性能版本复核
-
-应用代码提交：`856ce2a7519195cf63ad379087ea52df0c24f6e5`。7001健康，本机 / 内网 / 外网域名的首页与静态资源均通过。主脚本gzip传输约193KB（原始约577KB），前端新配色与版本资源在浏览器中确认加载。数据库备份完成，部署后完整性与数据数量一致；8002启动时间未变化。
-
-外部助手从「系统 → Agent 接口」配置；具体参数与权限见 [接入文档](ai-internal-api.md)。性能对比与验证范围见 本次改动记录。

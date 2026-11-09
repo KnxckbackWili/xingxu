@@ -1,6 +1,5 @@
 """Canonical weekly plans; publication is explicit scope, actual work is separate."""
 from datetime import date
-from io import BytesIO
 from typing import Literal
 from urllib.parse import quote
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -9,7 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from app.db import get_db
 from app.deps import get_current_user
-from app.models import WeeklyPlanCell, User, Task
+from app.models import User
 from app.services.scope import ensure_project_visible, visible_projects
 from app.services.permissions import C_SCHEDULE, C_EXPORT, authorize_project, project_capabilities
 from app.services.system_permissions import route_permission
@@ -124,8 +123,6 @@ def personal_weekly(week_start: date | None = None, weeks: int = Query(1, ge=1, 
     projects = visible_projects(db, user)
     if scope == 'team':
         projects = [project for project in projects if C_SCHEDULE in project_capabilities(user, project)]
-        if not projects and user.role not in ('admin','director','pm','lead','technician'):
-            raise HTTPException(403, '仅可查看本人已发布周计划')
     cells, warnings = [], []
     for project in projects:
         begin = week_start or service.local_today(project)

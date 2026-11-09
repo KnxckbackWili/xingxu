@@ -102,7 +102,6 @@ def test_cancelled_rows_are_reviewable_and_restore_requires_reason_and_fresh_ver
     assert cancelled.status_code==200,cancelled.text
     assert not client.get(f'/api/projects/{pid}/weekly-plans?week_start=2001-01-01',headers=pm_headers).json()['cells']
     assert client.get(f'/api/projects/{pid}/weekly-plans?week_start=2001-01-01&include_cancelled=true',headers=pm_headers).json()['cells'][0]['is_cancelled']
-    assert client.get(f'/api/projects/{pid}/weekly-plans?week_start=2001-01-01&include_cancelled=true',headers=worker_headers).status_code==403
     assert client.post(f'/api/projects/{pid}/weekly-plans',headers=pm_headers,json={'task_id':task['id'],'week_start':'2001-01-01'}).status_code==409
     assert client.put(url,headers=pm_headers,json={'version':1,'is_cancelled':False,'reason':'已明确恢复本周安排'}).status_code==200
 

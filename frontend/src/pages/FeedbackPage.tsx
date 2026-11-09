@@ -28,7 +28,7 @@ interface FeedbackItem {
 /**
  * 系统问题反馈（HYPE-72）。
  * - 全局入口（/pm/feedback、/worker/feedback 共用本页）：所有角色可提交。
- * - 管理角色（admin/director/pm）额外看到反馈列表、详情与处理状态更新；
+ * - 系统管理员额外看到反馈列表、详情与处理状态更新；
  *   普通用户不渲染管理区块，后端读取接口亦按角色 403。
  */
 export default function FeedbackPage() {

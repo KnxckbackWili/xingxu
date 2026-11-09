@@ -3,7 +3,7 @@ from tests.lifecycle_helpers import versioned
 from datetime import date
 import pytest
 from app.db import SessionLocal
-from app.models import Project, Phase, Module, Task, CheckItem
+from app.models import Project, Phase, Task, CheckItem
 from app.services.progress import project_completion_blockers, task_progress
 from tests.test_completion_issue_review import project
 

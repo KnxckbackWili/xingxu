@@ -20,7 +20,7 @@ from app.time_utils import utcnow
 
 
 def require_admin(user):
-    if user.role != 'admin' or not user.is_active or not has_permission(user, 'system.projects.purge', default=True):
+    if user.role != 'admin' or not user.is_active or not has_permission(user, 'system.projects.purge'):
         raise HTTPException(403, '仅系统管理员可管理项目永久删除备份及永久删除')
 
 

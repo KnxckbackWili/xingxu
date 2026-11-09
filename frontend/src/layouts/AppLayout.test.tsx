@@ -4,7 +4,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom'
 import AppLayout from './AppLayout'
 import { ProjectMenuContent } from '../pages/pm/project/ProjectMenu'
 
-const { logout, auth, queue } = vi.hoisted(() => ({ logout: vi.fn(), auth: { role: 'pm' }, queue: { pending: 0 } }))
+const { logout, auth, queue } = vi.hoisted(() => ({ logout: vi.fn(), auth: { role: 'admin' }, queue: { pending: 0 } }))
 vi.mock('../stores/auth', () => ({ useAuth: () => ({ user: { role: auth.role, display_name: '项目测试经理' }, logout }) }))
 vi.mock('../stores/theme', () => ({ useThemeStore: (selector: (value: unknown) => unknown) => selector({ mode: 'light', toggle: vi.fn() }) }))
 vi.mock('../components/NotificationBell', () => ({ default: () => null }))
@@ -12,7 +12,7 @@ vi.mock('../components/UploadQueue', () => ({ default: () => null }))
 vi.mock('../offline/queue', () => ({ getQueue: () => Array.from({ length: queue.pending }) }))
 vi.mock('../components/ChangePasswordModal', () => ({ default: ({ open }: { open: boolean }) => open ? <div role="dialog">修改密码表单</div> : null }))
 function LocationProbe() { return <output data-testid="route">{useLocation().pathname}</output> }
-beforeEach(() => { auth.role = 'pm'; queue.pending = 0; logout.mockClear() })
+beforeEach(() => { auth.role = 'admin'; queue.pending = 0; logout.mockClear() })
 
 const mainLinks = () => within(screen.getByRole('navigation', { name: '主导航' })).getAllByRole('link').map(link => link.textContent)
 
@@ -25,11 +25,11 @@ it('gives managers and field staff the same shell, with entries following permis
   const admin = render(<MemoryRouter initialEntries={['/pm/dashboard']}><AppLayout /></MemoryRouter>)
   expect(mainLinks()).toEqual(['工作台', '项目', '问题', '消息', '设置'])
   admin.unmount()
-  auth.role = 'worker'
+  auth.role = 'employee'
   render(<MemoryRouter initialEntries={['/worker/week']}><AppLayout /></MemoryRouter>)
   expect(mainLinks()).toEqual(['工作台', '项目', '问题', '消息', '设置'])
   const workbench = within(screen.getByRole('navigation', { name: '主导航' })).getByRole('link', { name: '工作台' })
-  expect(workbench).toHaveAttribute('href', '/worker/week')
+  expect(workbench).toHaveAttribute('href', '/pm/dashboard')
   expect(workbench).toHaveAttribute('aria-current', 'page')
 })
 
@@ -49,7 +49,7 @@ it('logs out to the login page, confirming first when offline records are unsync
 })
 
 it('phone "我的" sheet offers records, password and logout', async () => {
-  auth.role = 'worker'
+  auth.role = 'employee'
   render(<MemoryRouter initialEntries={['/worker/week']}><AppLayout /><LocationProbe /></MemoryRouter>)
   fireEvent.click(screen.getByRole('button', { name: '我的：记录、设置与账户' }))
   const sheet = within(await screen.findByRole('dialog', { name: '项目测试经理' }))
@@ -58,7 +58,8 @@ it('phone "我的" sheet offers records, password and logout', async () => {
   expect(screen.getByTestId('route')).toHaveTextContent('/worker/my')
 })
 
-it('finds a function by purpose without exposing admin settings to a project manager', async () => {
+it('finds a function by purpose without exposing admin settings to an employee', async () => {
+  auth.role = 'employee'
   render(<MemoryRouter initialEntries={['/pm/projects/project-a/overview']}><AppLayout /><LocationProbe /></MemoryRouter>)
   fireEvent.click(screen.getByRole('button', { name: '查找功能' })); const dialog = within(await screen.findByRole('dialog'))
   expect(dialog.queryByRole('link', { name: '账号' })).toBeNull(); expect(dialog.queryByRole('link', { name: '项目模板' })).toBeNull()

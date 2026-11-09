@@ -21,11 +21,6 @@ it('shows work by week without naming who does it',async()=>{
  expect(screen.getByText('接线核对')).toBeVisible();expect(screen.queryByText(/李工/)).toBeNull();expect(screen.queryByLabelText('计划负责人')).toBeNull();expect(screen.queryByText('已发布')).toBeNull()
  expect(screen.queryByText('计划 0 项')).toBeNull();fireEvent.click(screen.getByRole('button',{name:'更多周计划操作'}));expect(await screen.findByRole('link',{name:'排期设置'})).toHaveAttribute('href','/pm/projects/p1/edit?section=schedule')
 })
-it('allows a server-authorized field role and honors an explicit system denial',async()=>{
- h.user={id:'worker',role:'worker',permission_overrides:{}};const view=show();await screen.findByRole('button',{name:/新增计划格/})
- h.user={...h.user,permission_version:1,permission_overrides:{'project.manage_schedule':false}};view.rerender(page())
- await waitFor(()=>expect(h.list).toHaveBeenCalledTimes(2));expect(screen.queryByRole('button',{name:/新增计划格/})).toBeNull();expect(await screen.findByText('接线核对')).toBeVisible()
-})
 it('creates non-vehicle completion plans without a quantity and rejects duplicate clicks',async()=>{
  let finish!:(v:any)=>void;h.create.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve}));show()
  fireEvent.click(await screen.findByRole('button',{name:'安排接线核对 '+start}));fireEvent.change(screen.getByLabelText('周计划备注'),{target:{value:'核对现场接线'}})

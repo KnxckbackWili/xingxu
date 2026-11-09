@@ -10,9 +10,8 @@ from zoneinfo import ZoneInfo
 from uuid import uuid4
 
 from fastapi import HTTPException
-from sqlalchemy.orm import Session
 
-from app.models import (Project, ProjectEvent, ProjectDocument, ProjectDocumentDefinition,
+from app.models import (ProjectEvent, ProjectDocument, ProjectDocumentDefinition,
                         VehicleUnit, User, DocumentNoticeReceipt, ChangeLog)
 from app.services.change_log import log_change
 from app.services.optimistic import bump_version
@@ -127,27 +126,19 @@ def _calculate(document, project, events, units):
 
 
 def owner_details(project, document, users):
-    """The technical lead follows a document, else the project manager; inactive people are skipped."""
-    manager=users.get(project.manager)
-    manager_warning='' if manager and manager.is_active and has_permission(manager,'project.read',default=True) else '项目经理未设置或已停用，逾期升级提醒需管理员接手'
-    warning = manager_warning
-    for candidate in dict.fromkeys([project.technical_manager, project.manager]):
-        person = users.get(candidate)
-        eligible=person and person.is_active and has_permission(person,'project.read',default=True)
-        if eligible and isinstance(document,ProjectDocument):
-            from app.services.project_documents import can_read_document
-            if not can_read_document(person,project,document):
-                warning='负责人未获保密资料查看权限，提醒暂由有权人员接收'
-                continue
-        if eligible:
-            return {'effective_owner_id': person.id, 'effective_owner_name': person.display_name, 'owner_warning': warning}
-        if candidate:
-            warning = '技术负责人已停用或无权查看，暂由项目经理接收提醒'+('；'+manager_warning if manager_warning else '')
-    return {'effective_owner_id': None, 'effective_owner_name': '', 'owner_warning': '尚无活跃负责人，请管理员设置项目经理或技术负责人'}
+    """The project lead receives a document's reminders while active and allowed to read it."""
+    person=users.get(project.manager)
+    if not (person and person.is_active and has_permission(person,'project.read')):
+        return {'effective_owner_id': None, 'effective_owner_name': '', 'owner_warning': '项目负责人未设置或已停用，请在项目设置里更换负责人'}
+    if isinstance(document,ProjectDocument):
+        from app.services.project_documents import can_read_document
+        if not can_read_document(person,project,document):
+            return {'effective_owner_id': None, 'effective_owner_name': '', 'owner_warning': '负责人未获保密资料查看权限，提醒暂由有权人员接收'}
+    return {'effective_owner_id': person.id, 'effective_owner_name': person.display_name, 'owner_warning': ''}
 
 
 def _users(db, project, documents):
-    ids = {project.manager, project.technical_manager}
+    ids = {project.manager}
     return {row.id: row for row in db.query(User).filter(User.id.in_(ids))}
 
 
@@ -291,7 +282,7 @@ def attention_for_projects(db, projects, user, now=None):
     by_project = defaultdict(list)
     for row in db.query(ProjectDocument).filter(ProjectDocument.project_id.in_([p.id for p in projects])):
         by_project[row.project_id].append(row)
-    owner_ids = {value for p in projects for value in (p.manager, p.technical_manager)}
+    owner_ids = {p.manager for p in projects}
     users = {row.id: row for row in db.query(User).filter(User.id.in_(owner_ids))}
     return {p.id: action_summary(db, p, user, now, by_project[p.id], users) for p in projects}
 
@@ -360,15 +351,15 @@ def remind_project(db, project, now=None):
         manager = users.get(project.manager)
         if recipients and not can_read_document(users[owner['effective_owner_id']],project,row):
             recipients.clear()
-            if manager and manager.is_active and has_permission(manager,'project.read',default=True):recipients.add(manager.id)
-        if kind == 'overdue' and manager and manager.is_active and has_permission(manager,'project.read',default=True):
+            if manager and manager.is_active and has_permission(manager,'project.read'):recipients.add(manager.id)
+        if kind == 'overdue' and manager and manager.is_active and has_permission(manager,'project.read'):
             recipients.add(manager.id)
         elif kind == 'overdue':
-            recipients.update(person.id for person in db.query(User).filter_by(role='admin',is_active=True) if has_permission(person,'project.read',default=True))
+            recipients.update(person.id for person in db.query(User).filter_by(role='admin',is_active=True) if has_permission(person,'project.read'))
         if not recipients:
             missing += 1
             recipients.update(person.id for person in db.query(User).filter_by(role='admin', is_active=True)
-                              if has_permission(person,'project.read',default=True) and can_read_document(person,project,row))
+                              if has_permission(person,'project.read') and can_read_document(person,project,row))
             if not recipients and _claim_notice(db, row, None, 'owner_missing', now):
                 log_change(db, project.id, 'project_document', row.id, 'reminder_unassigned', None,
                            '资料提醒无人接收，请指定活跃负责人', None, {'due_at': row.due_at.isoformat()})

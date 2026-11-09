@@ -21,7 +21,6 @@ it('lets an authorized non-admin delete with one versioned confirmation and back
  await waitFor(() => expect(done).toHaveBeenCalledOnce()); expect(projectApi.remove).toHaveBeenCalledWith('p1', { version: 3 })
 })
 it('does not override a negative server metadata result with cached capabilities', () => { show({ ...project, can_delete: false }); expect(screen.queryByRole('button')).not.toBeInTheDocument() })
-it.each(['project.delete', 'project.read'])('removes the entry after explicit %s denial', key => { auth.user = { id: 'admin', role: 'admin', permission_overrides: { [key]: false } }; show(); expect(screen.queryByRole('button')).not.toBeInTheDocument(); expect(projectApi.remove).not.toHaveBeenCalled() })
 it('cancels without deleting or opening the surrounding card', async () => {
  const card = vi.fn(), done = vi.fn(); render(<ConfigProvider theme={{ token: { motion: false } }}><div onClick={card}><ProjectDeleteButton project={project} onDeleted={done} /></div></ConfigProvider>)
  await open(); fireEvent.click(screen.getByRole('button', { name: '保留项目' })); expect(projectApi.remove).not.toHaveBeenCalled(); expect(card).not.toHaveBeenCalled(); expect(done).not.toHaveBeenCalled()
@@ -53,7 +52,7 @@ it('ignores a late read after the parent revokes metadata or actor permissions c
  const done = vi.fn()
  const view = render(<ConfigProvider theme={{ token: { motion: false } }}><ProjectDeleteButton project={{ ...project, version: undefined }} onDeleted={done} /></ConfigProvider>)
  await open()
- auth.user = { id: 'pm1', role: 'pm', permission_version: 2 }
+ auth.user = { id: 'pm1', role: 'employee' }
  view.rerender(<ConfigProvider theme={{ token: { motion: false } }}><ProjectDeleteButton project={{ ...project, version: 4, can_delete: false }} onDeleted={done} /></ConfigProvider>)
  await act(async () => resolve({ ...project, version: 9 }))
  expect(screen.queryByRole('button', { name: '删除项目：物流一期' })).not.toBeInTheDocument()

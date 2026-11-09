@@ -6,7 +6,7 @@ import subprocess
 import pytest
 
 
-def _create_user(client, admin_headers, username, role="pm"):
+def _create_user(client, admin_headers, username, role="employee"):
     response = client.post("/api/users", headers=admin_headers, json={
         "username": username, "password": "Review123!", "display_name": username, "role": role,
     })

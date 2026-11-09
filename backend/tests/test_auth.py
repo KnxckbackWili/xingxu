@@ -63,11 +63,3 @@ def test_pm_can_create_project(client, pm_headers):
     })
     assert r.status_code == 200
 
-
-def test_worker_cannot_create_project(client, worker_headers):
-    r = client.post("/api/projects", headers=worker_headers, json={
-        "name": "越权项目",
-        "start_date": "2026-09-01", "new_vehicles": False,
-        "end_date": "2026-09-30",
-    })
-    assert r.status_code == 403

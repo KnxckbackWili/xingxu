@@ -40,21 +40,3 @@ def test_mfa_challenge_uses_rotated_signing_key_and_rejects_old_key(client, monk
     assert client.post('/api/auth/2fa/enroll/start', json={'challenge':forged}).status_code == 401
     assert client.post('/api/auth/2fa/enroll/start', json={'challenge':token}).status_code == 200
 
-
-def test_rotation_invalidates_external_sessions_but_keeps_share_capability(client, pm_headers, monkeypatch):
-    project = client.post('/api/projects', headers=pm_headers, json={'name':'signing scope',
-        'start_date':'2026-10-01','end_date':'2026-12-31','module_ids':[]})
-    assert project.status_code == 200
-    share = client.post('/api/projects/'+project.json()['id']+'/external-shares', headers=pm_headers,
-        json={'expires_at':(utcnow()+timedelta(days=1)).isoformat()+'Z'})
-    assert share.status_code == 200
-    body = {'token':share.json()['token']}
-    old = client.post('/api/external/bootstrap', json=body)
-    assert old.status_code == 200
-    rotate(monkeypatch)
-    assert client.get('/api/external/view', headers={'Authorization':'Bearer '+old.json()['session_token']}).status_code == 401
-    new = client.post('/api/external/bootstrap', json=body)
-    assert new.status_code == 200
-    assert client.get('/api/external/view', headers={'Authorization':'Bearer '+new.json()['session_token']}).status_code == 200
-    with pytest.raises(jwt.InvalidSignatureError):
-        jwt.decode(new.json()['session_token'], config.SECRET_KEY, algorithms=[config.ALGORITHM], audience='external_view')

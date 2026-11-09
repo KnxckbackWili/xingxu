@@ -7,33 +7,23 @@ beforeEach(() => {
   nav.mockClear()
 })
 
-describe('openNotification 通知跳转按 PM 工作台权限判权', () => {
+describe('openNotification 打开通知对应的工作', () => {
   it.each([
     ['document_submitted', '/documents'],
     ['report', '/reports'],
     ['schedule_confirmed', '/plan?view=weeks'],
-  ])('PM %s 通知进入对应项目业务页', (ntype, path) => {
-    openNotification({ ntype, project_id: 'p1' }, { role: 'pm' }, nav)
+  ])('%s 通知进入对应项目业务页', (ntype, path) => {
+    openNotification({ ntype, project_id: 'p1' }, { role: 'employee' }, nav)
     expect(nav).toHaveBeenCalledWith(`/pm/projects/p1${path}`)
   })
 
-  it('PM 工作台角色（technician）→ 项目问题上下文', () => {
-    openNotification({ ntype: 'issue_assigned', project_id: 'p1' }, { role: 'technician' }, nav)
+  it('没有具体问题的问题通知进入项目问题页', () => {
+    openNotification({ ntype: 'issue_assigned', project_id: 'p1' }, { role: 'employee' }, nav)
     expect(nav).toHaveBeenCalledWith('/pm/projects/p1/issues')
   })
 
-  it('worker → 现场工作台（不进项目页）', () => {
-    openNotification({ ntype: 'schedule_confirmed', project_id: 'p1' }, { role: 'worker' }, nav)
-    expect(nav).toHaveBeenCalledWith('/worker/week?project_id=p1')
-  })
-
-  it('intern → 现场工作台（回归：原 `role !== worker` 会把 intern 导向 /pm/projects → 403）', () => {
-    openNotification({ ntype: 'schedule_confirmed', project_id: 'p1' }, { role: 'intern' }, nav)
-    expect(nav).toHaveBeenCalledWith('/worker/week?project_id=p1')
-  })
-
-  it('无 project_id → 当前账号可进入的工作台', () => {
-    openNotification({ ntype: 'system', project_id: null }, { role: 'pm' }, nav)
+  it('无 project_id → 工作台', () => {
+    openNotification({ ntype: 'system', project_id: null }, { role: 'employee' }, nav)
     expect(nav).toHaveBeenCalledWith('/pm/dashboard')
   })
 })
@@ -46,21 +36,21 @@ it('localizes only legacy system issue severity fields and preserves user text',
 })
 
 it.each(['issue_reported', 'issue_assigned', 'issue_resolved', 'issue_reopened', 'issue_cancelled'])('opens the exact field issue for %s', (ntype) => {
-  openNotification({ ntype, project_id: 'p1', entity_id: 'issue-1' }, { role: 'worker' }, nav)
+  openNotification({ ntype, project_id: 'p1', entity_id: 'issue-1' }, { role: 'employee' }, nav)
   expect(nav).toHaveBeenCalledWith('/worker/issues?issue_id=issue-1')
 })
 
-it('opens the field issue list when a legacy issue notification has no entity', () => {
-  openNotification({ ntype: 'issue_assigned', project_id: 'p1' }, { role: 'intern' }, nav)
+it('opens the issue list when an issue notification has neither project nor entity', () => {
+  openNotification({ ntype: 'issue_assigned', project_id: null }, { role: 'employee' }, nav)
   expect(nav).toHaveBeenCalledWith('/worker/issues')
 })
 
-it.each(['worker', 'intern', 'pm'])('new document notifications use the same document list for %s', role => {
+it.each(['employee', 'admin'])('new document notifications use the same document list for %s', role => {
   openNotification({ ntype: 'document_submitted', project_id: 'p1', entity_id: 'document-1' }, { role }, nav)
   expect(nav).toHaveBeenCalledWith('/pm/projects/p1/documents')
 })
 
 it('opens the exact document for a deadline reminder without treating it as a task', () => {
-  openNotification({ ntype: 'document_deadline', project_id: 'p1', entity_id: 'document-1' }, { role: 'worker' }, nav)
+  openNotification({ ntype: 'document_deadline', project_id: 'p1', entity_id: 'document-1' }, { role: 'employee' }, nav)
   expect(nav).toHaveBeenCalledWith('/pm/projects/p1/documents?document=document-1')
 })

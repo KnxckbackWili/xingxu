@@ -34,69 +34,6 @@ def complete(client, headers, pid):
     return client.post(f'/api/projects/{pid}/status', headers=headers, json={'status': 'completed'})
 
 
-@pytest.mark.parametrize('confirmation', [None, False, True])
-def test_entry_cannot_use_warning_flag_as_risk_approval(client, pm_headers, confirmation):
-    pid = ready_project(client, pm_headers)
-    body = {'status': 'executing', 'reason': '不是正式风险评审'}
-    if confirmation is not None:
-        body['confirm_warnings'] = confirmation
-    response = client.post(f'/api/projects/{pid}/status', headers=pm_headers, json=body)
-    assert response.status_code == 400, response.text
-    assert '风险' in response.json()['detail']['message']
-    assert client.get(f'/api/projects/{pid}', headers=pm_headers).json()['status'] == 'preparing'
-
-
-def test_entry_accepts_current_risk_review_then_requires_new_review_after_change(client, pm_headers):
-    from tests.lifecycle_helpers import approve_risk_entry
-    from uuid import uuid4
-    pid = ready_project(client, pm_headers)
-    approve_risk_entry(client, pm_headers, pid)
-    state = f'/api/projects/{pid}/status'
-    assert client.post(state, headers=pm_headers, json={'status': 'executing'}).status_code == 200
-    assert client.post(state, headers=pm_headers, json={'status': 'preparing'}).status_code == 200
-    added = client.post(f'/api/projects/{pid}/documents/requirements', headers=pm_headers, json={
-        'stage_key': '5', 'code': '5.' + uuid4().hex[:8], 'name': '新增电源确认资料',
-        'scope': 'project', 'timing_type': 'on_demand', 'required': True})
-    assert added.status_code == 200, added.text
-    assert client.post(state, headers=pm_headers, json={'status': 'executing', 'confirm_warnings': True}).status_code == 400
-
-
-@pytest.mark.parametrize('required,waived,ready_allowed', [(False, False, True), (True, False, False), (True, True, True)])
-def test_dispatch_required_optional_and_waived_documents_control_entry(client, pm_headers, required, waived, ready_allowed):
-    from uuid import uuid4
-    from tests.document_helpers import documents
-    pid = ready_project(client, pm_headers)
-    response = client.post(f'/api/projects/{pid}/documents/requirements', headers=pm_headers, json={
-        'stage_key': '5', 'code': '5.' + uuid4().hex[:8], 'name': '当前发车资料',
-        'scope': 'project', 'timing_type': 'on_demand', 'required': required})
-    assert response.status_code == 200, response.text
-    row = next(row for row in documents(client, pm_headers, pid)['documents'] if row['definition_id'] == response.json()['id'])
-    if waived:
-        changed = client.put(f'/api/projects/{pid}/documents/{row["id"]}', headers=pm_headers,
-            json={'status': 'waived', 'version': row['version'], 'reason': '已核对本项目无该配置，客户明确无需此资料'})
-        assert changed.status_code == 200, changed.text
-    path = f'/api/projects/{pid}/documents/dispatch-review'
-    manifest = client.post(path, headers=pm_headers).json()
-    assert len(manifest['entry_unmet']) == (0 if ready_allowed else 1)
-    response = client.post(path + '/confirm', headers=pm_headers,
-        json={'conclusion': 'ready', 'review_token': manifest['review_token']})
-    assert response.status_code == (200 if ready_allowed else 400), response.text
-    if ready_allowed:
-        assert response.json()['summary']['entry_confirmed']
-        assert client.post(f'/api/projects/{pid}/status', headers=pm_headers, json={'status': 'executing'}).status_code == 200
-
-
-def test_missing_dispatch_document_scope_does_not_bypass_entry_gate(client, pm_headers):
-    from app.models import ProjectDocument, ProjectDocumentDefinition
-    pid = ready_project(client, pm_headers)
-    with SessionLocal() as db:
-        assert not db.query(ProjectDocument).filter_by(project_id=pid, stage_key='5').count()
-        assert not db.query(ProjectDocumentDefinition).filter_by(project_id=pid, stage_key='5').count()
-    response = client.post(f'/api/projects/{pid}/status', headers=pm_headers, json={'status': 'executing'})
-    assert response.status_code == 400, response.text
-    assert any(row['type'] == 'entry_conditions' for row in response.json()['detail']['blockers'])
-
-
 @pytest.mark.parametrize('conclusion', ['rejected', 'conditionally_accepted'])
 def test_latest_result_supersedes_historical_pass_for_completion_and_archive(client, pm_headers, conclusion):
     pid, _, _ = completeable_project(client, pm_headers)

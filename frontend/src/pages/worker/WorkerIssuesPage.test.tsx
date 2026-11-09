@@ -17,41 +17,6 @@ beforeEach(() => {
   vi.mocked(api.get).mockImplementation(async (url) => ({ data: url === '/projects' ? [{ id: 'p1', name: '现场项目' }] : { items: [] } }) as any)
 })
 
-it('keeps assigned handling available when only issue reporting is denied', async () => {
-  authState.user = { id: 'worker', role: 'worker', system_permissions: [], permission_overrides: { 'worker.issues': false } }
-  vi.mocked(api.get).mockImplementation(async url => ({ data: url === '/projects' ? [{ id: 'p1', name: '现场项目', status: 'executing' }] : { items: [{ id: 'i1', title: '已指派的问题', assignee_id: 'worker', reporter_id: 'other', status: 'open', severity: 'medium', project_status: 'executing', version: 2 }] } }))
-  vi.mocked(api.put).mockResolvedValue({ data: {} })
-  render(<WorkerIssuesPage />, '/worker/issues?issue_id=i1')
-  expect(await screen.findByRole('button', { name: '上报问题' })).toBeDisabled()
-  const drawer = await screen.findByRole('dialog', { name: '已指派的问题' })
-  fireEvent.click(within(drawer).getByRole('button', { name: '开始处理' }))
-  await waitFor(() => expect(api.put).toHaveBeenCalledWith('/issues/i1', { status: 'processing', version: 2 }))
-  expect(api.post).not.toHaveBeenCalled()
-})
-
-it.each(['open', 'resolved'])('keeps %s issues readable when contextual handling is explicitly denied', async status => {
-  authState.user = { id: 'worker', role: 'worker', permission_overrides: { 'project.manage_issues': false } }
-  vi.mocked(api.get).mockImplementation(async url => ({ data: url === '/projects' ? [] : { items: [{ id: 'i1', title: '仅查看问题', assignee_id: 'worker', reporter_id: 'worker', status, severity: 'medium', project_status: 'executing', resolution: '原处理结果' }] } }))
-  render(<WorkerIssuesPage />, '/worker/issues?issue_id=i1')
-  const drawer = await screen.findByRole('dialog', { name: '仅查看问题' })
-  expect(within(drawer).queryByRole('button', { name: /开始处理|提交处理结果|重新打开/ })).not.toBeInTheDocument()
-  expect(api.put).not.toHaveBeenCalled(); expect(api.post).not.toHaveBeenCalled()
-})
-
-it('cannot submit an open resolution after contextual permission is revoked', async () => {
-  vi.mocked(api.get).mockImplementation(async url => ({ data: url === '/projects' ? [] : { items: [{ id: 'i1', title: '处理草稿', assignee_id: 'worker', reporter_id: 'worker', status: 'open', severity: 'medium', project_status: 'executing', version: 2 }] } }))
-  const view = render(<WorkerIssuesPage />, '/worker/issues?issue_id=i1')
-  const drawer = await screen.findByRole('dialog', { name: '处理草稿' })
-  fireEvent.click(within(drawer).getByRole('button', { name: '提交处理结果' }))
-  fireEvent.change(screen.getByLabelText('处理措施与验证结果'), { target: { value: '已填写，尚未提交' } })
-  authState.user = { id: 'worker', role: 'worker', permission_overrides: { 'project.manage_issues': false } }
-  view.rerender(<MemoryRouter initialEntries={['/worker/issues?issue_id=i1']}><WorkerIssuesPage /></MemoryRouter>)
-  expect(screen.getByRole('button', { name: '提交复核' })).toBeDisabled()
-  expect(screen.getByLabelText('处理措施与验证结果')).toHaveValue('已填写，尚未提交')
-  await act(async () => { fireEvent.submit(screen.getByLabelText('处理措施与验证结果').closest('form')!) })
-  expect(api.put).not.toHaveBeenCalled()
-})
-
 it('opens a permitted issue from a notification deep link', async () => {
   let resolveIssues!: (value: { data: { items: Record<string, unknown>[] } }) => void
   const pendingIssues = new Promise<{ data: { items: Record<string, unknown>[] } }>(resolve => { resolveIssues = resolve })

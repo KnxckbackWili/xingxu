@@ -61,9 +61,6 @@ def test_current_week_excel_uses_site_iso_year_exact_original_dates_and_headers(
     assert [ws.cell(row,7).value for row in (3,4)]==['2025.12.29','2026.1.4'] and ws.max_row==4
     metadata=result['latest_version']['review_metadata']['generated']
     assert metadata['period_key']=='2026-W01' and metadata['source_event_ids']==[first,last]
-    reviewed=client.post(f'/api/projects/{pid}/documents/{doc["id"]}/versions/{result["latest_version"]["id"]}/review',headers=admin_headers,json={'decision':'approved','note':'核对系统生成来源'})
-    assert reviewed.status_code==200,reviewed.text
-    assert reviewed.json()['review_metadata']['generated']['source_event_ids']==[first,last]
     with SessionLocal() as db:assert db.get(models.VehicleLifecycleEvent,before).event_date==date(2025,12,28)
     newer=generate(client,pm_headers,pid,doc['id'],'lifecycle');assert newer.status_code==200 and len(newer.json()['versions'])==2
 
@@ -166,12 +163,10 @@ def test_generation_audit_failure_rolls_back_real_file_versions_status_and_sourc
     assert set(config.UPLOAD_DIR.iterdir())==before
 
 
-def test_archived_or_explicitly_denied_generation_creates_no_evidence(client,pm_headers,monkeypatch):
+def test_archived_generation_creates_no_evidence(client,pm_headers,monkeypatch):
     pid,document=weekly(client,pm_headers,monkeypatch)
-    with SessionLocal() as db:db.get(models.User,'user-pm-001').permission_overrides={'worker.deliver':False};db.commit()
-    assert generate(client,pm_headers,pid,document['id'],'lifecycle').status_code==403
     with SessionLocal() as db:
-        db.get(models.User,'user-pm-001').permission_overrides={};db.get(models.Project,pid).status='archived';db.commit()
+        db.get(models.Project,pid).status='archived';db.commit()
     assert generate(client,pm_headers,pid,document['id'],'lifecycle').status_code==400
     with SessionLocal() as db:assert db.query(models.DocumentVersion).count()==0 and db.query(models.Attachment).filter_by(project_id=pid).count()==0
 

@@ -18,7 +18,6 @@
 #   FORWARDED_ALLOW_IPS     反向代理可信地址/网段（默认空=仅回环可信，见 docs/deployment.md T024）。
 #   WEB_CONCURRENCY         uvicorn worker 数（默认 2）。
 #   AGV_IMAGE / APP_VERSION 镜像标签与版本（默认从 frontend/package.json 自动同步，一般无需改动）。
-#   AI_PROVIDER / DEEPSEEK_* / MIMO_* / MINIMAX_*  AI 服务密钥（可选，不配置不影响手工业务）。
 set -euo pipefail
 umask 077
 

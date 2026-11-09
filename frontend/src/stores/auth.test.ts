@@ -75,10 +75,9 @@ describe('session request ownership', () => {
     expect(useAuth.getState().loading).toBe(false)
     expect(useAuth.getState().user?.id).toBe('same')
     expect(getOfflineAccount()).toBe('same')
-    pending.resolve({ id: 'same', role: 'pm', system_permissions: [], permission_version: 2 })
+    pending.resolve({ id: 'same', role: 'employee', system_permissions: [] })
     await Promise.all([first, second])
     expect(useAuth.getState().user?.system_permissions).toEqual([])
-    expect(useAuth.getState().user?.permission_version).toBe(2)
     expect(getOfflineAccount()).toBe('same')
   })
   it('does not erase the current account or permissions after a background network failure', async () => {

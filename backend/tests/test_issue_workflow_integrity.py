@@ -67,7 +67,7 @@ def _make_project_with_task(client, pm_headers, name):
     r = client.post(f'/api/projects/{pid}/tasks/generate', headers=pm_headers, json={'work_item_ids': default_work('mod-03')})
     assert r.status_code == 200, r.text
     tree = client.get(f'/api/projects/{pid}/tree', headers=pm_headers).json()
-    tid = tree[0]['modules'][0]['tasks'][0]['id']
+    tid = tree[0]['work_items'][0]['id']
     return (pid, tid)
 
 def test_issue_create_rejects_task_from_other_project(client, pm_headers):

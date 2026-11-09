@@ -14,7 +14,7 @@ beforeEach(() => {
 })
 function show(props: any = {}) { return render(<MemoryRouter><TaskPlanPage projectId="p" {...props} /></MemoryRouter>) }
 it('shows phase/work items and matrix warnings without editable quantities', async () => {
-  show(); expect(await screen.findByText('现场验证')).toBeVisible(); expect(screen.getAllByText('原模块标签')[0]).toBeVisible(); expect(screen.getByTitle('2 / 3 个车辆环节')).toBeVisible(); expect(screen.getByText(/不代表逐台核验/)).toBeVisible()
+  show(); expect(await screen.findByText('现场验证')).toBeVisible(); expect(screen.getAllByText('现场分组')[0]).toBeVisible(); expect(screen.getByTitle('2 / 3 个车辆环节')).toBeVisible(); expect(screen.getByText(/不代表逐台核验/)).toBeVisible()
   expect(screen.queryByRole('spinbutton')).toBeNull()
 })
 it('keeps execution details in the global drawer and calls its close callback', async () => {

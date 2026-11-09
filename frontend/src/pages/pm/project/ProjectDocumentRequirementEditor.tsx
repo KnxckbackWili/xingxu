@@ -4,7 +4,7 @@ import { errMsg } from '../../../api/client'
 import { projectDocumentsApi, type ProjectDocumentDefinition, type ProjectRequirementBody } from '../../../api/projectDocuments'
 import { DOCUMENT_EVENTS, DOCUMENT_MILESTONES, DOCUMENT_RULE_EMPTY, DOCUMENT_STAGES, DOCUMENT_TIMINGS, DOCUMENT_TRIGGERS, DOCUMENT_WEEKDAYS } from '../../../constants/documentRules'
 
-const fields = ['stage_key', 'code', 'name', 'template_no', 'required', 'scope', 'platform', 'timing_type', 'timing_event', 'timing_offset_hours', 'timing_weekday', 'trigger_type', 'sort_order', 'note', 'confidential_default', 'external_visible_default', 'external_never_visible'] as const
+const fields = ['stage_key', 'code', 'name', 'template_no', 'required', 'scope', 'platform', 'timing_type', 'timing_event', 'timing_offset_hours', 'timing_weekday', 'trigger_type', 'sort_order', 'note', 'confidential_default'] as const
 export default function ProjectDocumentRequirementEditor({ projectId, editing, onClose, onSaved, onDirtyChange, canEdit = false, canSetConfidentiality = false }: {
   canEdit?: boolean
   canSetConfidentiality?: boolean
@@ -22,21 +22,18 @@ export default function ProjectDocumentRequirementEditor({ projectId, editing, o
     if (editing) form.setFieldsValue(editing === 'new' ? {
       ...DOCUMENT_RULE_EMPTY, stage_key: '6', name: '', code: '', template_no: '', required: true,
       scope: 'project', platform: null, timing_type: 'on_demand', sort_order: 0, note: '',
-      confidential_default: false, external_visible_default: false, external_never_visible: false,
+      confidential_default: false,
     } : editing)
   }, [editing, projectId, form, onDirtyChange])
   const kind = Form.useWatch('timing_type', form)
   const scope = Form.useWatch('scope', form)
-  const confidential = Form.useWatch('confidential_default', form)
-  const never = Form.useWatch('external_never_visible', form)
   const code = Form.useWatch('code', form)
-  const forbiddenExternal = ['6.11.6', '6.11.6a', '6.11.6b', '6.11.6c'].includes(code)
+  const defaultConfidential = ['6.11.6', '6.11.6a', '6.11.6b', '6.11.6c'].includes(code)
   const previousCode = useRef('')
   useEffect(() => {
-    if (editing === 'new' && forbiddenExternal && code !== previousCode.current) form.setFieldValue('confidential_default', true)
+    if (editing === 'new' && defaultConfidential && code !== previousCode.current) form.setFieldValue('confidential_default', true)
     previousCode.current = code
-  }, [code, editing, forbiddenExternal, form])
-  useEffect(() => { if (forbiddenExternal) form.setFieldsValue({ external_never_visible: true, external_visible_default: false }) }, [forbiddenExternal, form])
+  }, [code, editing, defaultConfidential, form])
   const save = async () => {
     if (lock.current || !editing || !canEdit) return
     try { await form.validateFields() } catch { return }
@@ -89,9 +86,7 @@ export default function ProjectDocumentRequirementEditor({ projectId, editing, o
         <Form.Item name="template_no" label="模板编号"><Input maxLength={100} placeholder="可选，如模板16" /></Form.Item>
         <Form.Item name="platform" label="只用于某个调度平台"><Select allowClear placeholder="所有平台都用" options={[{ value: 'NDC', label: 'NDC' }, { value: 'GRACE', label: 'GRACE' }, { value: 'integrated', label: '集成' }]} /></Form.Item>
         <Space align="start" wrap size={24}>
-          <Form.Item name="confidential_default" label="默认保密" valuePropName="checked"><Switch disabled={!canSetConfidentiality || editing !== 'new'} onChange={value => value && form.setFieldValue('external_visible_default', false)} /></Form.Item>
-          <Form.Item name="external_never_visible" label="禁止外部查看" valuePropName="checked"><Switch disabled={forbiddenExternal || editing !== 'new'} onChange={value => value && form.setFieldValue('external_visible_default', false)} /></Form.Item>
-          <Form.Item name="external_visible_default" label="默认对外可见" valuePropName="checked"><Switch disabled={confidential || never || forbiddenExternal || editing !== 'new'} /></Form.Item>
+          <Form.Item name="confidential_default" label="默认保密" valuePropName="checked"><Switch disabled={!canSetConfidentiality || editing !== 'new'} /></Form.Item>
         </Space>
         {editing && editing !== 'new' && <Typography.Paragraph type="secondary">已有资料的保密范围请从“保密范围”设置。</Typography.Paragraph>}
         <Form.Item name="sort_order" label="排序" rules={[{ required: true }]}><InputNumber min={0} max={100000} precision={0} /></Form.Item>

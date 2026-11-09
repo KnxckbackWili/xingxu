@@ -1,6 +1,5 @@
 """Private, account-bound evidence uploads with bounded memory and atomic finish."""
 from datetime import date,timedelta
-from pathlib import Path
 from uuid import uuid4,UUID
 import errno,hashlib,math,os,re,shutil,logging,json
 

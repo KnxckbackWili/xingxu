@@ -1,6 +1,5 @@
 """FastAPI application entry point."""
 
-import os
 from contextlib import asynccontextmanager
 from typing import Optional
 from pathlib import Path
@@ -16,10 +15,7 @@ from app import config
 from app.routers import system_updates
 from app.middleware import TrustedHostsMiddleware, StaticAssetCompressionMiddleware, HTTPSOnlyMiddleware
 from app.routers import (
-    external_shares,
     project_recycle_bin,
-    permissions,
-    agent,
     auth,
     users,
     projects,
@@ -37,8 +33,6 @@ from app.routers import (
     progress,
     issues,
     io_routes,
-    ai_projects,
-    ai_internal,
     attachments,
     notifications,
     dashboard,
@@ -79,12 +73,8 @@ async def lifespan(app: FastAPI):
         scheduler = start_scheduler()
     app.state.scheduler = scheduler
 
-    # Mounted ASGI applications do not receive the parent lifespan automatically.
-    from app.services.ai_mcp import agent_mcp_lifespan
-
     try:
-        async with agent_mcp_lifespan():
-            yield
+        yield
     finally:
         if scheduler is not None:
             scheduler.shutdown(wait=False)
@@ -124,10 +114,7 @@ async def security_headers(request, call_next):
     if request.url.path.startswith(("/api/projects", "/api/dashboard", "/api/worker", "/api/people")):
         response.headers["Cache-Control"]="private, no-store"
     response.headers["X-Frame-Options"] = "DENY"
-    response.headers["Referrer-Policy"] = "no-referrer" if request.url.path.startswith(("/external", "/api/external")) else "same-origin"
-    if request.url.path.startswith(("/api/external/", "/api/agent/", "/api/ai/internal/", "/api/ai/mcp", "/api/ai-projects/")) or "/external-shares" in request.url.path:
-        response.headers["Cache-Control"] = "private, no-store"
-        response.headers["Pragma"] = "no-cache"
+    response.headers["Referrer-Policy"] = "same-origin"
     response.headers["Permissions-Policy"] = (
         "camera=(self), microphone=(), geolocation=()"
     )
@@ -158,7 +145,7 @@ async def csrf_protection(request, call_next):
         #   path=/api/auth/refresh + SameSite=Lax，跨站 POST 不会携带该 cookie。
         # MFA public steps authenticate with an audience/purpose-bound signed
         # challenge in the JSON body, never with the ambient business Cookie.
-        if request.url.path == "/api/external/bootstrap" or request.url.path in ("/api/auth/login", "/api/auth/refresh", "/api/auth/2fa/verify", "/api/auth/2fa/enroll/start", "/api/auth/2fa/enroll/confirm", "/api/auth/2fa/recover/start", "/api/auth/2fa/cancel"):
+        if request.url.path in ("/api/auth/login", "/api/auth/refresh", "/api/auth/2fa/verify", "/api/auth/2fa/enroll/start", "/api/auth/2fa/enroll/confirm", "/api/auth/2fa/recover/start", "/api/auth/2fa/cancel"):
             return await call_next(request)
         from app.services.cookies import verify_csrf
 
@@ -178,10 +165,7 @@ async def csrf_protection(request, call_next):
 
 # API routes
 app.include_router(auth.router, prefix="/api")
-app.include_router(external_shares.router, prefix="/api")
-app.include_router(external_shares.external_router, prefix="/api")
 app.include_router(users.router, prefix="/api")
-app.include_router(permissions.router, prefix="/api")
 app.include_router(projects.router, prefix="/api")
 app.include_router(project_events.router, prefix="/api")
 app.include_router(project_documents.router, prefix="/api")
@@ -201,7 +185,6 @@ app.include_router(worker.router, prefix="/api")
 app.include_router(progress.router, prefix="/api")
 app.include_router(issues.router, prefix="/api")
 app.include_router(io_routes.router, prefix="/api")
-app.include_router(ai_projects.router, prefix="/api")
 app.include_router(attachments.router, prefix="/api")
 app.include_router(notifications.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
@@ -213,8 +196,6 @@ app.include_router(vehicle_progress.router, prefix="/api")
 app.include_router(inventory.router, prefix="/api")
 app.include_router(system.router, prefix="/api")
 app.include_router(system_updates.router, prefix="/api")
-app.include_router(ai_internal.router, prefix="/api")
-app.include_router(agent.router, prefix="/api")
 app.include_router(report_forms.router, prefix="/api")
 app.include_router(notification_channels.router, prefix="/api")
 app.include_router(vehicle_types.router, prefix="/api")
@@ -248,10 +229,6 @@ async def update_maintenance(request, call_next):
     return await call_next(request)
 
 
-# Internal AI access: Model Context Protocol endpoint for Claude Desktop/Dify/etc.
-from app.services.ai_mcp import mcp_http_app  # noqa: E402
-
-app.mount("/api/ai/mcp", mcp_http_app)
 
 
 @app.get("/health")

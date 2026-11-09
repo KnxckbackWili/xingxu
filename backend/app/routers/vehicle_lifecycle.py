@@ -214,12 +214,10 @@ def _editable(db: Session, project_id: str, user: User):
 
 def _can_record(db: Session, project_id: str, user: User):
     from app.services.system_permissions import has_permission
-    if not has_permission(user, "worker.issues", default=True):
+    if not has_permission(user, "worker.issues"):
         raise HTTPException(403, "现场问题记录权限已被系统管理员撤销")
     project = ensure_project_visible(db, project_id, user)
     lock_writable_project(db, project, user)
-    if user.role in ("readonly", "external"):
-        raise HTTPException(status_code=403, detail="只读账号不能记录车辆现场问题")
     return project
 
 
@@ -340,12 +338,7 @@ def update_event(
     event = db.get(VehicleLifecycleEvent, event_id)
     if event is None or event.project_id != project_id or event.vehicle_unit_id != unit_id:
         raise HTTPException(status_code=404, detail="车辆问题记录不存在")
-    can_manage = (
-        user.role in ("admin", "director")
-        or project.manager == user.id
-        or project.technical_manager == user.id
-        or C_ISSUES in project_capabilities(user, project)
-    )
+    can_manage = C_ISSUES in project_capabilities(user, project)
     if event.operator_id != user.id and not can_manage:
         raise HTTPException(status_code=403, detail="只能修改自己记录的现场问题")
     if body.attachment_id:

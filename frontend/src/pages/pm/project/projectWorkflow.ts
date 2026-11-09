@@ -8,7 +8,6 @@ export interface WorkflowInput {
   plans: number | null
   drafts: number | null
   planWarnings?: number
-  prepReady: boolean
   kickoffReady?: boolean
   severeIssues: number
   progress: number
@@ -17,12 +16,12 @@ export interface WorkflowAction { title: string; description: string; path: stri
 
 export function projectStageGuidance(status: string): { next?: string; description: string; path: string; link: string } | null {
   const stages: Record<string, { next?: string; description: string; path: string; link: string }> = {
-    preparing: { next: 'executing', description: '按顺序核对车型、资料、周计划和发车前资料。第4阶段必需资料与发车前资料齐备（或已有有效的风险批准）后，由负责人确认开始现场实施。', path: '/documents?stage=4', link: '核对准备资料' },
-    executing: { next: 'acceptance', description: '联调和试运行按关键事件记录；提交到货签收单、调试完工单、上线运行单和培训记录后，负责人确认进入验收中。', path: '/documents?stage=6', link: '核对签单资料' },
+    preparing: { next: 'executing', description: '按顺序核对车型、资料和周计划。第4阶段必需资料齐备后，确认开始现场实施。', path: '/documents?stage=4', link: '核对准备资料' },
+    executing: { next: 'acceptance', description: '联调和试运行按关键事件记录；提交到货签收单、调试完工单、上线运行单和培训记录后，确认进入验收中。', path: '/documents?stage=6', link: '核对签单资料' },
     acceptance: { next: 'completed', description: '核对完成进度、质量检查、必需资料、已关闭或作废的问题、车辆故障和最新有效验收，再人工确认完成。', path: '/documents?acceptance=1', link: '核对验收记录' },
     completed: { next: 'archived', description: '补齐交付和全周期资料并填写复盘，重新核对完成依据后归档。', path: '/documents', link: '核对归档资料' },
     archived: { description: '项目已归档，可查阅原资料和历史记录；整改需先恢复状态，原证据保留。', path: '/documents', link: '查看交付资料' },
-    suspended: { description: '处理停工原因后，负责人明确恢复原阶段；填报、撤回和资料上传不会自行恢复项目。', path: '/issues', link: '查看停工问题' },
+    suspended: { description: '处理停工原因后，明确恢复原阶段；填报、撤回和资料上传不会自行恢复项目。', path: '/issues', link: '查看停工问题' },
   }
   return stages[status] ?? null
 }
@@ -33,7 +32,6 @@ export function projectWorkflow(x: WorkflowInput) {
     { title: '车型', description: x.vehicles ? `${x.vehicles} 台已配置` : '确认车型和台数', path: '/edit?section=vehicles', done: x.vehicles > 0 },
     { title: '资料清单', description: x.kickoffReady ? '第4阶段必需资料齐备' : '提交准备资料或说明不适用理由', path: '/documents?stage=4', done: x.kickoffReady === true },
     { title: '周计划', description: x.plans===null ? '周计划尚未读取，请重新核对' : x.drafts ? `${x.drafts} 格草稿待发布` : x.plans ? `已发布 ${x.plans} 格` : '还没有安排，先生成初稿', path: '/plan?view=weeks', done: x.plans!==null && x.plans>0 && x.drafts===0 && !x.planWarnings },
-    { title: '发车前资料确认', description: x.prepReady ? '资料确认已就绪' : '核对第5阶段资料与风险批准', path: '/documents?review=1', done: x.prepReady },
   ]
   const setup = x.status === 'preparing'
   const guidance = projectStageGuidance(x.status)
@@ -41,10 +39,10 @@ export function projectWorkflow(x: WorkflowInput) {
   if (x.status === 'preparing') {
     const next = checklist.find(item => !item.done)
     action = next ? { title: next.title, description: next.description, path: next.path }
-      : { title: '确认开始现场实施', description: '系统会重新核对第4阶段必需资料和发车前资料。', path: '/documents?review=1', status: 'executing' }
+      : { title: '确认开始现场实施', description: '系统会重新核对第4阶段必需资料。', path: '/documents?stage=4', status: 'executing' }
   }
   else if (['executing', 'acceptance'].includes(x.status) && x.severeIssues > 0) action = { title: '处理严重问题', description: `有 ${x.severeIssues} 个严重问题，请先评估影响。`, path: '/issues' }
-  else if (x.status === 'executing') action = x.progress >= 100 ? { title: '核对签单与验收', description: guidance!.description, path: guidance!.path } : { title: '跟进现场实施', description: '查看本周工作与执行人，签单齐备后由负责人推进验收。', path: '/plan?view=weeks' }
+  else if (x.status === 'executing') action = x.progress >= 100 ? { title: '核对签单与验收', description: guidance!.description, path: guidance!.path } : { title: '跟进现场实施', description: '查看本周工作，签单齐备后推进验收。', path: '/plan?view=weeks' }
   else action = { title: guidance?.link ?? '查看项目', description: guidance?.description ?? '', path: guidance?.path ?? '/overview' }
   return { checklist, setup, action }
 }

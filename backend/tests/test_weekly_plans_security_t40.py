@@ -26,17 +26,12 @@ def test_plan_completion_rechecks_exact_required_and_safety_checks(client,pm_hea
     row=create_cell(client,pm_headers,pid,task,mode='finish',target_count=2)
     assert publish(client,pm_headers,pid,row).status_code==200
     with SessionLocal() as db:
-        legacy=CheckItem(task_id=task['id'],project_id=None,name='原必需待检',is_required=True,is_safety_critical=True,is_done=False)
-        db.add(legacy)
         for uid in units:db.add(VehicleProgress(project_id=pid,vehicle_unit_id=uid,step_key='arrival_inspection',is_done=True,done_on=date(2001,1,3)))
-        db.get(Task,task['id']).manually_completed=True;db.get(Task,task['id']).manual_completed_reason='不能覆盖安全';db.commit();cid=legacy.id
+        db.get(Task,task['id']).manually_completed=True;db.get(Task,task['id']).manual_completed_reason='不能覆盖安全';db.commit()
     path=f'/api/projects/{pid}/weekly-plans?week_start=2001-01-01&weeks=1'
-    facts=client.get(path,headers=pm_headers).json()['cells'][0]['completion']
-    assert facts['completed_count']==0 and facts['overdue']
     with SessionLocal() as db:
         from uuid import uuid4
         from app.services.vehicle_checks import snapshot_definitions, generate_for_units
-        db.get(CheckItem,cid).is_done=True
         definition=CheckItem(id=str(uuid4()),name='该车必检',is_required=True,is_safety_critical=True,is_done=False,version=0)
         current=db.get(Task,task['id']);snapshot_definitions(db,current,[definition])
         generate_for_units(db,pid,[db.get(VehicleUnit,units[0])],current)
@@ -65,8 +60,8 @@ def test_pg_stale_actor_revocation_is_rechecked_after_project_lock(client,pm_hea
             db.commit();return 200
     with SessionLocal() as first,ThreadPoolExecutor(max_workers=1) as pool:
         actor=first.query(User).filter_by(username='pm').one();lock_writable_project(first,first.get(Project,pid),actor)
-        actor.permission_overrides={'project.manage_schedule':False};actor.permission_version+=1;first.flush()
-        future=pool.submit(attempt);assert entered.wait(2);assert not future.done();first.commit();assert future.result(timeout=10)==403
+        actor.is_active=False;first.flush()
+        future=pool.submit(attempt);assert entered.wait(2);assert not future.done();first.commit();assert future.result(timeout=10) in (401,403)
     with SessionLocal() as db:assert db.query(WeeklyPlanCell).filter_by(project_id=pid).count()==0
 
 

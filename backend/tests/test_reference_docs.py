@@ -21,7 +21,7 @@ def _first_template_task(client, headers):
 
 def _project_task(tree, name):
     return next(
-        task for phase in tree for module in phase["modules"] for task in module["tasks"]
+        task for phase in tree for task in phase["work_items"]
         if task["name"] == name
     )
 

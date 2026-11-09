@@ -21,13 +21,12 @@ from sqlalchemy.exc import OperationalError
 
 from app.config import UPLOAD_DIR, MAX_UPLOAD_SIZE
 from app.models import DocumentRequirement, DocumentTemplateFile, Template, User
-from app.services.change_log import log_change
 
 EVENTS = {"internal_kickoff", "ship", "arrival_all", "delivery_signed", "commissioning_done", "go_live", "training_done", "acceptance", "handover"}
 MILESTONES = {"delivery_signed", "commissioning_done", "go_live", "training_done", "acceptance", "handover"}
 RULE_FIELDS = ("timing_type", "timing_event", "timing_offset_hours", "timing_weekday", "trigger_type")
 FIELDS = ("stage_key", "code", "name", "template_no", "is_group", "required", "scope", "platform", *RULE_FIELDS,
-          "confidential_default", "external_visible_default", "external_never_visible", "sort_order", "note")
+          "confidential_default", "sort_order", "note")
 MAX_BUNDLE_FILES = 100
 
 
@@ -48,8 +47,6 @@ class RequirementInput(BaseModel):
     timing_weekday: StrictInt | None = Field(default=None, ge=1, le=7)
     trigger_type: Literal["accident", "quality", "member_leave"] | None = None
     confidential_default: bool = False
-    external_visible_default: bool = False
-    external_never_visible: bool = False
     sort_order: StrictInt = Field(default=0, ge=0, le=100000)
     note: str = Field(default="", max_length=5000)
 
@@ -64,10 +61,6 @@ class RequirementInput(BaseModel):
         if not self.name or not valid_code:
             raise ValueError("名称不能为空；编号只能用字母、数字、点和短横线（如6.11.1a）")
         if self.is_group:
-            if self.code in {"6.11.6", "6.11.6a", "6.11.6b", "6.11.6c"}:
-                self.external_never_visible = True
-            if self.confidential_default and self.external_visible_default or self.external_never_visible and self.external_visible_default:
-                raise ValueError("保密资料或禁止外部查看的资料不能默认对外可见")
             if self.scope is not None or any(getattr(self, key) is not None for key in RULE_FIELDS) or self.required:
                 raise ValueError("分组不能设置资料范围、输出规则或必需提交")
             return self
@@ -76,13 +69,7 @@ class RequirementInput(BaseModel):
 
 
 def check_rule(self):
-    """Visibility and output-timing rules of one document; shared by template items and project documents."""
-    if self.code in {"6.11.6", "6.11.6a", "6.11.6b", "6.11.6c"}:
-        if self.external_visible_default:
-            raise ValueError("保密资料或禁止外部查看的资料不能默认对外可见")
-        self.external_never_visible = True
-    if (self.confidential_default or self.external_never_visible) and self.external_visible_default:
-        raise ValueError("保密资料或禁止外部查看的资料不能默认对外可见")
+    """Output-timing rules of one document; shared by template items and project documents."""
     if not self.scope or not self.timing_type:
         raise ValueError("资料必须选择范围和输出时机")
     kind = self.timing_type
@@ -156,7 +143,7 @@ def recheck_authority(db, actor_id, capability="system.templates.manage"):
     db.refresh(actor)
     if not actor.is_active:
         raise HTTPException(401, "账号已停用，请重新登录")
-    if not has_permission(actor, capability, default=actor.role == "admin"):
+    if not has_permission(actor, capability):
         raise HTTPException(403, "模板操作权限已被撤销")
 
 

@@ -3,7 +3,6 @@ import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-
 import { Spin, Button, Result } from 'antd'
 import { useAuth } from './stores/auth'
 import { isAuthed } from './api/client'
-import { PM_ROLES, WORKER_ROLES } from './constants/roles'
 import { canAccessNav } from './constants/nav'
 import { SYSTEM_PERMISSION_REFRESH_EVENT } from './constants/systemPermissions'
 import { installAccessibilityPatches } from './utils/a11y'
@@ -12,7 +11,6 @@ import LoginPage from './pages/LoginPage'
 import ForbiddenPage from './pages/ForbiddenPage'
 import NotFoundPage from './pages/NotFoundPage'
 
-const ExternalViewPage = lazy(() => import('./pages/ExternalViewPage'))
 const AppLayout = lazy(() => import('./layouts/AppLayout'))
 const SettingsPage = lazy(() => import('./pages/pm/SettingsPage'))
 const ProjectListPage = lazy(() => import('./pages/pm/ProjectListPage'))
@@ -22,13 +20,11 @@ const TemplateEditorPage = lazy(() => import('./pages/pm/TemplateEditorPage'))
 const TemplateLibraryPage = lazy(() => import('./pages/pm/TemplateLibraryPage'))
 const DashboardPage = lazy(() => import('./pages/pm/DashboardPage'))
 const UsersPage = lazy(() => import('./pages/pm/UsersPage'))
-const SystemPermissionsPage = lazy(() => import('./pages/pm/SystemPermissionsPage'))
 const SystemBackupPanel = lazy(() => import('./pages/pm/SystemBackupPanel'))
 const StorageSettingsPage = lazy(() => import('./pages/pm/StorageSettingsPage'))
 const SystemUpdatesPage = lazy(() => import('./pages/pm/SystemUpdatesPage'))
 const ProjectRecycleBinPage = lazy(() => import('./pages/pm/ProjectRecycleBinPage'))
 const MessagesPage = lazy(() => import('./pages/MessagesPage'))
-const AiTokensPage = lazy(() => import('./pages/pm/AiTokensPage'))
 const NotificationChannelsPage = lazy(() => import('./pages/pm/NotificationChannelsPage'))
 const VehicleTypesPage = lazy(() => import('./pages/pm/VehicleTypesPage'))
 const HolidayCalendarsPage = lazy(() => import('./pages/pm/HolidayCalendarsPage'))
@@ -47,7 +43,6 @@ function WorkerProjectRedirect() {
 const FeedbackPage = lazy(() => import('./pages/FeedbackPage'))
 
 
-/** 角色路由边界：PM_ROLES / WORKER_ROLES 定义见 constants/roles.ts（与登录落地共用单一事实源） */
 
 function PageLoader() {
   return (
@@ -124,13 +119,13 @@ export default function App() {
     // HYPE-56：登录页不做会话校验。旧 token/cookie 残留时，登录页触发 fetchMe 必然 401，
     // 进而 refresh→失败→重定向，把登录页自身写进 next 造成路由级死循环。
     // 登录页是公开页，无需 fetchMe，由用户登录动作换取新会话。
-    if (isAuthed() && !user && location.pathname !== '/login' && !location.pathname.startsWith('/external')) {
+    if (isAuthed() && !user && location.pathname !== '/login') {
       fetchMe()
     }
   }, [user, fetchMe, location.pathname])
 
   useEffect(() => {
-    if (!user || location.pathname.startsWith('/external') || typeof refreshPermissions !== 'function') return
+    if (!user || typeof refreshPermissions !== 'function') return
     const refresh = () => { if (document.visibilityState !== 'hidden') void refreshPermissions() }
     window.addEventListener('focus', refresh)
     window.addEventListener(SYSTEM_PERMISSION_REFRESH_EVENT, refresh)
@@ -151,11 +146,10 @@ export default function App() {
     <div className="page-fade">
       <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/external" element={load(<ExternalViewPage />)} />
       <Route
         path="/pm"
         element={
-          <ProtectedRoute allow={PM_ROLES}>
+          <ProtectedRoute>
             {load(<AppLayout />)}
           </ProtectedRoute>
         }
@@ -174,8 +168,6 @@ export default function App() {
         <Route path="backups" element={<ProtectedRoute navKey="/pm/backups">{load(<SystemBackupPanel />)}</ProtectedRoute>} />
         <Route path="system-updates" element={<ProtectedRoute allow={['admin']} navKey="/pm/system-updates">{load(<SystemUpdatesPage />)}</ProtectedRoute>} />
         <Route path="users" element={<ProtectedRoute navKey="/pm/users">{load(<UsersPage />)}</ProtectedRoute>} />
-        <Route path="permissions" element={<ProtectedRoute allow={['admin']} navKey="/pm/permissions">{load(<SystemPermissionsPage />)}</ProtectedRoute>} />
-        <Route path="ai-tokens" element={<ProtectedRoute navKey="/pm/ai-tokens">{load(<AiTokensPage />)}</ProtectedRoute>} />
         <Route path="notification-channels" element={<ProtectedRoute navKey="/pm/notification-channels">{load(<NotificationChannelsPage />)}</ProtectedRoute>} />
         <Route path="holidays" element={<ProtectedRoute navKey="/pm/holidays">{load(<HolidayCalendarsPage />)}</ProtectedRoute>} />
         <Route path="vehicle-types" element={<ProtectedRoute navKey="/pm/vehicle-types">{load(<VehicleTypesPage />)}</ProtectedRoute>} />
@@ -185,7 +177,7 @@ export default function App() {
       <Route
         path="/worker"
         element={
-          <ProtectedRoute allow={WORKER_ROLES}>
+          <ProtectedRoute>
             {load(<AppLayout />)}
           </ProtectedRoute>
         }
@@ -203,9 +195,7 @@ export default function App() {
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="*" element={<NotFoundPage />} />
       </Routes>
-      {!location.pathname.startsWith('/external') && <>
-        <WorkDetailHost />
-      </>}
+      <WorkDetailHost />
     </div>
   )
 }

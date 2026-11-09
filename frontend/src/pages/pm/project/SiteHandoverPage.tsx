@@ -6,14 +6,12 @@ import { DeleteOutlined, EditOutlined, PlusOutlined, StarFilled } from '@ant-des
 import { projectApi, type Project } from '../../../api'
 import { useSubmitLock } from '../../../hooks/useSubmitLock'
 import { errMsg } from '../../../api/client'
-import { useAuth } from '../../../stores/auth'
 import { WorkPageHeader, WorkSection } from '../../../components/WorkPage'
 import { useMediaQuery } from '../../../hooks/useMediaQuery'
 import './FieldWorkPages.css'
 
 export default function SiteHandoverPage({ project, onReload }: { project: Project; onReload: () => void }) {
-  const { user } = useAuth()
-  const canEdit = useProjectCapability('project.update', user?.role === 'admin' || (user?.role === 'pm' && project.manager === user.id))
+  const canEdit = useProjectCapability('project.update', true)
   const [contacts, setContacts] = useState<any[]>(project.client_contacts ?? [])
   const [contactOpen, setContactOpen] = useState(false)
   const [contactSaving, setContactSaving] = useState(false)

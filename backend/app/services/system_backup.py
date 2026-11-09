@@ -1,7 +1,7 @@
 """Encrypted full-system backups and compatibility helpers."""
 from datetime import datetime
 from pathlib import Path
-import subprocess
+import subprocess  # noqa: F401  patched by tests that drive pg_dump
 from uuid import uuid4
 
 from app.config import DATA_DIR, DATABASE_URL, APP_VERSION

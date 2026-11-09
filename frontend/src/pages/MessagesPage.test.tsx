@@ -25,7 +25,7 @@ const NOTIFICATIONS = [
 beforeEach(() => {
   vi.clearAllMocks()
   mockNavigate.mockClear()
-  useAuth.setState({ user: { id: 'u-pm', role: 'pm', username: 'pm', display_name: '项目经理', phone: '', email: '', is_active: true } })
+  useAuth.setState({ user: { id: 'u-pm', role: 'employee', username: 'pm', display_name: '项目经理', phone: '', email: '', is_active: true } })
   vi.mocked(api.get).mockResolvedValue({ data: NOTIFICATIONS })
   vi.mocked(api.post).mockResolvedValue({ data: { message: '已标记为已读' } })
 })

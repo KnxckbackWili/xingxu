@@ -4,7 +4,6 @@ import { BellOutlined, CheckOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../stores/auth'
-import { isPMWorkbench } from '../constants/roles'
 import { TYPE_TAG, openNotification, formatNotificationContent } from '../utils/notifyNav'
 import { NOTIFICATION_READ_EVENT, notifyReadStateChanged } from '../utils/notificationEvents'
 import { formatDateTime } from '../utils/date'
@@ -117,8 +116,7 @@ export default function NotificationBell() {
 
   const goMessages = () => {
     setOpen(false)
-    // 用 isPMWorkbench 而非 `role === 'worker'`：intern 非 worker，但同样无 /pm 权限，应去 /worker/messages
-    navigate(isPMWorkbench(user?.role) ? '/pm/messages' : '/worker/messages')
+    navigate('/pm/messages')
   }
 
   const dismissWithKeyboard = (event: KeyboardEvent) => {

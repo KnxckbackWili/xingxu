@@ -1,7 +1,6 @@
 """Weekly/monthly reports from actual operations, documents and published plans."""
 from datetime import date,datetime,time,timedelta,timezone
 from typing import Optional
-from sqlalchemy import or_,and_
 from sqlalchemy.orm import Session
 from app.models import Project,Task,User,Issue,FieldOperation
 
@@ -27,7 +26,7 @@ def generate_project_report(db:Session,project:Project,period='week',ref_date:Op
         raise HTTPException(403,'报告需要当前启用的项目查看账号')
     from app.services.scope import ensure_project_visible
     from app.services.system_permissions import has_permission
-    if not has_permission(user,'project.read',default=True):
+    if not has_permission(user,'project.read'):
         from fastapi import HTTPException
         raise HTTPException(403,'当前账号没有项目报告查看权限')
     ensure_project_visible(db,project.id,user)
@@ -42,7 +41,7 @@ def generate_project_report(db:Session,project:Project,period='week',ref_date:Op
     completed_items=[serialize(db,row,user,text_filter=filter_text) for row in records]
     people={uid:db.get(User,uid) for uid in {r.actor_id for r in effective} if uid}
     per_person=[{'user_id':uid,'name':person.display_name if person else '历史账号','records':sum(row.actor_id==uid for row in effective),
-        'completed':sum(row.actor_id==uid and row.is_done for row in effective),'assisted':sum(row.actor_id==uid and bool(row.assisted_user_id) for row in effective)} for uid,person in people.items()]
+        'completed':sum(row.actor_id==uid and row.is_done for row in effective)} for uid,person in people.items()]
     def issue_day(value):return value.replace(tzinfo=timezone.utc).astimezone(project_zone).date().isoformat() if value else ''
     issue_rows=db.query(Issue).filter_by(project_id=project.id).all()
     opened=[i for i in issue_rows if i.created_at and start_dt<=i.created_at<end_dt]
@@ -85,12 +84,12 @@ def generate_project_report(db:Session,project:Project,period='week',ref_date:Op
     from app.config import REPORT_WEEKLY_TIME
     vehicle_actual=[{'event_id':row.id,'vehicle_unit_id':row.target_id,'date':row.completion_date.isoformat(),
         'title':row.target_label,'is_done':row.is_done,'recorded_at':row.recorded_at.isoformat()+'Z','actor_id':row.actor_id,
-        'assisted_user_id':row.assisted_user_id,'source':'actual_field_operation'} for row in records if row.kind=='vehicle']
+        'source':'actual_field_operation'} for row in records if row.kind=='vehicle']
     return {'project':{'id':project.id,'name':project.name,'client':project.client,'location':project.location,'manager':project.manager},
         'period':period,'period_label':f'{start.isoformat()} ~ {end.isoformat()}','generated_at':local_today.isoformat(),
         'weekly_delivery':{'weekday':7,'time':REPORT_WEEKLY_TIME,'timezone':project.timezone},
         'progress':progress_totals(db,project.id),'summary':{'actual_records':len(effective),'completed_work':sum(r.kind=='work' and r.is_done for r in effective),
-            'vehicle_completions':sum(r.kind=='vehicle' and r.is_done for r in effective),'assisted_count':sum(bool(r.assisted_user_id) for r in effective),
+            'vehicle_completions':sum(r.kind=='vehicle' and r.is_done for r in effective),
             'person_count':len(people),'issues_opened':len(opened),'issues_resolved':len(resolved),'open_issues':len(open_issues),
             'next_period_tasks':None if next_plan is None else len(next_plan),'documents_submitted':document_summary['submitted'],
             'document_versions':document_summary['versions'],'vehicle_progress_changes':len(vehicle_changes)+len(vehicle_actual)},

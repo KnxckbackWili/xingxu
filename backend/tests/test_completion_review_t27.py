@@ -132,13 +132,11 @@ def test_package_rejects_missing_file_and_cross_project_atomically(client,admin_
     assert client.post(path,headers=admin_headers,json={'document_ids':[row['id'],row['id']]}).status_code==422
 
 
-def test_readonly_export_remains_available_but_confidential_selection_is_denied(client,admin_headers,worker_headers):
+def test_employee_export_is_available_but_confidential_selection_is_denied(client,admin_headers,worker_headers):
     from tests.test_project_documents import create,view,upload
     from app.models import User,ProjectDocument,Attachment,DocumentVersion
     pid=create(client,admin_headers)['id'];row=view(client,admin_headers,pid)['documents'][0]
     result=upload(client,admin_headers,pid,[row['id']]);assert result.status_code==200
-    with SessionLocal() as db:
-        db.get(User,'user-worker-001').role='readonly';db.commit()
     path=f'/api/projects/{pid}/documents/package'
     assert client.post(path,headers=worker_headers,json={'document_ids':[row['id']]}).status_code==200
     with SessionLocal() as db:

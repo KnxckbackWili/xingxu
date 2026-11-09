@@ -40,19 +40,6 @@ it('serializes repeated restoration clicks and locks cancellation during its res
  expect(projectRecycleApi.restore).toHaveBeenCalledTimes(1); expect(screen.getByRole('button', { name: '保留在回收站' })).toBeDisabled()
  await act(async () => resolve({ message: '成功', project_id: 'p1', version: 6 })); await screen.findByText('回收站暂无项目')
 })
-it.each(['project.delete', 'project.read'])('denies restore and backup download after explicit %s denial', async key => {
- auth.user = { id: 'pm1', role: 'pm', permission_overrides: { [key]: false } }; show(); const restore = await screen.findByRole('button', { name: '还原项目：物流一期' })
- expect(restore).toBeDisabled(); fireEvent.click(restore); expect(screen.getByRole('button', { name: '下载项目备份：物流一期' })).toBeDisabled(); expect(projectRecycleApi.restore).not.toHaveBeenCalled(); expect(projectRecycleApi.downloadBackup).not.toHaveBeenCalled()
-})
-it('keeps authorized restoration while hiding backup download after explicit export denial, even with stale allowed metadata', async () => {
- auth.user = { id: 'pm1', role: 'pm', permission_overrides: { 'project.delete': true, 'project.export': false } }
- show(); const restore = await screen.findByRole('button', { name: '还原项目：物流一期' })
- expect(restore).toBeEnabled(); expect(screen.queryByRole('button', { name: '下载项目备份：物流一期' })).not.toBeInTheDocument()
- expect(projectRecycleApi.downloadBackup).not.toHaveBeenCalled()
- const dialog = await open(); fireEvent.click(within(dialog).getByRole('button', { name: '确认还原' }))
- await waitFor(() => expect(projectRecycleApi.restore).toHaveBeenCalledWith('p1', { version: 5, deletion_id: 'd1' }))
- await screen.findByText('回收站暂无项目'); expect(projectRecycleApi.downloadBackup).not.toHaveBeenCalled()
-})
 it.each([false, undefined])('requires an explicit server download grant (%s) without disabling restore', async canDownload => {
  vi.mocked(projectRecycleApi.list).mockResolvedValue([{ ...row, can_download_backup: canDownload }]); show()
  expect(await screen.findByRole('button', { name: '还原项目：物流一期' })).toBeEnabled()

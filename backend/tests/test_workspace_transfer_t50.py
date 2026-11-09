@@ -11,7 +11,7 @@ from tests.document_helpers import requirement,documents,upload_documents
 
 
 def recipient(client,admin_headers,username='next-pm'):
-    response=client.post('/api/users',headers=admin_headers,json={'username':username,'display_name':'下一位项目经理','password':'Review123!','role':'pm'})
+    response=client.post('/api/users',headers=admin_headers,json={'username':username,'display_name':'下一位项目负责人','password':'Review123!','role':'employee'})
     assert response.status_code==200,response.text
     row=response.json();login=client.post('/api/auth/login',json={'username':username,'password':'Review123!'})
     assert login.status_code==200
@@ -28,19 +28,6 @@ def transfer(client,headers,pid,target,view,**extra):
     return client.post(f'/api/projects/{pid}/transfer',headers=headers,json={'target_manager_id':target,
         'reason':'明确交接并由新的项目经理接手','version':view['version'],
         'member_removal_confirmations':[row['user_id'] for row in view['removed']],**extra})
-
-
-def test_explicit_retained_role_stays_member_but_never_keeps_implicit_confidential_owner_access(client,pm_headers,admin_headers):
-    pid,people=setup_project(client,pm_headers);target,new_headers=recipient(client,admin_headers)
-    private=requirement(client,pm_headers,pid,name='NEW-OWNER-ONLY')
-    assert policy(client,pm_headers,pid,'document',private).status_code==200
-    with SessionLocal() as db:db.get(Project,pid).technical_manager=people['pm'];db.commit()
-    view=preview(client,pm_headers,pid);assert view['removed']==[]
-    result=transfer(client,pm_headers,pid,target,view)
-    assert result.status_code==200 and result.json()['viewer_retains_access']
-    assert private['id'] not in {row['id'] for row in documents(client,pm_headers,pid)['documents']}
-    assert private['id'] in {row['id'] for row in documents(client,new_headers,pid)['documents']}
-    with SessionLocal() as db:assert not db.query(DocumentTriggerEvent).filter_by(project_id=pid,trigger_type='member_leave').first()
 
 
 def test_current_actor_and_target_are_refreshed_after_lock_and_log_failure_rolls_back(client,pm_headers,admin_headers,monkeypatch):
@@ -95,7 +82,7 @@ def test_current_facts_exist_in_project_list_without_workspace_and_filter_privat
     with SessionLocal() as db:
         for identity in (public['id'],private['id']):
             row=db.get(ProjectDocument,identity);row.due_at=utcnow()-timedelta(days=1);row.due_is_estimated=False;row.timing_type='after_event';row.timing_event='ship'
-        worker=db.get(User,people['worker1']);worker.permission_overrides={'workspace.view':False,'insights.view':True};db.commit()
+        db.commit()
     listed=client.get('/api/projects',headers=worker_headers)
     assert listed.status_code==200 and listed.headers['cache-control']=='private, no-store'
     row=next(row for row in listed.json() if row['id']==pid)
@@ -103,7 +90,6 @@ def test_current_facts_exist_in_project_list_without_workspace_and_filter_privat
     assert row['vehicle_progress']['percent'] is None and not row['vehicle_progress']['progress_known']
     assert row['next_signoff']['code']=='6.10.1'
     assert 'PRIVATE-OVERDUE' not in json.dumps(row)
-    assert client.get('/api/dashboard/overview',headers=worker_headers).status_code==403
     statistics=client.get('/api/dashboard/statistics',headers=worker_headers)
     assert statistics.status_code==200,statistics.text
     stats=statistics.json();assert stats['projects']==1 and stats['documents']['overdue_count']==1
@@ -132,11 +118,9 @@ def test_workbench_and_statistics_only_current_facts_and_issue_closure_no_stale_
     result=client.get('/api/dashboard/statistics',headers=admin_headers).json()
     assert result['issues']=={'open':2,'critical':1}
     assert result['vehicle_progress']['quantity_unknown'] and result['vehicle_progress']['percent'] is None
-    with SessionLocal() as db:db.get(User,people['admin']).permission_overrides={'insights.view':False};db.commit()
-    assert client.get('/api/dashboard/statistics',headers=admin_headers).status_code==403
 
 
-@pytest.mark.parametrize('change,expected',[('actor_permission',403),('actor_readonly',403),('target_inactive',400)])
+@pytest.mark.parametrize('change,expected',[('actor_disabled',401),('target_inactive',400)])
 def test_permission_and_recipient_changes_after_project_lock_cannot_be_cached(client,pm_headers,admin_headers,monkeypatch,change,expected):
     from app.services import project_transfer as service
     from sqlalchemy import update
@@ -144,8 +128,7 @@ def test_permission_and_recipient_changes_after_project_lock_cannot_be_cached(cl
     view=preview(client,pm_headers,pid);original=service.lock_record
     def changed(db,project,**kwargs):
         original(db,project,**kwargs)
-        if change=='actor_permission':db.execute(update(User).where(User.id==people['pm']).values(permission_overrides={'project.manage_members':False}).execution_options(synchronize_session=False))
-        elif change=='actor_readonly':db.execute(update(User).where(User.id==people['pm']).values(role='readonly').execution_options(synchronize_session=False))
+        if change=='actor_disabled':db.execute(update(User).where(User.id==people['pm']).values(is_active=False).execution_options(synchronize_session=False))
         else:db.execute(update(User).where(User.id==target).values(is_active=False).execution_options(synchronize_session=False))
     monkeypatch.setattr(service,'lock_record',changed)
     assert transfer(client,pm_headers,pid,target,view).status_code==expected

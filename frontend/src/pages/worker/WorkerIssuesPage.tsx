@@ -69,7 +69,7 @@ export default function WorkerIssuesPage() {
   const { user } = useAuth()
   const canRaiseIssue = hasSystemPermission(user, 'worker.issues')
   // Anyone with issue handling allowed may start or resolve an issue.
-  const canHandleIssue = !!user && user.permission_overrides?.['project.manage_issues'] !== false
+  const canHandleIssue = !!user
   const permissions = useRef({ raise: canRaiseIssue, handle: canHandleIssue })
   permissions.current = { raise: canRaiseIssue, handle: canHandleIssue }
   const [loadError, setLoadError] = useState(false)
@@ -133,7 +133,7 @@ export default function WorkerIssuesPage() {
   }, [user?.id, retry])
 
   // No assignment: anyone may start or resolve an open issue; whoever starts it becomes its handler.
-  const canWork = (issue: MyIssue) => canHandleIssue && user?.role !== 'readonly' && issue.source !== 'vehicle' && ['open', 'processing'].includes(issue.status) && !isProjectWriteBlocked(issue.project_status)
+  const canWork = (issue: MyIssue) => canHandleIssue && issue.source !== 'vehicle' && ['open', 'processing'].includes(issue.status) && !isProjectWriteBlocked(issue.project_status)
   const handleIssue = async (status: 'processing' | 'resolved', resolution?: string, target: MyIssue | null = detail) => {
     if (!permissions.current.handle || !target || conflict || !canWork(target) || !handlingLock.tryAcquire()) return
     setHandling(true)
@@ -212,7 +212,7 @@ export default function WorkerIssuesPage() {
       {loadError ? (
         <Alert type="warning" showIcon message="暂时无法加载问题和项目" description="这不代表没有待处理问题。请检查网络后重试；已填写的上报内容仍保留在本页。" action={<Button onClick={() => setRetry((value) => value + 1)}>重新加载</Button>} />
       ) : issues.length === 0 ? (
-        <Empty description={projects.length === 0 ? "你还没有可见项目，请联系项目经理将你加入项目后再上报问题。" : writableProjects.length === 0 ? "当前可见项目只读，可查阅问题历史；需要上报时请联系项目负责人确认项目状态。" : "当前没有需要关注的问题；遇到现场异常时，可点击上报问题。"} image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ padding: 60 }} />
+        <Empty description={projects.length === 0 ? "系统里还没有项目。" : writableProjects.length === 0 ? "当前可见项目只读，可查阅问题历史；需要上报时请联系项目负责人确认项目状态。" : "当前没有需要关注的问题；遇到现场异常时，可点击上报问题。"} image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ padding: 60 }} />
       ) : (
         <ul className="issue-list" aria-label="我的问题列表">{visible.map(i => <li key={i.id} className={`issue-row sev-${i.severity}${['closed', 'cancelled'].includes(i.status) ? ' is-closed' : ''}`}>
           <span className={`issue-row-severity${i.source === 'vehicle' ? ' is-vehicle' : ''}`} title={`严重程度：${SEV[i.severity]?.label ?? ''}`} aria-hidden />
@@ -305,20 +305,19 @@ export default function WorkerIssuesPage() {
               {detail.status === 'resolved' && `已解决：${detail.resolution || '处理人已提交解决方案'}`}
               {(detail.status === 'closed' || detail.status === 'cancelled') && (detail.status === 'cancelled' ? '问题已作废。' : '问题已关闭。')}
             </Typography.Paragraph>
-            {detail.project_status === 'completed' && <Alert type="warning" showIcon message="项目已完成" description="重开问题后，请项目经理确认返工；需要安排或报工时，先将项目恢复到验收中。" />}
+            {detail.project_status === 'completed' && <Alert type="warning" showIcon message="项目已完成" description="重开问题后，请项目负责人确认返工；需要安排或报工时，先将项目恢复到验收中。" />}
             {canWork(detail) && <Space>
               {detail.status === 'open' && <Button loading={handling} onClick={() => handleIssue('processing')}>开始处理</Button>}
               <Button loading={handling} onClick={() => { resolutionForm.setFieldsValue({ resolution: detail.resolution || '' }); setResolutionOpen(true) }}>提交处理结果</Button>
             </Space>}
             {canHandleIssue && detail.source !== 'vehicle' && !isProjectWriteBlocked(detail.project_status)
-              && ['resolved', 'closed', 'cancelled'].includes(detail.status)
-              && user?.role !== 'readonly' && (
+              && ['resolved', 'closed', 'cancelled'].includes(detail.status) && (
               <Button loading={reopening} onClick={async () => {
                 if (!permissions.current.handle || isProjectWriteBlocked(detail.project_status) || !reopenLock.tryAcquire()) return
                 setReopening(true)
                 try {
                   await api.post(`/issues/${detail.id}/reopen`)
-                  message.success(detail.project_status === 'completed' ? '问题已重新打开；需项目经理确认是否恢复返工' : '问题已重新打开'); setDetail(null); setRetry((value) => value + 1)
+                  message.success(detail.project_status === 'completed' ? '问题已重新打开；需项目负责人确认是否恢复返工' : '问题已重新打开'); setDetail(null); setRetry((value) => value + 1)
                 } catch (error: any) { message.error(error.response?.data?.detail ?? '重新打开失败') }
                 finally { setReopening(false); reopenLock.release() }
               }}>重新打开</Button>

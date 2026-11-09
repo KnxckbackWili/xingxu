@@ -8,7 +8,7 @@ from app.models import Task, User
 from tests.template_work import default_work
 
 
-CONTRACT_KEYS = ("progress", "timeline", "overdue", "issues", "tree", "logs", "preparations",
+CONTRACT_KEYS = ("progress", "timeline", "overdue", "issues", "tree", "logs",
                  "weekly_plans", "document_progress", "document_actions", "project")
 
 

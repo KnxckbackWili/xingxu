@@ -28,7 +28,7 @@ const descriptions: Record<string, string> = {
   vehicles: '车辆进度表、逐车检查、资料与问题履历', plan: '维护工作项和周计划',
   issues: '上报问题并跟进闭环', field: '物品和联系人', inventory: '物品保管、台账与收发流水',
   handover: '客户联系人、入场说明和交接记录', reports: '查看项目周报和月报',
-  history: '谁在何时修改了项目', export: '导出六张交付表、项目包或克隆新项目', edit: '维护项目范围、成员、负责人和外部查看',
+  history: '谁在何时修改了项目', export: '导出六张交付表、项目包或克隆新项目', edit: '维护项目范围、负责人和基本信息',
 }
 export const PROJECT_PAGE_INFO = Object.fromEntries(PROJECT_NAV_ITEMS.flatMap(item =>
   [{ key: item.key, label: item.label }, ...(item.children ?? [])].map(entry => [entry.key, { label: entry.label, description: descriptions[entry.key] ?? '', aliases: [] as string[] }])) ) as Record<string, { label: string; title?: string; description: string; aliases: string[] }>
@@ -60,7 +60,3 @@ export const PROJECT_ACTIONS: ProjectActionItem[] = [
   { key: 'report', label: '上报问题', path: 'issues?report=1', icon: <PlusOutlined /> },
   ...PROJECT_NAV_ITEMS.filter(item => ['edit','export'].includes(item.key)),
 ]
-export function filterProjectActions(actions: ProjectActionItem[], role?: string, canEditSettings=false, capabilities?: string[]): ProjectActionItem[] {
-  return actions.filter(action => !(role==='readonly' && action.key==='report') && (!action.requiresEdit || canEditSettings)
-    && (action.key!=='export' || (capabilities!==undefined ? capabilities.includes('project.export') : !['worker','intern','readonly'].includes(role ?? ''))))
-}

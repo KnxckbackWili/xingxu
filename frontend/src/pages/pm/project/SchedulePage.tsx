@@ -46,7 +46,7 @@ export default function SchedulePage({projectId,project,onProjectChange}: {proje
   const [phaseId,setPhaseId]=useState<string>()
   const [includeCancelled,setIncludeCancelled]=useState(false)
   const [showAll,setShowAll]=useState(false)
-  const scope=JSON.stringify([projectId,project?.status,project?.capabilities,user?.id,user?.role,user?.permission_version,user?.permission_overrides,user?.system_permissions,start,count,includeCancelled])
+  const scope=JSON.stringify([projectId,project?.status,project?.capabilities,user?.id,user?.role,user?.system_permissions,start,count,includeCancelled])
   const [snapshot,setSnapshot]=useState<{scope:string;data?:WeeklyPlanView;error?:string}>({scope:''})
   const data=snapshot.scope===scope?snapshot.data:undefined
   const error=snapshot.scope===scope?snapshot.error:undefined
@@ -66,8 +66,8 @@ export default function SchedulePage({projectId,project,onProjectChange}: {proje
   const [preview,setPreview]=useState<{body:DraftRequest;value:DraftPreview}>()
   const [anchorDates,setAnchorDates]=useState<{ship?:string;arrival_all?:string}>({})
   const epoch=useRef(0),request=useRef(0),lock=useRef(false)
-  const allowed=!!data?.permissions.edit&&!isProjectWriteBlocked(project?.status)&&user?.role!=='readonly'&&user?.permission_overrides?.['project.manage_schedule']!==false&&user?.permission_overrides?.['project.read']!==false
-  const canExport=!!data?.permissions.export&&user?.permission_overrides?.['project.export']!==false
+  const allowed=!!data?.permissions.edit&&!isProjectWriteBlocked(project?.status)
+  const canExport=!!data?.permissions.export
   const load=async()=>{
     const ticket=++request.current,current=epoch.current;setLoading(true)
     try {

@@ -70,7 +70,7 @@ DEFAULT_CONTENT = [
 ]
 
 FILE_KEYS = ('code', 'name', 'template_no', 'required', 'scope', 'platform', 'timing_type', 'timing_event', 'timing_offset_hours',
-             'timing_weekday', 'trigger_type', 'confidential_default', 'external_visible_default', 'external_never_visible', 'note')
+             'timing_weekday', 'trigger_type', 'confidential_default', 'note')
 
 
 def company_documents() -> dict:

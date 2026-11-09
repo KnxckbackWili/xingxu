@@ -149,9 +149,6 @@ describe('项目总览按需展开', () => {
     expect(screen.queryByTestId('lazy-chart')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '进度与记录' }))
     expect(await screen.findByTestId('lazy-chart')).toBeInTheDocument()
-    expect(within(screen.getByRole('list', { name: '准备清单' })).getByText(/3 项发车前资料待落实/)).toBeVisible()
-    fireEvent.click(screen.getByRole('button', { name: '发车前资料确认' }))
-    expect(navigate).toHaveBeenCalledWith('/pm/projects/p1/documents?review=1')
   })
   it('总览只有一个聚合请求；草稿的状态管理仍只允许推进到准备中', async () => {
     render(<OverviewPage projectId="p2" projectStatus="preparing" canManageStatus />)
@@ -165,16 +162,6 @@ describe('项目总览按需展开', () => {
     expect(screen.queryByText('切换到「计划中」')).not.toBeInTheDocument()
     expect(apiPost).not.toHaveBeenCalled()
   })
-  it('现场人员的下一步指向可用日程，不出现无权访问的准备和任务设置', async () => {
-    role.value = 'worker'
-    render(<OverviewPage projectId="p3" projectStatus="preparing" />)
-    fireEvent.click(await screen.findByRole('button', { name: /查看执行安排/ }))
-    expect(navigate).toHaveBeenCalledWith('/pm/projects/p3/plan?view=weeks')
-    expect(screen.queryByText('开工安排')).not.toBeInTheDocument()
-    expect(screen.queryByText(/发车前资料待落实/)).not.toBeInTheDocument()
-    expect(screen.queryByText('最近动态')).not.toBeInTheDocument()
-  })
-
   it.each([['executing', '验收中', 'acceptance']])('100%% progress in %s never advances without explicit confirmation', async (status, label, target) => {
     apiGet.mockResolvedValue({ data: { ...overview, progress: { ...overview.progress, percent: 100 } } })
     const changed = vi.fn()
@@ -207,19 +194,6 @@ describe('项目总览按需展开', () => {
     await act(async () => finish({ data: {} }))
   })
 
-  it('blocked entry offers current review instead of a warning-confirm bypass', async () => {
-    apiPost.mockRejectedValue({ response: { status: 400, data: { detail: '当前进场条件未满足，请先评审并明确批准风险进场' } } })
-    render(<OverviewPage projectId="p1" projectStatus="preparing" canManageStatus />)
-    fireEvent.click(await screen.findByRole('button', { name: '推进至「现场实施」' }))
-    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '确认推进阶段' }))
-    expect(await screen.findByText('当前进场条件未满足，请先评审并明确批准风险进场')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '仍然切换' })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '查看发车前资料确认' }))
-    expect(navigate).toHaveBeenCalledWith('/pm/projects/p1/documents?review=1')
-    expect(apiPost).toHaveBeenCalledTimes(1)
-    expect(apiPost.mock.calls[0][1]).not.toHaveProperty('confirm_warnings')
-  })
-
   it('shows every lifecycle blocker in a structured transition rejection', async () => {
     apiPost.mockRejectedValue({ response: { status: 400, data: { detail: {
       message: '必需资料未齐备；还有未解决问题',
@@ -232,17 +206,6 @@ describe('项目总览按需展开', () => {
     fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '确认推进阶段' }))
     expect(await screen.findByText('必需资料未齐备；还有未解决问题')).toBeInTheDocument()
     expect(apiPost).toHaveBeenCalledTimes(1)
-  })
-
-  it('legacy warning responses also cannot offer a bypass', async () => {
-    const changed = vi.fn()
-    apiPost.mockResolvedValue({ data: { requires_confirmation: true, warnings: ['缺少入场证'] } })
-    render(<OverviewPage projectId="p1" projectStatus="preparing" canManageStatus onStatusChange={changed} />)
-    fireEvent.click(await screen.findByRole('button', { name: '推进至「现场实施」' }))
-    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '确认推进阶段' }))
-    expect(await screen.findByText(/缺少入场证；请到资料清单核对发车前资料/)).toBeInTheDocument()
-    expect(changed).not.toHaveBeenCalled()
-    expect(screen.queryByText('仍然切换')).not.toBeInTheDocument()
   })
 
   it('archive rejection retains retrospective and provides a path to fix current acceptance', async () => {
@@ -308,12 +271,5 @@ describe('项目总览按需展开', () => {
     await waitFor(() => expect(apiPost).toHaveBeenCalledWith('/projects/p1/status', expect.objectContaining({ status: 'acceptance' })))
   })
 
-  it('stale readiness approval points startup back to current entry review', async () => {
-    apiGet.mockResolvedValue({ data: { ...overview, tree: [{ modules: [{ tasks: [{ target_quantity: 1 }] }] }], schedule: [{ is_confirmed: true, assignee_id: 'u1' }], preparations: { summary: { state_key: 'forced_ready', entry_confirmed: true, void: true } } } })
-    render(<OverviewPage projectId="p1" projectStatus="preparing" vehicleTotal={1} canManageStatus />)
-    fireEvent.click(await screen.findByRole('button', { name: /发车前资料确认/ }))
-    expect(navigate).toHaveBeenCalledWith('/pm/projects/p1/documents?review=1')
-    expect(apiPost).not.toHaveBeenCalled()
-  })
 })
 

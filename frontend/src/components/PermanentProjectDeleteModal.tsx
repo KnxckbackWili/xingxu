@@ -25,8 +25,8 @@ export default function PermanentProjectDeleteModal({ project, onClose, onPurged
   const [done, setDone] = useState(false)
   const generation = useRef(0)
   const lock = useSubmitLock()
-  const allowed = user?.role === 'admin' && project?.can_permanently_delete === true && ['project.read', 'project.delete', 'project.export', 'system.projects.purge'].every(key => user.permission_overrides?.[key] !== false)
-  const signature = JSON.stringify([user?.id, user?.role, user?.permission_version, user?.permission_overrides, project?.id, project?.deletion_id, project?.version])
+  const allowed = user?.role === 'admin' && project?.can_permanently_delete === true
+  const signature = JSON.stringify([user?.id, user?.role, project?.id, project?.deletion_id, project?.version])
   const currentSignature = useRef(signature); currentSignature.current = signature
   useEffect(() => {
     generation.current++; setReceipt(null); setSaved(false); setDownloaded(false); setName(''); setError(''); setBusy(false); setDone(false)

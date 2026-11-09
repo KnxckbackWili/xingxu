@@ -9,7 +9,7 @@ import { RefreshAction } from './IconAction'
 export default function WorkspaceStatistics() {
   const { user } = useAuth()
   const allowed = hasSystemPermission(user, 'insights.view')
-  const scope=JSON.stringify([user?.id,user?.role,user?.permission_version,user?.system_permissions,user?.permission_overrides])
+  const scope=JSON.stringify([user?.id,user?.role,user?.system_permissions])
   const [snapshot,setSnapshot]=useState<{scope:string;data?:WorkspaceStatisticsData;error?:string}>({scope:''})
   const data=snapshot.scope===scope?snapshot.data:undefined
   const error=snapshot.scope===scope?snapshot.error:undefined

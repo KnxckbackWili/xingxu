@@ -67,8 +67,7 @@
 - 机器人安全设置选「加签」→ 把密钥填入 `DINGTALK_WEBHOOK_SECRET`（或文件）。
 - 选「自定义关键词」→ 密钥留空即可（需保证消息含该关键词）。
 
-密钥放文件时，把文件路径给 `*_FILE` 变量，与 AI key 的 `DEEPSEEK_API_KEY_FILE` 等读取模式
-一致，方便挂载 Docker secret / K8s secret。
+密钥放文件时，把文件路径给 `*_FILE` 变量，方便挂载 Docker secret / K8s secret。
 
 ## 4. 接入步骤（单容器部署）
 

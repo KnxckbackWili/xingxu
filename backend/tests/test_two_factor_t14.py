@@ -14,7 +14,7 @@ from sqlalchemy import select
 
 from app import config
 from app.db import SessionLocal
-from app.models import User, MfaChallenge, MfaRecoveryCode, ChangeLog, AiApiToken
+from app.models import User, MfaChallenge, MfaRecoveryCode, ChangeLog
 from app.services import two_factor as mfa
 from app.time_utils import utcnow
 
@@ -72,7 +72,7 @@ def test_rfc6238_vectors(timestamp, sha1, sha256, sha512):
         assert mfa.totp(secret, timestamp // 30, 8, algorithm) == expected
 
 
-@pytest.mark.parametrize('role', ['admin', 'pm'])
+@pytest.mark.parametrize('role', ['admin'])
 def test_public_existing_user_has_only_purpose_limited_enrollment(client, role):
     old = login(client, role, 'admin123' if role == 'admin' else 'pm123')
     config.PUBLIC_MODE = True
@@ -232,50 +232,3 @@ def test_audit_failure_rolls_back_recovery_consumption(client, clock, monkeypatc
         assert db.scalars(select(MfaChallenge)).one().used_at is None
         mfa.verify_login(db, step['challenge'], recovery_code=session['recovery_codes'][0])
 
-
-def test_role_promotion_old_sessions_and_agents_cannot_bypass(client):
-    worker = login(client, 'worker1', 'worker123')
-    raw = 'agv_ai_' + 'isolated-t14-token'
-    with SessionLocal() as db:
-        user = db.get(User, worker['user']['id'])
-        db.add(AiApiToken(id=str(uuid4()), user_id=user.id, name='isolated legacy agent', token_hash=hashlib.sha256(raw.encode()).hexdigest(), scopes=['projects:read']))
-        db.commit()
-    from app.services.agent_auth import authenticate_agent, enforce_agent_mfa
-    identity = authenticate_agent('Bearer ' + raw)
-    assert identity[0] == worker['user']['id']
-    config.PUBLIC_MODE = True
-    with SessionLocal() as db:
-        db.get(User, worker['user']['id']).role = 'pm'; db.commit()
-    assert client.get('/api/auth/me', headers=headers(worker)).status_code == 401
-    assert client.post('/api/auth/refresh', json={'refresh_token': worker['refresh_token']}).status_code == 401
-    with pytest.raises(HTTPException): authenticate_agent('Bearer ' + raw)
-    from app.services import ai_mcp
-    ai_mcp._set_mcp_identity(*identity)
-    try:
-        with SessionLocal() as db:
-            with pytest.raises(HTTPException): ai_mcp._current_user(db)
-    finally: ai_mcp._set_mcp_identity('', [])
-    with SessionLocal() as db:
-        db.get(User, worker['user']['id']).role = 'worker'; db.commit()
-        user = db.get(User, worker['user']['id'])
-        with pytest.raises(HTTPException): enforce_agent_mfa(db, user, 'missing-id')
-
-
-def test_agent_tokens_must_be_self_created_after_mfa_and_revoked_on_changes(client, clock):
-    session, secret = enroll(client, clock)
-    config.PUBLIC_MODE = False  # still enabled => still required
-    created = client.post('/api/ai/internal/tokens', headers=headers(session), json={'name': 'isolated MFA agent', 'user_id': session['user']['id']})
-    assert created.status_code == 200, created.text
-    agent = {'Authorization': 'Bearer ' + created.json()['token']}
-    assert client.get('/api/agent/tools', headers=agent).status_code == 200
-    from app.services.agent_auth import authenticate_agent, enforce_agent_mfa
-    identity = authenticate_agent(agent['Authorization'])
-    with SessionLocal() as db:
-        row = db.get(AiApiToken, created.json()['id']); row.expires_at = utcnow() - timedelta(seconds=1); db.commit()
-        with pytest.raises(HTTPException): enforce_agent_mfa(db, db.get(User, session['user']['id']), identity[1].token_id)
-        row.expires_at = None; db.commit()
-    with SessionLocal() as db: mfa.host_reset(db, session['user']['id'])
-    assert client.get('/api/auth/me', headers=headers(session)).status_code == 401
-    assert client.get('/api/agent/tools', headers=agent).status_code == 401
-    config.PUBLIC_MODE = True
-    assert login(client)['setup_required']

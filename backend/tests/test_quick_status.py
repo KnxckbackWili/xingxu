@@ -21,7 +21,6 @@ def test_item_quick_status_preserves_details_balance_and_rejects_stale_or_extra_
     assert updated.json()['movement_count'] == created.json()['movement_count']
     assert client.patch(endpoint, headers=pm_headers, json={'status': 'lost', 'expected_status': 'on_site'}).status_code == 409
     assert client.patch(endpoint, headers=pm_headers, json={'status': 'lost', 'expected_status': 'in_use', 'quantity': 0}).status_code == 422
-    assert client.patch(endpoint, headers=worker_headers, json={'status': 'lost', 'expected_status': 'in_use'}).status_code in (403, 404)
     listing = client.get(f'/api/projects/{pid}/inventory', headers=pm_headers).json()['items'][0]
     assert listing['status'] == 'in_use' and listing['quantity'] == 25 and listing['note'] == body['note']
 
@@ -40,7 +39,6 @@ def test_application_quick_status_preserves_form_and_rejects_stale_changes(clien
         assert updated.json()[key] == ('approved' if key == 'status' else value)
     assert client.patch(endpoint, headers=pm_headers, json={'status': 'rejected', 'expected_status': 'pending'}).status_code == 409
     assert client.patch(endpoint, headers=pm_headers, json={'status': 'rejected', 'expected_status': 'approved', 'amount': '0'}).status_code == 422
-    assert client.patch(endpoint, headers=worker_headers, json={'status': 'rejected', 'expected_status': 'approved'}).status_code in (403, 404)
     final = client.get(f"/api/projects/{pid}/item-applications/{created.json()['id']}", headers=pm_headers).json()
     assert final['status'] == 'approved' and final['amount'] == '3200' and final['requirement'] == body['requirement']
 

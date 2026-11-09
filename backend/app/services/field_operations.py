@@ -7,9 +7,8 @@ from app.models import User,Project,Task,CheckItem,VehicleProgress,FieldOperatio
 from app.services.scope import ensure_project_visible
 from app.services.record_lock import lock_writable_project,lock_record
 from app.services.system_permissions import has_permission
-from app.services.permissions import C_PLAN,project_capabilities
 from app.services.change_log import log_change
-from app.time_utils import project_today,utcnow
+from app.time_utils import project_today
 
 
 def date_window(project):
@@ -27,7 +26,7 @@ def validate_date(project,value):
         raise HTTPException(400,'完成日期必须在项目当地补记窗口内，且不能晚于当地今天')
 
 
-def authority(db,project_id,user,assisted=None):
+def authority(db,project_id,user):
     from app.services.two_factor import required
     was_required=required(user)
     version=user.token_version or 0
@@ -37,13 +36,11 @@ def authority(db,project_id,user,assisted=None):
     project=lock_writable_project(db,project,user)
     anchor=db.query(User).filter_by(username='admin').first() or db.query(User).order_by(User.id).first()
     if anchor:lock_record(db,anchor,conflict_detail='账号授权正在变化，请稍后重试')
-    for identity in sorted({identity for identity in (user.id,assisted) if identity and (anchor is None or identity!=anchor.id)}):
-        person=db.get(User,identity)
-        if person:lock_record(db,person,conflict_detail='实际操作人员正在变化，请稍后重试')
+    if anchor is None or user.id!=anchor.id:lock_record(db,user,conflict_detail='实际操作人员正在变化，请稍后重试')
     db.refresh(user)
     if not user.is_active or (user.token_version or 0)!=version:raise HTTPException(401,'账号或会话已变化，请重新登录')
     if required(user) and (not was_required or not user.mfa_enabled):raise HTTPException(401,'账号验证要求已变化，请重新登录')
-    if user.role in ('readonly','external') or not has_permission(user,'worker.report',default=True):raise HTTPException(403,'没有现场登记权限')
+    if not has_permission(user,'worker.report'):raise HTTPException(403,'没有现场登记权限')
     return project
 
 
@@ -69,17 +66,7 @@ def snapshot(db,project_id,kind,target_id,step_key=''):
             'is_applicable':bool(row.is_applicable),'not_applicable_reason':row.not_applicable_reason or ''}
 
 
-def owner_guard(db,project,user,kind,target,step,before):
-    if C_PLAN in project_capabilities(user,project):return
-    previous=latest(db,project.id,kind,target,step)
-    if not before.get('is_done') and not before.get('failed') and before.get('is_applicable',True):return
-    actor=previous.actor_id if previous else before.get('done_by')
-    if actor and actor!=user.id:raise HTTPException(403,'他人的实际记录不能修改或撤回；请明确选择协助登记或联系负责人')
-    if previous:validate_date(project,previous.completion_date)
-    elif before.get('is_done') and not actor:raise HTTPException(403,'历史记录无法确认本人身份，请联系负责人核对')
-
-
-def capture(db,project,user,kind,target,step,before,completion_date,*,note='',assisted=None,cell=None,client_uuid=None,payload_hash=None,action='record',replaces=None,root=None,restores=None,reason=''):
+def capture(db,project,user,kind,target,step,before,completion_date,*,note='',cell=None,client_uuid=None,payload_hash=None,action='record',replaces=None,root=None,restores=None,reason=''):
     db.flush()  # SessionLocal deliberately disables autoflush; snapshot must see the mutation.
     after=snapshot(db,project.id,kind,target,step)
     label_row=db.get(Task,target) if kind=='work' else db.get(CheckItem,target) if kind=='check' else None
@@ -93,14 +80,14 @@ def capture(db,project,user,kind,target,step,before,completion_date,*,note='',as
         if unit:label=(unit.fleet_no or unit.asset_code)+' · '+label
     sequence=(db.query(func.max(FieldOperation.sequence)).filter_by(project_id=project.id).scalar() or 0)+1
     row=FieldOperation(project_id=project.id,kind=kind,target_id=target,step_key=step,weekly_cell_id=cell,target_label=label,
-        actor_id=user.id,assisted_user_id=assisted,completion_date=completion_date,is_done=after['is_done'],
+        actor_id=user.id,completion_date=completion_date,is_done=after['is_done'],
         note=note,action=action,replaces_id=replaces,root_id=root,restores_id=restores,reason=reason or note,
         before_state=before,after_version=after['version'],sequence=sequence,
         client_uuid=client_uuid or str(uuid.uuid4()),payload_hash=payload_hash or '')
     db.add(row);db.flush()
-    log_change(db,project.id,'field_operation',row.id,action,user.id,'登记现场实际操作（协助）' if assisted else '登记现场实际操作',
+    log_change(db,project.id,'field_operation',row.id,action,user.id,'登记现场实际操作',
         before,{'kind':kind,'target_id':target,'step_key':step,'completion_date':completion_date.isoformat(),
-                'recorded_at':row.recorded_at.isoformat(),'actor_id':user.id,'assisted_user_id':assisted,
+                'recorded_at':row.recorded_at.isoformat(),'actor_id':user.id,
                 'is_done':row.is_done,'note':note,'reason':row.reason,'replaces_id':replaces,'restores_id':restores})
     return row
 
@@ -125,16 +112,14 @@ def serialize(db,row,user,*,text_filter=None):
     except HTTPException:actual={'version':-1}
     bounds=date_window(project)
     from app.services.project_lifecycle import EXECUTION_PROJECT_STATUSES
-    editable=(project.status in EXECUTION_PROJECT_STATUSES and has_permission(user,'worker.report',default=True) and row.actor_id==user.id and current.id==row.id and row.after_version==actual['version'] and
+    editable=(project.status in EXECUTION_PROJECT_STATUSES and has_permission(user,'worker.report') and row.actor_id==user.id and current.id==row.id and row.after_version==actual['version'] and
               bounds['earliest']<=row.completion_date.isoformat()<=bounds['latest'] and (row.action!='retract' or row.restores_id is not None))
     actor=db.get(User,row.actor_id) if row.actor_id else None
-    assisted=db.get(User,row.assisted_user_id) if row.assisted_user_id else None
     text_filter=text_filter or text_redactor(db,project,user)
     label=text_filter(row.target_label)
     return {'id':row.id,'project_id':row.project_id,'project_name':project.name,'kind':row.kind,'target_id':row.target_id,
             'step_key':row.step_key,'target_name':label,'weekly_cell_id':row.weekly_cell_id,'actor_id':row.actor_id,
-            'actor_name':actor.display_name if actor else '历史账号','assisted_user_id':row.assisted_user_id,
-            'assisted_user_name':assisted.display_name if assisted else None,'completion_date':row.completion_date.isoformat(),
+            'actor_name':actor.display_name if actor else '已删除账号','completion_date':row.completion_date.isoformat(),
             'recorded_at':row.recorded_at.isoformat()+'Z','is_done':row.is_done,'note':text_filter(row.note),'action':row.action,
             'replaces_id':row.replaces_id,'restores_id':row.restores_id,'root_id':row.root_id or row.id,
             'operation_reason':text_filter(row.reason),'effective':row.action!='retract' or row.restores_id is not None,
@@ -142,11 +127,6 @@ def serialize(db,row,user,*,text_filter=None):
 
 
 def _assignment(db,project,user,data):
-    assisted=data.get('assisted_user_id')
-    if assisted:
-        person=db.get(User,assisted,populate_existing=True)
-        if assisted==user.id or not person or not person.is_active or person.role in ('readonly','external'):
-            raise HTTPException(400,'被协助人必须是启用的内部账号，且不能是自己')
     cell_id=data.get('weekly_cell_id')
     if not cell_id:return
     from app.models import WeeklyPlanCell
@@ -175,7 +155,7 @@ def _assignment(db,project,user,data):
 
 
 def apply(db,project_id,user,data,*,record_id=None,retract=False):
-    project=authority(db,project_id,user,data.get('assisted_user_id'))
+    project=authority(db,project_id,user)
     user=db.get(User,user.id)
     if not data['reason'].strip():raise HTTPException(400,'请填写明确的实际情况或操作理由')
     digest=hashlib.sha256(json.dumps({'data':data,'record_id':record_id,'retract':retract},sort_keys=True,separators=(',',':'),default=str).encode()).hexdigest()
@@ -207,7 +187,6 @@ def apply(db,project_id,user,data,*,record_id=None,retract=False):
             # A date/note correction owns no new inspection decision. Preserve
             # the full locked tri-state; is_done=False alone would clear failure.
             data={**data,**{key:before[key] for key in ('is_done','failed','failed_reason','is_applicable','not_applicable_reason')}}
-    elif before.get('is_done') and data['is_done']:owner_guard(db,project,user,kind,target,step,before)
     if not record_id:_assignment(db,project,user,data)
     if before['version']!=data['version']:raise HTTPException(409,'当前事实已改变，请保留原操作并刷新核对')
     record_note=(restored_record.note if restored_record else old.before_state.get('note','')) if retract else data.get('note','') if old else data.get('note') or data['reason']
@@ -241,8 +220,7 @@ def apply(db,project_id,user,data,*,record_id=None,retract=False):
         from app.routers.tasks import _apply_check,CheckItemUpdate
         fields={key:data[key] for key in ('failed','failed_reason','is_applicable','not_applicable_reason') if key in data}
         _apply_check(project_id,target,CheckItemUpdate(version=data['version'],is_done=data['is_done'],**fields),user,db)
-    return capture(db,project,user,kind,target,step,before,completion_date,note=record_note,
-        assisted=data.get('assisted_user_id'),cell=data.get('weekly_cell_id'),client_uuid=data['client_uuid'],payload_hash=digest,
+    return capture(db,project,user,kind,target,step,before,completion_date,note=record_note,cell=data.get('weekly_cell_id'),client_uuid=data['client_uuid'],payload_hash=digest,
         action='retract' if retract else 'edit' if old else 'record',replaces=record_id,
         root=(old.root_id or old.id) if old else None,restores=restores,reason=data['reason'])
 
@@ -255,7 +233,6 @@ def direct_matrix(db,project_id,user,body):
     previous=[]
     for cell in body.cells:
         before=snapshot(db,project_id,'vehicle',cell.vehicle_unit_id,cell.step_key)
-        if before.get('is_done') and body.is_done:owner_guard(db,project,user,'vehicle',cell.vehicle_unit_id,cell.step_key,before)
         previous.append((cell,before))
     from app.routers.vehicle_progress import _apply_matrix
     result=_apply_matrix(project_id,body,user,db)

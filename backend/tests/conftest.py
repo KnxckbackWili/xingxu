@@ -203,7 +203,7 @@ def tech_headers(client, admin_headers):
     """technician 角色登录态（测试库每用例重建，不存在则创建）。"""
     r = client.post("/api/users", headers=admin_headers, json={
         "username": "tech", "password": "Review123!",
-        "display_name": "技术工程师-测试", "role": "technician"})
+        "display_name": "技术工程师-测试", "role": "employee"})
     if r.status_code != 200 and "已存在" not in r.text:
         raise AssertionError(r.text)
     r = client.post("/api/auth/login", json={"username": "tech", "password": "Review123!"})
@@ -216,7 +216,7 @@ def lead_headers(client, admin_headers):
     """lead 角色登录态（测试库每用例重建，不存在则创建）。"""
     r = client.post("/api/users", headers=admin_headers, json={
         "username": "lead", "password": "Review123!",
-        "display_name": "技术经理-测试", "role": "lead"})
+        "display_name": "技术经理-测试", "role": "employee"})
     if r.status_code != 200 and "已存在" not in r.text:
         raise AssertionError(r.text)
     r = client.post("/api/auth/login", json={"username": "lead", "password": "Review123!"})

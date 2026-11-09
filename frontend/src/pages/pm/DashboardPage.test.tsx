@@ -22,15 +22,6 @@ it('shows current document, vehicle and next-signoff facts with safe deep links'
  expect(screen.queryByText(/耗时|今日填报|下达日程/)).toBeNull();expect(h.statistics).not.toHaveBeenCalled()
  fireEvent.click(screen.getByText('统计'));await waitFor(()=>expect(h.statistics).toHaveBeenCalledOnce())
 })
-it('supports the independent statistics permission without reading the workbench',async()=>{
- h.user.permission_overrides={'workspace.view':false,'insights.view':true};show()
- expect(await screen.findByText(/已完成 50 \/ 125 个车辆环节/)).toBeVisible();expect(h.overview).not.toHaveBeenCalled()
- expect(h.statistics).toHaveBeenCalledOnce();expect(screen.queryByText('项目甲')).toBeNull()
-})
-it('does not load denied statistics even when workspace reading is allowed',async()=>{
- h.user.permission_overrides={'insights.view':false};show();await screen.findByText('我的项目')
- expect(screen.queryByText('统计')).toBeNull();expect(h.statistics).not.toHaveBeenCalled()
-})
 it('does not display successful zero counts after a read failure',async()=>{
  h.overview.mockRejectedValue(new Error('read failed'));show();expect(await screen.findByText('工作台暂不可读取')).toBeVisible()
  expect(screen.queryByText('暂无需要处理的事项')).toBeNull();expect(screen.queryByText('需要处理')).toBeNull()

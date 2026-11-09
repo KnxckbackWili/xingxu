@@ -9,8 +9,7 @@ from tests.document_helpers import requirement, upload_documents, documents
 def setup_project(client, pm_headers):
     with SessionLocal() as db:
         people={u.username:u.id for u in db.query(User)}
-    response=client.post('/api/projects',headers=pm_headers,json={'name':'T26隔离项目','start_date':'2026-01-01','end_date':'2026-12-31',
-        'technical_manager_id':people['worker2']})
+    response=client.post('/api/projects',headers=pm_headers,json={'name':'T26隔离项目','start_date':'2026-01-01','end_date':'2026-12-31'})
     assert response.status_code==200,response.text
     return response.json()['id'],people
 
@@ -51,7 +50,6 @@ def test_only_owner_or_explicit_people_can_read_no_admin_technical_or_submitter_
     from app.services.document_requirements import RequirementInput
     rule={key:value for key,value in definition.items() if key in RequirementInput.model_fields}
     assert client.put(f'/api/projects/{pid}/documents/requirements/{definition["id"]}',headers=technical,json={**rule,'note':'获指定且有计划权限的人员可维护说明'}).status_code==200
-    assert client.put(f'/api/projects/{pid}/documents/requirements/{definition["id"]}',headers=technical,json={**rule,'external_never_visible':False}).status_code==409
     assert policy(client,technical,pid,'document',shared.json(),[users['worker2']]).status_code==403
     # Every successful authorized download and metadata read is an audit event.
     with SessionLocal() as db:
@@ -154,27 +152,6 @@ def test_simultaneous_policy_edits_have_one_winner_and_refresh_stale_actor(clien
         with pytest.raises(HTTPException) as error:docs.writable(stale,pid,actor,'project.manage_plan')
         assert error.value.status_code==401
         stale.rollback()
-
-
-def test_agent_and_mcp_use_same_scope_and_external_never_reads(client,pm_headers,admin_headers):
-    from .test_agent_api import token,call,mcp_call
-    from app.services import project_documents as docs
-    from types import SimpleNamespace
-    pid,users=setup_project(client,pm_headers)
-    doc=requirement(client,pm_headers,pid,code='6.99',name='T26-AGENT-PRIVATE')
-    upload=upload_documents(client,pm_headers,pid,[doc['id']],content=b'private',name='T26-AGENT-PRIVATE.txt')
-    assert policy(client,pm_headers,pid,'document',upload['documents'][0]).status_code==200
-    _,agent=token(client,admin_headers,scopes=['projects:read','files:read'])
-    result=call(client,agent,'documents_read',project_id=pid)
-    assert result.status_code==200 and 'T26-AGENT-PRIVATE' not in result.text
-    result=mcp_call(client,agent,'tools/call',{'name':'project_files','arguments':{'project_id':pid}})
-    assert result.status_code==200 and 'T26-AGENT-PRIVATE' not in result.text
-    with SessionLocal() as db:
-        project=db.get(Project,pid);row=db.get(ProjectDocument,doc['id'])
-        external=SimpleNamespace(id=project.manager,role='external',is_active=True)
-        assert not docs.can_read_document(external,project,row)
-        from app.models import Attachment
-        assert not docs.can_read_file(external,project,db.get(Attachment,upload['file']['id']))
 
 
 def test_project_blank_uses_family_scope_while_global_unfilled_template_stays_public(client,pm_headers,admin_headers,worker_headers):

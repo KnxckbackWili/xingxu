@@ -28,6 +28,3 @@ it('preserves notes after a failed save and rereads without automatically replay
 it('does not submit a daily arrangement from a retained old context',async()=>{
  show({entry:{project_id:'p1',id:'old-daily',work_date:'2026-10-27'}});expect(await screen.findByRole('link',{name:'打开项目周计划'})).toHaveAttribute('href','/pm/projects/p1/plan?view=weeks');expect(screen.getByRole('button',{name:'保存为周计划草稿'})).toBeDisabled();expect(h.list).not.toHaveBeenCalled();expect(h.post).not.toHaveBeenCalled()
 })
-it('denies repair planning when the system explicitly forbids schedule maintenance',async()=>{
- h.user={...h.user,permission_overrides:{'project.manage_schedule':false}};show();await waitFor(()=>expect(screen.getByText('本账号当前没有此项目的周计划维护权限')).toBeVisible());expect(screen.getByRole('button',{name:'保存为周计划草稿'})).toBeDisabled()
-})

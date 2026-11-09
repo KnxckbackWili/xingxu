@@ -1,34 +1,18 @@
-"""Current document attention, project phases and owner-private legacy notes."""
+"""Current document attention and project phases."""
 
-from datetime import date
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.services.system_permissions import route_permission,route_permission_exempt
+from app.services.system_permissions import route_permission
 from app.db import get_db
 from app.deps import get_current_user
-from app.services.system_permissions import has_permission
-from app.models import User, Project
+from app.models import User
 from app.services.scope import ensure_project_visible
 from app.services.progress import project_progress_tree
 from app.services.project_lifecycle import ACTIVE_PROJECT_STATUSES
 
 router = APIRouter(tags=["洞察"])
-
-
-def _require_pm_workbench_role(
-    user: User,
-    message: str = "仅 PM 端角色可使用该功能",
-    capability: str = "workspace.view",
-):
-    """Keep personal ownership/project scope after the configurable action gate."""
-    if not has_permission(
-        user,
-        capability,
-        default=user.role in ("admin", "director", "lead", "pm", "technician"),
-    ):
-        raise HTTPException(status_code=403, detail=message)
 
 
 @router.get("/projects/{project_id}/overdue")
@@ -64,7 +48,6 @@ def current_phase(
     """Current phase of a project: farthest template phase with progress,
     plus the chain of all phases with their completion."""
     ensure_project_visible(db, project_id, user)
-    from app.services.progress import project_progress_tree
 
     tree = project_progress_tree(db, project_id)
     chain = []

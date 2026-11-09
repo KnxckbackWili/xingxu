@@ -26,13 +26,12 @@ def complete_documents(client, headers, project_id):
 def complete_checks_and_documents(client, headers, project_id):
     tree = client.get(f'/api/projects/{project_id}/tree', headers=headers).json()
     for phase in tree:
-        for module in phase.get('modules', []):
-            for task in module.get('tasks', []):
-                for check in task.get('check_items', []):
-                    if check.get('is_applicable', True) and (check.get('is_required') or check.get('is_safety_critical')):
-                        response = client.put(f'/api/projects/{project_id}/check-items/{check["id"]}',
-                            headers=headers, json={'is_done': True, 'version': check['version']})
-                        assert response.status_code == 200, response.text
+        for task in phase.get('work_items', []):
+            for check in task.get('check_items', []):
+                if check.get('is_applicable', True) and (check.get('is_required') or check.get('is_safety_critical')):
+                    response = client.put(f'/api/projects/{project_id}/check-items/{check["id"]}',
+                        headers=headers, json={'is_done': True, 'version': check['version']})
+                    assert response.status_code == 200, response.text
     complete_documents(client, headers, project_id)
 
 

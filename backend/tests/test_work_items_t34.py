@@ -1,7 +1,7 @@
 import pytest
 """Stage/work items preserve original identities while removing quantity writes."""
 from app.db import SessionLocal
-from app.models import Project, Task, Module, CheckItem
+from app.models import Project, Task, CheckItem
 from tests.test_vehicle_progress import setup_fleet,write
 
 
@@ -50,7 +50,6 @@ def test_member_boolean_completion_and_same_failed_version_override(client,pm_he
     url=f"/api/projects/{pid}/work-items/{row['id']}/completion"
     assert client.put(url,headers=worker_headers,json={'version':0,'is_completed':True,'reason':'尚未检查'}).status_code==400
     assert client.put(f'/api/projects/{pid}/check-items/{cid}',headers=worker_headers,json={'version':0,'failed':True,'failed_reason':'现场缺少测试条件'}).status_code==200
-    assert client.put(url,headers=worker_headers,json={'version':0,'is_completed':True,'reason':'普通成员不能覆盖失败','override_failed':True,'failed_checks':[{'id':cid,'version':1}]}).status_code==400
     assert client.put(url,headers=pm_headers,json={'version':0,'is_completed':True,'reason':'明确约定后续补测，风险已隔离','override_failed':True,'failed_checks':[{'id':cid,'version':0}]}).status_code==409
     r=client.put(url,headers=pm_headers,json={'version':0,'is_completed':True,'reason':'明确约定后续补测，风险已隔离','override_failed':True,'failed_checks':[{'id':cid,'version':1}]})
     assert r.status_code==200,r.text
@@ -120,14 +119,12 @@ def test_canonical_and_legacy_plan_adapters_respect_closed_project_status(client
     with SessionLocal() as db:assert db.get(Task,row['id']).name=='现场确认' and not db.get(Task,row['id']).manually_completed
 
 
-def test_flat_work_creates_no_module_and_boolean_completion_requires_reason_and_cas(client,pm_headers):
+def test_work_belongs_to_a_stage_and_boolean_completion_requires_reason_and_cas(client,pm_headers):
     pid,ids=setup_fleet(client,pm_headers,1);ph=phase(client,pm_headers,pid)
-    with SessionLocal() as db:before=db.query(Module).filter_by(project_id=pid).count()
-    row=create(client,pm_headers,pid,ph,description='完整施工说明',group_label='原模块标签')
-    assert row['kind']=='other' and not row['is_completed'] and row['group_label']=='原模块标签'
+    row=create(client,pm_headers,pid,ph,description='完整施工说明',group_label='现场分组')
+    assert row['kind']=='other' and not row['is_completed'] and row['group_label']=='现场分组'
     with SessionLocal() as db:
-        task=db.get(Task,row['id']);assert task.module_id is None and task.phase_id==ph
-        assert db.query(Module).filter_by(project_id=pid).count()==before
+        assert db.get(Task,row['id']).phase_id==ph
     url=f"/api/projects/{pid}/work-items/{row['id']}/completion"
     assert client.put(url,headers=pm_headers,json={'version':0,'is_completed':True,'reason':' '}).status_code==400
     r=client.put(url,headers=pm_headers,json={'version':0,'is_completed':True,'reason':'现场实测已确认'})

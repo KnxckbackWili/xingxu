@@ -1,5 +1,5 @@
 import { describe,expect,it } from 'vitest'
-import { PROJECT_NAV_ITEMS,PROJECT_PRIMARY_SECTIONS,PROJECT_MORE_KEYS,PROJECT_PAGE_INFO,PROJECT_NAV_GROUPS,PROJECT_ITEM_BY_KEY,PROJECT_CHILD_BY_SEGMENT,resolveProjectNav,childSegment,defaultChildKey,filterProjectNav,filterProjectActions,PROJECT_ACTIONS } from './projectNav'
+import { PROJECT_NAV_ITEMS,PROJECT_PRIMARY_SECTIONS,PROJECT_MORE_KEYS,PROJECT_PAGE_INFO,PROJECT_NAV_GROUPS,PROJECT_ITEM_BY_KEY,PROJECT_CHILD_BY_SEGMENT,resolveProjectNav,childSegment,defaultChildKey,filterProjectNav } from './projectNav'
 describe('project navigation',()=>{
  it('has exactly six daily destinations and four More destinations from one definition',()=>{
   expect(PROJECT_PRIMARY_SECTIONS.map(row=>row.label)).toEqual(['概况','计划','车辆','资料','问题','现场'])
@@ -19,10 +19,7 @@ describe('project navigation',()=>{
   ['overview','overview',null],['documents','delivery',null],['plan','plan',null],['vehicles','vehicles',null],['inventory','field','inventory'],['handover','field','handover'],
   ['history','activity','history'],['reports','activity','reports'],['edit','overview',null],['export','delivery',null],['unknown','overview',null],
  ])('resolves the %s route to its renderer', (url,parent,child)=>expect(resolveProjectNav(url)).toEqual({parent,child}))
- it('shares readable project destinations across roles while keeping writes separate',()=>{
-  for(const role of ['pm','admin','worker','intern','readonly'])expect(filterProjectNav(PROJECT_NAV_GROUPS,role,[])).toEqual(PROJECT_NAV_GROUPS)
-  expect(filterProjectActions(PROJECT_ACTIONS,'readonly',false,[]).some(item=>item.key==='report')).toBe(false)
-  expect(filterProjectActions(PROJECT_ACTIONS,'worker',false,[]).some(item=>item.key==='export')).toBe(false)
-  expect(filterProjectActions(PROJECT_ACTIONS,'worker',false,['project.export']).some(item=>item.key==='export')).toBe(true)
+ it('shows every project destination to every account',()=>{
+  for(const role of ['admin','employee'])expect(filterProjectNav(PROJECT_NAV_GROUPS,role,[])).toEqual(PROJECT_NAV_GROUPS)
  })
 })

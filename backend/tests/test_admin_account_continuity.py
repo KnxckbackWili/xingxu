@@ -5,7 +5,7 @@
 
 def test_last_active_admin_cannot_demote_themself(client, admin_headers):
     me = client.get('/api/auth/me', headers=admin_headers).json()
-    response = client.put(f"/api/users/{me['id']}", headers=admin_headers, json={'role': 'worker'})
+    response = client.put(f"/api/users/{me['id']}", headers=admin_headers, json={'role': 'employee'})
     assert response.status_code == 400, response.text
     assert client.get('/api/users', headers=admin_headers).status_code == 200
 
@@ -16,7 +16,7 @@ def test_admin_handover_then_last_replacement_cannot_be_disabled(client, admin_h
         'username': 'replacement', 'display_name': 'Replacement', 'password': 'Secure123!', 'role': 'admin'}).json()
     token = client.post('/api/auth/login', json={'username': 'replacement', 'password': 'Secure123!'}).json()['access_token']
     headers = {'Authorization': f'Bearer {token}'}
-    assert client.put(f"/api/users/{me['id']}", headers=headers, json={'role': 'worker'}).status_code == 200
+    assert client.put(f"/api/users/{me['id']}", headers=headers, json={'role': 'employee'}).status_code == 200
     for method, body in [('put', {'is_active': False}), ('delete', None)]:
         response = client.request(method.upper(), f"/api/users/{replacement['id']}", headers=headers, json=body)
         assert response.status_code == 400, response.text
@@ -39,7 +39,7 @@ def test_two_administrators_cannot_concurrently_retire_all_admins(client, admin_
             actor = db.get(User, uid)
             gate.wait(timeout=5)
             try:
-                update_user(uid, UserUpdate(role='worker'), actor, db)
+                update_user(uid, UserUpdate(role='employee'), actor, db)
                 return 200
             except HTTPException as error:
                 db.rollback()

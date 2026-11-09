@@ -1,23 +1,13 @@
-"""Excel/JSON import & export for the template and project snapshots.
-
-Excel layout (sheet 1 "实施模板"):
-    阶段 | 模块 | 模块类型 | 任务 | 数量规则 | 数量 | 单位 | 标准耗时 | 是否安全 | 检查项 | 必查 | 安全项
-Each row = one check item (long format); tasks/modules/phases repeat.
+"""Project Excel/JSON export.
 
 项目Excel默认提供六张交付工作表；完整业务事实通过JSON和项目完整包保全。
 """
 
-import io
-import json
 import os
-from collections import defaultdict
-from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
 from openpyxl.utils import get_column_letter
 from sqlalchemy.orm import Session
 
-from app.models import Phase, Module, Task, CheckItem
-from app.services.vehicle_checks import definition_data
 
 
 def _beautify(ws, title, widths=None):
@@ -165,7 +155,6 @@ def _archive_evidence_html(evidence: dict) -> str:
     from datetime import datetime
     from html import escape
     from urllib.parse import quote
-    import json
 
     def text(value):
         return escape(str(value if value is not None else ""), quote=True)
@@ -243,7 +232,7 @@ def project_package_stream(db: Session, project_id: str, actor=None):
     import tempfile
     import stat
     from app.config import UPLOAD_DIR
-    from app.models import Attachment, Project
+    from app.models import Project
     from app.time_utils import utcnow
 
     p = db.get(Project, project_id)
@@ -365,7 +354,6 @@ def project_to_json(db: Session, project_id: str, actor=None, include_documents=
             "suspension": p.suspension or {},
             "dispatch_platform": p.dispatch_platform,
             "staffing_notes": p.staffing_notes or "",
-            "conditions": {key: key in (p.prep_conditions or []) for key in ("need_wms", "need_charging", "client_server", "new_vehicles", "overseas")},
             "rest_mode": p.rest_mode,
             "rest_days": p.rest_days or [],
             "skip_holidays": bool(p.skip_holidays),
@@ -413,7 +401,7 @@ def project_to_json(db: Session, project_id: str, actor=None, include_documents=
     for item in db.query(ProjectPreparationItem).filter_by(project_id=project_id).order_by(ProjectPreparationItem.sort_order).all():
         snapshot["preparations"].append({
             "category": item.category, "name": item.name, "is_required": item.is_required,
-            "blocks_entry": item.blocks_entry, "status": item.status, "owner_party": item.owner_party,
+            "status": item.status, "owner_party": item.owner_party,
             "required_date": item.required_date.isoformat() if item.required_date else None,
             "committed_date": item.committed_date.isoformat() if item.committed_date else None,
             "forecast_date": item.forecast_date.isoformat() if item.forecast_date else None,

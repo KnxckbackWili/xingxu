@@ -26,9 +26,6 @@ const PROJECT = {
   id: 'p1',
   name: '测试项目',
   manager: 'u-pm',
-  technical_manager: 'u-pm',
-  members: ['u-pm'],
-  is_co_manager: false,
   status: 'executing',
 }
 
@@ -46,7 +43,7 @@ function installDictFail() {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  useAuth.setState({ user: { id: 'u-worker', role: 'worker', username: 'worker1', display_name: '现场1' } as any })
+  useAuth.setState({ user: { id: 'u-worker', role: 'employee', username: 'worker1', display_name: '现场1' } as any })
 })
 
 it('an archived project allows vehicle reading and export while writes stay hidden', async () => {
@@ -76,9 +73,9 @@ describe('VehicleLifecyclePage 车型字典错误反馈', () => {
     render(<VehicleLifecyclePage project={PROJECT as any} configurationOnly />)
 
     // 历史车型（字典外/已停用）仍显示在配置表中，不被静默清空
-    expect(await screen.findByText('老式叉车')).toBeInTheDocument()
-    expect(screen.getByText('L1')).toBeInTheDocument()
-    expect(screen.getByText('2 台')).toBeInTheDocument()
+    expect(await screen.findByTitle('老式叉车（历史）')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('L1')).toBeInTheDocument()
+    expect(screen.getByText('计划车型与数量（2 台）')).toBeInTheDocument()
 
     // 配置区出现清楚错误提示 + 重试按钮（AntD 会在两个汉字间自动插入空格）
     expect(screen.getByText('车型字典加载失败')).toBeInTheDocument()

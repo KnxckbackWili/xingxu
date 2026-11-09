@@ -70,17 +70,17 @@ def test_chunk_boundaries_hash_and_same_index_content_are_enforced(client,admin_
     assert client.post(f'/api/projects/{pid}/uploads',headers=admin_headers,json={**body,'filename':'different.bin'}).status_code==409
 
 
-def test_owner_and_current_permission_are_rechecked_before_every_part_and_finish(client,admin_headers,worker_headers):
+def test_owner_and_current_account_are_rechecked_before_every_part_and_finish(client,admin_headers,worker_headers):
     p=create(client,admin_headers);pid=p['id']
     session,_=start(client,worker_headers,pid,b'private pending bytes')
     sid=session['id'];base=f'/api/projects/{pid}/uploads/{sid}'
     assert client.get(base,headers=admin_headers).status_code==404
     assert chunk(client,worker_headers,pid,sid,0,b'private pending bytes').status_code==200
     with SessionLocal() as db:
-        db.get(User,'user-worker-001').permission_overrides={'worker.deliver':False};db.commit()
-    assert client.get(base,headers=worker_headers).status_code==403
-    assert chunk(client,worker_headers,pid,sid,0,b'private pending bytes').status_code==403
-    assert client.post(base+'/finish',headers=worker_headers).status_code==403
+        db.get(User,'user-worker-001').is_active=False;db.commit()
+    assert client.get(base,headers=worker_headers).status_code==401
+    assert chunk(client,worker_headers,pid,sid,0,b'private pending bytes').status_code==401
+    assert client.post(base+'/finish',headers=worker_headers).status_code==401
     with SessionLocal() as db:assert db.query(Attachment).filter_by(project_id=pid).count()==0
     assert client.get(f'/api/.upload-sessions/{sid}/part-00000000',headers=admin_headers).status_code==404
 

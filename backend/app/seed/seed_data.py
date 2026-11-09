@@ -24,7 +24,7 @@ def seed_all(db):
     import os
     import logging
     from passlib.context import CryptContext
-    from app.models import User, Phase, Module, Task, CheckItem, Template
+    from app.models import User
 
     _pwd = CryptContext(schemes=["bcrypt"])
     logger = logging.getLogger(__name__)
@@ -128,7 +128,7 @@ def seed_all(db):
             username="pm",
             password_hash=_demo_password_hash("DEMO_PM_PASSWORD", "$2b$12$X0XbdrvjQFhHNVnjMT05xeUX/u4wFFpGR30BL4x7EWbw50QVQeL26"),
             display_name="项目经理",
-            role="pm",
+            role="employee",
             is_active=True,
         )
         db.add(pm)
@@ -140,7 +140,7 @@ def seed_all(db):
             username="worker1",
             password_hash=_worker_hash,
             display_name="现场工程师A",
-            role="worker",
+            role="employee",
             is_active=True,
         )
         db.add(worker1)
@@ -149,95 +149,19 @@ def seed_all(db):
             username="worker2",
             password_hash=_worker_hash,
             display_name="现场工程师B",
-            role="worker",
+            role="employee",
             is_active=True,
         )
         db.add(worker2)
 
     db.flush()
 
-    # The built-in template's content is created by migration g3a93b000001 (template sections and rows).
-
     db.commit()
     user_count = 4 if seed_demo else 1
     print(f"✓ Seed data created: {user_count} users")
 
 
-# 「项目准备」模板阶段的模块与任务（迁移旧库时补插用；新库由 seed_all 直接建）
-PREP_PHASE_MODULES = [
-    ("mod-16", "项目准备", ["项目实施范围冻结", "现场布局图", "点位表", "客户系统接口文档（WMS/MES）",
-                            "验收标准确认", "车辆交付", "调度系统项目配置", "现场施工完成", "网络检查",
-                            "实施人员安排", "入场手续"]),
-    ("mod-17", "WMS 接口", ["接口协议确认", "测试环境提供", "测试账号提供", "网络连通检查", "联调计划确认"]),
-    ("mod-18", "自动充电", ["充电设备交付", "充电区域施工", "电源条件确认", "充电通讯测试条件"]),
-    ("mod-19", "客户服务器", ["服务器配置确认", "操作系统准备", "网络端口开放", "远程访问方式确认"]),
-    ("mod-20", "新造车辆", ["设计冻结", "首车完成", "厂内测试通过", "发货", "到场确认"]),
-    ("mod-21", "海外项目", ["发运和清关计划", "人员签证/邀请函", "入场手续（海外）", "当地网络和通信条件", "现场交通住宿安排"]),
-]
-
-TEMPLATE_PREP_ITEMS = [
-    # (name, category, required, blocks, party, risk, condition)
-    ("项目实施范围冻结", "scope", True, True, "project", "low", "default"),
-    ("现场布局图", "scope", True, False, "client", "medium", "default"),
-    ("点位表", "scope", True, True, "client", "high", "default"),
-    ("客户系统接口文档（WMS/MES）", "scope", False, False, "client", "medium", "default"),
-    ("验收标准确认", "scope", True, False, "client", "low", "default"),
-    ("车辆交付", "vehicle", True, True, "production", "high", "default"),
-    ("调度系统项目配置", "software", True, False, "software", "high", "default"),
-    ("现场施工完成", "site", True, True, "client", "high", "default"),
-    ("网络检查", "site", True, True, "client", "high", "default"),
-    ("实施人员安排", "site", True, False, "project", "medium", "default"),
-    ("入场手续", "site", True, True, "project", "medium", "default"),
-    # 条件组：need_wms
-    ("接口协议确认", "scope", True, True, "client", "high", "need_wms"),
-    ("测试环境提供", "scope", True, False, "client", "high", "need_wms"),
-    ("测试账号提供", "scope", False, False, "client", "medium", "need_wms"),
-    ("网络连通检查", "site", True, True, "client", "high", "need_wms"),
-    ("联调计划确认", "software", True, False, "software", "medium", "need_wms"),
-    # 条件组：need_charging
-    ("充电设备交付", "vehicle", True, True, "procurement", "high", "need_charging"),
-    ("充电区域施工", "site", True, True, "client", "high", "need_charging"),
-    ("电源条件确认", "site", True, False, "client", "medium", "need_charging"),
-    ("充电通讯测试条件", "software", False, False, "software", "low", "need_charging"),
-    # 条件组：client_server
-    ("服务器配置确认", "scope", True, False, "client", "high", "client_server"),
-    ("操作系统准备", "scope", True, False, "client", "medium", "client_server"),
-    ("网络端口开放", "site", True, True, "client", "high", "client_server"),
-    ("远程访问方式确认", "scope", False, False, "client", "low", "client_server"),
-    # 条件组：new_vehicles
-    ("设计冻结", "vehicle", True, False, "production", "medium", "new_vehicles"),
-    ("首车完成", "vehicle", True, False, "production", "high", "new_vehicles"),
-    ("厂内测试通过", "vehicle", True, True, "production", "high", "new_vehicles"),
-    ("发货", "vehicle", True, True, "production", "high", "new_vehicles"),
-    ("到场确认", "vehicle", True, True, "production", "high", "new_vehicles"),
-    # 条件组：overseas
-    ("发运和清关计划", "scope", True, True, "project", "high", "overseas"),
-    ("人员签证/邀请函", "site", True, True, "project", "high", "overseas"),
-    ("入场手续（海外）", "site", True, False, "client", "medium", "overseas"),
-    ("当地网络和通信条件", "site", True, False, "client", "medium", "overseas"),
-    ("现场交通住宿安排", "site", False, False, "project", "low", "overseas"),
-]
-
-
-# 默认模板采购项：(名称, 单位, 规格, 必需, 风险)
-# 数量不在模板内：项目内带入/创建时再确认数量。
-# 到货状态由项目页维护（未申请 / 已下单 / 采购中 / 已到货）。
-TEMPLATE_PROCUREMENT_ITEMS = [
-    ("AGV 本体", "台", "按合同型号与配置（数量请在项目内确认）", True, "high"),
-    ("车载工控机", "台", "含 4G 模块与硬盘（每车 1 台）", False, "medium"),
-    ("自动充电桩", "台", "按车辆 1:1 选型，含安装底座", True, "medium"),
-    ("安全围栏", "米", "铝合金围栏 1.2m 高，含立柱", False, "medium"),
-    ("工业路由器", "台", "4G 工业路由器，双卡", False, "low"),
-    ("千兆交换机", "台", "8 口千兆工业级", False, "low"),
-    ("网线与水晶头", "箱", "超五类成品线 + 备用水晶头", False, "low"),
-    ("WMS 接口服务器", "台", "客户机房机架式，含系统", True, "high"),
-    ("客户服务器部署包", "套", "由软件团队提供介质与授权", False, "high"),
-    ("海外海运包装", "套", "木箱 + 防潮干燥剂 + 外文标识", True, "high"),
-]
-
-
 PRESET_VEHICLE_TYPES = ["潜伏式", "平衡重叉车", "堆高车", "前移式", "滚筒车", "顶升车", "其他/定制"]
-
 
 
 def seed_vehicle_types(db):
@@ -269,23 +193,6 @@ def seed_vehicle_types(db):
             },
         )
     db.flush()
-
-
-DEFAULT_TASK_DELIVERABLES = {
-    "场地勘测": [{"name": "现场勘测记录", "required": True, "doc_type": "PDF", "note": "包含尺寸、通道和现场照片"}],
-    "施工方案确认": [{"name": "已确认施工方案", "required": True, "doc_type": "PDF", "note": "需客户或项目负责人确认"}],
-    "开箱检查": [{"name": "设备开箱照片", "required": True, "doc_type": "照片", "note": "每批设备留存全景与铭牌照片"}],
-    "到货文档归档": [{"name": "到货签收单", "required": True, "doc_type": "PDF", "note": "包含签收人和日期"}],
-    "安全激光及停车距离验证": [{"name": "安全测试记录", "required": True, "doc_type": "Excel", "note": "记录各速度档停车距离"}],
-    "单车配置和程序备份": [{"name": "单车配置备份包", "required": True, "doc_type": "其他", "note": "按车辆编号命名"}],
-    "地图验证与备份": [{"name": "地图与站点备份包", "required": True, "doc_type": "其他", "note": "包含地图、站点与版本说明"}],
-    "服务器部署与配置": [{"name": "服务器部署记录", "required": True, "doc_type": "Word", "note": "记录地址、版本和关键配置"}],
-    "系统性能测试": [{"name": "系统性能测试报告", "required": True, "doc_type": "PDF", "note": "包含吞吐、并发和异常恢复结果"}],
-    "运行报告编制": [{"name": "试运行报告", "required": True, "doc_type": "PDF", "note": "汇总连续运行和遗留问题"}],
-    "操作培训": [{"name": "培训签到与考核记录", "required": True, "doc_type": "PDF", "note": "包含参训人员签字"}],
-    "最终验收": [{"name": "项目验收单", "required": True, "doc_type": "PDF", "note": "需双方签字"}],
-    "验收文档归档": [{"name": "最终交付文档清单", "required": True, "doc_type": "Excel", "note": "列明文件名、版本和交付日期"}],
-}
 
 
 DEFAULT_REFERENCE_GUIDES = {

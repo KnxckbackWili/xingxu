@@ -7,7 +7,6 @@ import re
 import uuid
 from pathlib import Path
 from datetime import date, datetime, timezone
-from decimal import Decimal
 from urllib.parse import quote
 from app.services.system_permissions import route_permission
 from app.time_utils import utcnow
@@ -16,15 +15,14 @@ from typing import Optional
 
 def _parse_date(v):
     return date.fromisoformat(v) if v else None
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from fastapi.responses import Response, StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, AwareDatetime, TypeAdapter
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.deps import get_current_user, require_pm, require_admin
-from app.models import User, Project, Vehicle, Phase, Module, Task, CheckItem, VehicleUnit, VehicleLifecycleEvent, ProjectPreparationItem, Issue, ProjectInventoryItem, ProjectInventoryMovement
-from app.routers.projects import get_project_or_404
+from app.deps import require_pm
+from app.models import User, Project, Vehicle, Phase, Task, CheckItem, VehicleUnit, VehicleLifecycleEvent, ProjectPreparationItem, Issue, ProjectInventoryItem, ProjectInventoryMovement
 from app.routers.vehicle_types import normalize_vehicle_type
 from app.services.scope import ensure_project_visible
 from app.services.permissions import require_project_capability
@@ -37,16 +35,9 @@ def _stream_bytes(data: bytes, chunk_size: int = 1024 * 1024):
         yield data[i:i + chunk_size]
 from app.services.change_log import log_change
 from app.services.rate_limit import rate_limit_export
-from app.config import MAX_UPLOAD_SIZE
-from app.services.project_lifecycle import PROJECT_STATUSES, INITIAL_PROJECT_STATUSES
+from app.services.project_lifecycle import PROJECT_STATUSES
 
 router = APIRouter(tags=["导入导出"])
-
-
-def _quick_import_template() -> dict:
-    """Use the portable Skill template as the single source of truth."""
-    from app.services.ai_project_assistant import template_payload
-    return template_payload()
 
 
 def _validate_quick_import(payload: dict) -> dict:
@@ -89,7 +80,7 @@ def _validate_quick_import(payload: dict) -> dict:
         parse_snapshot(payload)
     except (ValueError,TypeError) as error:
         errors.append(f"资料定义格式错误：{error}")
-    forbidden = [key for key in ("manager_id", "technical_manager_id") if key in project]
+    forbidden = [key for key in ("manager_id",) if key in project]
     if forbidden:
         errors.append(f"不得通过导入绑定系统账号：{', '.join(forbidden)}")
     if not str(project.get("name", "")).strip():
@@ -148,14 +139,6 @@ def _validate_quick_import(payload: dict) -> dict:
         errors.append("新建项目导入不能直接进入实施或后续阶段；请将 project.status 改为 preparing 后导入（旧筹备/待进场状态会统一重置为准备），再由有权限的人按流程确认推进。历史项目恢复请使用完整备份恢复流程。")
     for idx, value in enumerate(project.get("rest_days") or []):
         checked_date(value, f"project.rest_days[{idx}]")
-
-    conditions = project.get("conditions") or {}
-    if not isinstance(conditions, dict):
-        errors.append("project.conditions 必须是对象")
-    else:
-        for key in ("need_wms", "need_charging", "client_server", "new_vehicles", "overseas"):
-            if key in conditions and not isinstance(conditions[key], bool):
-                errors.append(f"project.conditions.{key} 必须是布尔值")
 
     contacts = project.get("client_contacts") or []
     if not isinstance(contacts, list):
@@ -380,16 +363,6 @@ def _validate_quick_import(payload: dict) -> dict:
     }
 
 
-@router.get("/projects/import/template")
-@route_permission('system.import.create')
-def download_quick_import_template(_: User = Depends(require_pm)):
-    return Response(
-        content=json.dumps(_quick_import_template(), ensure_ascii=False, indent=2),
-        media_type="application/json",
-        headers={"Content-Disposition": "attachment; filename*=UTF-8''AGV-AI-project-import-template.json"},
-    )
-
-
 @router.post("/projects/import/preview")
 @route_permission('system.import.create')
 def preview_quick_import(payload: dict, _: User = Depends(require_pm)):
@@ -496,12 +469,10 @@ def import_project_json(
         entry_plan=proj.get("entry_plan", {}),
         created_by=user.id,
     )
-    conditions = proj.get("conditions") or {}
-    p.prep_conditions = [key for key in ("need_wms", "need_charging", "client_server", "new_vehicles", "overseas") if conditions.get(key)]
     db.add(p)
     db.flush()
     from app.models import ProjectEvent
-    from app.services.project_events import normalize_actual, sync_arrival_all, update_plans
+    from app.services.project_events import normalize_actual, sync_arrival_all
     declared_arrival = None
     if "project_events" in payload:
         for data in payload["project_events"]:
@@ -542,7 +513,7 @@ def import_project_json(
             vehicle = t.get("kind") == "vehicle"
             task = Task(
                 project_id=p.id, phase_id=pphase.id, name=t.get("name", "任务"), description=t.get("description", ""),
-                group_label=t.get("group_label",m.get("source_group_label",m.get("name",""))), scope_conditions=t.get("scope_conditions",m.get("preparation_conditions",[])),
+                group_label=t.get("group_label",m.get("source_group_label",m.get("name",""))),
                 source_task_id=t.get("source_task_id"),
                 quantity_type="per_vehicle" if vehicle else "fixed",
                 vehicle_step_key=t.get("vehicle_step_key") or None,
@@ -597,8 +568,8 @@ def import_project_json(
         for item in payload["preparations"]:
             if item.get("category")!="procurement":
                 continue
-            db.add(ProjectPreparationItem(project_id=p.id, category=item.get("category", "scope"), name=item.get("name", "准备事项"),
-                is_required=bool(item.get("is_required", True)), blocks_entry=bool(item.get("blocks_entry", False)), status=item.get("status", "not_started"),
+            db.add(ProjectPreparationItem(project_id=p.id, category="procurement", name=item.get("name", "采购项"),
+                is_required=bool(item.get("is_required", True)), status=item.get("status", "not_started"),
                 owner_party=item.get("owner_party", "project"), required_date=_parse_date(item.get("required_date")), committed_date=_parse_date(item.get("committed_date")),
                 forecast_date=_parse_date(item.get("forecast_date")), actual_date=_parse_date(item.get("actual_date")), risk=item.get("risk", "low"),
                 note=item.get("note", ""), extra=item.get("extra", {}), sort_order=item.get("sort_order", 0)))
@@ -708,7 +679,6 @@ def clone_project(
         dispatch_platform=src.dispatch_platform,
         description=src.description,
         staffing_notes=src.staffing_notes,
-        prep_conditions=deepcopy(src.prep_conditions or []),
         rest_mode=src.rest_mode,
         rest_days=deepcopy(src.rest_days or []),
         skip_holidays=bool(src.skip_holidays),
@@ -737,26 +707,25 @@ def clone_project(
         if old_phase.id not in phase_map:
             phase=Phase(project_id=p.id,**{key:getattr(old_phase,key) for key in ('name','sort_order','color','entry_criteria','exit_criteria','stage_key')})
             db.add(phase);db.flush();phase_map[old_phase.id]=phase.id
-        task=Task(project_id=p.id,phase_id=phase_map[old_phase.id],module_id=None,group_label=group_of(db,old_task),
-            scope_conditions=deepcopy(old_task.scope_conditions or []),
+        task=Task(project_id=p.id,phase_id=phase_map[old_phase.id],group_label=group_of(db,old_task),
             name=old_task.name,description=old_task.description,quantity_type='per_vehicle' if old_task.quantity_type=='per_vehicle' else 'fixed',
             safety_flag=old_task.safety_flag,
             applicable_vehicle_types=deepcopy(old_task.applicable_vehicle_types or []),sort_order=old_task.sort_order,
             source_task_id=old_task.source_task_id,vehicle_step_key=old_task.vehicle_step_key)
         db.add(task);db.flush();task_map[old_task.id]=task
         # Reference files must also be independent of the source project.
-        from app.services.generate_tasks import _upload_dir
+        from app.config import UPLOAD_DIR
         import shutil
         refs = []
         for ref in old_task.reference_docs or []:
             stored = ref.get("stored_name", "")
             if not stored or stored != Path(stored).name:
                 continue
-            source_file = _upload_dir() / stored
+            source_file = UPLOAD_DIR / stored
             if source_file.is_file():
                 new_name = f"{uuid.uuid4().hex}{source_file.suffix}"
-                destination=_upload_dir()/new_name
-                if source_file.is_symlink() or destination.exists() or source_file.resolve().parent!=_upload_dir().resolve():
+                destination=UPLOAD_DIR/new_name
+                if source_file.is_symlink() or destination.exists() or source_file.resolve().parent!=UPLOAD_DIR.resolve():
                     raise HTTPException(409,"来源参考文件路径无效，克隆未保存")
                 from app.services.document_requirements import track_new_file
                 track_new_file(db,destination)
@@ -774,7 +743,7 @@ def clone_project(
     for prep in db.query(ProjectPreparationItem).filter_by(project_id=src.id,category="procurement").all():
         db.add(ProjectPreparationItem(project_id=p.id, required_date=p.start_date,
             **{key: getattr(prep, key) for key in
-               ("category", "name", "is_required", "blocks_entry", "owner_party", "risk", "sort_order")}))
+               ("category", "name", "is_required", "owner_party", "risk", "sort_order")}))
     db.flush()
     from app.services.vehicle_progress import import_snapshot as import_vehicle_snapshot
     import_vehicle_snapshot(db,p,snapshot.get('vehicle_progress_matrix'),task_map)

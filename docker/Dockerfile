@@ -40,7 +40,6 @@ COPY docker/scripts/backup_runtime.py ./backup_runtime.py
 # /app/alembic.ini 与 /app/migrations（upgrade head），必须随镜像打包。
 COPY backend/alembic.ini ./alembic.ini
 COPY backend/migrations ./migrations
-COPY skills ./skills
 COPY --from=frontend-builder /build/frontend/dist ./frontend/dist
 COPY docker/start.sh /app/start.sh
 COPY docker/supervisord.conf /app/supervisord.conf

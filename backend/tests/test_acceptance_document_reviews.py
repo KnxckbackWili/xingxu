@@ -61,26 +61,3 @@ def test_completed_gate_requires_acceptance_record(client, pm_headers, worker_he
     assert response.status_code == 200, response.text
     result = client.post(f'/api/projects/{pid}/status', headers=pm_headers, json={'status': 'completed'})
     assert result.status_code == 200, result.text
-
-def test_document_self_review_blocked(client, pm_headers):
-    from tests.document_helpers import documents, upload_documents
-    pid = _project(client, pm_headers)
-    row = documents(client, pm_headers, pid)['documents'][0]
-    submitted = upload_documents(client, pm_headers, pid, [row['id']])['documents'][0]
-    version = submitted['versions'][0]
-    response = client.post(f'/api/projects/{pid}/documents/{row['id']}/versions/{version['id']}/review', headers=pm_headers, json={'decision': 'approved'})
-    assert response.status_code == 400 and '不能自己审核' in response.json()['detail']
-
-def test_document_submission_and_review_notify_original_actors(client, pm_headers, worker_headers):
-    from tests.document_helpers import documents, upload_documents
-    pid = _project(client, pm_headers)
-    _add_worker(client, pm_headers, worker_headers, pid)
-    row = documents(client, pm_headers, pid)['documents'][0]
-    submitted = upload_documents(client, worker_headers, pid, [row['id']])['documents'][0]
-    pm_messages = client.get('/api/notifications', headers=pm_headers).json()
-    assert any((n['ntype'] == 'document_submitted' and n['entity_id'] == row['id'] for n in pm_messages))
-    version = submitted['versions'][0]
-    response = client.post(f'/api/projects/{pid}/documents/{row['id']}/versions/{version['id']}/review', headers=pm_headers, json={'decision': 'rejected', 'note': '缺少检测记录'})
-    assert response.status_code == 200, response.text
-    worker_messages = client.get('/api/notifications', headers=worker_headers).json()
-    assert any((n['ntype'] == 'document_reviewed' and n['entity_id'] == row['id'] for n in worker_messages))

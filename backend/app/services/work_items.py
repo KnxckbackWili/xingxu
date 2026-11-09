@@ -1,14 +1,13 @@
-"""Stage/work-item domain; old hierarchy and quantities remain read-only facts.
+"""Stages and work items.
 
 All mutations take the common Project lock before fresh reads. This module never
-commits; callers own transactions. No Module is created to hold new work.
+commits; callers own transactions.
 """
 from uuid import uuid4
 from fastapi import HTTPException
-from sqlalchemy import func,or_
-from app.models import (Task,Phase,Module,Project,User,CheckItem,
+from sqlalchemy import func
+from app.models import (Task,Phase,User,CheckItem,
     VehicleUnit,ProjectVehicleStep,VehicleProgress)
-from app.services.execution_scope import REMINDER_ONLY_PHASE_NAMES
 from app.services.permissions import C_PLAN,authorize_project,project_capabilities
 from app.services.system_permissions import has_permission
 from app.services.record_lock import lock_writable_project,lock_record
@@ -25,21 +24,15 @@ def is_vehicle(task):return task.quantity_type=='per_vehicle'
 
 
 def phase_of(db,task):
-    if task.phase_id:return db.get(Phase,task.phase_id)
-    module=db.get(Module,task.module_id) if task.module_id else None
-    return db.get(Phase,module.phase_id) if module and module.phase_id else None
+    return db.get(Phase,task.phase_id) if task.phase_id else None
 
 
 def group_of(db,task):
-    if task.phase_id:return task.group_label or ''
-    module=db.get(Module,task.module_id) if task.module_id else None
-    return module.name if module else task.group_label or ''
+    return task.group_label or ''
 
 
 def tasks_query(db,project_ids):
-    return db.query(Task).outerjoin(Module,Task.module_id==Module.id).join(
-        Phase,Phase.id==func.coalesce(Task.phase_id,Module.phase_id)).filter(
-        Task.project_id.in_(project_ids),Phase.name.notin_(REMINDER_ONLY_PHASE_NAMES))
+    return db.query(Task).join(Phase,Phase.id==Task.phase_id).filter(Task.project_id.in_(project_ids))
 
 
 def assert_phase(db,phase_id,*,project_id=None,template_id=None):
@@ -47,13 +40,12 @@ def assert_phase(db,phase_id,*,project_id=None,template_id=None):
     tid=None if template_id=='default' else template_id
     if row is None or row.project_id!=project_id or project_id is None and row.template_id!=tid:
         raise HTTPException(404,'阶段不属于当前项目或模板')
-    if row.name in REMINDER_ONLY_PHASE_NAMES:raise HTTPException(400,'准备提醒已由资料清单维护，不能生成实施工作')
     return row
 
 
 def lock_plan(db,project,user):
     project=lock_writable_project(db,project,user);db.refresh(user)
-    if not has_permission(user,'project.manage_plan',default=True):raise HTTPException(403,'工作计划维护权限已变化')
+    if not has_permission(user,'project.manage_plan'):raise HTTPException(403,'工作计划维护权限已变化')
     authorize_project(user,project,C_PLAN)
     from app.services.project_lifecycle import ACTIVE_PROJECT_STATUSES
     if project.status not in ACTIVE_PROJECT_STATUSES:raise HTTPException(400,'请先核对或恢复项目状态再维护工作定义')
@@ -115,9 +107,8 @@ def item_dicts(db,tasks,*,checks=False):
     tasks=list(tasks)
     if not tasks:return {}
     ids=[t.id for t in tasks]
-    # Phases/modules are few and usually already in the identity map; db.get reuses it.
-    modules={key:db.get(Module,key) for key in {t.module_id for t in tasks if t.module_id and not t.phase_id}}
-    phases={key:db.get(Phase,key) for key in {t.phase_id for t in tasks if t.phase_id}|{m.phase_id for m in modules.values() if m and m.phase_id}}
+    # Phases are few and usually already in the identity map; db.get reuses it.
+    phases={key:db.get(Phase,key) for key in {t.phase_id for t in tasks if t.phase_id}}
     actor_ids={t.manual_completed_by for t in tasks if t.manual_completed_by}
     actors={u.id:u for u in db.query(User).filter(User.id.in_(actor_ids))} if actor_ids else {}
     template_docs=defaultdict(list)
@@ -139,13 +130,9 @@ def item_dicts(db,tasks,*,checks=False):
         unit_ids={c.vehicle_unit_id for rows in task_checks.values() for c in rows if c.vehicle_unit_id}
         units={u.id:u for u in db.query(VehicleUnit).filter(VehicleUnit.id.in_(unit_ids))} if unit_ids else {}
     def phase_for(task):
-        if task.phase_id:return phases.get(task.phase_id)
-        module=modules.get(task.module_id)
-        return phases.get(module.phase_id) if module and module.phase_id else None
+        return phases.get(task.phase_id) if task.phase_id else None
     def group_for(task):
-        if task.phase_id:return task.group_label or ''
-        module=modules.get(task.module_id)
-        return module.name if module else task.group_label or ''
+        return task.group_label or ''
     def label(check):
         if not check.vehicle_unit_id:return '任务级检查（未逐车核验）'
         unit=units.get(check.vehicle_unit_id)
@@ -159,7 +146,7 @@ def item_dicts(db,tasks,*,checks=False):
         row={'id':task.id,'phase_id':phase.id if phase else None,'phase_name':stage_label(phase.name) if phase else '历史未分类',
             'group_label':group_for(task),'name':task.name,'description':task.description or '',
             'kind':'vehicle' if is_vehicle(task) else 'other','vehicle_step_key':task.vehicle_step_key,
-            'applicable_vehicle_types':task.applicable_vehicle_types or [],'scope_conditions':task.scope_conditions or [],
+            'applicable_vehicle_types':task.applicable_vehicle_types or [],
             'is_completed':bool(matrix['complete']) if matrix else bool(task.manually_completed),'matrix':matrix,
             'completion':{'reason':task.manual_completed_reason or '', 'by':task.manual_completed_by,
                 'by_name':actor.display_name if actor else '原操作人未记录' if task.manual_completed_by else '',
@@ -193,15 +180,12 @@ def set_definition(db,task,data,*,creating=False):
     if any(data.get(k) is None for k in ('phase_id','description','group_label','sort_order') if k in data and not (creating and k=='sort_order')):raise HTTPException(400,'工作定义字段不能为空值')
     if 'name' in data and (not isinstance(data['name'],str) or not data['name'].strip()):raise HTTPException(400,'工作项名称不能为空白')
     if 'name' in data:data['name']=data['name'].strip()
-    previous_phase=phase_of(db,task) if not creating else None
-    if previous_phase is not None and previous_phase.name in REMINDER_ONLY_PHASE_NAMES:
-        raise HTTPException(400,'历史准备工作来源只读，资料要求请到清单维护')
     if 'phase_id' in data:assert_phase(db,data['phase_id'],project_id=task.project_id,template_id=task.template_id);task.phase_id=data['phase_id']
     if creating:
         if 'sort_order' not in data or data['sort_order'] is None:
             task.sort_order=(db.query(func.max(Task.sort_order)).filter(Task.project_id==task.project_id,Task.template_id==task.template_id,Task.phase_id==task.phase_id).scalar() or 0)+1
         task.quantity_type='per_vehicle' if data['kind']=='vehicle' else 'fixed'
-    for key in ('name','description','group_label','sort_order','applicable_vehicle_types','scope_conditions'):
+    for key in ('name','description','group_label','sort_order','applicable_vehicle_types'):
         if key in data and not (creating and key=='sort_order' and data[key] is None):setattr(task,key,data[key])
     if 'vehicle_step_key' in data or creating:
         from app.services.vehicle_checks import bind_step
@@ -230,15 +214,11 @@ def complete(db,project,user,task_id,data):
         project=actual.authority(db,project.id,user)
         user=db.get(User,user.id)
         actual_before=actual.snapshot(db,project.id,'work',task_id)
-        if actual_before.get('is_done') and data['is_completed']:
-            actual.owner_guard(db,project,user,'work',task_id,'',actual_before)
     from app.services.project_lifecycle import EXECUTION_PROJECT_STATUSES
     project=lock_writable_project(db,project,user);db.refresh(user)
-    if not has_permission(user,'worker.report',default=True) or user.role in ('readonly','external'):raise HTTPException(403,'没有登记工作完成的权限')
+    if not has_permission(user,'worker.report'):raise HTTPException(403,'没有登记工作完成的权限')
     if project.status not in EXECUTION_PROJECT_STATUSES:raise HTTPException(400,'现场实施前或项目结束后不能登记工作完成')
     task=lock_work(db,project,user,task_id,data['version'])
-    phase=phase_of(db,task)
-    if phase is None or phase.name in REMINDER_ONLY_PHASE_NAMES:raise HTTPException(400,'历史准备工作来源只读，资料请到清单维护')
     if is_vehicle(task):raise HTTPException(400,'车辆工作完成由真实车辆进度表登记，不能用工作完成状态覆盖')
     reason=data['reason'].strip()
     if not reason:raise HTTPException(400,'完成或重新打开工作必须填写理由')
@@ -269,26 +249,51 @@ def complete(db,project,user,task_id,data):
     return task
 
 
-def selected_template_work(db,template_id,selection,excluded_ids=None,excluded_names=None):
-    """Canonical task IDs; old module IDs are a read-only import adapter."""
+def selected_template_work(db,template_id,selection,excluded_ids=()):
+    """The template's work items chosen for a project, in template order."""
     tid=None if template_id=='default' else template_id
     tasks=db.query(Task).filter(Task.project_id.is_(None),Task.template_id==tid).all()
-    valid={t.id:t for t in tasks}
-    modules={m.id for m in db.query(Module).filter(Module.project_id.is_(None),Module.template_id==tid)}
-    unknown=set(selection)-set(valid)-modules
-    if unknown:raise ValueError('工作范围已失效，请重新读取模板')
-    ids={t.id for t in tasks if t.id in selection or t.module_id in selection}
-    if set(excluded_ids or [])-ids:raise ValueError('排除的工作项不在所选范围')
-    return [t for t in tasks if t.id in ids and t.id not in (excluded_ids or []) and t.name not in (excluded_names or [])
-            and phase_of(db,t) is not None and phase_of(db,t).name not in REMINDER_ONLY_PHASE_NAMES]
+    if set(selection)-{t.id for t in tasks}:raise ValueError('工作范围已失效，请重新读取模板')
+    if set(excluded_ids)-set(selection):raise ValueError('排除的工作项不在所选范围')
+    return [t for t in tasks if t.id in selection and t.id not in excluded_ids and t.phase_id]
+
+
+def copy_reference_docs(db, template_task, project_task):
+    """模板任务参考文档 → 项目任务（物理文件复制，任务 JSON 自包含）。幂等：已有文档不重拷。"""
+    if project_task.reference_docs:
+        return False
+    import os
+    import shutil
+    from app.config import UPLOAD_DIR
+    from app.models import TemplateDoc
+    src_docs = db.query(TemplateDoc).filter(TemplateDoc.task_id == template_task.id).all()
+    if not src_docs:
+        return False
+    refs = []
+    for sd in src_docs:
+        src_path = UPLOAD_DIR / sd.stored_name
+        if not src_path.exists():
+            continue
+        new_stored = f"{uuid4().hex}{os.path.splitext(sd.filename or '')[-1]}"
+        destination = UPLOAD_DIR / new_stored
+        if "creation_copied_files" in db.info:
+            db.info["creation_copied_files"].append(destination)
+        shutil.copy2(src_path, destination)
+        refs.append({
+            "filename": sd.filename, "stored_name": new_stored,
+            "file_size": sd.file_size, "content_type": sd.content_type,
+            "note": sd.note,
+        })
+    if refs:
+        project_task.reference_docs = refs
+    return True
 
 
 def generate(db,project,source_tasks):
-    """Freeze independent stage/work/check definitions without creating Modules."""
-    from app.services.generate_tasks import copy_reference_docs
+    """Copy the chosen template work, its stages and checks into the project."""
     from app.services.vehicle_checks import definition_data,import_definitions,generate_for_units
     # check_items：本次实际生成的检查记录；check_definitions：冻结的检查要求（按车辆的在车辆建档后逐车生成）。
-    result={'tasks':0,'check_items':0,'check_definitions':0,'vehicle_check_definitions':0,'modules':[],'work_items':[]}
+    result={'tasks':0,'check_items':0,'check_definitions':0,'vehicle_check_definitions':0,'work_items':[]}
     mapping={t.source_task_id:t for t in db.query(Task).filter_by(project_id=project.id) if t.source_task_id}
     for source in source_tasks:
         if source.id in mapping:continue
@@ -298,10 +303,10 @@ def generate(db,project,source_tasks):
             phase=Phase(project_id=project.id,name=stage_label(origin.name),color=origin.color,sort_order=origin.sort_order,
                 entry_criteria=origin.entry_criteria,exit_criteria=origin.exit_criteria,stage_key=origin.stage_key)
             db.add(phase);db.flush()
-        row=Task(project_id=project.id,phase_id=phase.id,module_id=None,name=source.name,description=source.description,
+        row=Task(project_id=project.id,phase_id=phase.id,name=source.name,description=source.description,
             quantity_type='per_vehicle' if is_vehicle(source) else 'fixed',safety_flag=source.safety_flag,
             applicable_vehicle_types=list(source.applicable_vehicle_types or []),group_label=group_of(db,source),
-            scope_conditions=list(source.scope_conditions or []),sort_order=source.sort_order,
+            sort_order=source.sort_order,
             source_task_id=source.id,vehicle_step_key=source.vehicle_step_key)
         db.add(row);db.flush();copy_reference_docs(db,source,row)
         definitions=definition_data(db,source)
@@ -326,7 +331,7 @@ def portable_definition(db,task):
     return {'source_id':task.id,'source_task_id':task.source_task_id,'name':task.name,'description':task.description or '',
         'kind':'vehicle' if is_vehicle(task) else 'other','quantity_type':task.quantity_type,
         'safety_flag':task.safety_flag,'applicable_vehicle_types':task.applicable_vehicle_types or [],
-        'vehicle_step_key':task.vehicle_step_key,'group_label':group_of(db,task),'scope_conditions':task.scope_conditions or [],
+        'vehicle_step_key':task.vehicle_step_key,'group_label':group_of(db,task),
         'sort_order':task.sort_order or 0,
         'check_items':definition_data(db,task)}
 
@@ -341,6 +346,6 @@ def portable_modules(db,project_id):
             'phase_name':phase.name if phase else '历史未分类','phase_color':phase.color if phase else '#1890ff',
             'phase_sort_order':phase.sort_order if phase else 0,'phase_entry_criteria':phase.entry_criteria if phase else '',
             'phase_exit_criteria':phase.exit_criteria if phase else '', 'category':'core','is_selected':True,
-            'sort_order':task.sort_order or 0,'preparation_conditions':task.scope_conditions or [],'tasks':[]})
+            'sort_order':task.sort_order or 0,'tasks':[]})
         envelope['tasks'].append(portable_definition(db,task))
     return list(groups.values())

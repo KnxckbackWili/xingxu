@@ -17,7 +17,6 @@ import hashlib
 import base64
 import json
 import logging
-import time
 import urllib.request
 import urllib.error
 import urllib.parse
@@ -281,7 +280,7 @@ def deliver_outbox(db, batch_size: Optional[int] = None, now=None) -> dict:
     状态机：pending → delivering → delivered / failed(→重试) / dead(超限) / disabled(无渠道)。
     退避：attempts² × NOTIFY_RETRY_BASE_SECONDS（1 次后 1min，2 次后 4min，3 次后 9min…）。
     """
-    from app.models import NotificationOutbox, Project
+    from app.models import NotificationOutbox
 
     now = now or utcnow()
     batch_size = batch_size or getattr(config, "NOTIFY_DELIVERY_BATCH_SIZE", 50)
@@ -312,7 +311,6 @@ def deliver_outbox(db, batch_size: Optional[int] = None, now=None) -> dict:
         }
     delivered = failed = dead = disabled = 0
     for row in rows:
-        project = db.get(Project, row.project_id) if row.project_id else None
         row.status = "delivering"
         row.attempts = (row.attempts or 0) + 1
         db.flush()

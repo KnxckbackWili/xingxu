@@ -211,13 +211,7 @@ def test_state_corruption_fails_closed_and_symlink_config_is_rejected(tmp_path):
         updates.get_status()
 
 
-def test_route_rejects_non_admin_even_with_permission_grants(client, pm_headers, admin_headers):
-    from app.db import SessionLocal
-    from app.models import User
-    with SessionLocal() as db:
-        user = db.query(User).filter_by(username="pm").one()
-        user.permission_overrides = {"system.backups.create": True, "system.updates.manage": True}
-        db.commit()
+def test_route_rejects_non_admin(client, pm_headers, admin_headers):
     assert client.get("/api/system/updates", headers=pm_headers).status_code == 403
     assert client.get("/api/system/updates", headers=admin_headers).status_code == 200
 

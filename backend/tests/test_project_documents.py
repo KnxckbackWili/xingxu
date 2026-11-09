@@ -41,7 +41,7 @@ def test_new_project_snapshot_platform_and_real_event_seams(client,admin_headers
     assert client.get(f'/api/projects/{pid}/procurements',headers=admin_headers).json()['items']==[]
 
 
-def test_real_file_multi_submission_versions_waive_and_optional_review(client,admin_headers):
+def test_real_file_multi_submission_versions_and_waive(client,admin_headers):
     p=create(client,admin_headers);pid=p['id'];docs=view(client,admin_headers,pid)['documents'][:2];ids=[row['id'] for row in docs]
     assert client.post(f'/api/projects/{pid}/documents/submit',headers=admin_headers,json={'document_ids':ids}).status_code==422
     assert client.post(f'/api/projects/{pid}/documents/submit',headers=admin_headers,json={'document_ids':ids,'attachment_id':'missing'}).status_code==400
@@ -60,16 +60,6 @@ def test_real_file_multi_submission_versions_waive_and_optional_review(client,ad
     assert client.put(path,headers=admin_headers,json=versioned(current["id"], {'status':'waived','reason':' '}, 'ProjectDocument')).status_code==400
     waived=client.put(path,headers=admin_headers,json={'status':'waived','reason':'客户明确无需此项','version':current['version']})
     assert waived.status_code==200 and waived.json()['status']=='waived'
-    second=next(row for row in view(client,admin_headers,pid)['documents'] if row['id']==ids[1])
-    review=client.post(f'/api/projects/{pid}/documents/{second["id"]}/versions/{second["versions"][0]["id"]}/review',headers=admin_headers,json={'decision':'rejected','note':'补充说明'})
-    assert review.status_code==400 and '自己审核' in review.text
-    created=client.post('/api/users',headers=admin_headers,json={'username':'reviewer','display_name':'另一审核人','password':'Review123!','role':'admin'})
-    assert created.status_code==200,created.text
-    token=client.post('/api/auth/login',json={'username':'reviewer','password':'Review123!'}).json()['access_token']
-    reviewer={'Authorization':'Bearer '+token}
-    review=client.post(f'/api/projects/{pid}/documents/{second["id"]}/versions/{second["versions"][0]["id"]}/review',headers=reviewer,json={'decision':'rejected','note':'补充说明'})
-    assert review.status_code==200,review.text
-    assert next(row for row in view(client,admin_headers,pid)['documents'] if row['id']==ids[1])['status']=='submitted'
 
 
 def test_unclassified_files_entity_filter_and_cross_project_atomicity(client,admin_headers):
@@ -196,23 +186,6 @@ def test_procurement_extra_patch_preserves_unknown_metadata_and_invalidates_chan
     assert updated.status_code==200,updated.text
     assert updated.json()['extra']=={'quantity':2,'spec':'原规格','unit':'套','historical_reference':{'keep':'原订单'}}
     assert updated.json()['status']=='pending' and updated.json()['completed_at'] is None
-
-
-def test_readonly_project_member_can_read_documents_without_writing(client,admin_headers):
-    from app.db import SessionLocal
-    from app.models import User,Project
-    pid=create(client,admin_headers)['id'];document=view(client,admin_headers,pid)['documents'][0]
-    assert upload(client,admin_headers,pid,[document['id']]).status_code==200
-    result=client.post('/api/users',headers=admin_headers,json={'username':'reader','display_name':'只读成员','password':'Review123!','role':'readonly'})
-    assert result.status_code==200,result.text
-    with SessionLocal() as db:
-        reader=db.query(User).filter_by(username='reader').one()
-    token=client.post('/api/auth/login',json={'username':'reader','password':'Review123!'}).json()['access_token'];headers={'Authorization':'Bearer '+token}
-    state=view(client,headers,pid);assert not state['permissions']['submit'] and not state['permissions']['manage']
-    submitted=next(row for row in state['documents'] if row['id']==document['id'])
-    assert client.get('/api'+submitted['latest_version']['download_url'],headers=headers).content==b'evidence'
-    assert upload(client,headers,pid,[document['id']]).status_code==403
-    assert client.put(f'/api/projects/{pid}/documents/{document["id"]}',headers=headers,json=versioned(document["id"], {'status':'waived','reason':'只读不能写'}, 'ProjectDocument')).status_code==403
 
 
 def rule_body(row,**changes):

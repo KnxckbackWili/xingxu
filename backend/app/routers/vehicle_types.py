@@ -109,7 +109,7 @@ def list_all_vehicle_types(
 ):
     """管理员或获查看/维护授权的成员读取全部车型（含已停用），供管理界面维护。"""
     from app.services.system_permissions import has_permission
-    if not (has_permission(user, "system.vehicle_types.view", default=user.role == "admin") or has_permission(user, "system.vehicle_types.manage", default=user.role == "admin")):
+    if not (has_permission(user, "system.vehicle_types.view") or has_permission(user, "system.vehicle_types.manage")):
         raise HTTPException(403, "没有车型管理查看权限")
     rows = db.query(VehicleType).order_by(VehicleType.sort_order, VehicleType.name).all()
     return [vehicle_type_dict(t) for t in rows]

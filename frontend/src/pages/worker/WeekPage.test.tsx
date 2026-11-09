@@ -59,11 +59,11 @@ it('资料上传携带精确期次ID到断点队列', async () => {
   await waitFor(() => expect(mocks.upload).toHaveBeenCalledWith('project-1', { file, documentIds: ['document-week-1'] }))
 })
 
-it('本人记录分别展示完成日期、登记时间和协助对象', async () => {
-  mocks.get.mockResolvedValue({ data: { records: [{ id: 'r1', project_id: 'project-1', project_name: '项目甲', kind: 'work', target_id: 'work-1', target_name: '现场网络核对', step_key: '', completion_date: '2026-10-25', recorded_at: '2026-10-27T03:00:00Z', actor_name: '本人', assisted_user_name: '同事乙', is_done: true, note: '原始附注', action: 'record', version: 1, can_edit: true, can_retract: true, earliest: '2026-10-19', latest: '2026-10-27', timezone: 'Asia/Shanghai' }] } })
+it('本人记录分别展示完成日期和登记时间', async () => {
+  mocks.get.mockResolvedValue({ data: { records: [{ id: 'r1', project_id: 'project-1', project_name: '项目甲', kind: 'work', target_id: 'work-1', target_name: '现场网络核对', step_key: '', completion_date: '2026-10-25', recorded_at: '2026-10-27T03:00:00Z', actor_name: '本人', is_done: true, note: '原始附注', action: 'record', version: 1, can_edit: true, can_retract: true, earliest: '2026-10-19', latest: '2026-10-27', timezone: 'Asia/Shanghai' }] } })
   render(<MemoryRouter><RecordsPage /></MemoryRouter>)
   expect(await screen.findByText('完成日期 2026-10-25')).toBeInTheDocument()
-  expect(screen.getByText(/登记时间 2026-10-27T03:00:00Z/)).toHaveTextContent('协助 同事乙')
+  expect(screen.getByText(/登记时间 2026-10-27T03:00:00Z/)).toBeVisible()
   expect(screen.getByRole('button', { name: /撤\s*回/ })).toBeInTheDocument()
 })
 

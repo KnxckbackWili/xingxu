@@ -368,7 +368,7 @@ def validate_sqlite_member(archive, directory=None):
             try:
                 if connection.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
                     raise BackupError("备份数据库完整性检查失败")
-                required = {"users": {"id", "username", "password_hash", "role", "is_active"}, "projects": {"id", "name"}, "tasks": {"id", "project_id", "module_id", "name"}}
+                required = {"users": {"id", "username", "password_hash", "role", "is_active"}, "projects": {"id", "name"}, "tasks": {"id", "project_id", "name"}}
                 for table, columns in required.items():
                     actual = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
                     if not columns.issubset(actual):

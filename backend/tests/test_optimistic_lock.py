@@ -29,19 +29,17 @@ def _project_with_tree(client, pm_headers):
 
 def _first_check_item(tree):
     for phase in tree:
-        for mod in phase.get("modules", []):
-            for t in mod.get("tasks", []):
-                items = t.get("check_items") or []
-                if items:
-                    return t, items[0]
+        for t in phase.get("work_items", []):
+            items = t.get("check_items") or []
+            if items:
+                return t, items[0]
     return None, None
 
 
 def _first_task(tree):
     for phase in tree:
-        for mod in phase.get("modules", []):
-            for t in mod.get("tasks", []):
-                return t
+        for t in phase.get("work_items", []):
+            return t
     return None
 
 

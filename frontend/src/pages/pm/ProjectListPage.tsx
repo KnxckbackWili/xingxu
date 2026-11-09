@@ -44,7 +44,7 @@ export default function ProjectListPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { user } = useAuth()
-  const actor = JSON.stringify([user?.id, user?.role, user?.permission_version, user?.permission_overrides, user?.system_permissions])
+  const actor = JSON.stringify([user?.id, user?.role, user?.system_permissions])
   const currentActor = useRef(actor)
   currentActor.current = actor
   const projects = projectData.actor === actor ? projectData.projects : []

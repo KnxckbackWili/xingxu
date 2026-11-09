@@ -45,24 +45,6 @@ services:
       - HEALTH_FAIL_THRESHOLD=${HEALTH_FAIL_THRESHOLD:-3}
       - HEALTH_WEB_RESTART_LIMIT=${HEALTH_WEB_RESTART_LIMIT:-2}
       - HEALTH_START_GRACE=${HEALTH_START_GRACE:-180}
-      # 可选：服务端 AI 项目助手；三家可同时配置，密钥绝不会发给浏览器。
-      - AI_PROVIDER=${AI_PROVIDER:-deepseek}
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
-      - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-v4-flash}
-      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
-      - MIMO_API_KEY=${MIMO_API_KEY:-}
-      - MIMO_MODEL=${MIMO_MODEL:-mimo-v2.5-pro}
-      - MIMO_BASE_URL=${MIMO_BASE_URL:-https://api.xiaomimimo.com/v1}
-      - MINIMAX_API_KEY=${MINIMAX_API_KEY:-}
-      - MINIMAX_MODEL=${MINIMAX_MODEL:-MiniMax-M2.7}
-      - MINIMAX_BASE_URL=${MINIMAX_BASE_URL:-https://api.minimaxi.com/v1}
-      - AI_PROVIDER_NAME=${AI_PROVIDER_NAME:-自建兼容服务}
-      - AI_BASE_URL=${AI_BASE_URL:-}
-      - AI_MODEL=${AI_MODEL:-}
-      - AI_API_KEY=${AI_API_KEY:-}
-      - AI_ALLOW_NO_KEY=${AI_ALLOW_NO_KEY:-0}
-      - AI_TIMEOUT_SECONDS=${AI_TIMEOUT_SECONDS:-180}
-      - INBOX_AUTO_ORGANIZE=${INBOX_AUTO_ORGANIZE:-0}
     volumes:
       - ${DATA_PATH:-../data}:/app/data
     init: true

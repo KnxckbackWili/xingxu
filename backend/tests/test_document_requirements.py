@@ -44,8 +44,7 @@ def test_default_carries_every_frozen_company_document_and_copies_keep_codes(cli
     rule_keys = ('name', 'required', 'scope', 'platform', 'timing_type', 'timing_event', 'timing_offset_hours', 'timing_weekday', 'trigger_type')
     for seed in seeds:
         assert all(by_code[seed['code']][key] == seed[key] for key in rule_keys if key in seed), seed['code']
-    assert all(by_code[code]['confidential_default'] and by_code[code]['external_never_visible'] for code in ('6.11.6a', '6.11.6b', '6.11.6c'))
-    assert not any(row['external_visible_default'] for row in rows)
+    assert all(by_code[code]['confidential_default'] for code in ('6.11.6a', '6.11.6b', '6.11.6c'))
     assert all(row['source_metadata'] and row['source_metadata'].get('template_item_id') for row in rows)
     result = client.post('/api/templates', headers=admin_headers, json={'name': '资料完整副本'})
     assert result.status_code == 200, result.text
@@ -63,8 +62,6 @@ def test_default_carries_every_frozen_company_document_and_copies_keep_codes(cli
     {'timing_type': 'after_event', 'timing_event': 'ship', 'timing_offset_hours': 1.5},
     {'timing_type': 'on_trigger', 'trigger_type': 'bad', 'timing_offset_hours': 0},
     {'timing_type': 'on_demand', 'timing_weekday': 7}, {'stage_key': '3'}, {'code': '6 99'}, {'code': '6..9'},
-    {'confidential_default': True, 'external_visible_default': True},
-    {'code': '6.11.6b', 'external_visible_default': True},
     {'is_group': True, 'required': False, 'scope': None, 'timing_type': None, 'timing_event': 'ship'},
 ])
 def test_invalid_rules_fail_before_writes(changes):

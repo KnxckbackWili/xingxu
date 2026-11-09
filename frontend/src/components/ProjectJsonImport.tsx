@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, Descriptions, Modal, Space, Typography, message } from 'antd'
-import { DownloadOutlined, UploadOutlined } from '@ant-design/icons'
+import { UploadOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { api, errMsg } from '../api/client'
 import { useAuth } from '../stores/auth'
@@ -12,7 +12,7 @@ import { useSubmitLock } from '../hooks/useSubmitLock'
 /** Import is owned by the advanced export section; account/project changes discard its preview. */
 export default function ProjectJsonImport({ projectId }: { projectId: string }) {
   const { user } = useAuth()
-  const scope = JSON.stringify([projectId,user?.id,user?.role,user?.permission_version,user?.permission_overrides,user?.system_permissions])
+  const scope = JSON.stringify([projectId,user?.id,user?.role,user?.system_permissions])
   return <ImportForm key={scope} allowed={hasSystemPermission(user, 'system.import.create')} />
 }
 function ImportForm({ allowed: canImport }: { allowed: boolean }) {
@@ -30,13 +30,6 @@ function ImportForm({ allowed: canImport }: { allowed: boolean }) {
   const [importPayload, setImportPayload] = useState<any>(null)
   const [importPreview, setImportPreview] = useState<any>(null)
   const [importing, setImporting] = useState(false)
-  const downloadImportTemplate = async () => {
-    try {
-      const response = await api.get('/projects/import/template', { responseType: 'blob', timeout: 600000 })
-      const url = URL.createObjectURL(response.data); const link = document.createElement('a'); link.href = url; link.download = '项目导入模板.json'; link.click(); URL.revokeObjectURL(url)
-    } catch (error) { message.error(errMsg(error)) }
-  }
-
   const previewImport = async (file: File) => {
     if (!canImport || importCreating.current) return false
     const request = ++importSequence.current
@@ -109,7 +102,6 @@ function ImportForm({ allowed: canImport }: { allowed: boolean }) {
   if (!canImport) return null
   return <>
     <Space wrap>
-      <Button icon={<DownloadOutlined />} onClick={() => void downloadImportTemplate()}>下载导入模板</Button>
       <Button icon={<UploadOutlined />} loading={importing || validatingImport} disabled={importing || validatingImport} onClick={() => importInputRef.current?.click()}>导入 JSON 新建项目</Button>
       <Typography.Text type="secondary">先预检再确认；新项目的交付证据与审核状态需重新提交。</Typography.Text>
       <input ref={importInputRef} type="file" accept=".json,application/json" disabled={importing || validatingImport} hidden onChange={event => { const file=event.target.files?.[0]; if(file) void previewImport(file); event.target.value='' }} />

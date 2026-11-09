@@ -25,7 +25,7 @@ const NOTIFICATIONS = [
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(isAuthed).mockReturnValue(true)
-  useAuth.setState({ user: { id: 'u-pm', role: 'pm', username: 'pm', display_name: '项目经理', phone: '', email: '', is_active: true }, loading: false, meError: false })
+  useAuth.setState({ user: { id: 'u-pm', role: 'employee', username: 'pm', display_name: '项目经理', phone: '', email: '', is_active: true }, loading: false, meError: false })
   vi.mocked(api.get).mockImplementation(async (url: string) => {
     if (url === '/notifications') return { data: NOTIFICATIONS }
     if (url === '/notifications/unread-count') return { data: { count: 1 } }
@@ -47,22 +47,6 @@ function LocationProbe() {
   return <output data-testid="route-location">{location.pathname + location.search + location.hash}</output>
 }
 
-it('permits an explicitly granted field account to directly read system backups', async () => {
-  useAuth.setState({ user: { id: 'member', role: 'worker', username: 'member', display_name: '成员', phone: '', email: '', is_active: true, system_permissions: ['system.backups.read'] } })
-  vi.mocked(api.get).mockImplementation(async (url: string) => ({ data: url === '/system/backups' ? { items: [], restore_pending: false, database: 'postgresql', web_restore_supported: false } : url.includes('unread-count') ? { count: 0 } : [] }))
-  renderApp('/pm/backups')
-  await waitFor(() => expect(api.get).toHaveBeenCalledWith('/system/backups'), { timeout: 8000 })
-  expect(screen.queryByText('403')).toBeNull()
-  expect(screen.queryByRole('button', { name: /立即备份/ })).toBeNull()
-}, 15000)
-
-it('blocks a revoked module before reading it and reserves permission administration to real admins', async () => {
-  useAuth.setState({ user: { id: 'member', role: 'worker', username: 'member', display_name: '成员', phone: '', email: '', is_active: true, system_permissions: ['permission.manage'], permission_overrides: { 'permission.manage': true } } })
-  renderApp('/pm/permissions')
-  expect(await screen.findByText('403')).toBeVisible()
-  expect(api.get).not.toHaveBeenCalledWith('/permissions/catalog')
-})
-
 it('opens software updates for a real admin even without delegated module permissions', async () => {
   useAuth.setState({ user: { id: 'admin', role: 'admin', username: 'admin', display_name: '管理员', phone: '', email: '', is_active: true, system_permissions: [] } })
   vi.mocked(api.get).mockImplementation(async (url: string) => ({ data: url === '/system/updates' ? {
@@ -76,24 +60,17 @@ it('opens software updates for a real admin even without delegated module permis
   expect(api.post).not.toHaveBeenCalled()
 })
 
-it.each([{ role: 'pm', is_active: true }, { role: 'admin', is_active: false }] as const)('blocks update URL access for an unauthorized account: %o', async account => {
-  useAuth.setState({ user: { id: 'blocked', ...account, username: 'blocked', display_name: '成员', phone: '', email: '', system_permissions: ['system.updates.manage'], permission_overrides: { 'system.updates.manage': true } } })
+it.each([{ role: 'employee', is_active: true }, { role: 'admin', is_active: false }] as const)('blocks update URL access for an unauthorized account: %o', async account => {
+  useAuth.setState({ user: { id: 'blocked', ...account, username: 'blocked', display_name: '成员', phone: '', email: '' } })
   renderApp('/pm/system-updates')
   expect(await screen.findByText('403', {}, { timeout: 5000 })).toBeVisible()
   expect(api.get).not.toHaveBeenCalledWith('/system/updates')
 })
 
-it('does not use an administrator role to bypass an empty effective permission list', async () => {
-  useAuth.setState({ user: { id: 'admin', role: 'admin', username: 'admin', display_name: '管理员', phone: '', email: '', is_active: true, system_permissions: [] } })
-  renderApp('/pm/backups')
-  expect(await screen.findByText('403')).toBeVisible()
-  expect(api.get).not.toHaveBeenCalledWith('/system/backups')
-})
-
 it('preserves an unauthenticated deep link including query and fragment through login', async () => {
   const target = '/pm/messages?qa=original-target&status=unread#main-content'
   vi.mocked(isAuthed).mockReturnValue(false)
-  const user: User = { id: 'u-pm', role: 'pm', username: 'pm', display_name: '项目经理', phone: '', email: '', is_active: true }
+  const user: User = { id: 'u-pm', role: 'employee', username: 'pm', display_name: '项目经理', phone: '', email: '', is_active: true }
   useAuth.setState({ user: null, login: async () => {
     vi.mocked(isAuthed).mockReturnValue(true)
     useAuth.setState({ user })
@@ -113,7 +90,7 @@ it('preserves an unauthenticated deep link including query and fragment through 
 
 it('retains forbidden-route enforcement after returning to an authorized internal next path', async () => {
   vi.mocked(isAuthed).mockReturnValue(false)
-  const user: User = { id: 'u-pm', role: 'pm', username: 'pm', display_name: '项目经理', phone: '', email: '', is_active: true }
+  const user: User = { id: 'u-pm', role: 'employee', username: 'pm', display_name: '项目经理', phone: '', email: '', is_active: true }
   useAuth.setState({ user: null, login: async () => {
     vi.mocked(isAuthed).mockReturnValue(true)
     useAuth.setState({ user })
@@ -198,16 +175,10 @@ it('administrators can open backup management without invoking a backup action',
   await waitFor(() => expect(api.get).toHaveBeenCalledWith('/system/backups'), { timeout: 5000 })
   expect(api.post).not.toHaveBeenCalled()
 })
-it.each(['pm', 'worker', 'intern'] as const)('%s cannot directly open administrator backups', async role => {
+it.each(['employee'] as const)('%s cannot directly open administrator backups', async role => {
   useAuth.setState({ user: { id: 'ordinary', role, username: 'ordinary', display_name: '普通用户', phone: '', email: '', is_active: true }, loading: false, meError: false })
   renderApp('/pm/backups')
   expect(await screen.findByText('403', {}, { timeout: 5000 })).toBeInTheDocument()
   expect(api.get).not.toHaveBeenCalledWith('/system/backups')
 })
 
-it.each(['worker', 'intern'] as const)('%s cannot use shared project routes to enter global staffing or inventory', async role => {
-  useAuth.setState({ user: { id: 'member', role, username: 'member', display_name: '项目成员', phone: '', email: '', is_active: true }, loading: false, meError: false })
-  renderApp('/pm/inventory')
-  expect(await screen.findByText('403', {}, { timeout: 5000 })).toBeInTheDocument()
-  expect(api.get).not.toHaveBeenCalledWith('/inventory/overview')
-})

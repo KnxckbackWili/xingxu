@@ -5,21 +5,19 @@ from datetime import date
 from app.time_utils import project_today
 from uuid import uuid4
 from app.db import SessionLocal
-from app.models import Task, Phase, Module, CheckItem, VehicleCheckDefinition, VehicleUnit, VehicleProgress, ChangeLog, Project
+from app.models import Task, Phase, CheckItem, VehicleCheckDefinition, VehicleUnit, VehicleProgress, ChangeLog, Project
 from app.services.vehicle_checks import snapshot_definitions, generate_for_units
 from tests.test_vehicle_progress import setup_fleet, write
 
 
-def work(pid, ids, *, key='arrival_inspection', safety=True, legacy=False, types=None):
+def work(pid, ids, *, key='arrival_inspection', safety=True, types=None):
     with SessionLocal() as db:
         p=Phase(project_id=pid,name='检查工作',sort_order=100);db.add(p);db.flush()
-        m=Module(project_id=pid,phase_id=p.id,name='逐车检查');db.add(m);db.flush()
-        t=Task(project_id=pid,module_id=m.id,name='实车检查',quantity_type='per_vehicle',vehicle_step_key=key,applicable_vehicle_types=types or [])
+        t=Task(project_id=pid,phase_id=p.id,name='实车检查',quantity_type='per_vehicle',vehicle_step_key=key,applicable_vehicle_types=types or [])
         db.add(t);db.flush()
         c=CheckItem(id=str(uuid4()),task_id=t.id,project_id=pid,name='急停测试',is_required=True,is_safety_critical=safety,version=0)
-        if legacy:db.add(c);db.flush()
         snapshot_definitions(db,t,[c])
-        if not legacy:generate_for_units(db,pid,[db.get(VehicleUnit,i) for i in ids],t)
+        generate_for_units(db,pid,[db.get(VehicleUnit,i) for i in ids],t)
         db.commit();return t.id
 
 
@@ -71,27 +69,6 @@ def test_pending_never_covered_failed_only_exact_current_snapshot(client,pm_head
     assert write(client,pm_headers,pid,[ids[0]],version=1).status_code==400
 
 
-def test_new_unit_pending_legacy_facts_unchanged_explicit_review_idempotent(client,pm_headers):
-    pid,ids=setup_fleet(client,pm_headers,1);tid=work(pid,ids,legacy=True)
-    with SessionLocal() as db:
-        c=db.query(CheckItem).filter_by(task_id=tid).one();c.is_done=True;c.done_by='original-actor';db.commit()
-    assert checks(client,pm_headers,pid,ids[0])[0]['scope']=='legacy_task'
-    assert write(client,pm_headers,pid,ids).status_code==200
-    r=client.post(f'/api/projects/{pid}/vehicle-units',headers=pm_headers,json={'asset_code':'REAL-NEW'})
-    assert r.status_code==200,r.text
-    new=r.json()['id'];actual=next(x for x in checks(client,pm_headers,pid,new) if x['scope']=='vehicle')
-    assert not actual['is_done'] and not actual['failed'] and actual['done_by'] is None and actual['done_at'] is None
-    assert actual['definition_version']==1 and actual['vehicle_step_key']=='arrival_inspection'
-    assert write(client,pm_headers,pid,[new]).status_code==400
-    url=f'/api/projects/{pid}/tasks/{tid}/vehicle-checks/generate'
-    assert client.post(url,headers=pm_headers,json={'vehicle_unit_ids':ids,'reason':' '}).status_code==400
-    assert client.post(url,headers=pm_headers,json={'vehicle_unit_ids':ids,'reason':'存量实车复核'}).json()['created']==1
-    assert client.post(url,headers=pm_headers,json={'vehicle_unit_ids':ids,'reason':'幂等核对'}).json()['created']==0
-    with SessionLocal() as db:
-        assert db.query(CheckItem).filter_by(task_id=tid,vehicle_unit_id=None).one().is_done
-        assert db.query(ChangeLog).filter_by(project_id=pid,entity_type='vehicle_check',action='generate_review').count()==2
-
-
 def test_real_step_link_required_qualified_facts_cannot_rebind(client,pm_headers):
     pid,ids=setup_fleet(client,pm_headers,1);tid=work(pid,ids,key=None)
     row=checks(client,pm_headers,pid,ids[0])[0]
@@ -103,16 +80,6 @@ def test_real_step_link_required_qualified_facts_cannot_rebind(client,pm_headers
     assert r.status_code==200 and r.json()['vehicle_step_key']=='arrival_inspection',r.text
     assert mark(client,pm_headers,pid,checks(client,pm_headers,pid,ids[0])[0],is_done=True).status_code==200
     assert client.put(url,headers=pm_headers,json={'vehicle_step_key':'go_live','version':1}).status_code==400
-
-
-def test_legacy_null_safety_still_gates_exact_step(client,pm_headers):
-    pid,ids=setup_fleet(client,pm_headers,1);tid=work(pid,ids,legacy=True)
-    row=checks(client,pm_headers,pid,ids[0])[0]
-    assert row['vehicle_unit_id'] is None and row['scope']=='legacy_task'
-    assert write(client,pm_headers,pid,ids).status_code==400
-    assert mark(client,pm_headers,pid,row,is_done=True).status_code==200
-    assert write(client,pm_headers,pid,ids).status_code==200
-    with SessionLocal() as db:assert db.query(CheckItem).filter_by(task_id=tid,vehicle_unit_id=None).count()==1
 
 
 def test_portable_and_clone_only_requirements_no_qualification(client,pm_headers):
@@ -230,20 +197,16 @@ def test_type_change_adds_only_newly_applicable_safety_checks(client,pm_headers)
     from app.models import VehicleType
     with SessionLocal() as db:
         target_type=db.query(VehicleType).filter(VehicleType.is_enabled.is_(True),VehicleType.name!='潜伏式').first().name
-    tid=work(pid,ids,types=[target_type]);legacy=work(pid,ids,legacy=True)
+    tid=work(pid,ids,types=[target_type])
     with SessionLocal() as db:
         vid=db.get(VehicleUnit,ids[0]).vehicle_id
-        original=db.query(CheckItem).filter_by(task_id=legacy).one();original.is_done=True;db.commit()
         assert db.query(CheckItem).filter_by(task_id=tid).count()==0
-        db.commit()
     r=client.put(f'/api/projects/{pid}/vehicles/{vid}',headers=pm_headers,json={'vehicle_type':target_type})
     assert r.status_code==200,r.text
     row=next(c for c in checks(client,pm_headers,pid,ids[0]) if c['task_id']==tid)
     assert row['vehicle_unit_id']==ids[0] and not row['is_done'] and row['is_safety_critical']
     assert write(client,pm_headers,pid,ids).status_code==400
     with SessionLocal() as db:
-        assert db.query(CheckItem).filter_by(task_id=legacy,vehicle_unit_id=None).one().is_done
-        assert db.query(CheckItem).filter(CheckItem.task_id==legacy,CheckItem.vehicle_unit_id.isnot(None)).count()==0
         assert db.query(ChangeLog).filter_by(project_id=pid,action='generate_scope').count()==1
     assert mark(client,pm_headers,pid,row,is_done=True).status_code==200
     assert write(client,pm_headers,pid,ids).status_code==200
@@ -258,16 +221,3 @@ def test_deleted_type_cannot_prove_real_unit_exempt_from_safety(client,pm_header
     assert row['vehicle_unit_id']==ids[0] and not row['is_done']
     assert write(client,pm_headers,pid,ids).status_code==400
 
-
-def test_retired_preparation_reminders_do_not_gain_vehicle_obligations(client,pm_headers):
-    pid,ids=setup_fleet(client,pm_headers,1);tid=work(pid,ids,legacy=True)
-    with SessionLocal() as db:
-        task=db.get(Task,tid);module=db.get(Module,task.module_id);db.get(Phase,module.phase_id).name='项目准备';db.commit()
-    assert client.put(f'/api/projects/{pid}/tasks/{tid}',headers=pm_headers,json={'vehicle_step_key':'arrival_inspection','version':0}).status_code==400
-    assert checks(client,pm_headers,pid,ids[0])==[]
-    r=client.post(f'/api/projects/{pid}/vehicle-units',headers=pm_headers,json={'asset_code':'REAL-NEW-SCOPE'})
-    assert r.status_code==200,r.text
-    with SessionLocal() as db:
-        rows=db.query(CheckItem).filter_by(task_id=tid).all()
-        assert len(rows)==1 and rows[0].vehicle_unit_id is None and not rows[0].is_done
-    assert write(client,pm_headers,pid,ids).status_code==200

@@ -38,8 +38,7 @@ export default function LoginPage() {
 
   const arrive = (user: User) => {
     message.success(`欢迎，${user.display_name}`)
-    const landing = systemHomeRoute(user)
-    navigate(safeNext || (landing === '/pm/dashboard' ? '/pm' : landing === '/worker/today' ? '/worker' : landing), { replace: true })
+    navigate(safeNext || systemHomeRoute(user), { replace: true })
   }
   const completed = (result: AuthSession) => {
     setProof('')

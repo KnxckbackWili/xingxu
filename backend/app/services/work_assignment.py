@@ -14,14 +14,14 @@ def create_repair_work(db, project, actor, event, unit, notes):
         if task.manually_completed:
             raise HTTPException(400, '该维修工作已完成，请先按真实情况重新打开工作')
         return task, False
-    if not has_permission(actor, 'project.manage_plan', default=True):
+    if not has_permission(actor, 'project.manage_plan'):
         raise HTTPException(403, '此故障尚无工作项，需要工作计划维护权限明确建立')
     authorize_project(actor, project, C_PLAN)
     phase = db.query(Phase).filter_by(project_id=project.id, name='现场追加工作').first()
     if phase is None:
         phase = Phase(project_id=project.id, name='现场追加工作', sort_order=90, color='#c07130')
         db.add(phase); db.flush()
-    task = Task(project_id=project.id, phase_id=phase.id, module_id=None,
+    task = Task(project_id=project.id, phase_id=phase.id,
         group_label='车辆维修', name=f'维修 {unit.asset_code} · {event.title}'[:200], description=notes,
         quantity_type='fixed', source_vehicle_event_id=event.id)
     db.add(task); db.flush()

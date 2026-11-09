@@ -110,28 +110,6 @@ MAX_BACKUP_UPLOAD_MB=2048
 MAX_BACKUP_EXPANDED_MB=8192
 ```
 
-### AI 项目整理助手（可选）
-
-系统的分域 AI 助手统一使用 OpenAI Chat Completions 兼容协议，内置 DeepSeek、小米 MiMo、MiniMax 三组预设。项目建档、排程研判、问题分诊、现场物品和交接归档分别使用独立 Skill，并显示读取、调用、解析、校验进度。未配置时不影响任何手工业务。
-
-Unraid 容器模板中至少新增：
-
-```dotenv
-AI_PROVIDER=deepseek
-DEEPSEEK_API_KEY=你的 DeepSeek 密钥
-MIMO_API_KEY=你的小米 MiMo 密钥
-MINIMAX_API_KEY=你的 MiniMax 密钥
-AI_TIMEOUT_SECONDS=180
-```
-
-只需填写实际使用的密钥。默认模型分别为 `deepseek-v4-flash`、`mimo-v2.5-pro`、`MiniMax-M2.7`，可用 `DEEPSEEK_MODEL`、`MIMO_MODEL`、`MINIMAX_MODEL` 覆盖。小米 Token Plan 用户可设置 `MIMO_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1`。
-
-自建服务设置 `AI_PROVIDER=custom`、`AI_PROVIDER_NAME`、`AI_BASE_URL`、`AI_MODEL`、`AI_API_KEY`。如果内网服务不校验密钥，可将 `AI_API_KEY` 留空并设置 `AI_ALLOW_NO_KEY=1`。系统会请求 API 根路下的 `/chat/completions`。
-
-密钥只在后端读取，不会返回前端；上传原文不落盘，但提取后的文字会发送给页面中选择的 AI 服务，应按你与该服务商的数据协议使用。
-
-公网部署不要在前端代码、导入 JSON、Gitea 仓库或截图中填写密钥。如需 Docker Secret，可改用 `AI_API_KEY_FILE=/run/secrets/ai_api_key`。
-
 `SECRET_KEY` 可留空，系统会在数据目录生成并持久化随机密钥。不要把密码或密钥提交到 Git。
 
 开始部署并检查：
@@ -201,9 +179,8 @@ COOKIE_SECURE=1
 
 **为什么这样可行（本次修复的落点）：**
 
-1. **SSE 流式无需在 NPM 手动关缓冲**：AI 对话流式是 `text/event-stream`。nginx/NPM 默认 `proxy_buffering on` 会把整段 SSE 缓冲、流结束才吐出，表现为"反代后 AI 聊天挂起"。后端已在 SSE 响应加 `X-Accel-Buffering: no`（`backend/app/routers/ai_projects.py`），nginx/NPM 自动即时转发，无需在 NPM 面板改任何缓冲设置。
-2. **代理头默认不信任任意来源（T024 加固）**：`FORWARDED_ALLOW_IPS` 默认**为空**，容器内 uvicorn 因此不信任代理头（原生启动且完全未设置该环境变量时，Uvicorn 默认仅信任 `127.0.0.1`）。直连 8002 的局域网/外部客户端伪造 `X-Forwarded-For/Proto` 会被一律忽略（登录审计 IP 与登录限流均使用真实对端，伪造头无法绕过限流）。需要 NPM 反代拿到真实客户端 IP 与 https scheme 时，将 `FORWARDED_ALLOW_IPS` 显式配置为 NPM 可信地址/网段（见下方「T024 配置」）。
-3. **完整链路已验证**：临时反代容器（独立 bridge 网络 → 宿主机 `host.docker.internal:8002`）实测——页面加载、深链刷新、登录、登录后 API、SSE 流式（含 `X-Accel-Buffering: no`）全部 200；宿主机局域网 IP（如 `192.168.1.136:8002`）直连同样 200。
+1. **代理头默认不信任任意来源（T024 加固）**：`FORWARDED_ALLOW_IPS` 默认**为空**，容器内 uvicorn 因此不信任代理头（原生启动且完全未设置该环境变量时，Uvicorn 默认仅信任 `127.0.0.1`）。直连 8002 的局域网/外部客户端伪造 `X-Forwarded-For/Proto` 会被一律忽略（登录审计 IP 与登录限流均使用真实对端，伪造头无法绕过限流）。需要 NPM 反代拿到真实客户端 IP 与 https scheme 时，将 `FORWARDED_ALLOW_IPS` 显式配置为 NPM 可信地址/网段（见下方「T024 配置」）。
+2. **完整链路已验证**：临时反代容器（独立 bridge 网络 → 宿主机 `host.docker.internal:8002`）实测——页面加载、深链刷新、登录、登录后 API、SSE 流式（含 `X-Accel-Buffering: no`）全部 200；宿主机局域网 IP（如 `192.168.1.136:8002`）直连同样 200。
 4. **常见误区**：NPM 的 Forward Hostname 不要填 `127.0.0.1`（NPM 容器自己的回环地址，会连接拒绝）；应填宿主机局域网 IP、`host.docker.internal`，或同网络容器名。容器内服务间调用不受影响（`NO_PROXY=*` 已兜底）。
 
 **HTTPS 反代必须同步设 `COOKIE_SECURE=1`（HYPE-99）**：浏览器会话已改为 HttpOnly Cookie 承载（不再把令牌写进 localStorage）。NPM 在容器外终止 HTTPS，容器内 uvicorn 看到的仍是 http——`FORCE_HTTPS=1` 负责 HTTPS 重定向和 HSTS，`COOKIE_SECURE=1` 单独负责 Set-Cookie 的 Secure 属性。若 `docker/.env` 不设 `COOKIE_SECURE=1`，https 页面下浏览器会拒绝非 Secure 的 HttpOnly Cookie，表现为**登录接口 200 成功、但随后每个请求都 401，界面回到登录页**。在 `docker/.env` 加一行再 `make update`：
@@ -414,7 +391,7 @@ chmod 600 docker/.env
 
 > 演示账号（`SEED_DEMO_USERS=1`）若仍持默认口令（pm123/worker123），seed 会在启动时幂等禁用并失效其旧会话；需保留演示角色请先用 `DEMO_ADMIN_PASSWORD` / `DEMO_PM_PASSWORD` / `DEMO_WORKER_PASSWORD` 轮换为强口令。
 
-其余变量（AI 密钥、备份上限等）不配置即用内置默认值。**二次部署通常无需改动任何变量。**
+其余变量（备份上限等）不配置即用内置默认值。**二次部署通常无需改动任何变量。**
 
 ### 首次部署
 
@@ -517,7 +494,6 @@ REPORT_WEEKLY_TIME=20:00  # 每个项目当地周日晚
 | `COOKIE_SAMESITE` | 否 | `lax` | 会话 Cookie SameSite：`lax`/`strict`/`none`（`none` 必须同时 `COOKIE_SECURE=1`） |
 | `WEB_CONCURRENCY` | 否 | `2` | uvicorn worker 数；多 worker 下登录/导出限流由 PostgreSQL 共享计数保证 |
 | `MAX_BACKUP_UPLOAD_MB` / `MAX_BACKUP_EXPANDED_MB` | 否 | `2048` / `8192` | 备份上传 / 恢复解压大小上限 |
-| AI（可选，可全不配） | 否 | 见说明 | `AI_PROVIDER`（`deepseek`）、`DEEPSEEK_API_KEY/MODEL/BASE_URL`、`MIMO_API_KEY/MODEL/BASE_URL`、`MINIMAX_API_KEY/MODEL/BASE_URL`；自建服务 `AI_PROVIDER=custom` + `AI_PROVIDER_NAME`/`AI_BASE_URL`/`AI_MODEL`/`AI_API_KEY`，内网不校验密钥可加 `AI_ALLOW_NO_KEY=1`；`AI_TIMEOUT_SECONDS`（180）、`INBOX_AUTO_ORGANIZE`（0） |
 
 > 说明：`config.py` 还支持 `CORS_ORIGINS`、`TIMEZONE` 等键（旧 `SOFT_DELETE_RETENTION_DAYS` 已由 #85 停用，回收站不自动到期），但
 > **8002 compose（`docker-compose.multica.yml`）未对这三个变量做 `environment` 透传**，写进

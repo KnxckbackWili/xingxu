@@ -1,18 +1,17 @@
-"""Canonical flat work maintenance; legacy module/quantity APIs are sources only."""
+"""Stages and work items of templates and projects."""
 from typing import Literal
 from fastapi import APIRouter,Depends,HTTPException
 from pydantic import BaseModel,Field
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.db import get_db
-from app.deps import get_current_user,require_admin
-from app.models import Project,Task,Phase,Module,Template,User,CheckItem
+from app.deps import get_current_user
+from app.models import Task,Phase,Template,User
 from app.services.system_permissions import route_permission,has_permission
 from app.services.scope import ensure_project_visible
 from app.services.permissions import C_PLAN,project_capabilities
 from app.services.change_log import log_change
 from app.services import work_items as service
-from app.services.execution_scope import REMINDER_ONLY_PHASE_NAMES
 router=APIRouter(tags=['工作项'])
 
 
@@ -33,7 +32,6 @@ class WorkCreate(BaseModel):
     group_label:str=Field(default='',max_length=200)
     vehicle_step_key:str|None=Field(default=None,max_length=80)
     applicable_vehicle_types:list[str]=Field(default_factory=list,max_length=100)
-    scope_conditions:list[Literal['need_wms','need_charging']]=Field(default_factory=list)
     checks:list[CheckDefinition]=Field(default_factory=list,max_length=100)
     sort_order:int|None=Field(default=None,ge=0)
 
@@ -52,7 +50,6 @@ class WorkUpdate(BaseModel):
 class TemplateWorkUpdate(WorkUpdate):
     kind:Literal['vehicle','other']|None=None
     applicable_vehicle_types:list[str]|None=Field(default=None,max_length=100)
-    scope_conditions:list[str]|None=Field(default=None,max_length=100)
     checks:list[CheckDefinition]|None=Field(default=None,max_length=100)
 
 
@@ -99,13 +96,13 @@ def _catalog(db,project_id=None,template_id=None):
     tasks=db.query(Task).filter(Task.project_id==project_id)
     if project_id is None:tasks=tasks.filter(Task.template_id==tid)
     from app.services.template_stages import stage_order
-    phases=db.query(Phase).filter(Phase.project_id==project_id,Phase.name.notin_(REMINDER_ONLY_PHASE_NAMES))
+    phases=db.query(Phase).filter(Phase.project_id==project_id)
     if project_id is None:phases=phases.filter(Phase.template_id==tid)
     phases=phases.order_by(Phase.sort_order,Phase.id).all()
     placed=[]
     for task in tasks.order_by(Task.sort_order,Task.id):
         phase=service.phase_of(db,task)
-        if phase is not None and phase.name not in REMINDER_ONLY_PHASE_NAMES:placed.append((phase.id,task))
+        if phase is not None:placed.append((phase.id,task))
     items=service.item_dicts(db,[task for _,task in placed],checks=True)
     by_phase={}
     for phase_id,task in placed:
@@ -121,7 +118,7 @@ def list_project_work(project_id:str,user:User=Depends(get_current_user),db:Sess
     project=ensure_project_visible(db,project_id,user)
     caps=project_capabilities(user,project)
     can_plan=C_PLAN in caps and project.status in ACTIVE_PROJECT_STATUSES
-    can_record=has_permission(user,'worker.report',default=True) and user.role not in ('readonly','external') and project.status in EXECUTION_PROJECT_STATUSES
+    can_record=has_permission(user,'worker.report') and project.status in EXECUTION_PROJECT_STATUSES
     return {'phases':_catalog(db,project_id=project_id),'permissions':{'plan':can_plan,'record':can_record,'override':C_PLAN in caps},'project_status':project.status}
 
 
@@ -161,7 +158,7 @@ def complete_project_work(project_id:str,task_id:str,body:WorkCompletion,user:Us
 @route_permission('project.manage_plan')
 def create_project_phase(project_id:str,body:PhaseCreate,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
     project=service.lock_plan(db,ensure_project_visible(db,project_id,user),user)
-    if body.name.strip() in REMINDER_ONLY_PHASE_NAMES or not body.name.strip():raise HTTPException(400,'请选择有效的实施阶段名')
+    if not body.name.strip():raise HTTPException(400,'请填写阶段名')
     phase=Phase(project_id=project.id,name=service.stage_label(body.name.strip()),color=body.color,stage_key=body.stage_key,sort_order=(db.query(func.max(Phase.sort_order)).filter_by(project_id=project.id).scalar() or 0)+1)
     db.add(phase);db.flush();log_change(db,project.id,'phase',phase.id,'create',user.id,f'新增工作分组「{phase.name}」');db.commit()
     return _phase_dict(phase)

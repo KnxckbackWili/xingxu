@@ -22,23 +22,17 @@ def test_omitted_create_status_starts_preparing_after_readback(client, pm_header
     assert _status(client, pm_headers, created.json()['id']) == 'preparing'
 
 
-def test_new_project_cannot_skip_kickoff_documents_or_entry_review(client, pm_headers):
-    from tests.lifecycle_helpers import approve_risk_entry
+def test_new_project_cannot_skip_kickoff_documents(client, pm_headers):
     from tests.document_helpers import documents, upload_documents
     pid = client.post('/api/projects', headers=pm_headers, json=create_body()).json()['id']
     # The former ready stage is gone; entering execution checks both former gates at once.
     assert client.post(f'/api/projects/{pid}/status', headers=pm_headers, json={'status': 'ready'}).status_code == 400
     rejected = client.post(f'/api/projects/{pid}/status', headers=pm_headers, json={'status': 'executing'})
     assert rejected.status_code == 400
-    assert '第4阶段' in rejected.text and '发车前' in rejected.text
+    assert '第4阶段' in rejected.text
     assert _status(client, pm_headers, pid) == 'preparing'
     kickoff = [row['id'] for row in documents(client, pm_headers, pid)['documents'] if row['stage_key'] == '4' and row['required']]
     upload_documents(client, pm_headers, pid, kickoff)
-    rejected = client.post(f'/api/projects/{pid}/status', headers=pm_headers, json={'status': 'executing'})
-    assert rejected.status_code == 400
-    assert '发车前' in rejected.text and '第4阶段' not in rejected.text
-    assert _status(client, pm_headers, pid) == 'preparing'
-    approve_risk_entry(client, pm_headers, pid)
     assert client.post(f'/api/projects/{pid}/status', headers=pm_headers, json={'status': 'executing'}).status_code == 200
     # Signoff documents gate acceptance; completion needs the acceptance gate.
     assert client.post(f'/api/projects/{pid}/status', headers=pm_headers, json={'status': 'acceptance'}).status_code == 400
@@ -58,11 +52,10 @@ def test_explicit_preparing_initial_state_is_accepted(client, pm_headers):
     assert created.status_code == 200 and created.json()['status'] == 'preparing'
 
 
-def test_worker_cannot_create_project_or_gain_stage_management(client, worker_headers, pm_headers):
-    assert client.post('/api/projects', headers=worker_headers, json=create_body()).status_code == 403
+def test_every_employee_can_create_a_project_but_gates_still_apply(client, worker_headers, pm_headers):
+    assert client.post('/api/projects', headers=worker_headers, json=create_body()).status_code == 200
     pid = client.post('/api/projects', headers=pm_headers, json=create_body()).json()['id']
-    uid = client.get('/api/auth/me', headers=worker_headers).json()['id']
-    assert client.post(f'/api/projects/{pid}/status', headers=worker_headers, json={'status': 'executing'}).status_code == 403
+    assert client.post(f'/api/projects/{pid}/status', headers=worker_headers, json={'status': 'executing'}).status_code == 400
     assert _status(client, worker_headers, pid) == 'preparing'
 
 

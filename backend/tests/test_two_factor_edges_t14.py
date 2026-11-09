@@ -14,7 +14,7 @@ from sqlalchemy import select
 
 from app import config
 from app.db import SessionLocal
-from app.models import User, AiApiToken, MfaRecoveryCode
+from app.models import User, MfaRecoveryCode
 from app.services import two_factor as mfa
 
 
@@ -55,19 +55,6 @@ def test_atomic_recovery_hash_consumption_with_independent_transactions(enabled)
                 db.rollback(); return False
     with ThreadPoolExecutor(max_workers=2) as pool:
         assert sorted(pool.map(consume, range(2))) == [False, True]
-
-
-def test_other_admin_cannot_mint_factor_bound_credentials_and_legacy_credentials_fail(enabled, client, monkeypatch):
-    uid, secret, codes = enabled
-    admin = client.post('/api/auth/login', json={'username': 'admin', 'password': 'admin123'}).json()
-    response = client.post('/api/ai/internal/tokens', headers={'Authorization': 'Bearer ' + admin['access_token']}, json={'name': 'not-self', 'user_id': uid})
-    assert response.status_code == 403
-    raw = 'agv_ai_isolated_legacy_factor_test'
-    with SessionLocal() as db:
-        db.add(AiApiToken(id=str(uuid4()), user_id=uid, name='legacy no factor proof', token_hash=hashlib.sha256(raw.encode()).hexdigest(), scopes=[]))
-        db.commit()
-    from app.services.agent_auth import authenticate_agent
-    with pytest.raises(HTTPException): authenticate_agent('Bearer ' + raw)
 
 
 def test_cipher_tamper_never_exposes_or_accepts_wrong_seed():

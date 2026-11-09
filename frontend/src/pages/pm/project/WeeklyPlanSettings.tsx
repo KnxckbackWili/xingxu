@@ -11,10 +11,10 @@ import HolidayCalendarNotice from '../../../components/HolidayCalendarNotice'
 
 export default function WeeklyPlanSettings({project,onReload,onDirtyChange}:{project:Project;onReload:()=>void;onDirtyChange?:(dirty:boolean)=>void}) {
   const {user}=useAuth()
-  const canSchedule=useProjectCapability('project.manage_schedule',project.capabilities?.includes('project.manage_schedule')??user?.role==='pm')
+  const canSchedule=useProjectCapability('project.manage_schedule',project.capabilities?.includes('project.manage_schedule')??true)
   const blocked=useProjectWriteBlocked(project.status)
-  const allowed=canSchedule&&!blocked&&user?.role!=='readonly'&&user?.permission_overrides?.['project.manage_schedule']!==false&&user?.permission_overrides?.['project.read']!==false
-  const scope=JSON.stringify([project.id,user?.id,user?.permission_version,user?.permission_overrides])
+  const allowed=canSchedule&&!blocked
+  const scope=JSON.stringify([project.id,user?.id])
   const [snapshot,setSnapshot]=useState<{scope:string;value?:SettingsResponse}>({scope:''})
   const [draft,setDraft]=useState<PlanSettings>({rest_mode:'none',rest_days:[],skip_holidays:false})
   const [dates,setDates]=useState('')

@@ -4,7 +4,7 @@ from datetime import date
 import pytest
 from fastapi import HTTPException
 from app.db import SessionLocal
-from app.models import AcceptanceRecord, CheckItem, Module, Phase, Project, ProjectPreparationItem, ProjectReadinessReview, Task, User
+from app.models import AcceptanceRecord, CheckItem, Phase, Project, ProjectPreparationItem, Task, User
 from tests.test_project_lifecycle_boundaries import project
 
 
@@ -20,9 +20,7 @@ def completeable_project(client, headers, *, documents_data=None, legacy_accepta
         p.status = 'acceptance'
         phase = Phase(project_id=pid, name='现场实施')
         db.add(phase); db.flush()
-        module = Module(project_id=pid, phase_id=phase.id, name='现场工作')
-        db.add(module); db.flush()
-        task = Task(project_id=pid, phase_id=phase.id, module_id=module.id, name='安全调试',
+        task = Task(project_id=pid, phase_id=phase.id, name='安全调试',
                     quantity_type='fixed')
         db.add(task); db.flush()
         check = CheckItem(project_id=pid, task_id=task.id, name='安全保护', is_safety_critical=True,
@@ -133,7 +131,6 @@ def test_preparation_write_rechecks_archival_after_preload(client, pm_headers, o
         stale.rollback()
     with SessionLocal() as db:
         assert db.query(ProjectPreparationItem).filter_by(project_id=pid).count() == count
-        assert db.query(ProjectReadinessReview).filter_by(project_id=pid).count() == 0
 
 
 @pytest.mark.parametrize('operation', ['acceptance'])

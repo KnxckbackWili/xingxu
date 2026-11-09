@@ -81,7 +81,7 @@ def _upload_path(stored):
 
 
 def project_backup_snapshot(db, project, *, include_deletion_snapshots=False):
-    # Validate before the legacy retention helper reads any path. Missing evidence
+    # Validate before the retention helper reads any path. Missing evidence
     # is a backup failure, never an excuse to discard the project.
     assets=db.query(models.Attachment).filter_by(project_id=project.id).all()
     from app.services.file_retention import removal_record
@@ -107,8 +107,6 @@ def project_backup_snapshot(db, project, *, include_deletion_snapshots=False):
     # Project-scoped planning preferences and complete edit/audit history are
     # not part of the older immutable-purge allowlist.
     for model in (
-        models.ExternalShare,
-        models.ExternalAccessLog,
         models.ProjectCreationReceipt,
         models.OfflineOpReceipt,
     ):
@@ -320,20 +318,16 @@ def restore_project(db, project_id, user, *, version, deletion_id):
         raise HTTPException(409, "删除记录已变化，请刷新回收站后重新确认")
     if version != (project.version or 0):
         raise HTTPException(409, "项目已被修改，请刷新回收站后重新确认")
-    legacy_unbacked = not record.backup_name
     try:
-        if legacy_unbacked:
-            project_backup_snapshot(db, project)  # all remaining file references must be intact
-        else:
-            verified_backup(record)
+        verified_backup(record)
     except Exception:
         raise HTTPException(409, '项目备份或现存文件校验失败，项目未还原，请联系管理员') from None
     # Missing original files can be repaired from this project's verified ZIP.
     # An existing different file is a conflict: never overwrite silently.
     created = []
     try:
-        with backup_zip(verified_backup(record)) if not legacy_unbacked else _empty_backup() as bundle:
-            evidence = json.loads(bundle.read("project-backup.json")) if bundle else {"binary_files": {"manifest": []}}
+        with backup_zip(verified_backup(record)) as bundle:
+            evidence = json.loads(bundle.read("project-backup.json"))
             for item in evidence["binary_files"]["manifest"]:
                 if item.get('intentionally_removed'):
                     from app.services.file_retention import manifest_removal
@@ -407,12 +401,12 @@ def recycle_item(db, project, record, *, user):
         "deletion_id": record.id,
         "version": project.version,
         "delete_backup_available": available,
-        "can_restore": available or (not record.backup_name),
+        "can_restore": available,
         "can_download_backup": available
         and C_EXPORT in project_capabilities(user, project),
         "can_permanently_delete": user.role == "admin"
         and C_EXPORT in project_capabilities(user, project)
-        and has_permission(user, 'system.projects.purge', default=True),
+        and has_permission(user, 'system.projects.purge'),
         "reason": record.reason,
         "backup": {
             "available": available,
@@ -421,8 +415,3 @@ def recycle_item(db, project, record, *, user):
             "scope": "仅此项目的业务记录和项目文件；不含系统密钥或个人私有事项",
         },
     }
-
-
-@contextmanager
-def _empty_backup():
-    yield None

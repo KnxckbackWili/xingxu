@@ -6,7 +6,7 @@ from tests.lifecycle_helpers import versioned
 def test_create_project_bad_manager_id_returns_400(client, pm_headers):
     r = client.post('/api/projects', headers=pm_headers, json={'name': '坏负责人', 'start_date': '2026-08-10', 'new_vehicles': False, 'end_date': '2026-09-30', 'manager_id': 'no-such-user'})
     assert r.status_code == 400
-    assert '项目经理' in r.json()['detail']
+    assert '项目负责人' in r.json()['detail']
 
 def _project(client, pm_headers, name='功能边界项目'):
     r = client.post('/api/projects', headers=pm_headers, json={'name': name, 'start_date': '2026-08-10', 'status': 'preparing', 'new_vehicles': False, 'end_date': '2026-09-30'})
@@ -23,7 +23,7 @@ def test_direct_transfer_bad_recipient_returns_400(client, admin_headers, pm_hea
         'version': preview.json()['version'],
         'member_removal_confirmations': [row['user_id'] for row in preview.json()['removed']]})
     assert result.status_code == 400
-    assert '项目经理' in result.json()['detail']
+    assert '账号' in result.json()['detail']
 
 def test_director_can_change_status(client, admin_headers, pm_headers):
     from tests.document_helpers import documents, upload_documents
@@ -33,13 +33,11 @@ def test_director_can_change_status(client, admin_headers, pm_headers):
     assert required
     upload_documents(client, pm_headers, pid, required)
     result = client.post('/api/users', headers=admin_headers, json={
-        'username': 'dir1', 'password': 'Review123!', 'display_name': '总监一号', 'role': 'director'})
+        'username': 'dir1', 'password': 'Review123!', 'display_name': '总监一号', 'role': 'employee'})
     assert result.status_code == 200, result.text
     login = client.post('/api/auth/login', json={'username': 'dir1', 'password': 'Review123!'})
     assert login.status_code == 200, login.text
     director = {'Authorization': 'Bearer ' + login.json()['access_token']}
-    from tests.lifecycle_helpers import approve_risk_entry
-    approve_risk_entry(client, pm_headers, pid)
     result = client.post(f'/api/projects/{pid}/status', headers=director, json={'status': 'executing'})
     assert result.status_code == 200, result.text
     assert client.get(f'/api/projects/{pid}', headers=director).json()['status'] == 'executing'
@@ -66,7 +64,7 @@ def _managed_project(client, headers, name, manager_id=None):
     assert r.status_code == 200, r.json()
     return r.json()['id']
 
-def _create_user(client, admin_headers, username, role='pm'):
+def _create_user(client, admin_headers, username, role='employee'):
     response = client.post('/api/users', headers=admin_headers, json={'username': username, 'password': 'password123', 'display_name': username, 'role': role})
     assert response.status_code == 200, response.text
     return response.json()['id']

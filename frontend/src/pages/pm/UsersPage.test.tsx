@@ -14,8 +14,8 @@ vi.mock('../../api', () => ({
   userApi: { list: vi.fn(), update: vi.fn(), create: vi.fn() },
 }))
 const people = [
-  { id: 'u1', username: 'one', display_name: '甲', role: 'worker', phone: '', email: '', is_active: true },
-  { id: 'u2', username: 'two', display_name: '乙', role: 'worker', phone: '', email: '', is_active: true },
+  { id: 'u1', username: 'one', display_name: '甲', role: 'employee', phone: '', email: '', is_active: true },
+  { id: 'u2', username: 'two', display_name: '乙', role: 'employee', phone: '', email: '', is_active: true },
 ]
 beforeEach(() => {
   permissionActor.user = { id: 'admin', role: 'admin', system_permissions: undefined }
@@ -70,46 +70,18 @@ it('shows load failure and blocks writes until a successful retry', async () => 
   expect(screen.getByRole('button', { name: /新建用户/ })).toBeEnabled()
 })
 
-it('preserves a migrated role when editing only contact details', async () => {
-  viewport.mobile = true
-  vi.mocked(userApi.list).mockResolvedValue([{ ...people[0], role: 'director' }] as any)
-  render(<ConfigProvider theme={{ token: { motion: false } }}><MemoryRouter><UsersPage /></MemoryRouter></ConfigProvider>)
-  expect(await screen.findByText('总监（旧）')).toBeInTheDocument()
-  fireEvent.click((await screen.findAllByRole('button', { name: /编辑/ }))[0])
-  const dialog = await screen.findByRole('dialog')
-  expect(within(dialog).getByText('总监（旧）')).toBeInTheDocument()
-  fireEvent.change(within(dialog).getByLabelText('电话'), { target: { value: '13900000000' } })
-  fireEvent.click(within(dialog).getByRole('button', { name: /保\s*存/ }))
-  await waitFor(() => expect(userApi.update).toHaveBeenCalledWith('u1', expect.objectContaining({ role: 'director', phone: '13900000000' })))
-})
 
-it('delegates ordinary account editing without transmitting roles or enabling administrator edits', async () => {
-  permissionActor.user = { id: 'member', role: 'worker', system_permissions: ['system.users.manage'] }
-  vi.mocked(userApi.list).mockResolvedValue([...people, { ...people[0], id: 'admin', username: 'admin', role: 'admin', display_name: '系统管理员' }] as any)
-  render(<ConfigProvider theme={{ token: { motion: false } }}><MemoryRouter><UsersPage /></MemoryRouter></ConfigProvider>)
-  const edits = await screen.findAllByRole('button', { name: /编辑/ })
-  expect(edits[2]).toBeDisabled()
-  expect(screen.queryByRole('button', { name: '管理成员权限' })).toBeNull()
-  fireEvent.click(edits[0])
-  const dialog = await screen.findByRole('dialog')
-  expect(within(dialog).getByRole('combobox', { name: '角色' })).toBeDisabled()
-  fireEvent.click(within(dialog).getByRole('button', { name: /保\s*存/ }))
-  await waitFor(() => expect(userApi.update).toHaveBeenCalledWith('u1', expect.objectContaining({ display_name: '甲' })))
-  expect(vi.mocked(userApi.update).mock.calls[0][1]).not.toHaveProperty('role')
-})
-
-
-it('creates an account with one role field; per-person permissions stay on the permissions page', async () => {
+it('creates an employee account by default with one account-type field', async () => {
   vi.mocked(userApi.create).mockResolvedValue({} as any)
   render(<MemoryRouter><UsersPage /></MemoryRouter>)
   fireEvent.click(await screen.findByRole('button', { name: /新建用户/ }))
   const dialog = await screen.findByRole('dialog')
-  expect(within(dialog).getByRole('combobox', { name: '角色' })).toBeInTheDocument()
-  expect(within(dialog).queryByText(/预设角色|高级：账号角色/)).toBeNull()
+  expect(within(dialog).getByRole('combobox', { name: '账号类型' })).toBeInTheDocument()
   fireEvent.change(within(dialog).getByLabelText('姓名'), { target: { value: '新工程师' } })
   fireEvent.change(within(dialog).getByPlaceholderText('至少 6 位'), { target: { value: 'example-test-password' } })
   fireEvent.click(within(dialog).getByRole('button', { name: /保\s*存/ }))
   await waitFor(() => expect(userApi.create).toHaveBeenCalledWith(expect.objectContaining({
-    username: '新工程师', permission_preset: 'worker', role: 'worker',
+    username: '新工程师', role: 'employee',
   })))
+  expect(vi.mocked(userApi.create).mock.calls[0][0]).not.toHaveProperty('permission_preset')
 })

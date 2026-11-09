@@ -64,7 +64,7 @@ export default function DocumentConfidentialityModal({ projectId, target, disabl
       <Alert type="warning" showIcon message={target?.kind === 'file'
         ? '附件自身的限制与所有关联保密资料取交集；关闭这里的限制也不会解除关联资料的保密范围。'
         : '此设置作用于此资料要求的全部期次、历史版本和以后生成项。'} />
-      <Typography.Paragraph>项目负责人默认可见，随当前负责人变更。系统管理员、技术负责人、上传人和提交人都需要明确指定；外部人员永远不可见保密内容。</Typography.Paragraph>
+      <Typography.Paragraph>项目负责人默认可见，随当前负责人变更。其他人（包括系统管理员、上传人和提交人）都需要在这里明确指定。</Typography.Paragraph>
       {error && <Alert type="error" showIcon message={error} description="尚未保存。若版本或权限已变化，请取消后刷新资料，再重新设置。" />}
       <Space><Typography.Text>保密</Typography.Text><Switch aria-label="保密" checked={confidential} disabled={busy || disabled || loading || !!error} onChange={value => { setConfidential(value); changed() }} /></Space>
       <Select aria-label="指定可见人员" mode="multiple" style={{ width: '100%' }} placeholder="仅项目负责人可见（可指定其他内部人员）"

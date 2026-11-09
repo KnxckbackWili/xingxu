@@ -1,25 +1,27 @@
 import { describe, expect, it } from 'vitest'
+import { canAccessNav, systemHomeRoute } from './nav'
 import { hasAnySystemPermission, hasSystemPermission } from './systemPermissions'
 
-describe('system permission metadata', () => {
-  it('uses effective permissions instead of the former role gate for explicit grants', () => {
-    expect(hasSystemPermission({ role: 'worker', system_permissions: ['system.templates.manage'] }, 'system.templates.manage', ['admin'])).toBe(true)
-    expect(hasSystemPermission({ role: 'pm', system_permissions: [] }, 'system.people.view', ['admin', 'pm'])).toBe(false)
+describe('two kinds of account', () => {
+  it('follows the server list when the session carries one', () => {
+    expect(hasSystemPermission({ role: 'employee', system_permissions: ['project.read'] }, 'project.read')).toBe(true)
+    expect(hasSystemPermission({ role: 'admin', system_permissions: [] }, 'system.users.manage')).toBe(false)
   })
-  it('keeps explicit false and an empty effective list from falling back to inherited roles', () => {
-    expect(hasSystemPermission({ role: 'admin', system_permissions: ['system.templates.manage'], permission_overrides: { 'system.templates.manage': false } }, 'system.templates.manage', ['admin'])).toBe(false)
-    expect(hasSystemPermission({ role: 'admin', system_permissions: [] }, 'system.templates.manage', ['admin'])).toBe(false)
+  it('lets an administrator do everything and an employee all project work', () => {
+    expect(hasSystemPermission({ role: 'admin' }, 'system.users.manage')).toBe(true)
+    expect(hasSystemPermission({ role: 'employee' }, 'system.users.manage')).toBe(false)
+    expect(hasSystemPermission({ role: 'employee' }, 'worker.report')).toBe(true)
+    expect(hasAnySystemPermission({ role: 'employee' }, ['system.backups.read', 'project.update'])).toBe(true)
   })
-  it('supports old payloads and unknown keys without granting extra privileges', () => {
-    expect(hasSystemPermission({ role: 'admin' }, 'system.templates.manage', ['admin'])).toBe(true)
-    expect(hasSystemPermission({ role: 'worker' }, 'system.templates.manage', ['admin'])).toBe(false)
-    expect(hasSystemPermission({ role: 'worker', permission_overrides: { 'system.templates.manage': true } }, 'system.templates.manage', ['admin'])).toBe(true)
-    expect(hasSystemPermission(null, 'system.templates.manage', true)).toBe(false)
-    expect(hasSystemPermission({ role: 'admin' }, 'unknown')).toBe(false)
-    expect(hasSystemPermission({ role: 'admin', permission_overrides: { unknown: true } }, 'unknown')).toBe(false)
+  it('gives nothing to a missing or disabled account', () => {
+    expect(hasSystemPermission(null, 'project.read')).toBe(false)
+    expect(hasSystemPermission({ role: 'admin', is_active: false }, 'project.read')).toBe(false)
   })
-  it('allows one of the required actions without overriding explicit denials', () => {
-    expect(hasAnySystemPermission({ role: 'worker', system_permissions: ['system.templates.view'] }, ['system.templates.view', 'system.templates.manage'], ['admin'])).toBe(true)
-    expect(hasAnySystemPermission({ role: 'admin', system_permissions: [] }, ['system.templates.view', 'system.templates.manage'], ['admin'])).toBe(false)
+  it('shows administrator pages only to administrators', () => {
+    expect(canAccessNav('/pm/users', { role: 'employee' })).toBe(false)
+    expect(canAccessNav('/pm/users', { role: 'admin' })).toBe(true)
+    expect(canAccessNav('/pm/projects', { role: 'employee' })).toBe(true)
+    expect(systemHomeRoute({ role: 'employee' })).toBe('/pm/dashboard')
+    expect(systemHomeRoute(null)).toBe('/login')
   })
 })

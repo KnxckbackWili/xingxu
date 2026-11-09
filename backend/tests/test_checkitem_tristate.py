@@ -11,7 +11,7 @@ def _project_with_check(client, pm_headers):
                     json={"work_item_ids": default_work("mod-01")})
     enter_execution(client, pm_headers, pid)  # 检查项只在现场实施期间登记
     r = client.get(f"/api/projects/{pid}/tree", headers=pm_headers)
-    ci = r.json()[0]["modules"][0]["tasks"][0]["check_items"][0]
+    ci = r.json()[0]["work_items"][0]["check_items"][0]
     return pid, ci["id"]
 
 
@@ -27,7 +27,7 @@ def test_failed_requires_reason(client, pm_headers, worker_headers):
     assert r.json()["failed_reason"] == "急停联动未响应"
     # tree 反映
     r = client.get(f"/api/projects/{pid}/tree", headers=pm_headers)
-    t = r.json()[0]["modules"][0]["tasks"][0]
+    t = r.json()[0]["work_items"][0]
     ci = next(c for c in t["check_items"] if c["id"] == cid)
     assert ci["failed"] is True
 

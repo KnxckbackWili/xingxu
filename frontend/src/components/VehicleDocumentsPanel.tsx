@@ -56,13 +56,6 @@ export default function VehicleDocumentsPanel({ projectId, unitId, unitLabel, pr
     return () => { current.current.generation++; requests.current++ }
   }, [projectId, unitId, user?.id])
   useEffect(() => { const refresh = () => { void load() }; window.addEventListener(UPLOAD_COMPLETE_EVENT, refresh); return () => window.removeEventListener(UPLOAD_COMPLETE_EVENT, refresh) }, [projectId, unitId, user?.id])
-  const permissionVersion = useRef(user?.permission_version)
-  useEffect(() => {
-    if (permissionVersion.current !== user?.permission_version) {
-      permissionVersion.current = user?.permission_version
-      void load()
-    }
-  }, [user?.permission_version])
   const canSubmit = !!data?.permissions?.submit && hasSystemPermission(user, 'worker.deliver') && !writeBlocked && !loading && !loadError
   // Validate the returned owner again; a delayed response must never open another car's upload.
   const documents = (data?.documents ?? []).filter(row => row.scope === 'vehicle' && row.vehicle_unit_id === unitId)

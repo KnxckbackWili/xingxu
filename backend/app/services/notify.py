@@ -6,7 +6,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app import config
-from app.models import Notification, NotificationOutbox, Project
+from app.models import Notification, NotificationOutbox
 from app.services.notify_channels import channels_enabled_db
 
 
@@ -27,7 +27,6 @@ def notify(
     指数退避/幂等键）。未配置任何外部渠道时队列行直接标记 disabled，避免无限积压。
     失败既不回滚主业务，也不会重复生成站内通知。
     """
-    project = db.get(Project, project_id) if project_id else None
     notification = Notification(
         user_id=user_id,
         title=title,

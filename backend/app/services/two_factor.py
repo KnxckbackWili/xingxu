@@ -16,10 +16,10 @@ from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, update
 
 from app import config
-from app.models import User, MfaChallenge, MfaRecoveryCode, AiApiToken
+from app.models import User, MfaChallenge, MfaRecoveryCode
 from app.services.change_log import log_change
 from app.time_utils import utcnow
 
@@ -32,7 +32,7 @@ class MfaError(ValueError):
 
 
 def mandatory(user):
-    return config.PUBLIC_MODE and user.role in {'admin', 'pm'}
+    return config.PUBLIC_MODE and user.role == 'admin'
 
 
 def required(user):
@@ -104,7 +104,7 @@ def issue(db, user_id, purpose, login_key, *, expected_version=None):
         raise MfaError('账号已变化，请重新登录')
     if purpose == 'login' and not user.mfa_enabled:
         raise MfaError('验证状态已变化，请重新登录')
-    if purpose == 'enroll' and (user.mfa_enabled or user.role not in {'admin', 'pm'}):
+    if purpose == 'enroll' and user.mfa_enabled:
         raise MfaError('当前账号不能登记新的二次验证')
     return issue_locked(db, user, purpose, login_key)
 
@@ -218,7 +218,6 @@ def enrollment_confirm(db, token, otp):
     user.mfa_last_step = step
     user.token_version = (user.token_version or 0) + 1
     codes = new_codes(db, user)
-    db.execute(update(AiApiToken).where(AiApiToken.user_id == user.id).values(is_active=False))
     row.used_at = utcnow(); row.pending_secret_encrypted = None
     log_change(db, None, 'user', user.id, 'mfa_enable' if row.purpose == 'enroll' else 'mfa_replace', user.id,
                '确认二次验证登记；撤销旧会话和外部凭据', new_value={'enabled': True, 'recovery_codes': 10})
@@ -232,7 +231,7 @@ def disable(db, user_id, otp, *, expected_version=None):
     if expected_version is not None and (user.token_version or 0) != expected_version:
         raise MfaError('账号已变化，请重新登录')
     if mandatory(user):
-        raise MfaError('公开部署的管理员和项目经理不能关闭二次验证')
+        raise MfaError('公开部署的系统管理员不能关闭二次验证')
     if not user.mfa_enabled:
         raise MfaError('账号未启用二次验证')
     consume_totp(user, otp)
@@ -240,7 +239,6 @@ def disable(db, user_id, otp, *, expected_version=None):
     user.token_version = (user.token_version or 0) + 1
     db.execute(delete(MfaRecoveryCode).where(MfaRecoveryCode.user_id == user.id))
     db.execute(delete(MfaChallenge).where(MfaChallenge.user_id == user.id))
-    db.execute(update(AiApiToken).where(AiApiToken.user_id == user.id).values(is_active=False))
     log_change(db, None, 'user', user.id, 'mfa_disable', user.id, '使用当前验证码关闭二次验证；撤销旧会话和外部凭据')
     db.commit()
 
@@ -288,7 +286,6 @@ def host_reset(db, user_id):
     user.token_version = (user.token_version or 0) + 1
     db.execute(delete(MfaRecoveryCode).where(MfaRecoveryCode.user_id == user.id))
     db.execute(delete(MfaChallenge).where(MfaChallenge.user_id == user.id))
-    db.execute(update(AiApiToken).where(AiApiToken.user_id == user.id).values(is_active=False))
     log_change(db, None, 'user', user.id, 'mfa_host_reset', None,
                '受信宿主操作员重置二次验证；撤销所有会话及外部凭据，公开部署下次登录必须重新登记')
     db.commit()

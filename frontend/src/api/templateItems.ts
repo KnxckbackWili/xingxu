@@ -5,8 +5,8 @@ export interface TemplateCheck { id?: string; name: string; description?: string
 export interface TemplateFile {
   id?: string; code: string; name: string; template_no: string; required: boolean; scope: 'project' | 'vehicle'
   platform: 'NDC' | 'GRACE' | 'integrated' | null; timing_type: string; timing_event: string | null; timing_offset_hours: number | null
-  timing_weekday: number | null; trigger_type: string | null; confidential_default: boolean; external_visible_default: boolean
-  external_never_visible: boolean; note: string; blank_file?: { id: string; filename: string; file_size: number } | null
+  timing_weekday: number | null; trigger_type: string | null; confidential_default: boolean
+  note: string; blank_file?: { id: string; filename: string; file_size: number } | null
 }
 export interface TemplateItem {
   id: string; section_id: string; kind: ItemKind; name: string; note: string; optional: boolean; per_vehicle: boolean; step_key: string | null
@@ -38,8 +38,8 @@ export const itemBody = (item: Omit<TemplateItem, 'id' | 'reference_docs' | 'sor
 
 export const newFile = (name = ''): TemplateFile => ({
   code: '', name, template_no: '', required: true, scope: 'project', platform: null, timing_type: 'on_demand', timing_event: null,
-  timing_offset_hours: null, timing_weekday: null, trigger_type: null, confidential_default: false, external_visible_default: false,
-  external_never_visible: false, note: '',
+  timing_offset_hours: null, timing_weekday: null, trigger_type: null, confidential_default: false,
+  note: '',
 })
 
 const base = (tid: string) => `/templates/${encodeURIComponent(tid)}`

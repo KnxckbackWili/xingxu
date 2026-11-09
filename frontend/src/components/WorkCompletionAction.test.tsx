@@ -33,11 +33,6 @@ it('locks duplicate clicks while saving and ignores a response after the actor c
   auth.user = { id: 'another', role: 'pm' }; v.rerender(<MemoryRouter><WorkCompletionAction {...p} /></MemoryRouter>)
   await act(async () => done({ data: {} })); expect(p.onSaved).not.toHaveBeenCalled()
 })
-it('retains an open reason when the permission is revoked and sends nothing', () => {
-  const p = props(); const v = view(p); fireEvent.click(screen.getByText('标记完成')); fireEvent.change(screen.getByLabelText('工作状态理由'), { target: { value: '原填写' } })
-  auth.user = { id: 'u', role: 'pm', permission_overrides: { 'worker.report': false } }; v.rerender(<MemoryRouter><WorkCompletionAction {...p} /></MemoryRouter>)
-  expect(screen.getByLabelText('工作状态理由')).toHaveValue('原填写'); expect(screen.getByRole('button', { name: '保存工作状态' })).toBeDisabled(); expect(put).not.toHaveBeenCalled()
-})
 it('only explicitly confirmed ordinary failure versions are sent for coverage', async () => {
   put.mockResolvedValue({ data: {} }); const p = { ...props(), canOverride: true, item: work({ check_items: [{ id: 'c', name: '复测', failed: true, failed_reason: '偏差', version: 4, is_applicable: true, is_required: true, is_done: false, is_safety_critical: false }] }) }
   view(p); fireEvent.click(screen.getByText('标记完成')); fireEvent.change(screen.getByLabelText('工作状态理由'), { target: { value: '已按当前偏差核对' } })

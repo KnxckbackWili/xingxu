@@ -4,7 +4,7 @@ from datetime import date, datetime
 import json
 
 from app.db import SessionLocal
-from app.models import Project, ProjectEvent, Attachment, DocumentVersion, Task, Module, Phase
+from app.models import Project, ProjectEvent, Attachment, DocumentVersion, Task, Phase
 from app.services.project_lifecycle import PROJECT_STATUSES
 from tests.document_helpers import documents, upload_documents
 
@@ -37,9 +37,7 @@ def test_execution_requires_stage4_and_acceptance_requires_all_four_real_signoff
     rows = documents(client, admin_headers, pid)['documents']
     upload_documents(client, admin_headers, pid, [r['id'] for r in rows if r['stage_key']=='4' and r['required']])
     response = state(client, admin_headers, pid, 'executing')
-    assert response.status_code == 400 and 'kickoff_documents' not in {b['type'] for b in response.json()['detail']['blockers']}
-    with SessionLocal() as db:
-        db.get(Project,pid).status='executing'; db.commit()
+    assert response.status_code == 200, response.text
     response = state(client, admin_headers, pid, 'acceptance')
     assert response.status_code == 400 and all(code in response.text for code in ('6.10.1','6.10.2','6.10.3','6.10.4'))
     upload_documents(client, admin_headers, pid, [r['id'] for r in rows if r['code'] in ('6.10.1','6.10.2','6.10.3','6.10.4')])

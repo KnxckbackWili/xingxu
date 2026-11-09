@@ -80,33 +80,21 @@ def get_current_user(
     from app.services.two_factor import session_allowed
     if not session_allowed(user, payload):
         raise HTTPException(status_code=401, detail="此账号需要完成二次验证，请重新登录")
-    # Explicit system denials apply on every authenticated route, including
-    # routes whose legacy handler accepts every signed-in role.
-    from app.services.system_permissions import permission_for_request, permission_override
+    # Every authenticated route checks the action it declares for this account.
+    from app.services.system_permissions import permission_for_request, has_permission, PERMISSIONS
     required = permission_for_request(request)
-    from app.services.system_permissions import readonly_request_allowed, PERMISSIONS
-    if user.role == "readonly" and not readonly_request_allowed(request):
-        raise HTTPException(status_code=403, detail="只读预设：此操作未对只读账号开放；请联系管理员调整账号预设")
     for capability in ([required] if isinstance(required, str) else required or []):
-        if permission_override(user, capability) is False:
-            raise HTTPException(status_code=403, detail=f"系统禁止：{PERMISSIONS[capability]['name']}（{capability}）")
+        if not has_permission(user, capability):
+            raise HTTPException(status_code=403, detail=f"没有权限：{PERMISSIONS[capability]['name']}")
     return user
 
 
-def require_roles(*roles: str):
-    """Dependency factory: require one of the given roles."""
-    def checker(request: Request, user: User = Depends(get_current_user)) -> User:
-        from app.services.system_permissions import permission_for_request, has_permission
-        required = permission_for_request(request)
-        capabilities = [required] if isinstance(required, str) else required or []
-        if user.role not in roles and not (capabilities and all(
-            has_permission(user, capability, default=False) for capability in capabilities
-        )):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="没有权限执行此操作")
-        return user
-    return checker
+def require_admin(user: User = Depends(get_current_user)) -> User:
+    if user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅系统管理员可以执行此操作")
+    return user
 
 
-# Convenience role checkers
-require_admin = require_roles("admin")
-require_pm = require_roles("admin", "pm")
+def require_pm(user: User = Depends(get_current_user)) -> User:
+    """Any signed-in employee; the route's declared action is checked at authentication."""
+    return user

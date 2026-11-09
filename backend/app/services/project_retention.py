@@ -19,14 +19,14 @@ RETAINED_MODELS = (
     models.ProjectEvent, models.Vehicle, models.VehicleUnit, models.VehicleLifecycleEvent,
     models.ProjectVehicleStep, models.VehicleProgress,
     models.ProjectInventoryItem, models.ProjectInventoryMovement, models.ItemApplication,
-    models.Phase, models.Module, models.Task, models.VehicleCheckDefinition, models.CheckItem,
+    models.Phase, models.Task, models.VehicleCheckDefinition, models.CheckItem,
     models.WeeklyPlanCell, models.Issue,
     models.Attachment, models.AcceptanceRecord,
     models.FieldOperation,
     models.ProjectDocumentDefinition, models.ProjectDocument, models.DocumentNoticeReceipt, models.ProjectReportReceipt,
     models.UploadSession,models.UploadChunk,models.FileCleanupReceipt,models.FileRemovalRecord,
     models.DocumentTriggerEvent,models.IssueSlaReceipt,
-    models.ProjectPreparationItem, models.ProjectReadinessReview,
+    models.ProjectPreparationItem,
 )
 
 
@@ -45,26 +45,13 @@ def _row(row):
 
 
 def project_retention_snapshot(db, project):
-    from sqlalchemy import and_, or_
     records = {}
-    task_ids = db.query(models.Task.id).filter(models.Task.project_id == project.id)
-    phase_ids = db.query(models.Module.phase_id).filter(models.Module.project_id == project.id)
-    actor_ids = {project.created_by, project.manager, project.technical_manager}
+    actor_ids = {project.created_by, project.manager}
     from app.services.file_retention import removal_record
     removed={}
     files = {}
     for model in RETAINED_MODELS:
-        owned = model.project_id == project.id
-        if model is models.CheckItem:
-            # Legacy execution checks may predate the redundant project_id.
-            # The task is the authoritative parent; never sweep another
-            # project's explicitly-owned checks into this archive.
-            owned = and_(model.task_id.in_(task_ids), or_(model.project_id == project.id, model.project_id.is_(None)))
-        elif model is models.Phase:
-            # Older project modules legitimately reference shared template
-            # phases. Keep those definitions along with project-local phases.
-            owned = or_(owned, and_(model.id.in_(phase_ids), model.project_id.is_(None)))
-        rows = db.query(model).filter(owned).order_by(model.id).all()
+        rows = db.query(model).filter(model.project_id == project.id).order_by(model.id).all()
         records[model.__tablename__] = [_row(row) for row in rows]
         for row in rows:
             for column in model.__table__.columns:
@@ -113,7 +100,7 @@ def project_retention_snapshot(db, project):
               for user in db.query(models.User).filter(models.User.id.in_(actor_ids)).order_by(models.User.id).all()]
     return {
         'type': 'agvpm-project-retention', 'version': 1,
-        'project': _row(project), 'modules': records['modules'], 'records': records, 'actors': actors,
+        'project': _row(project), 'records': records, 'actors': actors,
         'binary_files': {'included': False, 'retained_in_uploads': True, 'recovery': 'Original files remain owned by this archive; full system backup is required for storage recovery. JSON alone does not contain file bytes.',
                          'manifest': [files[key] for key in sorted(files)]},
         'restore_supported': False,

@@ -1,7 +1,6 @@
 """Only precise, authorized cleanup evidence can stand in for removed old bytes."""
-from datetime import datetime,date,timezone
-from sqlalchemy.orm import object_session
-from app.models import FileRemovalRecord,ProjectDocument
+from datetime import timezone
+from app.models import ProjectDocument
 
 IDENTITY=('stage_key','code','name','scope','vehicle_unit_id','vehicle_label','period_key','platform','timing_type','timing_weekday','required')
 

@@ -55,7 +55,7 @@ export default function DashboardPage() {
   const canWorkspace = hasSystemPermission(user, 'workspace.view')
   const canStatistics = hasSystemPermission(user, 'insights.view')
   const canWeek = canAccessNav('/worker/week', user)
-  const scope = JSON.stringify([user?.id, user?.role, user?.permission_version, user?.system_permissions, user?.permission_overrides])
+  const scope = JSON.stringify([user?.id, user?.role, user?.system_permissions])
   const [snapshot, setSnapshot] = useState<{ scope: string; data?: WorkbenchOverview; error?: string; issues?: IssueRow[]; issuesError?: string }>({ scope: '' })
   const current = snapshot.scope === scope ? snapshot : undefined
   const data = current?.data
