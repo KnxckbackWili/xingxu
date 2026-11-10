@@ -42,8 +42,8 @@ html.printing-weekly-plans .weekly-plan-print>header { display:block; }.weekly-p
 .weekly-plan-table tbody th small { margin-top:2px; color:var(--agv-text-secondary); font-size:12px; }
 .weekly-plan-kind.ant-tag { margin-left:6px; font-size:11px; line-height:16px; padding:0 4px; }
 .weekly-plan-table td { position:relative; }
-.weekly-plan-cell { border-radius:10px; padding:8px 10px; background:var(--agv-bg-subtle); border-left:3px solid var(--agv-border); }
-.weekly-plan-cell.is-published { background:var(--agv-primary-soft); border-left-color:var(--agv-primary); }
+.weekly-plan-cell { border-radius:10px; padding:8px 10px; background:var(--agv-primary-soft); border-left:3px solid var(--agv-primary); }
+.weekly-plan-cell.is-cancelled { background:var(--agv-bg-subtle); border-left-color:var(--agv-border); }
 .weekly-plan-cell-head { display:flex; align-items:center; gap:6px; font-size:11px; }
 .weekly-plan-badge { color:var(--agv-text-secondary); }
 .weekly-plan-state { margin-left:auto; color:var(--agv-text-secondary); }

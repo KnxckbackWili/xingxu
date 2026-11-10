@@ -25,7 +25,7 @@ RETAINED_MODELS = (
     models.FieldOperation,
     models.ProjectDocumentDefinition, models.ProjectDocument, models.DocumentNoticeReceipt, models.ProjectReportReceipt,
     models.UploadSession,models.UploadChunk,models.FileCleanupReceipt,models.FileRemovalRecord,
-    models.DocumentTriggerEvent,models.IssueSlaReceipt,
+    models.DocumentTriggerEvent,
     models.ProjectPreparationItem,
 )
 

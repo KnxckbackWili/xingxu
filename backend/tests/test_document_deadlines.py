@@ -247,17 +247,6 @@ def test_weekly_report_restart_recovers_every_period_after_its_real_cursor(clien
         assert generate_and_notify_weekly_report(db,now=datetime(2026,11,22,21))['notified']==0
 
 
-def test_lifetime_waiting_for_actual_kickoff_blocks_only_archive(client,admin_headers):
-    from app.services.lifecycle_gates import _pending_required_documents
-    pid=create(client,admin_headers)['id']
-    with SessionLocal() as db:
-        for row in db.query(ProjectDocument).filter_by(project_id=pid):row.status='waived';row.waived_reason='聚焦全周期门禁'
-        db.commit()
-        assert _pending_required_documents(db,pid)==[]
-        assert any('9.2' in item and '内部启动会' in item for item in _pending_required_documents(db,pid,archiving=True))
-        assert not db.query(ProjectDocument).filter_by(project_id=pid,timing_type='lifetime').first()
-
-
 def test_real_vehicle_arrival_api_keeps_date_precision_and_recomputes_clear(client,admin_headers):
     pid=create(client,admin_headers,timezone='America/New_York')['id']
     vehicle=client.post(f'/api/projects/{pid}/vehicles',headers=admin_headers,json={'vehicle_type':'潜伏式','model_name':'AGV','quantity':1}).json()['id']

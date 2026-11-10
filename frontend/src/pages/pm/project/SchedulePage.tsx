@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Button, Checkbox, DatePicker, Dropdown, Empty, Input, InputNumber, Modal, Select, Space, Spin, Switch, Table, Tag, Typography } from 'antd'
+import { Alert, Button, DatePicker, Dropdown, Empty, Input, InputNumber, Modal, Select, Space, Spin, Switch, Table, Tag, Typography } from 'antd'
 import { LeftOutlined, MoreOutlined, PlusOutlined, RightOutlined } from '@ant-design/icons'
 import { Link, useLocation } from 'react-router-dom'
 import dayjs from 'dayjs'
@@ -53,10 +53,8 @@ export default function SchedulePage({projectId,project,onProjectChange}: {proje
   const [loading,setLoading]=useState(false)
   const [busy,setBusy]=useState(false)
   const [actionError,setActionError]=useState('')
-  const [selection,setSelection]=useState<string[]>([])
   const [editor,setEditor]=useState<Edit>()
   const [editStale,setEditStale]=useState(false)
-  const [publishOpen,setPublishOpen]=useState(false)
   const [cancelCell,setCancelCell]=useState<PlanCell>()
   const [cancelReason,setCancelReason]=useState('')
   const [draftOpen,setDraftOpen]=useState(false)
@@ -74,12 +72,12 @@ export default function SchedulePage({projectId,project,onProjectChange}: {proje
       const next=await weeklyPlansApi.list(projectId,start,count,includeCancelled)
       if(current!==epoch.current||ticket!==request.current)return
       if(!Array.isArray(next.cells)||!Array.isArray(next.weeks)||!Array.isArray(next.work_items)||!next.permissions){setSnapshot({scope,error:'周计划响应不完整，请重新读取'});return}
-      setSnapshot({scope,data:next});setSelection([])
+      setSnapshot({scope,data:next})
     }catch(failure){if(current===epoch.current&&ticket===request.current)setSnapshot({scope,error:errMsg(failure)})}
     finally{if(current===epoch.current&&ticket===request.current)setLoading(false)}
   }
   useEffect(()=>{
-    epoch.current++;lock.current=false;setBusy(false);setSnapshot({scope});setSelection([]);setEditor(undefined);setPreview(undefined);setDraftOpen(false);setRules([]);setFirstWeek(undefined);setRecommendations(undefined);setPublishOpen(false);setCancelCell(undefined);setActionError('');setPhaseId(undefined)
+    epoch.current++;lock.current=false;setBusy(false);setSnapshot({scope});setEditor(undefined);setPreview(undefined);setDraftOpen(false);setRules([]);setFirstWeek(undefined);setRecommendations(undefined);setCancelCell(undefined);setActionError('');setPhaseId(undefined)
     void load();return()=>{epoch.current++;request.current++}
   },[scope])
   const write=async(operation:()=>Promise<unknown>,finish:()=>void)=>{
@@ -92,7 +90,6 @@ export default function SchedulePage({projectId,project,onProjectChange}: {proje
   const works=useMemo(()=>data?.work_items.flatMap(phase=>phase.work_items.map(work=>({...work,phase_id:phase.id,phase_name:phase.name})))??[],[data])
   const visibleWorks=works.filter(work=>!phaseId||work.phase_id===phaseId)
   const visibleCells=data?.cells.filter(cell=>!phaseId||cell.phase_id===phaseId)??[]
-  const chosen=visibleCells.filter(cell=>selection.includes(cell.id)&&!cell.published&&!cell.is_cancelled)
   const work=works.find(item=>item.id===editor?.input.task_id)
   const openNew=(item?:PlanWork,week=start)=>{setEditStale(false);setActionError('');setEditor({scopeMode:'all',input:{task_id:item?.id??'',scope:{vehicle_unit_ids:[]},week_start:week,mode:'finish',target_count:null,notes:''}})}
   const openCell=(cell:PlanCell)=>{setEditStale(false);setActionError('');setEditor({cell,scopeMode:cell.scope.vehicle_type?'type':cell.scope.vehicle_unit_ids.length?'batch':'all',input:{task_id:cell.task_id,scope:{...cell.scope,vehicle_unit_ids:[...cell.scope.vehicle_unit_ids]},week_start:cell.week_start,mode:cell.mode,target_count:cell.target_count,notes:cell.notes}})}
@@ -152,11 +149,9 @@ export default function SchedulePage({projectId,project,onProjectChange}: {proje
   }
   const print=()=>{document.documentElement.classList.add('printing-weekly-plans');window.addEventListener('afterprint',()=>document.documentElement.classList.remove('printing-weekly-plans'),{once:true});window.print()}
   const missing=[...new Set([...(project?.missing_holiday_years??[]),...(data?.weeks.flatMap(week=>week.missing_holiday_years)??[])])]
-  const drafts=visibleCells.filter(cell=>!cell.published&&!cell.is_cancelled)
-  const published=visibleCells.filter(cell=>cell.published&&!cell.is_cancelled)
+  const activeCells=visibleCells.filter(cell=>!cell.is_cancelled)
   const planned=new Set(visibleCells.map(cell=>cell.task_id))
   const rows=showAll?visibleWorks:visibleWorks.filter(item=>planned.has(item.id))
-  const publishDrafts=()=>{if(!chosen.length)setSelection(drafts.map(cell=>cell.id));setEditStale(false);setActionError('');setPublishOpen(true)}
   const moreItems=[
     ...(canExport?[{key:'excel',label:'导出 Excel'},{key:'print',label:'导出 PDF / 打印'}]:[]),
     {key:'settings',label:<Link to={`/pm/projects/${projectId}/edit?section=schedule`}>排期设置</Link>},
@@ -165,12 +160,11 @@ export default function SchedulePage({projectId,project,onProjectChange}: {proje
   // Rows are grouped under their work group, so each row only names its own work.
   const startsGroup=(index:number)=>index===0||rows[index-1].phase_name!==rows[index].phase_name
   return <section className="weekly-plan-page">
-    <WorkPageHeader title="周计划" description="行是工作项，列是周，只写这周做什么、不写谁来做。点空格安排，点计划格修改；草稿发布后，谁做完谁在工作台登记。"
-      meta={data&&<span>已发布 {published.length} 格{allowed?` · 草稿 ${drafts.length} 格`:''}</span>}
+    <WorkPageHeader title="周计划" description="行是工作项，列是周，只写这周做什么、不写谁来做。点空格安排，点计划格修改；保存后所有人都能看到，谁做完谁在本周页登记。"
+      meta={data&&<span>共 {activeCells.length} 格</span>}
       primary={allowed&&<Space wrap>
         <Button type="primary" icon={<PlusOutlined/>} disabled={busy} onClick={()=>openNew()}>新增计划格</Button>
-        <Button disabled={busy} onClick={openDraft}>生成初稿</Button>
-        {data?.permissions.publish&&drafts.length>0&&<Button disabled={busy} onClick={publishDrafts}>{chosen.length?`发布已选 ${chosen.length} 格`:`发布草稿 ${drafts.length} 格`}</Button>}
+        <Button disabled={busy} onClick={openDraft}>按规则生成</Button>
       </Space>}
       tools={<Space><RefreshAction label="刷新周计划" loading={loading} disabled={busy} onClick={load} />
         <Dropdown trigger={['click']} menu={{items:moreItems,onClick:({key})=>{if(key==='excel')void excel();if(key==='print')print()}}}><IconAction bordered label="更多周计划操作" icon={<MoreOutlined/>}/></Dropdown></Space>}/>
@@ -185,25 +179,24 @@ export default function SchedulePage({projectId,project,onProjectChange}: {proje
         <Button type="link" size="small" disabled={busy} onClick={()=>setStart(monday(todayInTimezone(project?.timezone)))}>本周</Button>
       </span>
       <Select aria-label="显示周数" value={count} disabled={busy} onChange={setCount} options={[4,6,8,12].map(value=>({value,label:`显示 ${value} 周`}))}/>
-      <Select aria-label="按阶段筛选周计划" value={phaseId} disabled={busy} allowClear placeholder="全部分组" onChange={value=>{setPhaseId(value);setSelection([])}} options={data?.work_items.map(phase=>({value:phase.id,label:phase.name}))}/>
+      <Select aria-label="按阶段筛选周计划" value={phaseId} disabled={busy} allowClear placeholder="全部分组" onChange={setPhaseId} options={data?.work_items.map(phase=>({value:phase.id,label:phase.name}))}/>
       <label className="weekly-plan-switch"><Switch size="small" aria-label="显示全部工作项" checked={showAll} disabled={busy} onChange={setShowAll}/> 显示未安排的工作</label>
       {allowed&&<label className="weekly-plan-switch"><Switch size="small" aria-label="显示已取消计划格" checked={includeCancelled} disabled={busy} onChange={setIncludeCancelled}/> 显示已取消</label>}
     </div>
     {loading&&!data&&<Spin aria-label="正在读取周计划"/>}
     {data&&<>
-      {data.warnings.length>0&&<details className="weekly-plan-warnings"><summary>{data.warnings.length} 条计划需要核对</summary><ul>{data.warnings.map((warning,index)=><li key={index}>{planWarningText(warning)}</li>)}</ul></details>}
       <div className="weekly-plan-print">
-        <header><h2>{project?.name||'项目'} · 周计划</h2><p>{start} 起 {count} 周 · 现场时区 {data.timezone} · 当前范围已发布 {published.length}{allowed?` / 草稿 ${drafts.length}`:''}</p></header>
+        <header><h2>{project?.name||'项目'} · 周计划</h2><p>{start} 起 {count} 周 · 现场时区 {data.timezone} · 共 {activeCells.length} 格</p></header>
         {!visibleWorks.length?<Empty description="本范围尚无工作项，请先在计划的工作项页维护"/>
-          :!rows.length?<Empty description="这几周还没有安排">{allowed&&<Space wrap><Button type="primary" onClick={openDraft} disabled={busy}>生成初稿</Button><Button onClick={()=>setShowAll(true)}>逐项安排</Button></Space>}</Empty>
-          :<div className="weekly-plan-scroll" role="region" aria-label="周计划表" tabIndex={0}><table className="weekly-plan-table"><thead><tr><th>工作项</th>{data.weeks.map(week=><th key={week.week_start}><strong>{week.week_start.slice(5)} — {week.week_end.slice(5)}</strong>{week.holiday_days.length>0&&<small>节假日：{week.holiday_days.map(day=>day.slice(5)).join('、')}</small>}{week.makeup_workdays.length>0&&<small>补班：{week.makeup_workdays.map(day=>day.slice(5)).join('、')}</small>}{restDays(week,data.settings).length>0&&<small>项目休息日：{restDays(week,data.settings).join('、')}</small>}{week.missing_holiday_years.length>0&&<small>年度安排待核对</small>}</th>)}</tr></thead><tbody>{rows.map((item,index)=><Fragment key={item.id}>{startsGroup(index)&&<tr className="weekly-plan-group"><th colSpan={data.weeks.length+1}>{item.phase_name}</th></tr>}<tr><th><strong>{item.name}{item.kind==='vehicle'&&<Tag className="weekly-plan-kind">逐车</Tag>}</strong>{groupLine(item)&&<small>{groupLine(item)}</small>}</th>{data.weeks.map(week=>{
+          :!rows.length?<Empty description="这几周还没有安排">{allowed&&<Space wrap><Button type="primary" onClick={openDraft} disabled={busy}>按规则生成</Button><Button onClick={()=>setShowAll(true)}>逐项安排</Button></Space>}</Empty>
+          :<div className="weekly-plan-scroll" role="region" aria-label="周计划表" tabIndex={0}><table className="weekly-plan-table"><thead><tr><th>工作项</th>{data.weeks.map(week=><th key={week.week_start}><strong>{week.week_start.slice(5)} — {week.week_end.slice(5)}</strong>{week.holiday_days.length>0&&<small>节假日：{week.holiday_days.map(day=>day.slice(5)).join('、')}</small>}{week.makeup_workdays.length>0&&<small>补班：{week.makeup_workdays.map(day=>day.slice(5)).join('、')}</small>}{restDays(week,data.settings).length>0&&<small>项目休息日：{restDays(week,data.settings).join('、')}</small>}{week.missing_holiday_years.length>0&&<small>缺节假日数据</small>}</th>)}</tr></thead><tbody>{rows.map((item,index)=><Fragment key={item.id}>{startsGroup(index)&&<tr className="weekly-plan-group"><th colSpan={data.weeks.length+1}>{item.phase_name}</th></tr>}<tr><th><strong>{item.name}{item.kind==='vehicle'&&<Tag className="weekly-plan-kind">逐车</Tag>}</strong>{groupLine(item)&&<small>{groupLine(item)}</small>}</th>{data.weeks.map(week=>{
           const cells=visibleCells.filter(cell=>cell.task_id===item.id&&cell.week_start===week.week_start)
           return <td key={week.week_start} className={cells.length?'has-plan':'is-empty'}>{cells.map(cell=>{
             const state=cell.completion.overdue?'已逾期':cell.completion.is_complete?'已完成':''
             const body=<strong>{goal(cell)}{narrowScope(cell)&&<small> · {narrowScope(cell)}</small>}</strong>
-            return <article key={cell.id} title={draftSource(cell)?`初稿依据：${draftBasis(cell.source_metadata)}`:undefined} className={`weekly-plan-cell${cell.is_cancelled?' is-cancelled':''}${cell.published?' is-published':' is-draft'}`}>
-            {(!cell.published||cell.is_cancelled||state)&&<div className="weekly-plan-cell-head">{allowed&&!cell.published&&!cell.is_cancelled&&<Checkbox aria-label={`选择${cell.task_name} ${cell.week_start} ${scopeText(cell)}`} checked={selection.includes(cell.id)} onChange={event=>setSelection(current=>event.target.checked?[...current,cell.id]:current.filter(id=>id!==cell.id))}/>}
-              {(cell.is_cancelled||!cell.published)&&<span className="weekly-plan-badge">{cell.is_cancelled?'已取消':'草稿'}</span>}
+            return <article key={cell.id} title={draftSource(cell)?`生成依据：${draftBasis(cell.source_metadata)}`:undefined} className={`weekly-plan-cell${cell.is_cancelled?' is-cancelled':''}`}>
+            {(cell.is_cancelled||state)&&<div className="weekly-plan-cell-head">
+              {cell.is_cancelled&&<span className="weekly-plan-badge">已取消</span>}
               {state&&<span className={`weekly-plan-state${cell.completion.overdue?' is-overdue':' is-done'}`}>{state}</span>}</div>}
             {cell.permissions.edit&&allowed?<button type="button" className="weekly-plan-cell-body" disabled={busy} aria-label={`编辑${cell.task_name} ${cell.week_start} ${scopeText(cell)}`} onClick={()=>openCell(cell)}>{body}</button>
               :<div className="weekly-plan-cell-body">{body}</div>}
@@ -234,13 +227,8 @@ export default function SchedulePage({projectId,project,onProjectChange}: {proje
       {editStale&&<Button disabled={busy} onClick={()=>{setCancelCell(undefined);setEditor(undefined);void load()}}>重新读取周计划</Button>}
       <Input.TextArea aria-label="计划取消或恢复理由" value={cancelReason} disabled={busy} onChange={event=>setCancelReason(event.target.value)} maxLength={1000}/>
     </Modal>
-    <Modal title="发布选定周计划" open={publishOpen&&!!data} onCancel={()=>{if(!busy)setPublishOpen(false)}} okText="确认发布" confirmLoading={busy} okButtonProps={{disabled:!chosen.length||!allowed||editStale}} onOk={()=>void write(()=>weeklyPlansApi.publish(projectId,chosen.map(cell=>({id:cell.id,version:cell.version}))),()=>setPublishOpen(false))}>
-      {actionError&&<Alert type="error" message={actionError}/>}
-      {editStale&&<Button disabled={busy} onClick={()=>{setPublishOpen(false);void load()}}>重新读取周计划</Button>}
-      <p>仅发布下面 {chosen.length} 格；实际完成保持独立记录。</p><ul>{chosen.map(cell=><li key={cell.id}>{cell.task_name} · {cell.week_start} · {scopeText(cell)}</li>)}</ul>
-    </Modal>
-    <Modal title="生成周计划初稿" open={draftOpen&&!!data} width={780} onCancel={()=>{if(!busy)setDraftOpen(false)}} okText="保存为草稿" confirmLoading={busy} okButtonProps={{disabled:!allowed||!preview||JSON.stringify(preview.body)!==JSON.stringify(draftBody)||!preview.value.proposals.length}} onOk={()=>preview&&void write(()=>weeklyPlansApi.draft(projectId,{...preview.body,preview_token:preview.value.preview_token}),()=>setDraftOpen(false))}>
-      <p className="weekly-plan-draft-intro">按发车和全部到场的计划日期，把每个分组排到对应的周。生成的是草稿，已有的计划格不会被覆盖；核对后再发布。{busy&&<Spin size="small" aria-label="正在处理初稿"/>}</p>
+    <Modal title="按规则生成周计划" open={draftOpen&&!!data} width={780} onCancel={()=>{if(!busy)setDraftOpen(false)}} okText="生成周计划" confirmLoading={busy} okButtonProps={{disabled:!allowed||!preview||JSON.stringify(preview.body)!==JSON.stringify(draftBody)||!preview.value.proposals.length}} onOk={()=>preview&&void write(()=>weeklyPlansApi.draft(projectId,{...preview.body,preview_token:preview.value.preview_token}),()=>setDraftOpen(false))}>
+      <p className="weekly-plan-draft-intro">按发车和全部到场的计划日期，把每个分组排到对应的周。已有的计划格不会被覆盖，生成后可以逐格修改。{busy&&<Spin size="small" aria-label="正在处理初稿"/>}</p>
       {actionError&&<Alert type="error" message={actionError} action={actionError.startsWith('默认初稿建议暂不可读取')?<Button size="small" disabled={busy} onClick={reloadRecommendations}>重新读取初稿建议</Button>:undefined}/>}
       {recommendations&&<div className="weekly-plan-suggestions">
         {!recommendations.rules.length&&!missingAnchors&&<Alert type="info" message="没有可用的默认安排，请在下方为每个分组选择排在哪周。"/>}

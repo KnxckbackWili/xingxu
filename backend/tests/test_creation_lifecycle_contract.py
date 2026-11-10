@@ -22,24 +22,6 @@ def test_omitted_create_status_starts_preparing_after_readback(client, pm_header
     assert _status(client, pm_headers, created.json()['id']) == 'preparing'
 
 
-def test_new_project_cannot_skip_kickoff_documents(client, pm_headers):
-    from tests.document_helpers import documents, upload_documents
-    pid = client.post('/api/projects', headers=pm_headers, json=create_body()).json()['id']
-    # The former ready stage is gone; entering execution checks both former gates at once.
-    assert client.post(f'/api/projects/{pid}/status', headers=pm_headers, json={'status': 'ready'}).status_code == 400
-    rejected = client.post(f'/api/projects/{pid}/status', headers=pm_headers, json={'status': 'executing'})
-    assert rejected.status_code == 400
-    assert '第4阶段' in rejected.text
-    assert _status(client, pm_headers, pid) == 'preparing'
-    kickoff = [row['id'] for row in documents(client, pm_headers, pid)['documents'] if row['stage_key'] == '4' and row['required']]
-    upload_documents(client, pm_headers, pid, kickoff)
-    assert client.post(f'/api/projects/{pid}/status', headers=pm_headers, json={'status': 'executing'}).status_code == 200
-    # Signoff documents gate acceptance; completion needs the acceptance gate.
-    assert client.post(f'/api/projects/{pid}/status', headers=pm_headers, json={'status': 'acceptance'}).status_code == 400
-    assert client.post(f'/api/projects/{pid}/status', headers=pm_headers, json={'status': 'completed'}).status_code == 400
-    assert _status(client, pm_headers, pid) == 'executing'
-
-
 @pytest.mark.parametrize('status', ['ready', 'executing', 'planning', 'draft'])
 def test_explicit_non_preparing_initial_state_is_rejected(client, pm_headers, status):
     created = client.post('/api/projects', headers=pm_headers, json=create_body(status=status))
@@ -52,11 +34,11 @@ def test_explicit_preparing_initial_state_is_accepted(client, pm_headers):
     assert created.status_code == 200 and created.json()['status'] == 'preparing'
 
 
-def test_every_employee_can_create_a_project_but_gates_still_apply(client, worker_headers, pm_headers):
+def test_every_employee_can_create_a_project_and_record_its_status(client, worker_headers, pm_headers):
     assert client.post('/api/projects', headers=worker_headers, json=create_body()).status_code == 200
     pid = client.post('/api/projects', headers=pm_headers, json=create_body()).json()['id']
-    assert client.post(f'/api/projects/{pid}/status', headers=worker_headers, json={'status': 'executing'}).status_code == 400
-    assert _status(client, worker_headers, pid) == 'preparing'
+    assert client.post(f'/api/projects/{pid}/status', headers=worker_headers, json={'status': 'executing'}).status_code == 200
+    assert _status(client, worker_headers, pid) == 'executing'
 
 
 def test_template_creation_generates_content_without_starting_the_project(client, pm_headers):

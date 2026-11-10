@@ -110,7 +110,7 @@ def test_workbench_and_statistics_only_current_facts_and_issue_closure_no_stale_
     before=client.get('/api/dashboard/overview',headers=admin_headers)
     assert before.status_code==200,before.text
     assert 'NOW-PRIVATE-ATTENTION' in before.text
-    assert before.json()['weekly_plan']=={'state':'available','count':0,'items':[],'unknown_count':0,'unknown_items':[]}
+    assert before.json()['weekly_plan']=={'state':'available','count':0,'items':[]}
     assert 'people' not in before.json() and 'quantities_by_unit' not in before.text and 'person_days' not in before.text
     assert policy(client,pm_headers,pid,'document',row).status_code==200
     after=client.get('/api/dashboard/overview',headers=admin_headers)

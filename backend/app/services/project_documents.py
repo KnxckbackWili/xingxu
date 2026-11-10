@@ -153,31 +153,6 @@ def redact_document_text(db, project, actor, text, *, public_names=()):
     return result
 
 
-def filter_blockers(db, project, actor, blockers):
-    """Preserve real blockers while hiding confidential titles from their caller.
-
-    check_transition remains actor-free and pure; run this only at the response
-    boundary. It also accepts dictionaries for future notification adapters.
-    """
-    from dataclasses import replace
-    restricted=[]
-    for model,predicate in ((ProjectDocument,can_read_document),(ProjectDocumentDefinition,can_read_definition)):
-        restricted.extend(row for row in db.query(model).filter_by(project_id=project.id).populate_existing() if not predicate(actor,project,row))
-    if not restricted:return list(blockers)
-    result=[]
-    signatures={'到货签收单','调试完工单','上线运行单','培训记录表'}
-    for blocker in blockers:
-        kind=blocker.get('type') if isinstance(blocker,dict) else blocker.type
-        message=blocker.get('message','') if isinstance(blocker,dict) else blocker.message
-        contains_private=any((row.name and row.name in message) or (not row.name and row.code and row.code in message) for row in restricted)
-        if kind in {'documents','kickoff_documents'} and contains_private:
-            message='仍有必需资料需要项目负责人核对，请联系负责人处理'
-        else:
-            message=redact_document_text(db,project,actor,message,public_names=signatures if kind=='signature_documents' else ())
-        result.append({**blocker,'message':message} if isinstance(blocker,dict) else replace(blocker,message=message))
-    return result
-
-
 def audit_access(db, project, user, *, documents=(), definitions=(), files=(), action='confidential_view'):
     """Audit actual authorized responses, never predicate evaluation or secrets."""
     verb={'confidential_dl':'下载','confidential_export':'导出'}.get(action,'查看')
@@ -590,8 +565,7 @@ def update_state(db,project,document,user,status,reason,expected=None):
 def progress_summary(db,project,user,documents=None):
     documents=documents if documents is not None else db.query(ProjectDocument).filter_by(project_id=project.id)
     rows=[row for row in documents if applicable(project,row) and can_read_document(user,project,row)]
-    from app.services.lifecycle_gates import _pending_required_documents
-    return {'phase4_ready': not _pending_required_documents(db, project.id, stages=('4',), verify_files=False), 'total':len(rows),'pending':sum(row.status=='pending' for row in rows),
+    return {'total':len(rows),'pending':sum(row.status=='pending' for row in rows),
         'submitted':sum(row.status=='submitted' for row in rows),'waived':sum(row.status=='waived' for row in rows),
         'required_pending':sum(row.required and row.status=='pending' for row in rows)}
 

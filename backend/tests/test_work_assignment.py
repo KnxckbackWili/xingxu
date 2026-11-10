@@ -22,17 +22,15 @@ def repair(client,headers,pid,unit,event,assignees):
         json={'week_start':start.isoformat(),'mode':'finish','notes':'携带驱动轮'})
 
 
-def test_repair_shared_work_survives_weekly_publication_and_reassignment(client,pm_headers,worker_headers):
-    from tests.test_weekly_plans import publish
+def test_repair_shared_work_survives_weekly_edits_and_reassignment(client,pm_headers,worker_headers):
     pid,unit,event=setup_work(client,pm_headers)
     with SessionLocal() as db:ids={u.username:u.id for u in db.query(User)}
     response=repair(client,pm_headers,pid,unit,event,[ids['worker1']]);assert response.status_code==200,response.text
-    first=response.json();cell=first['cell'];assert first['created'] and not cell['published']
-    assert publish(client,pm_headers,pid,cell).status_code==200
+    first=response.json();cell=first['cell'];assert first['created'] and 'published' not in cell
     url=f"/api/projects/{pid}/weekly-plans/{cell['id']}"
-    changed=client.put(url,headers=pm_headers,json={'version':1,'notes':'改为周三更换'})
+    changed=client.put(url,headers=pm_headers,json={'version':0,'notes':'改为周三更换'})
     assert changed.status_code==200 and changed.json()['notes']=='改为周三更换'
-    assert client.put(url,headers=pm_headers,json={'version':1,'notes':'旧版本'}).status_code==409
+    assert client.put(url,headers=pm_headers,json={'version':0,'notes':'旧版本'}).status_code==409
     next_week=(project_today('Asia/Shanghai')+timedelta(weeks=1));next_week-=timedelta(days=next_week.weekday())
     another=client.post(f'/api/projects/{pid}/vehicle-units/{unit}/events/{event}/weekly-plans',headers=pm_headers,
         json={'week_start':next_week.isoformat(),'mode':'in_progress'})

@@ -448,7 +448,7 @@ export default function VehicleLifecyclePage({ project, onReload, configurationO
             {!!event.replaced_parts?.length && <div><b>更换配件：</b>{event.replaced_parts.map((part: any) => `${part.name || '配件'}${part.model ? `(${part.model})` : ''} x${part.quantity || 1}`).join('；')}</div>}
             {event.downtime_hours != null && <div><b>停机：</b>{event.downtime_hours} 小时</div>}
             {event.verification && <div><b>验证：</b>{event.verification}</div>}
-            {!!event.weekly_assignments?.length && <div className="vehicle-repair-assignments"><strong>维修周计划</strong>{event.weekly_assignments.map((cell:any)=><div key={cell.id}><a href={`/pm/projects/${projectId}/plan?view=weeks&week=${cell.week_start}&cell=${cell.id}`}>{cell.week_start}</a> <Tag>{cell.is_cancelled?'已取消':cell.published?'已发布':'草稿'}</Tag></div>)}</div>}
+            {!!event.weekly_assignments?.length && <div className="vehicle-repair-assignments"><strong>维修周计划</strong>{event.weekly_assignments.map((cell:any)=><div key={cell.id}><a href={`/pm/projects/${projectId}/plan?view=weeks&week=${cell.week_start}&cell=${cell.id}`}>{cell.week_start}</a> {cell.is_cancelled&&<Tag>已取消</Tag>}</div>)}</div>}
             {canSchedule && !event.is_closed && <Button size="small" style={{ marginTop: 8 }} onClick={() => setAssignment({ projectId, repair: { unitId: selected.id, eventId: event.id, title: event.title } })}>{event.assignments?.length ? '追加维修安排' : '安排维修'}</Button>}
             {!writeBlocked && (canManageEvents || event.operator_id === user?.id) && <Space size={0} wrap>
               <Button size="small" type="link" icon={<EditOutlined />} onClick={() => editEvent(event)}>补充 / 编辑</Button>

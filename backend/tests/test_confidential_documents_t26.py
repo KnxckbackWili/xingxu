@@ -173,31 +173,6 @@ def test_project_blank_uses_family_scope_while_global_unfilled_template_stays_pu
     assert client.get(f"/api/templates/default/document-requirements/{rule['id']}/blank-file",headers=admin_headers).status_code==200
 
 
-def test_completion_review_real_status_and_future_blockers_never_reveal_private_titles(client,pm_headers,admin_headers):
-    from app.services.project_documents import filter_blockers,redact_document_text
-    from app.services.lifecycle_gates import Blocker,check_transition
-    pid,_=setup_project(client,pm_headers)
-    doc=requirement(client,pm_headers,pid,code='6.99',name='T26-SECRET-GATE-TITLE')
-    assert policy(client,pm_headers,pid,'document',doc).status_code==200
-    with SessionLocal() as db:
-        project=db.get(Project,pid);project.status='acceptance';db.commit()
-        admin=db.query(User).filter_by(username='admin').one()
-        raw=check_transition(db,project,'completed')
-        assert any('T26-SECRET-GATE-TITLE' in row.message for row in raw)
-        filtered=filter_blockers(db,project,admin,[*raw,Blocker('kickoff_documents','4.1 T26-SECRET-GATE-TITLE','/documents'),
-            Blocker('signature_documents','到货签收单、T26-SECRET-GATE-TITLE','/documents')])
-        assert all('T26-SECRET-GATE-TITLE' not in row.message for row in filtered)
-        assert '到货签收单' in filtered[-1].message
-        public=Blocker('documents','仍需提交公开资料：4.1 公开责任书','/documents')
-        assert filter_blockers(db,project,admin,[public])==[public]
-        assert 'T26-SECRET-GATE-TITLE' not in redact_document_text(db,project,admin,'待交：T26-SECRET-GATE-TITLE')
-        assert any('T26-SECRET-GATE-TITLE' in row.message for row in raw)  # Pure source result was not mutated.
-    review=client.get(f'/api/projects/{pid}/completion-review',headers=admin_headers)
-    assert review.status_code==200 and 'T26-SECRET-GATE-TITLE' not in review.text
-    rejected=client.post(f'/api/projects/{pid}/status',headers=admin_headers,json={'status':'completed'})
-    assert rejected.status_code==400 and 'T26-SECRET-GATE-TITLE' not in rejected.text
-
-
 def test_independent_private_upload_is_atomic_and_ordinary_members_cannot_assign_acl(client,pm_headers,admin_headers,worker_headers):
     pid,users=setup_project(client,pm_headers)
     url=f'/api/projects/{pid}/documents/files'

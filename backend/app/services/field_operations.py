@@ -131,7 +131,7 @@ def _assignment(db,project,user,data):
     if not cell_id:return
     from app.models import WeeklyPlanCell
     cell=db.get(WeeklyPlanCell,cell_id,populate_existing=True)
-    if not cell or cell.project_id!=project.id or not cell.published or getattr(cell,'is_cancelled',False):raise HTTPException(404,'已发布周计划不存在')
+    if not cell or cell.project_id!=project.id or getattr(cell,'is_cancelled',False):raise HTTPException(404,'周计划不存在')
     # 周计划只说“这周做什么”，谁做完谁登记。
     task_id=data['target_id'] if data['kind']=='work' else db.get(CheckItem,data['target_id']).task_id if data['kind']=='check' and db.get(CheckItem,data['target_id']) else None
     if task_id and task_id!=cell.task_id:raise HTTPException(404,'工作不属于该周计划')

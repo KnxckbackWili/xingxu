@@ -12,7 +12,6 @@ export const TYPE_TAG: Record<string, string> = {
   document_submitted: '资料提交',
   document_deadline: '资料截止提醒',
   schedule_confirmed: '计划通知',
-  issue_sla: '问题时限',
   project_membership: '项目负责人',
   report: '报告',
   system: '系统',

@@ -86,11 +86,6 @@ def project_completion_blocker_tasks(db: Session, project_id: str) -> list[Task]
             or (task.quantity_type != 'per_vehicle' and not task.manually_completed)]
 
 
-def project_completion_blockers(db: Session, project_id: str) -> list[str]:
-    from app.services.vehicle_progress import matrix_completion_blockers
-    return [task.name for task in project_completion_blocker_tasks(db, project_id)] + matrix_completion_blockers(db, project_id)
-
-
 def project_progress_tree(db: Session, project_id: str) -> dict:
     """Equal real vehicle-step counts plus non-vehicle work completion."""
     from app.services.work_items import phase_of,group_of,stage_label
@@ -137,7 +132,7 @@ def plan_vs_actual_timeline(db: Session, project_id: str, from_date, to_date) ->
     end=max(to_date or project.end_date,start)
     planned={}; unknown=set()
     rows=db.query(WeeklyPlanCell,Task).join(Task,Task.id==WeeklyPlanCell.task_id).filter(
-        WeeklyPlanCell.project_id==project_id,WeeklyPlanCell.published.is_(True),WeeklyPlanCell.is_cancelled.is_(False),
+        WeeklyPlanCell.project_id==project_id,WeeklyPlanCell.is_cancelled.is_(False),
         WeeklyPlanCell.mode=='finish',Task.quantity_type=='per_vehicle').all()
     for cell,task in rows:
         if cell.target_count is None:unknown.add(cell.week_start)
@@ -150,6 +145,6 @@ def plan_vs_actual_timeline(db: Session, project_id: str, from_date, to_date) ->
     while start<=end:
         result.append({'date':start.isoformat(),'planned':None if start in unknown else planned.get(start,0),
             'actual':actual.get(start,0),'planned_pct':None,'actual_pct':None,'period':'week','unit':'车辆环节',
-            'plan_available':bool(rows),'meaning':'已发布完成目标与实际完成日期'})
+            'plan_available':bool(rows),'meaning':'周计划完成目标与实际完成日期'})
         start+=timedelta(days=7)
     return result

@@ -19,7 +19,7 @@ def main():
     while is_maintenance():
         time.sleep(2)
     sched = start_scheduler()
-    logger.info("独立调度器已启动（daily/weekly/issue_sla）")
+    logger.info("独立调度器已启动（资料截止/周报/存储维护/通知投递）")
     try:
         while True:
             time.sleep(60)

@@ -1,4 +1,4 @@
-"""Weekly/monthly reports from actual operations, documents and published plans."""
+"""Weekly/monthly reports from actual operations, documents and weekly plans."""
 from datetime import date,datetime,time,timedelta,timezone
 from typing import Optional
 from sqlalchemy.orm import Session

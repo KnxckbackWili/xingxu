@@ -1,6 +1,5 @@
 import { PersonAvatar } from '../../../components/Person'
 import { type WeeklyPlanSummary } from '../../../api/weeklyPlans'
-import CompletionReview from './CompletionReview'
 import ProjectEventsTimeline from '../../../components/ProjectEventsTimeline'
 import { ProjectCapabilitiesContext, useProjectWriteBlocked } from '../../../hooks/useProjectCapability'
 import { useContext, useEffect, useRef, useState } from 'react'
@@ -14,7 +13,7 @@ import {
 import LazyChart from '../../../components/LazyChart'
 import { api } from '../../../api/client'
 import { useNavigate } from 'react-router-dom'
-import { projectStageGuidance, projectWorkflow } from './projectWorkflow'
+import { projectStageGuidance } from './projectWorkflow'
 import { STATUS_LABEL, isProjectStatus, projectStatusMeta } from '../../../constants/status'
 import AcceptanceDecision, { type AcceptanceSummary } from '../../../components/AcceptanceDecision'
 import type { DocumentAttention } from '../../../api/projectDocuments'
@@ -32,24 +31,22 @@ const STATUS_FLOW: Record<string, string[]> = {
 const SUSPENDABLE_STATUSES = ['preparing', 'executing', 'acceptance']
 
 /** Project status remains a management decision; the work tree organizes its readable evidence. */
-export default function OverviewPage({ projectId, projectStatus, projectSuspension = null, infoComplete, vehicleTotal = 0, canManageStatus = false, canArchive = true, onStatusChange }: {
-  projectId: string; projectStatus: string; projectSuspension?: any; infoComplete?: boolean; vehicleTotal?: number; canManageStatus?: boolean; canArchive?: boolean; onStatusChange?: () => void
+export default function OverviewPage({ projectId, projectStatus, projectSuspension = null, canManageStatus = false, canArchive = true, onStatusChange }: {
+  projectId: string; projectStatus: string; projectSuspension?: any; canManageStatus?: boolean; canArchive?: boolean; onStatusChange?: () => void
 }) {
   const eventWriteBlocked = useProjectWriteBlocked(projectStatus)
   const eventCapabilities = useContext(ProjectCapabilitiesContext)
   const [data, setData] = useState<any>(null)
   const [dataOpen, setDataOpen] = useState(false)
-  const [reviewOpen, setReviewOpen] = useState(false)
   const [eventState, setEventState] = useState<any>()
   const [timeline, setTimeline] = useState<any[]>([])
   const [overdue, setOverdue] = useState<any[]>([])
   const [issues, setIssues] = useState<any[]>([])
   const [documentActions, setDocumentActions] = useState<DocumentAttention | null>(null)
-  const [documentProgress, setDocumentProgress] = useState<{ pending: number; submitted: number; waived: number; required_pending: number; total: number; phase4_ready?: boolean } | null>(null)
+  const [documentProgress, setDocumentProgress] = useState<{ pending: number; submitted: number; waived: number; required_pending: number; total: number } | null>(null)
   const [recentLogs, setRecentLogs] = useState<any[]>([])
   const [weeklyPlan, setWeeklyPlan] = useState<WeeklyPlanSummary | null>(null)
   const [taskCount, setTaskCount] = useState(0)
-  const [unlinkedVehicleWorkCount, setUnlinkedVehicleWorkCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [loadAttempt, setLoadAttempt] = useState(0)
@@ -87,7 +84,6 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
         setWeeklyPlan(overview.weekly_plans ?? null)
         const projectTasks = (overview.tree ?? []).flatMap((phase: any) => phase.work_items ?? [])
         setTaskCount(projectTasks.length)
-        setUnlinkedVehicleWorkCount(projectTasks.filter((task: any) => task.kind === 'vehicle' && !task.vehicle_step_key).length)
       } catch {
         if (!controller.signal.aborted) setLoadError(true)
       } finally {
@@ -98,7 +94,7 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
     return () => controller.abort()
   }, [projectId, projectStatus, loadAttempt])
 
-  useEffect(() => { setReviewOpen(false); setDataOpen(false); setStatusFailure(null); setMilestoneTarget(null); setArchiveModal(false); setSuspendOpen(false) }, [projectId, projectStatus])
+  useEffect(() => { setDataOpen(false); setStatusFailure(null); setMilestoneTarget(null); setArchiveModal(false); setSuspendOpen(false) }, [projectId, projectStatus])
 
   if (loading) {
     return (
@@ -152,19 +148,6 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
   const currentPhase = phases.find((p) => p.percent < 100)
   const openIssues = issues.filter((i) => !['closed', 'cancelled'].includes(i.status))
   const allowedNext = canManageStatus ? (STATUS_FLOW[projectStatus] ?? []).filter(status => status !== 'archived' || canArchive) : []
-  const draftPlans = weeklyPlan?.draft_count ?? null
-  const weeklyWarnings = weeklyPlan?.warning_count ?? weeklyPlan?.warnings?.length ?? 0
-  const severeIssueCount = openIssues.filter((i) => i.severity === 'critical' || i.severity === 'high').length
-  const workflow = projectWorkflow({
-    status: projectStatus, infoComplete, vehicles: vehicleTotal, tasks: taskCount,
-    plans: weeklyPlan?.total ?? null, drafts: draftPlans,
-    planWarnings: weeklyPlan?.warning_count,
-    kickoffReady: documentProgress?.phase4_ready, severeIssues: severeIssueCount, progress: data?.percent ?? 0,
-  })
-  const nextAction = workflow.action
-  const actionDescription = nextAction.path.includes('step=schedule') && !nextAction.status
-    ? '核对每周工作、车辆范围和负责人，再发布周计划。'
-    : nextAction.description
   const stageGuidance = projectStageGuidance(projectStatus)
 
   const chartOption = {
@@ -195,91 +178,62 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
   }
 
   const go = (path: string) => navigate(`/pm/projects/${projectId}${path}`)
-  const milestoneNext: Record<string, string> = { executing: 'acceptance' }
   // 每次人工推进都先确认；归档另有复盘弹窗。
   const requestStatus = (status: string) => {
     if (status === 'archived') { changeStatus(status); return }
     setStatusFailure(null); setStatusReason(''); setMilestoneTarget(status)
   }
-  const failureLinks = statusFailure?.target === 'executing'
-    ? [{ path: '/documents?stage=4', label: '查看准备资料' }]
-    : statusFailure?.target === 'acceptance' ? [{ path: '/documents?stage=6', label: '查看签单资料' }]
-    : ['completed', 'archived'].includes(statusFailure?.target ?? '')
-      ? [{ path: '/documents?acceptance=1', label: '核对验收与归档' }, { path: '/plan', label: '核对任务与质量' }, { path: '/documents', label: '核对必需资料' }, { path: '/issues', label: '处理未解决问题' }]
-      : []
-  const failureAlert = statusFailure && <Alert type="error" showIcon message="项目阶段尚未更新" className="overview-failure"
-    description={<><div>{statusFailure.message}</div><Space wrap className="overview-failure-actions">{failureLinks.length ? failureLinks.map(link => <Button key={link.path} onClick={() => { setMilestoneTarget(null); setArchiveModal(false); setSuspendOpen(false); go(link.path) }}>{link.label}</Button>)
-      : <Button onClick={() => { setMilestoneTarget(null); setArchiveModal(false); setSuspendOpen(false); setStatusFailure(null); setLoadAttempt(value => value + 1) }}>重新查看项目</Button>}</Space></>} />
+  const failureAlert = statusFailure && <Alert type="error" showIcon message="项目状态尚未更新" className="overview-failure"
+    description={<><div>{statusFailure.message}</div><Space wrap className="overview-failure-actions">
+      <Button onClick={() => { setMilestoneTarget(null); setArchiveModal(false); setSuspendOpen(false); setStatusFailure(null); setLoadAttempt(value => value + 1) }}>重新查看项目</Button></Space></>} />
   const pushTarget = stageGuidance && canManageStatus && stageGuidance.next && (stageGuidance.next !== 'archived' || canArchive) ? stageGuidance.next : null
-  const reviewLabel = projectStatus === 'completed' ? '归档前核对' : '完成前核对'
   const statusItems = [
-    ...allowedNext.map((status) => ({ key: status, label: `${status === milestoneNext[projectStatus] ? '确认进入' : '切换到'}「${STATUS_LABEL[status]}」`, onClick: () => requestStatus(status) })),
-    ...(canManageStatus && ['executing', 'acceptance', 'completed'].includes(projectStatus) ? [{ key: 'review', label: reviewLabel, onClick: () => setReviewOpen(true) }] : []),
+    ...allowedNext.filter(status => status !== pushTarget).map((status) => ({ key: status, label: `退回「${STATUS_LABEL[status]}」`, onClick: () => requestStatus(status) })),
     ...(canManageStatus && SUSPENDABLE_STATUSES.includes(projectStatus) ? [{ type: 'divider' as const }, { key: 'suspend', label: '突发停工', danger: true, onClick: () => { setSuspendReason(''); setSuspendOpen(true) } }] : []),
   ]
   const menuOf = (items: typeof statusItems) => items.some(item => 'label' in item) && <Dropdown trigger={['click']} menu={{ items }}><Button loading={changingStatus}>调整项目状态 <DownOutlined /></Button></Dropdown>
   const statusMenu = menuOf(statusItems)
-  const checklistMenu = menuOf(statusItems.filter(item => item.key !== pushTarget))
-  const lifecycleTip = stageGuidance && <ContextTip id="project-lifecycle" title="项目怎么推进"><p>{stageGuidance.description}</p><p>完成与归档会检查当前资料和工作。</p></ContextTip>
   const link = (title: string, path: string, detail?: string, urgent = false) => <a
     className={`overview-tree-link${urgent ? ' is-urgent' : ''}`} href={`/pm/projects/${projectId}${path}`}
     onClick={event => { if (event.button !== 0 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return; event.preventDefault(); go(path) }}>
     <span><strong>{title}</strong>{detail && <small>{detail}</small>}</span><RightOutlined aria-hidden="true" />
   </a>
-  const checklist = projectStatus === 'preparing' ? workflow.checklist : null
-  const pendingSteps = checklist ? checklist.filter(item => !item.done).length : 0
   const groups: UnitQuantity[] = data?.quantities_by_unit ?? []
   const quantity = (value: number) => Number(value.toFixed(3))
   // Say what needs doing, not the bookkeeping.
-  const scheduleDetail = !weeklyPlan ? '周计划尚未读取' : draftPlans ? `${draftPlans} 格草稿待发布` : weeklyPlan.total ? `已发布 ${weeklyPlan.published_count} 格` : '还没有安排'
+  const scheduleDetail = !weeklyPlan ? '周计划尚未读取' : weeklyPlan.total ? `已安排 ${weeklyPlan.total} 格` : '还没有安排，可以按模板生成'
   const overdueFirst = overdue[0]
   const overdueDetail = overdueFirst ? [overdueFirst.code, overdueFirst.name, deadlineLabel(overdueFirst.due_at, documentActions?.timezone || 'Asia/Shanghai'), overdueFirst.effective_owner_name].filter(Boolean).join(' · ') : ''
   const deliveryDetail = documentProgress ? `${documentProgress.pending} 项资料待提交${documentProgress.required_pending ? `，其中 ${documentProgress.required_pending} 项必需` : ''}` : '资料状态待核对'
 
   return (
     <div className="project-overview-tree overview-work-page">
-      <CompletionReview key={projectId} projectId={projectId} target={projectStatus === 'completed' ? 'archived' : 'completed'} open={reviewOpen} onClose={() => setReviewOpen(false)} />
       {statusFailure && !archiveModal && !milestoneTarget && !suspendOpen && failureAlert}
       {projectStatus === 'suspended' && <Alert type="warning" showIcon message="项目已停工" description={projectSuspension?.reason || '请联系项目负责人了解恢复安排。'} />}
-      {!checklist && <section className="overview-next" aria-label="当前行动">
+      <section className="overview-next" aria-label="项目状态">
         <div className="overview-next-copy">
-          <span className="overview-next-kicker"><strong>{projectStatusMeta(projectStatus).label}</strong>{stageGuidance?.next && <span>下一项目状态：{STATUS_LABEL[stageGuidance.next]}</span>}{lifecycleTip}</span>
-          <p>{projectStatus === 'suspended' && canManageStatus ? '处理停工原因后恢复原状态，现场实施仍需核对进场条件。' : actionDescription}</p>
+          <span className="overview-next-kicker"><strong>{projectStatusMeta(projectStatus).label}</strong>{stageGuidance?.next && <span>下一步：{STATUS_LABEL[stageGuidance.next]}</span>}</span>
+          <p>{stageGuidance?.description}</p>
         </div>
-        <div className="overview-status-actions">
-          <Button type="primary" loading={changingStatus} disabled={projectStatus === 'suspended' && canManageStatus && !projectSuspension?.status_before}
-            icon={projectStatus === 'suspended' && canManageStatus ? <PlayCircleOutlined aria-hidden="true" /> : undefined}
-            onClick={() => projectStatus === 'suspended' && canManageStatus ? changeStatus(projectSuspension.status_before) : nextAction.status && canManageStatus ? requestStatus(nextAction.status) : go(nextAction.path)}>
-            {projectStatus === 'suspended' && canManageStatus ? '恢复项目' : nextAction.status && !canManageStatus ? '查看准备情况' : nextAction.title}
-          </Button>
-          {!canManageStatus && ['executing', 'acceptance', 'completed'].includes(projectStatus) && <Button onClick={() => setReviewOpen(true)}>{reviewLabel}</Button>}
+        {canManageStatus && <div className="overview-status-actions">
+          {projectStatus === 'suspended'
+            ? <Button type="primary" loading={changingStatus} disabled={!projectSuspension?.status_before} icon={<PlayCircleOutlined aria-hidden="true" />} onClick={() => changeStatus(projectSuspension.status_before)}>恢复项目</Button>
+            : pushTarget && <Button type="primary" loading={changingStatus} onClick={() => requestStatus(pushTarget)}>推进到「{STATUS_LABEL[pushTarget]}」</Button>}
           {statusMenu}
-        </div>
-      </section>}
+        </div>}
+      </section>
 
       <div className="overview-layout">
         <div className="overview-main">
-          <section className="overview-next-work overview-card" aria-label={checklist ? '当前行动' : '待处理工作'}>
-            <div className="overview-card-head">
-              <h2>{checklist ? (pendingSteps ? `进入「现场实施」还差 ${pendingSteps} 项` : '准备清单已全部核对') : '现在要处理'}{checklist && lifecycleTip}</h2>
-              {checklist && (pushTarget || checklistMenu) && <div className="overview-status-actions">
-                {pushTarget && <Button type={pendingSteps ? 'default' : 'primary'} loading={changingStatus} onClick={() => requestStatus(pushTarget)}>推进至「{STATUS_LABEL[pushTarget]}」</Button>}
-                {checklistMenu}
-              </div>}
-            </div>
-            {checklist && <ol aria-label="准备清单" className="overview-checklist">{checklist.map(item => <li key={item.title} className={item.done ? 'is-done' : ''}>
-              <span className="overview-check-mark" aria-hidden="true">{item.done ? '✓' : '!'}</span>
-              <span className="overview-check-copy"><Button type="link" onClick={() => go(item.path)}>{item.title}</Button><small>{item.description}</small></span>
-              <span className="overview-check-state">{item.done ? '已核对' : '待核对'}</span>
-            </li>)}</ol>}
+          <section className="overview-next-work overview-card" aria-label="待处理工作">
+            <div className="overview-card-head"><h2>现在要处理</h2></div>
             <div className="overview-work-cards overview-work-list">
-              {openIssues.length > 0 && link('现场问题', '/issues', `${openIssues.length} 个问题待处理${severeIssueCount ? `，其中 ${severeIssueCount} 个优先处理` : ''}`, severeIssueCount > 0)}
+              {openIssues.length > 0 && link('现场问题', '/issues', `${openIssues.length} 个问题未关闭`)}
               {overdue.length > 0 && link(`${overdue.length} 项资料已逾期`, '/documents', overdueDetail, true)}
-              {(!taskCount || unlinkedVehicleWorkCount > 0) && link('工作项范围待确认', '/plan', !taskCount ? '确认项目阶段与工作项范围' : `${unlinkedVehicleWorkCount} 项车辆工作尚未明确关联真实进度环节`)}
-              {!checklist && (workflow.setup || (draftPlans??0)>0 || (weeklyPlan?.warning_count??0)>0) && link('周计划', '/plan?view=weeks', weeklyWarnings ? `${scheduleDetail} · ${weeklyWarnings} 条提醒` : scheduleDetail, weeklyWarnings > 0)}
+              {!taskCount && link('还没有工作项', '/plan', '从模板带入或手动添加要做的工作')}
+              {link('周计划', '/plan?view=weeks', scheduleDetail)}
               {!!documentActions?.this_week_count && link('本周待交资料', '/documents?filter=week', `${documentActions.this_week_count} 项资料本周截止，按现场时区 ${documentActions.timezone}`)}
-              {!checklist && (documentProgress === null || documentProgress.pending > 0) && link('项目资料', '/documents', deliveryDetail)}
-              {!workflow.setup && !overdue.length && !openIssues.length && documentProgress !== null && !documentProgress.pending && link('查看周计划', '/plan?view=weeks', '查看已发布的工作和实际完成情况')}
+              {(documentProgress === null || documentProgress.pending > 0) && link('项目资料', '/documents', deliveryDetail)}
             </div>
           </section>
           <ProjectEventsTimeline key={projectId} projectId={projectId} initialData={eventState} canEdit={!eventWriteBlocked && (eventCapabilities ? eventCapabilities.includes('project.update') : canManageStatus)} onChanged={onStatusChange} />
@@ -336,11 +290,10 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
       {/* C8-3：归档前填写项目复盘 */}
       <Modal title={milestoneTarget ? `确认进入「${STATUS_LABEL[milestoneTarget]}」` : '确认项目阶段'} open={!!milestoneTarget}
         onCancel={() => { if (!changingStatus) { setMilestoneTarget(null); setStatusFailure(null) } }}
-        onOk={() => { if (milestoneTarget) changeStatus(milestoneTarget, undefined, statusReason.trim()) }} okText="确认推进阶段" cancelText="取消" confirmLoading={changingStatus}
+        onOk={() => { if (milestoneTarget) changeStatus(milestoneTarget, undefined, statusReason.trim()) }} okText="确认" cancelText="取消" confirmLoading={changingStatus}
         cancelButtonProps={{ disabled: changingStatus }} closable={!changingStatus} maskClosable={false}>
         <Typography.Paragraph>项目状态将从「{STATUS_LABEL[projectStatus] ?? projectStatus}」变为「{milestoneTarget ? STATUS_LABEL[milestoneTarget] : ''}」，变更会记入项目记录。</Typography.Paragraph>
-        {milestoneTarget === milestoneNext[projectStatus] && <Typography.Paragraph>请核对现场实际情况后确认。当前进度 {data?.percent ?? 0}% 仅供参考，不会自动推进阶段；录入验收记录也不会自动标记项目完成。</Typography.Paragraph>}
-        <Input.TextArea aria-label="状态变更说明" rows={2} maxLength={5000} value={statusReason} onChange={event => setStatusReason(event.target.value)} placeholder="说明（可选）：如资料已齐、客户确认进场等" disabled={changingStatus} />
+        <Input.TextArea aria-label="状态变更说明" rows={2} maxLength={5000} value={statusReason} onChange={event => setStatusReason(event.target.value)} placeholder="说明（可选）" disabled={changingStatus} />
         {failureAlert}
       </Modal>
 

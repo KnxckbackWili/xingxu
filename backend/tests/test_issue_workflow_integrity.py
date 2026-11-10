@@ -30,33 +30,6 @@ def test_issue_cancelled_status(client, pm_headers):
     r3 = client.put(f'/api/issues/{i2}', headers=pm_headers, json=versioned(i2, {'status': 'cancelled'}, 'Issue'))
     assert r3.status_code == 400
 
-def test_overdue_sla_scan_notifies_pm(client, pm_headers, admin_headers):
-    pid = _project(client, pm_headers)
-    r = client.post(f'/api/projects/{pid}/issues', headers=pm_headers, json={'title': '老问题', 'severity': 'high'})
-    issue_id = r.json()['id']
-    from datetime import timedelta
-    from app.time_utils import utcnow
-    from app.db import SessionLocal
-    from app.models import Issue
-    db = SessionLocal()
-    try:
-        i = db.get(Issue, issue_id)
-        i.created_at = utcnow() - timedelta(days=4)
-        db.commit()
-    finally:
-        db.close()
-    from app.services.report_scheduler import scan_overdue_issues
-    from app.db import SessionLocal as SL
-    db = SL()
-    try:
-        result = scan_overdue_issues(db)
-        db.commit()
-    finally:
-        db.close()
-    assert result['scanned'] >= 1
-    msgs = client.get('/api/notifications', headers=pm_headers).json()
-    assert any(('SLA 超时' in n['title'] for n in msgs))
-
 def _make_project_with_task(client, pm_headers, name):
     """建项目 + 生成任务，返回 (project_id, 首个任务 id)。"""
     r = client.post('/api/projects', headers=pm_headers, json={'name': name, 'start_date': '2026-08-10', 'new_vehicles': False, 'end_date': '2026-09-30'})

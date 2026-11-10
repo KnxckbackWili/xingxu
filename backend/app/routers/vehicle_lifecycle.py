@@ -105,17 +105,15 @@ def _update_unit_status(db: Session, unit: VehicleUnit, requested: str) -> None:
 
 def _weekly_event_assignments(db, events, viewer=None):
     from app.models import Task,WeeklyPlanCell,Project
-    from app.services.weekly_plans import can_edit
     grouped={}
     if not events:return grouped
     project=db.get(Project,events[0].project_id)
     query=db.query(Task.source_vehicle_event_id,WeeklyPlanCell).join(WeeklyPlanCell,WeeklyPlanCell.task_id==Task.id).filter(
         Task.project_id==project.id,WeeklyPlanCell.project_id==project.id,Task.source_vehicle_event_id.in_([event.id for event in events]))
-    if viewer is None or not can_edit(project,viewer):query=query.filter(WeeklyPlanCell.published.is_(True))
     rows=query.order_by(WeeklyPlanCell.week_start,WeeklyPlanCell.id).all()
     for event_id,cell in rows:
         grouped.setdefault(event_id,[]).append({'id':cell.id,'task_id':cell.task_id,'week_start':cell.week_start.isoformat(),
-            'published':cell.published,'is_cancelled':cell.is_cancelled})
+            'is_cancelled':cell.is_cancelled})
     return grouped
 
 
@@ -387,4 +385,4 @@ def plan_repair_week(project_id: str, unit_id: str, event_id: str, body: RepairW
     from app.services.cache import cache_clear
     cache_clear('dashboard:')
     return {'cell':weekly_plans.serialize_cell(db,project,cell,user),'task_id':task.id,'created':created,
-            'message':'维修周计划初稿已建立；未自动发布，未改原处理人或完成事实'}
+            'message':'维修周计划已建立；未改原处理人或完成事实'}

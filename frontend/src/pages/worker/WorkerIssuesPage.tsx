@@ -33,9 +33,6 @@ interface MyIssue {
   extra?: Record<string, unknown> | null
   asset_code?: string
   nature?:string
-  sla_hours?:number
-  sla_due_at?:string|null
-  sla_warning?:string|null
 }
 
 const SEV: Record<string, { label: string; color: string }> = {
@@ -291,8 +288,6 @@ export default function WorkerIssuesPage() {
               {detail.project_name} · 上报 {detail.source === 'vehicle' ? formatDate(detail.created_at) : formatDateTime(detail.created_at)}
             </Typography.Text>
             {extraSummary(detail.extra) && <Typography.Text type="secondary" style={{ fontSize: 12 }}>{extraSummary(detail.extra)}</Typography.Text>}
-            {detail.sla_due_at && <Typography.Paragraph type="secondary">处理时限 {detail.sla_hours} 小时 · 截止 {formatDateTime(detail.sla_due_at)}；仅关闭或作废算闭环。</Typography.Paragraph>}
-            {detail.sla_warning && <Alert type="info" message={detail.sla_warning} />}
             {detail.description && (
               <Typography.Paragraph type="secondary">{detail.description}</Typography.Paragraph>
             )}

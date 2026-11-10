@@ -61,14 +61,6 @@ def test_optional_document_does_not_prevent_completion(client, pm_headers):
     assert result.status_code == 200, result.text
 
 
-def test_required_document_needs_real_submission_for_completion(client, pm_headers):
-    pid, _, _ = completeable_project(client, pm_headers, documents_data=['必需报告'])
-    result = client.post(f'/api/projects/{pid}/status', headers=pm_headers,
-                         json={'status': 'completed'})
-    assert result.status_code == 400, result.text
-    assert '资料' in result.json()['detail']['message']
-
-
 @pytest.mark.parametrize('state', ['pending', 'failed', 'na'])
 def test_retracted_preparation_clears_completion_metadata(client, pm_headers, state):
     pid = project(client, pm_headers)
@@ -155,23 +147,6 @@ def test_completion_evidence_rechecks_archival_after_preload(client, pm_headers,
         assert db.query(AcceptanceRecord).filter_by(project_id=pid).count() == 0
 
 
-def test_repair_after_failed_archive_gate_can_finish_normally(client, pm_headers):
-    pid, _, cid = completeable_project(client, pm_headers)
-    status_path = f'/api/projects/{pid}/status'
-    assert client.post(status_path, headers=pm_headers, json={'status': 'completed'}).status_code == 200
-    # Checks are frozen once completed: reopen to acceptance before recording a failed recheck.
-    assert client.post(status_path, headers=pm_headers, json={'status': 'acceptance'}).status_code == 200
-    assert client.put(f'/api/projects/{pid}/check-items/{cid}', headers=pm_headers,
-                      json={'failed': True, 'failed_reason': '复检不通过', 'version': check_version(cid)}).status_code == 200
-    assert client.post(status_path, headers=pm_headers, json={'status': 'completed'}).status_code == 400
-    # The denial must not strand the project: repair, complete, then archive.
-    assert client.put(f'/api/projects/{pid}/check-items/{cid}', headers=pm_headers,
-                      json={'is_done': True, 'version': check_version(cid)}).status_code == 200
-    assert client.post(status_path, headers=pm_headers, json={'status': 'completed'}).status_code == 200
-    assert client.post(status_path, headers=pm_headers,
-                       json={'status': 'archived', 'retrospective': '整改复检通过后归档'}).status_code == 200
-
-
 @pytest.mark.parametrize('prior', ['preparing'])
 def test_pausing_pre_execution_project_does_not_enable_acceptance(client, pm_headers, prior):
     pid = project(client, pm_headers)
@@ -190,44 +165,4 @@ def test_whitespace_is_not_acceptance_signer(client, pm_headers):
     result = client.post(f'/api/projects/{pid}/acceptance', headers=pm_headers,
                          json={'accepted_by_name': '  ', 'accepted_at': '2026-09-30'})
     assert result.status_code in (400, 422), result.text
-
-
-def test_legacy_archive_can_reopen_for_correction_without_recertifying_completion(client, pm_headers):
-    pid, _, cid = completeable_project(client, pm_headers)
-    with SessionLocal() as db:
-        db.get(Project, pid).status = 'archived'
-        check = db.get(CheckItem, cid)
-        check.is_done = False
-        check.failed = True
-        check.failed_reason = '旧档案存在未修复安全问题'
-        db.query(AcceptanceRecord).filter_by(project_id=pid).delete()
-        db.commit()
-    path = f'/api/projects/{pid}/status'
-    restored = client.post(path, headers=pm_headers, json={'status': 'completed'})
-    assert restored.status_code == 200, restored.text
-    # Restoration is not a fresh completion or a route around archive checks.
-    blocked = client.post(path, headers=pm_headers,
-                          json={'status': 'archived', 'retrospective': '仍然缺少复检'})
-    assert blocked.status_code == 400, blocked.text
-    assert client.post(path, headers=pm_headers, json={'status': 'acceptance'}).status_code == 200
-    assert client.put(f'/api/projects/{pid}/check-items/{cid}', headers=pm_headers,
-                      json={'is_done': True, 'version': check_version(cid)}).status_code == 200
-    missing_signature = client.post(path, headers=pm_headers, json={'status': 'completed'})
-    assert missing_signature.status_code == 400 and '验收' in missing_signature.json()['detail']['message']
-    with SessionLocal() as db:
-        assert db.query(AcceptanceRecord).filter_by(project_id=pid).count() == 0
-
-
-def test_archive_rechecks_required_document_withdrawn_after_completion(client, pm_headers):
-    from tests.document_helpers import documents
-    pid, _, _ = completeable_project(client, pm_headers)
-    assert client.post(f'/api/projects/{pid}/status', headers=pm_headers, json={'status': 'completed'}).status_code == 200
-    row = next(row for row in documents(client, pm_headers, pid)['documents'] if row['required'] and row['stage_key'] in ('4', '5', '6', '7'))
-    withdrawn = client.put(f'/api/projects/{pid}/documents/{row["id"]}', headers=pm_headers,
-        json={'status': 'pending', 'reason': '归档前发现附件需要补充', 'version': row['version']})
-    assert withdrawn.status_code == 200, withdrawn.text
-    result = client.post(f'/api/projects/{pid}/status', headers=pm_headers, json={'status': 'archived', 'retrospective': '收尾复盘'})
-    assert result.status_code == 400 and '资料' in result.json()['detail']['message']
-    with SessionLocal() as db:
-        assert db.get(Project, pid).status == 'completed'
 

@@ -442,9 +442,6 @@ class WeeklyPlanCell(Base):
     week_start = Column(Date, nullable=False, index=True)
     mode = Column(String(20), nullable=False, default="in_progress")
     target_count = Column(Integer, nullable=True)
-    published = Column(Boolean, nullable=False, default=False)
-    published_at = Column(DateTime, nullable=True)
-    published_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     is_cancelled = Column(Boolean, nullable=False, default=False)
     notes = Column(Text, nullable=False, default="")
     source_metadata = Column(JSON, nullable=True)  # Immutable original daily entries and publication facts
@@ -688,7 +685,7 @@ class SchedulerWatermark(Base):
     __tablename__ = "scheduler_watermarks"
 
     id = Column(String(36), primary_key=True, default=gen_uuid)
-    job_id = Column(String(50), unique=True, nullable=False)  # daily_report / weekly_report / issue_sla_scan
+    job_id = Column(String(50), unique=True, nullable=False)  # weekly_report / document_deadlines / storage_maintenance / notify_outbox_drain
     last_success_at = Column(DateTime, nullable=True)
     last_status = Column(String(20), default="ok")
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
@@ -905,7 +902,7 @@ from app.models.project_deletion import ProjectDeletionRecord, ProjectPermanentB
 
 from app.models.project_documents import ProjectDocumentDefinition, ProjectDocument, DocumentVersion, DocumentNoticeReceipt, ProjectReportReceipt  # noqa: E402,F401
 from app.models.storage import UploadSession,UploadChunk,FileCleanupReceipt,FileRemovalRecord  # noqa: E402,F401
-from app.models.document_triggers import DocumentTriggerEvent, IssueSlaReceipt  # noqa: E402,F401
+from app.models.document_triggers import DocumentTriggerEvent  # noqa: E402,F401
 
 class HolidayCalendar(Base):
     """Explicit complete annual overrides; bundled official years need no seed write."""

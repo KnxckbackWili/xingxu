@@ -8,7 +8,7 @@ from fastapi import HTTPException
 from app import config,models
 from app.db import SessionLocal
 from app.services import storage_cleanup as cleanup
-from app.services.file_retention import retained_submission,manifest_removal
+from app.services.file_retention import manifest_removal
 from app.services.project_documents import validate_file
 from .test_project_documents import create,view
 
@@ -44,7 +44,7 @@ def confirm(client,headers,pid,p):
         'keep_periods':p['keep_periods'],'fingerprint':p['fingerprint'],'reason':'按公司最近8期策略清理旧原件'})
 
 
-def test_preview_is_readonly_cleanup_old_unique_versions_preserves_gate_and_history(client,admin_headers):
+def test_preview_is_readonly_cleanup_old_unique_versions_preserves_history(client,admin_headers):
     pid,rows=weekly(client,admin_headers)
     with SessionLocal() as db:before=db.query(models.ChangeLog).count()
     p=preview(client,admin_headers,pid)
@@ -62,15 +62,8 @@ def test_preview_is_readonly_cleanup_old_unique_versions_preserves_gate_and_hist
     assert response.status_code==410 and '清理' in response.text
     with SessionLocal() as db:
         d=db.get(models.ProjectDocument,rows[0][0]);a=db.get(models.Attachment,rows[0][1]);v=db.query(models.DocumentVersion).filter_by(project_document_id=d.id).one()
-        assert retained_submission(db,db.get(models.Project,pid),d,v,a)
-        from app.services.lifecycle_gates import _pending_required_documents
-        assert '5.weekly 现场周报' not in _pending_required_documents(db,pid)
-        # Every ordinary missing file still blocks. Current/latest periods can
-        # never borrow an old-period tombstone to prove present bytes.
         latest=db.get(models.Attachment,rows[-1][1]);(config.UPLOAD_DIR/latest.stored_name).unlink()
         with pytest.raises(HTTPException):validate_file(latest)
-        assert not retained_submission(db,db.get(models.Project,pid),db.get(models.ProjectDocument,rows[-1][0]),v,latest)
-        assert '5.weekly 现场周报' in _pending_required_documents(db,pid)
         assert db.query(models.DocumentVersion).count()==10 and db.query(models.FileRemovalRecord).count()==2
 
 

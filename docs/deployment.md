@@ -455,15 +455,9 @@ make rollback      # 回滚到上一次 update 前的镜像（依据状态文件
 
 权衡：autoheal sidecar 需额外常驻容器 + Docker socket（破坏单容器形态、提升攻击面）；宿主 watchdog 需 NAS 上额外 systemd/cron（逻辑不在仓库内）。看门狗为仓库内代码（`backend/app/services/healthwatch.py`），零外部依赖，两个 compose（SQLite 基线与 8002/PG）默认都启用。参数均可用环境变量覆盖（见 `.env.example`）。
 
-#### C6-1：问题 SLA 扫描配置
-
-每分钟扫描尚未关闭或作废的问题，按性质使用经过小时阈值，并用持久凭据避免重复通知 PM 与总监。普通问题的小时配置留空时兼容原天数配置：
+#### 周报时间
 
 ```dotenv
-ISSUE_SLA_DAYS=3
-ISSUE_SLA_NORMAL_HOURS=
-ISSUE_SLA_ACCIDENT_HOURS=24
-ISSUE_SLA_QUALITY_HOURS=24
 REPORT_WEEKLY_TIME=20:00  # 每个项目当地周日晚
 ```
 

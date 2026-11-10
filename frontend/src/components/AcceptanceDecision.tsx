@@ -43,7 +43,7 @@ export default function AcceptanceDecision({ summary }: { summary?: AcceptanceSu
     message={latest ? `最新验收结论：${acceptanceLabels[latest.conclusion]}` : '尚无验收结论'}
     description={<Space direction="vertical" size={4}>
       {latest && <Typography.Text>验收日期 {latest.accepted_at} · 验收人 {latest.accepted_by_name}{latest.created_at ? ` · 录入时间 ${formatDateTime(latest.created_at)}` : ''}</Typography.Text>}
-      <Typography.Text>{summary.reason || (summary.eligible ? '最新验收已通过；完成及归档仍需核对其他条件。' : '请在资料清单中核对最新验收结论。')}</Typography.Text>
+      <Typography.Text>{summary.reason || (summary.eligible ? '最新验收已通过。' : '请在资料清单中核对最新验收结论。')}</Typography.Text>
       {summary.warning && <Typography.Text type="warning">{summary.warning}</Typography.Text>}
     </Space>} />
 }

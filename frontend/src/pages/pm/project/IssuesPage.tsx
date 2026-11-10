@@ -7,7 +7,7 @@ import {
   CheckCircleOutlined, DeleteOutlined, DownloadOutlined, FileExcelOutlined, FileTextOutlined, PaperClipOutlined,
   ImportOutlined, PlusOutlined, StopOutlined, UploadOutlined, UserSwitchOutlined,
 } from '@ant-design/icons'
-import { parseDateTime,formatDateTime } from '../../../utils/date'
+import { parseDateTime } from '../../../utils/date'
 import { saveBlob } from '../../../utils/download'
 import { api, errMsg } from '../../../api/client'
 import { projectDocumentsApi, uploadProjectFile, downloadProjectFile } from '../../../api/projectDocuments'
@@ -32,11 +32,7 @@ interface Issue {
   description: string
   issue_type: string
   nature?:string
-  sla_hours?:number
-  sla_due_at?:string|null
-  sla_basis?:string
   trigger_event_id?:string|null
-  sla_warning?:string|null
   extra: Record<string, unknown> | null
   severity: 'critical' | 'high' | 'medium' | 'low'
   status: 'open' | 'processing' | 'resolved' | 'closed' | 'cancelled'
@@ -270,7 +266,6 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
     ...filtered.map(item=>({id:`project:${item.id}`,source:'project' as const,item})),
     ...filteredVehicles.map(item=>({id:`vehicle:${item.id}`,source:'vehicle' as const,item})),
   ]
-  const overdue = (issue: Issue) => !!issue.sla_due_at && !['closed', 'cancelled', 'resolved'].includes(issue.status) && parseDateTime(issue.sla_due_at).isBefore(new Date())
   const shortTime = (value?: string | null) => value ? parseDateTime(value).format('MM-DD HH:mm') : ''
   const issueRow = (row: typeof queue[number]) => {
     if (row.source === 'vehicle') {
@@ -298,7 +293,6 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
         {issue.nature && issue.nature !== 'normal' && <Tag color={issue.nature === 'accident' ? 'red' : issue.nature === 'quality' ? 'orange' : undefined}>{ISSUE_NATURES.find(item => item.value === issue.nature)?.label}</Tag>}
         {['critical', 'high'].includes(issue.severity) && <Tag color={SEVERITY_MAP[issue.severity]?.color}>{SEVERITY_MAP[issue.severity]?.label}</Tag>}
         <Tag color={ISSUE_STATUS_MAP[issue.status]?.color}>{ISSUE_STATUS_MAP[issue.status]?.label}</Tag>
-        {overdue(issue) && <Tag color="red">超过 {issue.sla_hours} 小时</Tag>}
       </span>
       <span className="issue-row-action">{nextAction(issue)}</span>
     </li>
@@ -428,8 +422,6 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
               try {const result=await api.put(`/issues/${detailIssue.id}`,{nature:value,version:detailIssue.version});if(currentProject.current!==projectId)return;setDetailIssue(result.data);await load()}
               catch(error){message.error(errMsg(error))}finally{statusLock.release();setStatusSaving(false)}
             }} /> : <Typography.Text>{ISSUE_NATURES.find(item=>item.value===detailIssue.nature)?.label || '普通'}</Typography.Text>}</Space>
-            {detailIssue.sla_due_at && <Typography.Text type="secondary">处理时限 {detailIssue.sla_hours} 小时 · 截止 {formatDateTime(detailIssue.sla_due_at)}{detailIssue.sla_basis==='nature_changed'?'（从本次性质变更登记时刻起）':'（从上报时刻起）'}；仅关闭或作废算闭环。</Typography.Text>}
-            {detailIssue.sla_warning && <Alert type="info" message={detailIssue.sla_warning} />}
             {detailIssue.trigger_event_id && <Button href={`/pm/projects/${projectId}/documents?trigger=${detailIssue.trigger_event_id}`}>查看本事件资料</Button>}
             {detailIssue.nature==='quality' && <Typography.Paragraph type="secondary">导出的质量问题反馈单可在本事件资料中作为6.8.1附件上传。</Typography.Paragraph>}
             <Space direction="vertical" size={2} style={{ width: '100%' }}>

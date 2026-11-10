@@ -6,15 +6,13 @@ import pytest
 from fastapi import HTTPException
 from app.db import SessionLocal, engine
 from app.models import Project, User, Task, WeeklyPlanCell, VehicleUnit, Vehicle, CheckItem, VehicleProgress, ProjectVehicleStep, VehicleLifecycleEvent, Notification
-from tests.test_weekly_plans import setup, create_cell, publish
+from tests.test_weekly_plans import setup, create_cell
 
 
-def test_overlapping_scope_warns_and_explicit_cars_obey_work_applicability(client,pm_headers):
+def test_explicit_cars_obey_work_applicability(client,pm_headers):
     pid,units,ph,task=setup(client,pm_headers,vehicle=True)
     create_cell(client,pm_headers,pid,task,mode='finish',target_count=2)
     create_cell(client,pm_headers,pid,task,week_start='2001-01-08',scope={'vehicle_unit_ids':[units[0]]},mode='finish',target_count=1)
-    data=client.get(f'/api/projects/{pid}/weekly-plans?week_start=2001-01-01&weeks=2',headers=pm_headers).json()
-    assert any(w['code']=='scope_overlap' for w in data['warnings'])
     with SessionLocal() as db:
         db.get(Task,task['id']).applicable_vehicle_types=['仅指定的其它车型'];db.commit()
     response=client.post(f'/api/projects/{pid}/weekly-plans',headers=pm_headers,json={'task_id':task['id'],'week_start':'2001-01-15','scope':{'vehicle_unit_ids':[units[0]]}})
@@ -24,7 +22,6 @@ def test_overlapping_scope_warns_and_explicit_cars_obey_work_applicability(clien
 def test_plan_completion_rechecks_exact_required_and_safety_checks(client,pm_headers):
     pid,units,ph,task=setup(client,pm_headers,vehicle=True)
     row=create_cell(client,pm_headers,pid,task,mode='finish',target_count=2)
-    assert publish(client,pm_headers,pid,row).status_code==200
     with SessionLocal() as db:
         for uid in units:db.add(VehicleProgress(project_id=pid,vehicle_unit_id=uid,step_key='arrival_inspection',is_done=True,done_on=date(2001,1,3)))
         db.get(Task,task['id']).manually_completed=True;db.get(Task,task['id']).manual_completed_reason='不能覆盖安全';db.commit()
@@ -82,13 +79,11 @@ def test_excel_phase_filter_does_not_include_other_phase_warning_text(client,pm_
 
 
 
-def test_retention_keeps_full_weekly_row_and_publish_retry_is_idempotent(client,pm_headers):
+def test_retention_keeps_full_weekly_row(client,pm_headers):
     from app.services.project_retention import project_retention_snapshot
     pid,units,ph,task=setup(client,pm_headers)
-    row=create_cell(client,pm_headers,pid,task,notes='原周计划完整说明')
-    assert publish(client,pm_headers,pid,row).json()['count']==1
-    assert publish(client,pm_headers,pid,{**row,'version':1}).json()['count']==0
+    create_cell(client,pm_headers,pid,task,notes='原周计划完整说明')
     with SessionLocal() as db:
         retained=project_retention_snapshot(db,db.get(Project,pid))['records']['weekly_plan_cells'][0]
-        assert retained['notes']=='原周计划完整说明' and retained['published'] and retained['version']==1
+        assert retained['notes']=='原周计划完整说明' and retained['version']==0
         assert set(retained)=={column.name for column in WeeklyPlanCell.__table__.columns}

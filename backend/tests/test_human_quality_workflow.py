@@ -4,7 +4,7 @@ from datetime import date
 import pytest
 from app.db import SessionLocal
 from app.models import Project, Phase, Task, CheckItem
-from app.services.progress import project_completion_blockers, task_progress
+from app.services.progress import task_progress
 from tests.test_completion_issue_review import project
 
 def test_completed_issue_reopen_keeps_state_and_notifies_manager(client, pm_headers, worker_headers):

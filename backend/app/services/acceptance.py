@@ -132,10 +132,3 @@ def acceptance_summary(db, project_id):
             'as_of_date': project_today(project.timezone if project else None).isoformat(),
             'pending_future_count': future_count,
             'warning': f'{future_count} 条历史验收记录日期晚于项目当地今天，暂不作为有效验收依据' if future_count else ''}
-
-
-def ensure_current_acceptance(db, project_id):
-    from fastapi import HTTPException
-    summary = acceptance_summary(db, project_id)
-    if not summary['eligible']:
-        raise HTTPException(status_code=400, detail=summary['reason'])

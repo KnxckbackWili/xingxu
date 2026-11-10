@@ -20,9 +20,9 @@
 
 显式分类待分类资料时，保留原定义和实例 ID、原始来源、所有版本与提交事实。同范围分类复用原实例，不生成重复项。
 
-## 完成门禁
+## 与项目状态的关系
 
-新第 4–7 阶段实例参与完成检查；第 8、9 阶段在归档检查，不提前阻塞 completed。规则见[完成核对](completion-review.md)与[项目状态](project-lifecycle-v3.md)。采购明细在 `/projects/{id}/procurements`，不作为进场门禁。
+资料是否齐全不影响项目状态推进，状态由人工确认，见[项目状态](project-lifecycle-v3.md)。采购明细在 `/projects/{id}/procurements`。
 
 ## 复制、导入导出与保全
 

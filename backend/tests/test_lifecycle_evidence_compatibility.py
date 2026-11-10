@@ -34,17 +34,17 @@ def complete(client, headers, pid):
     return client.post(f'/api/projects/{pid}/status', headers=headers, json={'status': 'completed'})
 
 
+def eligible(client, headers, pid):
+    return client.get(f'/api/projects/{pid}', headers=headers).json()['acceptance_summary']['eligible']
+
+
 @pytest.mark.parametrize('conclusion', ['rejected', 'conditionally_accepted'])
-def test_latest_result_supersedes_historical_pass_for_completion_and_archive(client, pm_headers, conclusion):
+def test_latest_result_supersedes_historical_pass(client, pm_headers, conclusion):
     pid, _, _ = completeable_project(client, pm_headers)
     accept(client, pm_headers, pid)
     assert complete(client, pm_headers, pid).status_code == 200
     latest = accept(client, pm_headers, pid, conclusion, '2026-10-01')
-    archive = client.post(f'/api/projects/{pid}/status', headers=pm_headers,
-                          json={'status': 'archived', 'retrospective': '验收结果已改变'})
-    assert archive.status_code == 400, archive.text
-    assert client.post(f'/api/projects/{pid}/status', headers=pm_headers, json={'status': 'acceptance'}).status_code == 200
-    assert complete(client, pm_headers, pid).status_code == 400
+    assert not eligible(client, pm_headers, pid)
     rows = client.get(f'/api/projects/{pid}/acceptance', headers=pm_headers).json()
     assert [row['id'] for row in rows if row['is_effective']] == [latest['id']]
 
@@ -53,13 +53,13 @@ def test_backdated_pass_does_not_replace_later_failure_and_same_day_recording_is
     pid, _, _ = completeable_project(client, pm_headers)
     rejected = accept(client, pm_headers, pid, 'rejected', '2026-10-01')
     accept(client, pm_headers, pid, 'accepted', '2026-09-29')
-    assert complete(client, pm_headers, pid).status_code == 400
+    assert not eligible(client, pm_headers, pid)
     rows = client.get(f'/api/projects/{pid}/acceptance', headers=pm_headers).json()
     assert rows[0]['id'] == rejected['id']
     passed = accept(client, pm_headers, pid, 'accepted', '2026-10-01')
     rows = client.get(f'/api/projects/{pid}/acceptance', headers=pm_headers).json()
     assert rows[0]['id'] == passed['id'] and rows[0]['is_effective']
-    assert complete(client, pm_headers, pid).status_code == 200
+    assert eligible(client, pm_headers, pid)
 
 
 def test_scope_change_needs_new_acceptance_but_notes_do_not(client, pm_headers):
@@ -75,20 +75,18 @@ def test_scope_change_needs_new_acceptance_but_notes_do_not(client, pm_headers):
     with SessionLocal() as db:
         db.get(Task, tid).name = '新增范围后的安全调试'
         db.commit()
-    assert complete(client, pm_headers, pid).status_code == 400
     summary = client.get(f'/api/projects/{pid}/overview', headers=pm_headers).json()['acceptance_summary']
     assert summary['latest']['id'] == accepted['id']
     assert not summary['eligible'] and not summary['latest']['scope_current']
     assert '范围' in summary['reason']
     accept(client, pm_headers, pid)
-    assert complete(client, pm_headers, pid).status_code == 200
+    assert eligible(client, pm_headers, pid)
 
 
 def test_legacy_acceptance_remains_history_without_fabricated_scope(client, pm_headers):
     pid, _, _ = completeable_project(client, pm_headers, legacy_acceptance=True)
-    response = complete(client, pm_headers, pid)
-    assert response.status_code == 400, response.text
-    assert '历史' in response.json()['detail']['message'] and '范围' in response.json()['detail']['message']
+    summary = client.get(f'/api/projects/{pid}', headers=pm_headers).json()['acceptance_summary']
+    assert not summary['eligible'] and '历史' in summary['reason'] and '范围' in summary['reason']
     rows = client.get(f'/api/projects/{pid}/acceptance', headers=pm_headers).json()
     assert len(rows) == 1 and not rows[0]['scope_verified']
     assert client.get(f'/api/projects/{pid}', headers=pm_headers).json()['status'] == 'acceptance'
@@ -159,7 +157,7 @@ def test_legacy_null_recorded_time_is_older_than_a_same_day_current_decision(cli
     # PostgreSQL's implicit DESC null ordering differs from SQLite's; make the
     # ordering explicit in executed SQL instead of trusting SQLite-only output.
     assert any('acceptance_records.created_at DESC NULLS LAST' in sql for sql in statements)
-    assert complete(client, pm_headers, pid).status_code == 400
+    assert not eligible(client, pm_headers, pid)
 
 
 def test_document_submission_preserves_material_instruction_and_satisfies_completion(client, pm_headers):

@@ -45,12 +45,11 @@ def _finish(client, pm_headers, pid, target):
 
 
 def test_strict_adjacent_flow_rejects_skips(client, pm_headers):
-    """手动流转只允许相邻：准备不能直接跳到已完成，现场实施也不能跨阶段；原“待进场”已退役。"""
+    """手动流转只允许相邻：准备不能直接跳到已完成，现场实施也不能跨阶段；推进不核对资料。"""
     pid = _create(client, pm_headers, "相邻流转项目")
     assert _status(client, pm_headers, pid) == "preparing"
-    assert _post(client, pm_headers, pid, "executing").status_code == 400
     assert _post(client, pm_headers, pid, "completed").status_code == 400
-    enter_execution(client, pm_headers, pid)
+    assert _post(client, pm_headers, pid, "executing").status_code == 200
     assert _post(client, pm_headers, pid, "completed").status_code == 400
     assert _post(client, pm_headers, pid, "archived", retrospective="跳级").status_code == 400
     assert _post(client, pm_headers, pid, "ready").status_code == 400  # 已退役的状态
@@ -110,8 +109,8 @@ def test_progress_write_preserves_human_selected_status(client, pm_headers):
     assert not [log for log in logs if "自动切换状态" in log.get("detail", "")]
 
 
-def test_acceptance_gate_blocks_completion_until_work_is_complete(client, pm_headers):
-    """验收门禁：现场工作未全部完成时，人工确认进入已完成也会被拒绝。"""
+def test_completion_is_a_manual_record_even_with_unfinished_work(client, pm_headers):
+    """状态只是人工记录：工作没全部完成，负责人仍可标记已完成，系统不拦。"""
     from app.db import SessionLocal
     from app.models import Task
     pid = _create(client, pm_headers, "验收门禁项目")
@@ -120,8 +119,8 @@ def test_acceptance_gate_blocks_completion_until_work_is_complete(client, pm_hea
         task = db.query(Task).filter(Task.project_id == pid, Task.quantity_type != "per_vehicle").first()
         task.manually_completed = False; db.commit()
     r = _post(client, pm_headers, pid, "completed")
-    assert r.status_code == 400, r.text
-    assert _status(client, pm_headers, pid) == "acceptance"
+    assert r.status_code == 200, r.text
+    assert _status(client, pm_headers, pid) == "completed"
 
 
 def test_acceptance_gate_allows_completion_when_complete(client, pm_headers):

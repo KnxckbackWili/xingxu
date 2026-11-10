@@ -1,4 +1,4 @@
-from typing import Literal, Optional
+from typing import Optional
 
 """Project CRUD routes + vehicles."""
 
@@ -727,14 +727,6 @@ def _status_change_project(
     return p
 
 
-@router.get("/{project_id}/completion-review")
-@route_permission('project.read')
-def read_completion_review(project_id: str, target: Literal['completed', 'archived'] = 'completed',
-    user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    from app.services.lifecycle_gates import completion_review
-    return completion_review(db, ensure_project_visible(db, project_id, user), target, actor=user)
-
-
 class ProjectStatusChange(BaseModel):
     status: str = Field(..., min_length=1, max_length=20)
     reason: str = Field(default="", max_length=5000)
@@ -804,19 +796,13 @@ def change_status(
             status_code=400,
             detail=f"不允许从「{status_label(old_status)}」切换到「{status_label(new_status)}」",
         )
-    from dataclasses import asdict
-    from app.services.lifecycle_gates import check_transition
+    # Status is a manual record of where the project stands; it is not gated on evidence.
     retrospective = body.retrospective.strip()
     if new_status == "archived" and retrospective:
         p.retrospective = {"content": retrospective, "written_at": utcnow().isoformat(), "author": user.id}
-    from app.services.project_documents import materialize_static, filter_blockers
-    materialize_static(db,p,actor_id=user.id)
-    blockers = filter_blockers(db,p,user,check_transition(db, p, new_status))
-    if blockers:
-        raise HTTPException(status_code=400, detail={
-            "message": "；".join(blocker.message for blocker in blockers),
-            "blockers": [asdict(blocker) for blocker in blockers],
-        })
+    if new_status == "archived" and not p.retrospective:
+        raise HTTPException(status_code=400, detail="归档前请填写项目复盘（成功经验、问题教训、改进建议）")
+    from app.services.project_documents import materialize_static
     old_status = p.status
     p.status = new_status
     db.flush()

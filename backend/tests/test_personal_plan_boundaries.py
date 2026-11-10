@@ -4,7 +4,7 @@ import pytest
 from app.db import SessionLocal
 from app.models import Project,Task,WeeklyPlanCell,FieldOperation
 from tests.test_project_lifecycle_boundaries import project
-from tests.test_weekly_plans import setup,create_cell,publish
+from tests.test_weekly_plans import setup,create_cell
 
 
 def test_report_defaults_to_project_local_calendar_date(client, pm_headers, monkeypatch):

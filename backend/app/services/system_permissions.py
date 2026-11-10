@@ -120,7 +120,7 @@ _GROUPS = [
             _p(
                 "project.manage_schedule",
                 "管理日程",
-                "安排、发布和调整日期、人员及计划数量，保留锁定与报工限制。",
+                "安排和调整周计划的周次与计划数量。",
                 "project",
                 contextual_default=True,
             ),

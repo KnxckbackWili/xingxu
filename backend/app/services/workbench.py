@@ -1,7 +1,7 @@
 """Current visible facts shared by project lists, workbench and statistics.
 
 No schedule simulation, quantity report backlog, effort or synthetic weekly-plan
-zero is a current workbench fact. Weekly attention reads canonical published cells.
+zero is a current workbench fact. Weekly attention reads the current plan cells.
 """
 from collections import Counter
 from sqlalchemy import func,or_,case

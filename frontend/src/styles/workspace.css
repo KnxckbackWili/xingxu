@@ -93,7 +93,6 @@ html[data-theme='dark'] .ant-btn-primary.ant-btn-background-ghost:not(:disabled)
 .project-history-access { display: inline-flex; align-items: center; gap: 8px; color: var(--agv-text-secondary); font-size: 13px; cursor: pointer; }
 .work-completion-blockers { display: grid; gap: 6px; margin: 0 0 12px; padding: 10px 12px; border-radius: 8px; background: var(--agv-bg-subtle); }
 .work-completion-blocker { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.completion-blockers { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 8px; }
 .completion-blocker { padding: 10px 12px; border-radius: 8px; background: var(--agv-bg-subtle); overflow-wrap: anywhere; }
 .completion-blocker-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .completion-blocker-head > a { flex-shrink: 0; }

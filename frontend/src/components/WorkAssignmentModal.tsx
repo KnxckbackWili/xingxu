@@ -40,13 +40,13 @@ export default function WorkAssignmentModal({context,onClose,onSaved}:{context:C
       const result=await api.post(`/projects/${pid}/vehicle-units/${context.repair.unitId}/events/${context.repair.eventId}/weekly-plans`,{week_start:week,mode,notes})
       if(current!==epoch.current)return
       if(result.data?.created===false){setExists(true);return}
-      message.success('维修周计划草稿已保存，请到周计划核对并发布');onClose();onSaved()
+      message.success('维修周计划已保存');onClose();onSaved()
     }catch(failure){if(current===epoch.current)setError(errMsg(failure))}
     finally{if(current===epoch.current){lock.current=false;setSaving(false)}}
   }
-  return <Modal title={context?.repair?`安排维修周计划 · ${context.repair.title}`:'工作安排已合并到周计划'} open={!!context} onCancel={()=>{if(!saving)onClose()}} onOk={()=>void save()} okText="保存为周计划草稿" confirmLoading={saving} okButtonProps={{disabled:!allowed||exists||loading||!context?.repair}} cancelButtonProps={{disabled:saving}} maskClosable={false}>
-    {!context?.repair?<p>在项目周计划中选择工作项、周和负责人。<a href={pid?`/pm/projects/${encodeURIComponent(pid)}/plan?view=weeks`:'/pm/projects'}>打开项目周计划</a></p>:<Space direction="vertical" style={{width:'100%'}}>
-      <p>维修记录保留原始事实；本次安排保存为周计划草稿，发布后谁修好谁在工作台登记。</p>
+  return <Modal title={context?.repair?`安排维修周计划 · ${context.repair.title}`:'工作安排已合并到周计划'} open={!!context} onCancel={()=>{if(!saving)onClose()}} onOk={()=>void save()} okText="保存到周计划" confirmLoading={saving} okButtonProps={{disabled:!allowed||exists||loading||!context?.repair}} cancelButtonProps={{disabled:saving}} maskClosable={false}>
+    {!context?.repair?<p>在项目周计划中选择工作项和周。<a href={pid?`/pm/projects/${encodeURIComponent(pid)}/plan?view=weeks`:'/pm/projects'}>打开项目周计划</a></p>:<Space direction="vertical" style={{width:'100%'}}>
+      <p>维修记录保留原始事实；本次安排直接放进周计划，谁修好谁在本周页登记。</p>
       {loading&&<Spin aria-label="正在读取维修计划人员"/>}
       {error&&<Alert type="error" message={error} action={<Button disabled={saving} onClick={()=>void load()}>重新读取</Button>}/>}
       {data&&!allowed&&<Alert type="info" message="本账号当前没有此项目的周计划维护权限"/>}

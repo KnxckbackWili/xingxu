@@ -212,24 +212,6 @@ def test_edit_unsubmitted_rule_updates_pending_but_preserves_submitted_snapshot(
         json=rule_body(changed.json(),source_metadata={'fake':True})).status_code==422
 
 
-def test_completed_document_gate_excludes_future_stages_and_requires_real_evidence(client,admin_headers):
-    from app.db import SessionLocal
-    from app.models import ProjectDocument
-    from app.services.lifecycle_gates import _pending_required_documents
-    pid=create(client,admin_headers)['id']
-    with SessionLocal() as db:
-        rows=db.query(ProjectDocument).filter_by(project_id=pid).all()
-        for row in rows:
-            row.status='pending' if row.stage_key in {'8','9'} else 'waived'
-            row.waived_reason='本项目明确不适用' if row.status=='waived' else ''
-        db.commit()
-        assert _pending_required_documents(db,pid)==[]
-        assert _pending_required_documents(db,pid,archiving=True)
-        missing=next(row for row in rows if row.stage_key=='4')
-        missing.status='submitted';missing.waived_reason='';db.commit()
-        assert any(missing.code in text for text in _pending_required_documents(db,pid))
-
-
 def test_concurrent_real_submissions_keep_every_accepted_version_and_file(client,admin_headers):
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier

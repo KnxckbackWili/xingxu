@@ -302,21 +302,6 @@ def workspace_attention(db, projects, user, now=None):
     return result
 
 
-def missing_lifetime_requirements(db, project):
-    """Archive must also see requirements waiting for an actual kickoff instance."""
-    from app.services.project_documents import applicable
-    definitions=db.query(ProjectDocumentDefinition).filter_by(project_id=project.id,timing_type='lifetime',required=True).all()
-    existing={(row.definition_id,row.vehicle_unit_id) for row in db.query(ProjectDocument).filter_by(project_id=project.id)}
-    units=db.query(VehicleUnit).filter_by(project_id=project.id).all()
-    missing=[]
-    for rule in definitions:
-        if not applicable(project,rule):continue
-        for unit in units if rule.scope=='vehicle' else [None]:
-            if (rule.id,unit.id if unit else None) not in existing:
-                missing.append(f'{rule.code} {rule.name}'+(f'（{unit.asset_code}）' if unit else '')+'：等待实际内部启动会建档')
-    return missing
-
-
 def _claim_notice(db, row, recipient_id, kind, now):
     values = {'id': str(uuid4()), 'project_id': row.project_id, 'project_document_id': row.id,
               'recipient_id': recipient_id, 'recipient_key': recipient_id or 'unassigned', 'kind': kind,

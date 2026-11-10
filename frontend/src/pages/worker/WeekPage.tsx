@@ -58,8 +58,6 @@ export default function WeekPage({ projectId = '' }: { projectId?: string }) {
   const blockedGroups = new Map<string, Set<string>>()
   for (const plan of data?.plans ?? []) { const reason = blockedReason(plan); if (reason) blockedGroups.set(reason, (blockedGroups.get(reason) ?? new Set()).add(plan.project_name)) }
   const sharedBlocked = new Set([...blockedGroups].filter(([, projects]) => (data?.plans.length ?? 0) > 1 && projects.size > 0).map(([reason]) => reason))
-  const warningGroups = new Map<string, number>()
-  for (const warning of data?.warnings ?? []) warningGroups.set(warning.message, (warningGroups.get(warning.message) ?? 0) + 1)
   const submitFile = async () => {
     if (!file || !uploading || uploadLock.current) return
     uploadLock.current = true; setUploadBusy(true); setUploadError(''); const owner = identity
@@ -77,17 +75,15 @@ export default function WeekPage({ projectId = '' }: { projectId?: string }) {
   const documents = data?.this_week_documents ?? []
   const documentLine = (doc: Week['this_week_documents'][number]) => <p key={doc.document_id}><Link to={`/pm/projects/${doc.project_id}/documents?document=${doc.document_id}`}>{doc.project_name} · {doc.code} {doc.name}{doc.vehicle_label ? ` · ${doc.vehicle_label}` : ''}</Link><br /><Typography.Text type="secondary">{deadlineLabel(doc.due_at, doc.timezone || 'Asia/Shanghai')}</Typography.Text> {data?.permissions.upload && hasSystemPermission(user, 'worker.deliver') && <Button onClick={() => { setUploading(doc); setFile(undefined); setEventDate(''); setUploadError('') }}>上传当期资料</Button>}</p>
   return <div className="worker-work-page">
-    <WorkPageHeader title="我的本周" description="这周已发布的工作、要交的资料和未解决的问题。谁做完谁登记。" tools={<Space wrap><DatePicker picker="week" aria-label="计划周" value={week ? dayjs(week) : dayjs()} allowClear={false} onChange={value => setWeek(value?.subtract((value.day() + 6) % 7, 'day').format('YYYY-MM-DD'))} /><RefreshAction onClick={load} loading={loading} /></Space>} />
+    <WorkPageHeader title="我的本周" description="这周计划的工作、要交的资料和未解决的问题。谁做完谁登记。" tools={<Space wrap><DatePicker picker="week" aria-label="计划周" value={week ? dayjs(week) : dayjs()} allowClear={false} onChange={value => setWeek(value?.subtract((value.day() + 6) % 7, 'day').format('YYYY-MM-DD'))} /><RefreshAction onClick={load} loading={loading} /></Space>} />
     {error && <Alert type="error" message="本周信息未能读取" description={error} />}
-    {warningGroups.size > 0 && <details className="week-notice week-notice-fold"><summary>{data!.warnings.length} 条计划提醒</summary>
-      <ul className="week-notice-list">{[...warningGroups].map(([message, count]) => <li key={message}>{message}{count > 1 ? `（${count} 处）` : ''}</li>)}</ul></details>}
     {[...sharedBlocked].map(reason => <Alert key={reason} type="info" showIcon className="week-notice" message={`${[...blockedGroups.get(reason)!].join('、')}：${reason}`} />)}
     {!!pendingCount && <Alert type="info" message={`${pendingCount} 条操作仍在本机队列，未计作服务器完成`} action={<Button disabled={!online} onClick={() => void flush().then(load)}>同步原操作</Button>} />}
     {!!rejected.length && <Card size="small" title="需核对的离线操作">{rejected.map(row => <p key={row.client_uuid}>{row.reason} <Button onClick={() => retry(row.client_uuid)}>重试原操作</Button><Button onClick={() => remove(row.client_uuid)}>移除本机待核对项</Button></p>)}</Card>}
     {/* One column: this week's work (anyone records it), documents due, open issues. */}
     <section className="week-section" aria-label="我这周要做的">
       <h2>本周要做的工作{!!data?.plans.length && <span>{data.plans.length}</span>}</h2>
-      {loading && !data ? <Card loading bordered={false} /> : data?.plans.length ? data.plans.map(plan => planCard(plan)) : !error && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={data?.permissions.plan_read === false ? '本人周计划查看权限已关闭' : data?.state === 'unavailable' ? '周计划尚未读取' : '本周没有已发布的工作'} />}
+      {loading && !data ? <Card loading bordered={false} /> : data?.plans.length ? data.plans.map(plan => planCard(plan)) : !error && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={data?.permissions.plan_read === false ? '本人周计划查看权限已关闭' : data?.state === 'unavailable' ? '周计划尚未读取' : '本周没有计划的工作'} />}
     </section>
     <section className="week-section" aria-label="要交的资料">
       <h2>本周要交的资料{!!documents.length && <span>{documents.length}</span>}</h2>

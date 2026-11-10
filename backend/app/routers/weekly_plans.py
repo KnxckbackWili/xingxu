@@ -1,4 +1,4 @@
-"""Canonical weekly plans; publication is explicit scope, actual work is separate."""
+"""Weekly plans say what is planned for each week; everyone sees them, actual work is recorded separately."""
 from datetime import date
 from typing import Literal
 from urllib.parse import quote
@@ -57,19 +57,6 @@ class UpdateCell(BaseModel):
         return self
 
 
-class CellVersion(BaseModel):
-    model_config = {'extra': 'forbid'}
-    id: str
-    version: int = Field(ge=0)
-
-
-class PublishCells(BaseModel):
-    model_config = {'extra': 'forbid'}
-    cells: list[CellVersion] = Field(min_length=1, max_length=2000)
-    phase_id: str | None = None
-
-
-
 class PhaseRule(BaseModel):
     model_config = {'extra': 'forbid'}
     phase_id: str
@@ -123,16 +110,15 @@ def personal_weekly(week_start: date | None = None, weeks: int = Query(1, ge=1, 
     projects = visible_projects(db, user)
     if scope == 'team':
         projects = [project for project in projects if C_SCHEDULE in project_capabilities(user, project)]
-    cells, warnings = [], []
+    cells = []
     for project in projects:
         begin = week_start or service.local_today(project)
-        selected = service.select_cells(db, [project.id], begin, weeks, published_only=True)
+        selected = service.select_cells(db, [project.id], begin, weeks)
         cache = {}
         cells.extend(service.serialize_cell(db, project, cell, user, cache=cache) for cell in selected)
-        warnings.extend(service.project_warnings(db, project, selected, user))
     begin = week_start or (service.local_today(projects[0]) if projects else date.today())
     return {'cells': cells, 'weeks': service.weeks_metadata(db, begin, weeks),
-            'warnings': warnings, 'permissions': {'team': scope == 'team'}, 'scope': scope}
+            'permissions': {'team': scope == 'team'}, 'scope': scope}
 
 
 @router.post('/projects/{project_id}/weekly-plans')
@@ -141,14 +127,6 @@ def create_cell(project_id: str, body: CreateCell, user: User = Depends(get_curr
     project = ensure_project_visible(db, project_id, user)
     row = committed(db, lambda: service.create(db, project, user, body.model_dump()))
     return service.serialize_cell(db, project, row, user)
-
-
-@router.post('/projects/{project_id}/weekly-plans/publish')
-@route_permission('project.manage_schedule')
-def publish_cells(project_id: str, body: PublishCells, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    project = ensure_project_visible(db, project_id, user)
-    changed = committed(db, lambda: service.publish(db, project, user, [cell.model_dump() for cell in body.cells], phase_id=body.phase_id))
-    return {'published_ids': changed, 'count': len(changed)}
 
 
 @router.get('/projects/{project_id}/weekly-plans/draft-rules')

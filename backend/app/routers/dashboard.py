@@ -68,13 +68,13 @@ def scope_issues(
         .all()
     )
     project_by_id = {project.id: project for project in projects}
-    from app.services.document_triggers import issue_events,issue_sla_fields
+    from app.services.document_triggers import issue_events,issue_trigger_fields
     trigger_sources=issue_events(db,[row[0] for row in rows])
     items = [
         {
             "id": i.id,
             "source": "project",
-            **issue_sla_fields(db,i,trigger_sources),
+            **issue_trigger_fields(db,i,trigger_sources),
             "version": i.version or 0,
             "title": i.title,
             "severity": i.severity,

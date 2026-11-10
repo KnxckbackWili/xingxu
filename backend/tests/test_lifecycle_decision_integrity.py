@@ -1,11 +1,10 @@
-"""人工生命周期决策、当前验收范围及权限复核。"""
+"""人工状态决策与当前验收结论：验收结论只是记录，不再拦截状态推进。"""
 
 from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 import pytest
-from fastapi import HTTPException
 from app.db import SessionLocal
-from app.models import AcceptanceRecord, Phase, Project, ProjectPreparationItem, Task, User
+from app.models import AcceptanceRecord, Phase, Project, ProjectPreparationItem, Task
 
 
 def _project(client, headers, status="preparing"):
@@ -37,6 +36,10 @@ def _preparation(client, headers, pid, **values):
 def _status(client, headers, pid, target, **values):
     return client.post(f"/api/projects/{pid}/status", headers=headers,
                        json={"status": target, **values})
+
+
+def _eligible(client, headers, pid):
+    return client.get(f"/api/projects/{pid}", headers=headers).json()["acceptance_summary"]["eligible"]
 
 
 def _assert_status(pid, expected):
@@ -80,13 +83,11 @@ def _sign(client, headers, pid, conclusion="accepted", day="2026-09-30"):
 
 @pytest.mark.parametrize("later", ["rejected", "conditionally_accepted"])
 @pytest.mark.parametrize("same_day", [False, True])
-def test_latest_nonpass_blocks_completion_even_with_older_pass(client, pm_headers, later, same_day):
+def test_latest_nonpass_is_the_current_decision_even_with_older_pass(client, pm_headers, later, same_day):
     pid, _ = _completion_fixture(client, pm_headers)
     _sign(client, pm_headers, pid, day="2026-09-29")
     current = _sign(client, pm_headers, pid, later, "2026-09-29" if same_day else "2026-09-30")
-    response = _status(client, pm_headers, pid, "completed")
-    assert response.status_code == 400, response.text
-    _assert_status(pid, "acceptance")
+    assert not _eligible(client, pm_headers, pid)
     rows = client.get(f"/api/projects/{pid}/acceptance", headers=pm_headers).json()
     assert [row["id"] for row in rows if row["is_effective"]] == [current]
     _sign(client, pm_headers, pid, day="2026-10-01")
@@ -103,8 +104,7 @@ def test_backfilled_older_signature_does_not_supersede_later_effective_date(clie
     rows = client.get(f"/api/projects/{pid}/acceptance", headers=pm_headers).json()
     assert rows[0]["id"] == current
     assert [row["id"] for row in rows if row["is_effective"]] == [current]
-    result = _status(client, pm_headers, pid, "completed")
-    assert result.status_code == expected, result.text
+    assert _eligible(client, pm_headers, pid) is (expected == 200)
 
 
 def test_latest_record_tie_break_is_deterministic(client, pm_headers):
@@ -119,17 +119,15 @@ def test_latest_record_tie_break_is_deterministic(client, pm_headers):
         db.commit()
     rows = client.get(f"/api/projects/{pid}/acceptance", headers=pm_headers).json()
     assert [row["id"] for row in rows if row["is_effective"]] == [max(one, two)]
-    assert _status(client, pm_headers, pid, "completed").status_code == 400
+    assert not _eligible(client, pm_headers, pid)
 
 
-def test_post_completion_rejection_blocks_archive_and_allows_recovery(client, pm_headers):
+def test_post_completion_rejection_is_shown_and_archive_stays_manual(client, pm_headers):
     pid, _ = _completion_fixture(client, pm_headers)
     _sign(client, pm_headers, pid)
     assert _status(client, pm_headers, pid, "completed").status_code == 200
     _sign(client, pm_headers, pid, "rejected", "2026-10-01")
-    denied = _status(client, pm_headers, pid, "archived", retrospective="发现问题后重新核对")
-    assert denied.status_code == 400, denied.text
-    _assert_status(pid, "completed")
+    assert not _eligible(client, pm_headers, pid)
     assert _status(client, pm_headers, pid, "acceptance").status_code == 200
     _sign(client, pm_headers, pid, day="2026-10-01")
     assert _status(client, pm_headers, pid, "completed").status_code == 200
@@ -145,9 +143,9 @@ def test_added_completed_work_still_requires_new_scope_acceptance(client, pm_hea
         db.add(added); db.commit()
     rows = client.get(f"/api/projects/{pid}/acceptance", headers=pm_headers).json()
     assert rows[0]["id"] == first and not rows[0]["scope_current"]
-    result = _status(client, pm_headers, pid, "completed")
-    assert result.status_code == 400, result.text
+    assert not _eligible(client, pm_headers, pid)
     _sign(client, pm_headers, pid)
+    assert _eligible(client, pm_headers, pid)
     final = _status(client, pm_headers, pid, "completed")
     assert final.status_code == 200, final.text
 
@@ -158,9 +156,7 @@ def test_new_required_project_document_cannot_reuse_old_signature(client, pm_hea
     _sign(client, pm_headers, pid)
     row = requirement(client, pm_headers, pid, name='新增强制安全方案')
     upload_documents(client, pm_headers, pid, [row['id']])
-    result = _status(client, pm_headers, pid, 'completed')
-    assert result.status_code == 400, result.text
-    assert any(blocker['type'] == 'acceptance' for blocker in result.json()['detail']['blockers'])
+    assert not _eligible(client, pm_headers, pid)
     _sign(client, pm_headers, pid)
     assert _status(client, pm_headers, pid, 'completed').status_code == 200
 
@@ -192,17 +188,15 @@ def test_empty_optional_material_definition_text_is_not_new_scope(client, pm_hea
     assert _status(client, pm_headers, pid, 'completed').status_code == 200
 
 
-def test_legacy_archived_project_can_restore_but_needs_current_signoff_to_rearchive(client, pm_headers):
+def test_legacy_archived_project_can_restore_and_rearchive_manually(client, pm_headers):
     pid, _ = _completion_fixture(client, pm_headers, "archived")
     with SessionLocal() as db:
         db.add(AcceptanceRecord(project_id=pid, accepted_by_name="历史客户",
                                accepted_at=date(2026, 9, 30), conclusion="accepted"))
         db.commit()
     assert _status(client, pm_headers, pid, "completed").status_code == 200
-    blocked = _status(client, pm_headers, pid, "archived", retrospective="恢复旧档案")
-    assert blocked.status_code == 400, blocked.text
+    assert not _eligible(client, pm_headers, pid)
     assert _status(client, pm_headers, pid, "acceptance").status_code == 200
-    assert _status(client, pm_headers, pid, "completed").status_code == 400
     _sign(client, pm_headers, pid)
     assert _status(client, pm_headers, pid, "completed").status_code == 200
     assert _status(client, pm_headers, pid, "archived", retrospective="补充当前范围签字后归档").status_code == 200
@@ -250,7 +244,7 @@ def test_new_project_import_cannot_bypass_lifecycle_decisions(client, pm_headers
 
 
 @pytest.mark.parametrize("state", ["preparing", "ready"])
-def test_allowed_preparation_import_still_requires_explicit_entry_decision(client, pm_headers, state):
+def test_allowed_preparation_import_lands_in_preparation(client, pm_headers, state):
     """A legacy ready payload is accepted and lands in preparation like any new project."""
     payload = {"type": "agvpm-project", "project": {
         "name": "导入待进场计划", "start_date": "2026-09-01",
@@ -262,38 +256,7 @@ def test_allowed_preparation_import_still_requires_explicit_entry_decision(clien
     assert result.status_code == 200, result.text
     pid = result.json()["id"]
     _assert_status(pid, "preparing")
-    assert _status(client, pm_headers, pid, "executing").status_code == 400
-
-
-def test_acceptance_can_be_recorded_early_but_cannot_complete_incomplete_work(client, pm_headers):
-    # Recorded during execution, before the acceptance stage (preparation cannot record acceptance).
-    pid = _project(client, pm_headers, "executing")
-    rid = _sign(client, pm_headers, pid)
-    with SessionLocal() as db:
-        assert db.get(AcceptanceRecord, rid) is not None
-        db.get(Project, pid).status = "acceptance"
-        db.commit()
-    blocked = _status(client, pm_headers, pid, "completed")
-    assert blocked.status_code == 400, blocked.text
-
-
-def test_stale_loaded_scope_does_not_survive_current_status_gate(client, pm_headers):
-    from app.routers.projects import ProjectStatusChange, change_status
-    pid, tid = _completion_fixture(client, pm_headers)
-    _sign(client, pm_headers, pid)
-    with SessionLocal() as stale:
-        p = stale.get(Project, pid)
-        actor = stale.get(User, p.manager)
-        original_task = stale.get(Task, tid)
-        with SessionLocal() as newer:
-            newer.get(Task, tid).description = "新增加现场联动要求"
-            newer.commit()
-        assert original_task.description != "新增加现场联动要求"
-        with pytest.raises(HTTPException) as error:
-            change_status(pid, ProjectStatusChange(status="completed"), actor, p, stale)
-        assert error.value.status_code == 400
-        stale.rollback()
-    _assert_status(pid, "acceptance")
+    assert _status(client, pm_headers, pid, "executing").status_code == 200
 
 
 def test_same_clock_acceptance_recordings_preserve_correction_order(client, pm_headers, monkeypatch):
@@ -304,7 +267,7 @@ def test_same_clock_acceptance_recordings_preserve_correction_order(client, pm_h
     rows = client.get(f"/api/projects/{pid}/acceptance", headers=pm_headers).json()
     assert rows[0]["id"] == rejected and rows[1]["id"] == passed
     assert rows[0]["created_at"] > rows[1]["created_at"]
-    assert _status(client, pm_headers, pid, "completed").status_code == 400
+    assert not _eligible(client, pm_headers, pid)
 
 
 @pytest.mark.parametrize("tz,day,expected", [
@@ -346,6 +309,4 @@ def test_legacy_future_record_is_visible_but_cannot_supply_current_decision(clie
     summary = client.get(f"/api/projects/{pid}", headers=pm_headers).json()["acceptance_summary"]
     assert summary["pending_future_count"] == 1 and summary["warning"]
     assert summary["eligible"] is (expected == 200)
-    result = _status(client, pm_headers, pid, "completed")
-    assert result.status_code == expected, result.text
 

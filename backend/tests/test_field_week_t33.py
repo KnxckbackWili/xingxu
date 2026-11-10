@@ -241,8 +241,8 @@ def test_work_annotation_revision_never_refreshes_an_old_failed_check_override(c
         assert db.get(CheckItem,cid).version==2
 
 
-def weekly_work(client,headers,*,vehicle=False,assignees=None,scope=None,published=True):
-    from tests.test_weekly_plans import create_cell,publish
+def weekly_work(client,headers,*,vehicle=False,assignees=None,scope=None):
+    from tests.test_weekly_plans import create_cell
     from tests.test_work_items_t34 import phase,create
     pid,units=setup_fleet(client,headers,2)
     with SessionLocal() as db:
@@ -250,10 +250,8 @@ def weekly_work(client,headers,*,vehicle=False,assignees=None,scope=None,publish
         db.commit()
     task=create(client,headers,pid,phase(client,headers,pid),**({'kind':'vehicle','vehicle_step_key':'arrival_inspection'} if vehicle else {}))
     today=project_today('Asia/Shanghai');start=today-timedelta(days=today.weekday())
-    row=create_cell(client,headers,pid,task,week_start=start.isoformat(),scope=scope or {})
-    if published:
-        result=publish(client,headers,pid,row);assert result.status_code==200,result.text
-        row=client.get(f'/api/projects/{pid}/weekly-plans',headers=headers,params={'week_start':start.isoformat(),'weeks':1}).json()['cells'][0]
+    create_cell(client,headers,pid,task,week_start=start.isoformat(),scope=scope or {})
+    row=client.get(f'/api/projects/{pid}/weekly-plans',headers=headers,params={'week_start':start.isoformat(),'weeks':1}).json()['cells'][0]
     return pid,units,people,task,row
 
 

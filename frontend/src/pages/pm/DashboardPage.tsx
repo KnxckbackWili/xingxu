@@ -19,13 +19,13 @@ const WorkspaceStatistics = lazy(() => import('../../components/WorkspaceStatist
 
 type Kind = '资料' | '周计划' | '问题' | '签单'
 type TodoRow = { key: string; kind: Kind; title: ReactNode; meta: string; due: string; urgent?: boolean }
-type IssueRow = { id: string; title: string; project_id: string; project_name: string; status: string; severity: string; sla_due_at?: string | null }
+type IssueRow = { id: string; title: string; project_id: string; project_name: string; status: string; severity: string; created_at?: string }
 const KINDS: Kind[] = ['资料', '周计划', '问题', '签单']
 const PAGE = 8
 
 const docLink = (row: WorkbenchAction) => <Link to={documentActionUrl(row)}>{row.code} {row.name}{row.vehicle_label ? ` · ${row.vehicle_label}` : ''}</Link>
 
-/** 我的本周：分配给当前账号的已发布周计划，登记在本周页完成。 */
+/** 我的本周：本周计划的工作，登记在本周页完成。 */
 function MyWeek({ account }: { account: string }) {
   const [week, setWeek] = useState<Week>()
   const [error, setError] = useState('')
@@ -35,7 +35,6 @@ function MyWeek({ account }: { account: string }) {
     return () => { live = false }
   }, [account])
   const plans = week?.plans ?? []
-  const blocked = week ? new Set(week.warnings.map(row => row.project_id)).size : 0
   return <section className="workbench-card workbench-mine" aria-labelledby="workbench-mine-title">
     <div className="workbench-card-head"><h2 id="workbench-mine-title">我的本周</h2><Link to="/worker/week">去登记</Link></div>
     {error ? <Alert type="warning" showIcon message="我的本周暂不可读取" description={error} />
@@ -46,7 +45,6 @@ function MyWeek({ account }: { account: string }) {
         <Tag>{plan.mode === 'finish' ? '计划完成' : '推进中'}</Tag>
         <small>{plan.project_name} · {plan.work_item.phase_name}{plan.work_item.check_items.length ? ` · ${plan.work_item.check_items.length} 项检查` : ''}</small>
       </li>)}{plans.length > 6 && <li className="workbench-more"><Link to="/worker/week">还有 {plans.length - 6} 项</Link></li>}</ul>}
-    {blocked > 0 && <p className="workbench-mine-note">{blocked} 个项目有需要核对的提醒，详见本周页。</p>}
   </section>
 }
 
@@ -95,13 +93,12 @@ export default function DashboardPage() {
   }
   for (const row of current?.issues ?? []) {
     todos.push({ key: `issue:${row.id}`, kind: '问题', title: <Link to={`/pm/projects/${encodeURIComponent(row.project_id)}/issues`}>{row.title}</Link>,
-      meta: row.project_name, due: row.sla_due_at ? `截止 ${dayjs(row.sla_due_at).format('MM-DD HH:mm')}` : '待处理', urgent: !!row.sla_due_at && dayjs(row.sla_due_at).isBefore(dayjs()) })
+      meta: row.project_name, due: row.status === 'processing' ? '处理中' : row.created_at ? `${dayjs(row.created_at).format('MM-DD')} 上报` : '待处理' })
   }
   for (const row of data?.this_week_documents ?? []) if (!seen.has(`${row.project_id}:${row.id}`)) {
     todos.push({ key: `week:${row.project_id}:${row.id}`, kind: '资料', title: docLink(row), meta: `${row.project_name} · 本周待交`,
       due: `${deadlineLabel(row.due_at, row.timezone ?? 'Asia/Shanghai')}${row.due_is_estimated ? '（预计）' : ''}` })
   }
-  if (planReadable) for (const row of plan!.unknown_items ?? []) todos.push({ key: `unknown:${row.id}`, kind: '周计划', title: <Link to={row.url}>{row.name}</Link>, meta: `${row.project_name} · 计划周 ${row.week_start}`, due: '完成情况待核对' })
   for (const project of projects) if (project.next_signoff) {
     const row = { ...project.next_signoff, project_id: project.id, project_name: project.name }
     todos.push({ key: `sign:${project.id}:${row.id}`, kind: '签单', title: docLink(row), meta: `${project.name} · 下一张待交签单`, due: '待提交' })

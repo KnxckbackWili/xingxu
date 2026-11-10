@@ -121,16 +121,6 @@ SCHEDULER_ENABLED = os.getenv("SCHEDULER_ENABLED", "0") == "1"
 SOFT_DELETE_RETENTION_DAYS = 30
 
 
-# T24：问题按性质使用经过小时阈值，每分钟扫描；仅关闭/作废算闭环。
-# 普通小时未设时兼容 ISSUE_SLA_DAYS；旧 ISSUE_SLA_TIME 只保留解析兼容，不再控制扫描。
-def _parse_sla_days(raw: Optional[str]) -> int:
-    try:
-        days = int(raw) if raw is not None else 3
-    except (TypeError, ValueError):
-        return 3
-    return days if days >= 1 else 3
-
-
 def _parse_hhmm(raw: Optional[str], default: str = "18:10") -> str:
     if not raw:
         return default
@@ -144,18 +134,6 @@ def _parse_hhmm(raw: Optional[str], default: str = "18:10") -> str:
     return default
 
 
-ISSUE_SLA_DAYS = _parse_sla_days(os.getenv("ISSUE_SLA_DAYS"))
-def _parse_sla_hours(raw, default):
-    try:
-        hours=int(raw)
-        return hours if 1<=hours<=87600 else default
-    except (TypeError,ValueError):
-        return default
-
-ISSUE_SLA_NORMAL_HOURS = _parse_sla_hours(os.getenv('ISSUE_SLA_NORMAL_HOURS'),min(ISSUE_SLA_DAYS*24,87600))
-ISSUE_SLA_ACCIDENT_HOURS = _parse_sla_hours(os.getenv('ISSUE_SLA_ACCIDENT_HOURS'),24)
-ISSUE_SLA_QUALITY_HOURS = _parse_sla_hours(os.getenv('ISSUE_SLA_QUALITY_HOURS'),24)
-ISSUE_SLA_TIME = _parse_hhmm(os.getenv("ISSUE_SLA_TIME"))
 REPORT_WEEKLY_TIME = _parse_hhmm(os.getenv("REPORT_WEEKLY_TIME"), "20:00")  # 项目当地周日晚，HH:MM
 
 # ===== 消息通知外部渠道（钉钉机器人 / 通用 JSON webhook） =====

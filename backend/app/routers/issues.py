@@ -70,13 +70,13 @@ def _issue_dict(db: Session, i: Issue, actor: User | None = None,events=None) ->
         and (actor.role == 'admin' or actor.id in {project.manager, i.reporter_id}))
     reporter = db.get(User, i.reporter_id)
     task = db.get(Task, i.task_id) if i.task_id else None
-    from app.services.document_triggers import issue_sla_fields
+    from app.services.document_triggers import issue_trigger_fields
     return {
         "id": i.id,
         "title": i.title,
         "description": i.description,
         "issue_type": i.issue_type,
-        **issue_sla_fields(db,i,events),
+        **issue_trigger_fields(db,i,events),
         "severity": i.severity,
         "status": i.status,
         "reporter_id": i.reporter_id,

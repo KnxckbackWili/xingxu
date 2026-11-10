@@ -14,7 +14,7 @@ def monday(day):return day-timedelta(days=day.weekday())
 def plan_cells(db,projects,start,weeks):
     """T40 owns persistence/selection; no fallback to old daily schedules."""
     from app.services.weekly_plans import select_cells
-    return select_cells(db,[p.id for p in projects],start,weeks,published_only=True)
+    return select_cells(db,[p.id for p in projects],start,weeks)
 
 
 def cell_dict(db,cell,project,user,*,cache=None):
@@ -32,21 +32,15 @@ def week_view(db,user,*,week_start=None,project_id=None):
     projects=visible_projects(db,user)
     if project_id:projects=[ensure_project_visible(db,project_id,user)]
     by_id={p.id:p for p in projects}
-    planned=[];warnings=[];matrices={};windows={}
-    # 本周已发布的工作都列在“要做的工作”里，谁做完谁登记。
+    planned=[];matrices={};windows={}
+    # 本周计划的工作都列在“要做的工作”里，谁做完谁登记。
     can_read_plan=has_permission(user,'personal.schedule.read')
-    if not can_read_plan:warnings.append({'project_id':'','message':'本人周计划查看权限已关闭'})
     for project in projects:
         start=monday(week_start or project_today(project.timezone));windows[project.id]=date_window(project)
         if not can_read_plan:continue
         cells=plan_cells(db,[project],start,1)
-        if cells is None:
-            warnings.append({'project_id':project.id,'message':'周计划服务尚未就绪，当前安排未知'});continue
         cache={}
-        from app.services.weekly_plans import project_warnings
-        warnings.extend(project_warnings(db,project,cells,user))
         for cell in cells:
-            if not cell.published:continue
             work=_work(db,cell.task_id)
             if not work:continue
             from app.services.project_lifecycle import EXECUTION_PROJECT_STATUSES
@@ -55,9 +49,6 @@ def week_view(db,user,*,week_start=None,project_id=None):
             planned.append(row)
         from app.services.vehicle_progress import matrix
         matrices[project.id]=matrix(db,project.id)
-        from app.services.holidays import calendar_in_range
-        holiday=calendar_in_range(start,start+timedelta(days=6),db)
-        if holiday['missing_holiday_years']:warnings.append({'project_id':project.id,'message':'缺少年度节假日数据','years':holiday['missing_holiday_years']})
     from app.services.workbench import project_facts
     facts=project_facts(db,projects,user)
     documents=[item for facts in facts.values() for item in facts['document_attention']['this_week']]
@@ -65,11 +56,11 @@ def week_view(db,user,*,week_start=None,project_id=None):
         rule=db.get(ProjectDocument,item['document_id']);item['timing_event']=rule.timing_event if rule else None
     issues=db.query(Issue).filter(Issue.project_id.in_(by_id),
         Issue.status.notin_(('closed','cancelled'))).order_by(Issue.created_at.desc()).limit(100).all()
-    return {'state':'unavailable' if any('尚未就绪' in w['message'] for w in warnings) else 'ready','plans':planned,
+    return {'state':'ready','plans':planned,
         'vehicle_matrices':matrices,'this_week_documents':documents,
         'my_issues':[{'id':i.id,'project_id':i.project_id,'project_name':by_id[i.project_id].name,'title':i.title,'status':i.status,
             'severity':i.severity,'reporter_id':i.reporter_id} for i in issues],
-        'windows':windows,'warnings':warnings,'permissions':{'record':has_permission(user,'worker.report'),
+        'windows':windows,'permissions':{'record':has_permission(user,'worker.report'),
             'upload':has_permission(user,'worker.deliver'),'issues':has_permission(user,'worker.issues'),'plan_read':can_read_plan}}
 
 

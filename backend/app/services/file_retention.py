@@ -1,6 +1,5 @@
 """Only precise, authorized cleanup evidence can stand in for removed old bytes."""
 from datetime import timezone
-from app.models import ProjectDocument
 
 IDENTITY=('stage_key','code','name','scope','vehicle_unit_id','vehicle_label','period_key','platform','timing_type','timing_weekday','required')
 
@@ -50,19 +49,6 @@ def removal_payload(asset):
     return {'storage_state':'removed_by_policy','removal':{'receipt_id':record.receipt_id,
         'removed_at':record.removed_at.replace(tzinfo=timezone.utc).isoformat(),
         'removed_by_name':record.removed_by_name,'reason':record.reason}}
-
-
-def retained_submission(db,project,document,version,asset):
-    if document.status!='submitted' or document.timing_type!='weekly':return False
-    record=removal_record(asset,db)
-    if record is None or document.project_id!=project.id or asset.project_id!=project.id or version.project_document_id!=document.id:return False
-    candidate=_matching_candidate(record.receipt,record)
-    proof=next((item for item in candidate.get('versions',[]) if item.get('id')==version.id and item.get('document_id')==document.id),None)
-    if proof is None or proof.get('document_status')!='submitted':return False
-    if proof.get('identity')!={key:getattr(document,key) for key in IDENTITY}:return False
-    documents=db.query(ProjectDocument).filter_by(project_id=project.id,timing_type='weekly').all()
-    if document.period_key in periods_kept(documents,record.receipt.keep_periods).get(series(document),set()):return False
-    return True
 
 
 def manifest_removal(snapshot,item):

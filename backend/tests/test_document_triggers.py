@@ -3,7 +3,7 @@ from tests.lifecycle_helpers import versioned
 from datetime import datetime,timedelta,timezone
 import pytest
 from app.db import SessionLocal
-from app.models import (Project,Issue,DocumentTriggerEvent,IssueSlaReceipt,ProjectDocument,DocumentVersion,ChangeLog,User,Notification)
+from app.models import (Project,Issue,DocumentTriggerEvent,ProjectDocument,DocumentVersion,ChangeLog,User,Notification)
 from .test_project_documents import create,view,upload
 
 
@@ -61,31 +61,6 @@ def test_issue_trigger_audit_failure_rolls_back_source_documents_and_issue(clien
         assert db.query(ProjectDocument).filter(ProjectDocument.project_id==pid,ProjectDocument.trigger_ref.isnot(None)).count()==0
 
 
-def test_nature_sla_uses_elapsed_hours_configuration_closure_and_durable_dedup(client,admin_headers,monkeypatch):
-    from app import config
-    from app.services.report_scheduler import scan_overdue_issues
-    monkeypatch.setattr(config,'ISSUE_SLA_ACCIDENT_HOURS',6)
-    monkeypatch.setattr(config,'ISSUE_SLA_QUALITY_HOURS',8)
-    monkeypatch.setattr(config,'ISSUE_SLA_NORMAL_HOURS',72)
-    pid=create(client,admin_headers)['id'];ids=[report(client,admin_headers,pid,nature)['id'] for nature in ['normal','accident','quality']]
-    now=datetime(2026,11,1,12)
-    with SessionLocal() as db:
-        db.get(Project,pid).status='preparing'
-        for issue in db.query(Issue).filter_by(project_id=pid):issue.created_at=now-timedelta(hours=7)
-        for event in db.query(DocumentTriggerEvent).filter_by(project_id=pid):event.occurred_at=now-timedelta(hours=7)
-        db.get(Issue,ids[1]).status='resolved';db.commit()
-        first=scan_overdue_issues(db,now=now);db.commit()
-        assert first['scanned']==1 and first['notified']>=1
-        notices=db.query(Notification).filter_by(ntype='issue_sla').count()
-        assert scan_overdue_issues(db,now=now)['notified']==0
-        assert db.query(Notification).filter_by(ntype='issue_sla').count()==notices
-        db.get(Issue,ids[1]).status='closed';db.commit()
-        assert scan_overdue_issues(db,now=now)['scanned']==0
-        later=scan_overdue_issues(db,now=now+timedelta(hours=2));db.commit()
-        assert later['scanned']==1 and later['notified']>=1
-        assert {row.nature for row in db.query(IssueSlaReceipt)}=={'accident','quality'}
-
-
 def test_quality_excel_preserves_date_metadata_and_can_be_submitted_as_real_6_8_1_file(client,admin_headers):
     pid=create(client,admin_headers)['id']
     issue=report(client,admin_headers,pid,extra={'feedback_date':'2024-05-08','part':'原部件','vehicle_no':'001'})
@@ -140,18 +115,15 @@ def test_concurrent_real_source_materialization_creates_one_obligation(client,ad
         assert db.query(ProjectDocument).filter_by(project_id=pid,code='6.6').count()==1
 
 
-def test_retention_covers_nonempty_trigger_and_sla_receipts_before_permanent_purge(client,admin_headers):
+def test_retention_covers_nonempty_trigger_events_before_permanent_purge(client,admin_headers):
     import json
     from .test_project_recycle_bin import _delete
     from .test_retention_unification import prepare,purge
     from app.services.project_deletion import backup_zip,_backup_path
     from app.models import ProjectPermanentBackup
-    project=create(client,admin_headers);pid=project['id'];iid=report(client,admin_headers,pid,'accident')['id']
+    project=create(client,admin_headers);pid=project['id'];report(client,admin_headers,pid,'accident')
     with SessionLocal() as db:
         event=db.query(DocumentTriggerEvent).filter_by(project_id=pid).one();event_id=event.id
-        receipt=IssueSlaReceipt(project_id=pid,issue_id=iid,nature='accident',sla_hours=24,
-            recipient_id='user-admin-001',recipient_key='user-admin-001')
-        db.add(receipt);db.commit();receipt_id=receipt.id
     assert _delete(client,admin_headers,project).status_code==200
     row=client.get(f'/api/project-recycle-bin/projects/{pid}',headers=admin_headers).json()
     response=prepare(client,admin_headers,row);assert response.status_code==200,response.text
@@ -159,13 +131,13 @@ def test_retention_covers_nonempty_trigger_and_sla_receipts_before_permanent_pur
         path=_backup_path(db.get(ProjectPermanentBackup,response.json()['backup_id']).backup_name)
         with backup_zip(path) as bundle:records=json.loads(bundle.read('project-backup.json'))['records']
     assert records['document_trigger_events'][0]['id']==event_id
-    assert records['issue_sla_receipts'][0]['id']==receipt_id
+    assert 'issue_sla_receipts' not in records
     result=purge(client,admin_headers,row,response.json());assert result.status_code==200,result.text
     with SessionLocal() as db:
-        assert db.get(DocumentTriggerEvent,event_id) is None and db.get(IssueSlaReceipt,receipt_id) is None
+        assert db.get(DocumentTriggerEvent,event_id) is None
 
 
-def test_portable_issue_keeps_original_nature_without_forging_new_incident_or_sla(client,admin_headers):
+def test_portable_issue_keeps_original_nature_without_forging_new_incident(client,admin_headers):
     pid=create(client,admin_headers)['id'];issue=report(client,admin_headers,pid,'quality')
     exported=client.get(f'/api/projects/{pid}/export/json',headers=admin_headers)
     assert exported.status_code==200
@@ -174,7 +146,7 @@ def test_portable_issue_keeps_original_nature_without_forging_new_incident_or_sl
     new_id=imported.json()['id']
     rows=client.get(f'/api/projects/{new_id}/issues',headers=admin_headers).json()
     assert len(rows)==1 and rows[0]['source_metadata']['original_nature']=='quality'
-    assert rows[0]['source_metadata']['original_id']==issue['id'] and rows[0]['sla_due_at'] is None and rows[0]['sla_warning']
+    assert rows[0]['source_metadata']['original_id']==issue['id'] and 'sla_due_at' not in rows[0]
     with SessionLocal() as db:
         assert db.query(DocumentTriggerEvent).filter_by(project_id=new_id).count()==0
         assert not db.query(ProjectDocument).filter(ProjectDocument.project_id==new_id,ProjectDocument.trigger_ref.isnot(None)).first()

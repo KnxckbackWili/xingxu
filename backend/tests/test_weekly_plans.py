@@ -21,16 +21,10 @@ def create_cell(client, headers, pid, task, **values):
     return response.json()
 
 
-def publish(client, headers, pid, *cells):
-    return client.post(f'/api/projects/{pid}/weekly-plans/publish', headers=headers,
-        json={'cells':[{'id':row['id'],'version':row['version']} for row in cells]})
-
-
 def test_finish_and_in_progress_have_distinct_overdue_and_other_work_is_boolean(client,pm_headers,monkeypatch):
     pid, units, ph, task=setup(client,pm_headers)
     pending=create_cell(client,pm_headers,pid,task)
     finish=create_cell(client,pm_headers,pid,task,week_start='2001-01-08',mode='finish')
-    assert publish(client,pm_headers,pid,pending,finish).status_code==200
     rows=client.get(f'/api/projects/{pid}/weekly-plans?week_start=2001-01-01&weeks=2',headers=pm_headers).json()['cells']
     by_id={row['id']:row for row in rows}
     assert not by_id[pending['id']]['completion']['overdue']
@@ -50,7 +44,6 @@ def test_vehicle_finish_counts_are_cumulative_not_reused_for_two_weeks(client,pm
     pid, units, ph, task=setup(client,pm_headers,vehicle=True)
     first=create_cell(client,pm_headers,pid,task,mode='finish',target_count=1)
     second=create_cell(client,pm_headers,pid,task,mode='finish',target_count=1,week_start='2001-01-08')
-    assert publish(client,pm_headers,pid,first,second).status_code==200
     assert write(client,pm_headers,pid,[units[0]]).status_code==200
     rows=client.get(f'/api/projects/{pid}/weekly-plans?week_start=2001-01-01&weeks=2',headers=pm_headers).json()['cells']
     by_id={row['id']:row for row in rows}
@@ -59,15 +52,14 @@ def test_vehicle_finish_counts_are_cumulative_not_reused_for_two_weeks(client,pm
     with SessionLocal() as db:assert db.query(VehicleProgress).filter_by(project_id=pid,is_done=True).count()==1
 
 
-def test_target_scope_and_publication_are_atomic_and_do_not_create_zero_goals(client,pm_headers):
+def test_target_scope_is_checked_and_zero_goals_are_never_created(client,pm_headers):
     pid, units, ph, task=setup(client,pm_headers,vehicle=True)
     for values in [{'mode':'finish','target_count':0},{'mode':'finish','target_count':1.5},{'mode':'in_progress','target_count':1}]:
         assert client.post(f'/api/projects/{pid}/weekly-plans',headers=pm_headers,json={'task_id':task['id'],'week_start':'2001-01-01',**values}).status_code in (400,422)
     first=create_cell(client,pm_headers,pid,task)
-    second=create_cell(client,pm_headers,pid,task,week_start='2001-01-08')
-    bad={**second,'version':9}
-    assert publish(client,pm_headers,pid,first,bad).status_code==409
-    with SessionLocal() as db:assert not db.get(WeeklyPlanCell,first['id']).published and db.get(WeeklyPlanCell,first['id']).version==0
+    stale=client.put(f"/api/projects/{pid}/weekly-plans/{first['id']}",headers=pm_headers,json={'version':9,'notes':'过期表单'})
+    assert stale.status_code==409
+    with SessionLocal() as db:assert db.get(WeeklyPlanCell,first['id']).version==0
     other_pid, other_units, other_ph, other_task=setup(client,pm_headers,vehicle=True)
     response=client.post(f'/api/projects/{pid}/weekly-plans',headers=pm_headers,json={'task_id':task['id'],'week_start':'2001-01-15','scope':{'vehicle_unit_ids':other_units}})
     assert response.status_code==404
@@ -129,5 +121,5 @@ def test_draft_preview_is_readonly_exact_events_and_stale_scope_requires_reprevi
     saved=client.post(base,headers=pm_headers,json={**body,'preview_token':fresh['preview_token']})
     assert saved.status_code==200 and saved.json()['count']==1,saved.text
     with SessionLocal() as db:
-        row=db.query(WeeklyPlanCell).filter_by(project_id=pid).one();assert row.target_count==2 and not row.published
+        row=db.query(WeeklyPlanCell).filter_by(project_id=pid).one();assert row.target_count==2
     assert not client.post(base+'/preview',headers=pm_headers,json=body).json()['proposals']

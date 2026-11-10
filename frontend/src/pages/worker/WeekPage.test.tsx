@@ -11,7 +11,7 @@ vi.mock('../../stores/auth', () => ({ useAuth: () => ({ user: { id: 'worker-1', 
 vi.mock('../../offline/useOfflineSync', () => ({ useOfflineSync: () => ({ online: navigator.onLine, pendingCount: 0, rejected: [], syncVersion: 0, flush: vi.fn(), retry: vi.fn(), remove: vi.fn() }) }))
 vi.mock('../../api/projectDocuments', () => ({ projectDocumentsApi: { upload: mocks.upload } }))
 const plan = { id: 'cell-1', project_id: 'project-1', project_name: '项目甲', task_id: 'work-1', version: 4, week_start: '2026-10-26', mode: 'finish', scope: {}, assignee_ids: ['worker-1'], assignees: [{ id: 'worker-1', name: '本人' }], date_window: { earliest: '2026-10-19', latest: '2026-10-27', timezone: 'Asia/Shanghai' }, work_item: { id: 'work-1', name: '现场网络核对', kind: 'other', version: 2, is_completed: false, phase_name: '现场工作', check_items: [] } }
-const base = { state: 'ready', plans: [plan], vehicle_matrices: {}, this_week_documents: [], my_issues: [], windows: {}, warnings: [], permissions: { record: true, upload: true, issues: true } }
+const base = { state: 'ready', plans: [plan], vehicle_matrices: {}, this_week_documents: [], my_issues: [], windows: {}, permissions: { record: true, upload: true, issues: true } }
 const draw = () => render(<MemoryRouter><WeekPage /></MemoryRouter>)
 beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); setOfflineAccount('worker-1'); vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true); mocks.get.mockResolvedValue({ data: base }); mocks.post.mockResolvedValue({ data: {} }); mocks.upload.mockResolvedValue({}) })
 
@@ -77,12 +77,11 @@ it('按真实周计划范围显示逐车检查与统一完成事实', async () =
   expect(screen.queryByRole('button', { name: /AGV-B/ })).not.toBeInTheDocument()
 })
 
-it('shows repeated warnings and the shared not-on-site notice once, naming the projects', async () => {
+it('shows the shared not-on-site notice once, naming the projects, and no plan reminders', async () => {
   const other = { ...plan, id: 'cell-2', project_id: 'project-2', project_name: '项目乙', project_status: 'preparing', can_record: false }
-  mocks.get.mockResolvedValue({ data: { ...base, plans: [{ ...plan, project_status: 'preparing', can_record: false }, other],
-    warnings: [{ project_id: 'project-1', message: '必需或安全检查仍需核对' }, { project_id: 'project-2', message: '必需或安全检查仍需核对' }, { project_id: 'project-2', message: '同周被安排到多个项目' }] } }); draw()
-  expect(await screen.findByText('3 条计划提醒')).toBeInTheDocument()
-  expect(screen.getByText('必需或安全检查仍需核对（2 处）')).toBeInTheDocument()
+  mocks.get.mockResolvedValue({ data: { ...base, plans: [{ ...plan, project_status: 'preparing', can_record: false }, other] } }); draw()
+  expect(await screen.findByText(/项目甲、项目乙：项目进入「现场实施」后/)).toBeInTheDocument()
+  expect(screen.queryByText(/计划提醒|需要核对/)).toBeNull()
   expect(screen.getAllByText(/项目进入「现场实施」后才能登记完成和检查/)).toHaveLength(1)
   expect(screen.getByText(/项目甲、项目乙：项目进入「现场实施」后/)).toBeInTheDocument()
   expect(screen.getAllByRole('link', { name: '项目甲' })[0]).toHaveAttribute('href', '/pm/projects/project-1/overview')

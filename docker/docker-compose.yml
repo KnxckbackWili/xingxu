@@ -35,10 +35,6 @@ services:
       - REPORT_WEEKLY_TIME=${REPORT_WEEKLY_TIME:-20:00}
       - FIELD_BACKFILL_DAYS=${FIELD_BACKFILL_DAYS:-}
       # 问题按性质使用经过小时阈值，每分钟扫描并去重；普通未设小时则兼容天数。
-      - ISSUE_SLA_DAYS=${ISSUE_SLA_DAYS:-3}
-      - ISSUE_SLA_NORMAL_HOURS=${ISSUE_SLA_NORMAL_HOURS:-}
-      - ISSUE_SLA_ACCIDENT_HOURS=${ISSUE_SLA_ACCIDENT_HOURS:-24}
-      - ISSUE_SLA_QUALITY_HOURS=${ISSUE_SLA_QUALITY_HOURS:-24}
       # O2 unhealthy 自愈看门狗调参（默认值见 app/services/healthwatch.py）。
       - HEALTH_CHECK_URL=${HEALTH_CHECK_URL:-http://127.0.0.1:8000/health}
       - HEALTH_CHECK_INTERVAL=${HEALTH_CHECK_INTERVAL:-15}

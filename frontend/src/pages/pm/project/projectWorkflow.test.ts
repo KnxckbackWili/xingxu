@@ -1,32 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { projectStageGuidance, projectWorkflow, type WorkflowInput } from './projectWorkflow'
-const ready: WorkflowInput = { status: 'preparing', vehicles: 2, tasks: 12, plans: 12, drafts: 0, kickoffReady: true, severeIssues: 0, progress: 0 }
-describe('人工推进和概况准备清单', () => {
-  it('uses the ordered setup areas and moves only to the adjacent execution state', () => {
-    expect(projectWorkflow(ready).checklist.map(row=>row.title)).toEqual(['车型','资料清单','周计划'])
-    expect(projectWorkflow({...ready,infoComplete:false}).checklist.map(row=>row.title)).toEqual(['基本资料','车型','资料清单','周计划'])
-    expect(projectWorkflow({...ready,infoComplete:false}).action.path).toBe('/edit?section=info')
-    expect(projectWorkflow(ready).action.status).toBe('executing')
-    expect(projectWorkflow({...ready,vehicles:0}).action.path).toBe('/edit?section=vehicles')
-    // 不再安排人：没有成员、周计划没写谁来做，都不挡进场。
-    expect(projectWorkflow({...ready}).action.status).toBe('executing')
-    expect(projectWorkflow({...ready,kickoffReady:false}).action.path).toBe('/documents?stage=4')
+import { projectStageGuidance } from './projectWorkflow'
+
+describe('projectStageGuidance', () => {
+  it('names the next status in order and stops at archived', () => {
+    expect(['preparing', 'executing', 'acceptance', 'completed'].map(status => projectStageGuidance(status)?.next))
+      .toEqual(['executing', 'acceptance', 'completed', 'archived'])
+    expect(projectStageGuidance('archived')?.next).toBeUndefined()
+    expect(projectStageGuidance('suspended')?.next).toBeUndefined()
+    expect(projectStageGuidance('unknown')).toBeNull()
   })
-  it('describes signoffs and milestones without retired project states', () => {
-    expect(projectStageGuidance('preparing')?.next).toBe('executing')
-    expect(projectStageGuidance('ready')).toBeNull()
-    expect(projectStageGuidance('executing')?.next).toBe('acceptance')
-    expect(projectStageGuidance('executing')?.description).toContain('调试完工单')
-    for(const state of ['draft','planning','commissioning','pilot'])expect(projectStageGuidance(state)).toBeNull()
-  })
-  it('keeps serious issues first and full progress still requires a separate human decision', () => {
-    expect(projectWorkflow({...ready,status:'executing',severeIssues:1}).action.path).toBe('/issues')
-    expect(projectWorkflow({...ready,status:'executing',progress:100}).action.path).toBe('/documents?stage=6')
-    expect(projectWorkflow({...ready,status:'executing',progress:100}).action.status).toBeUndefined()
-    expect(projectWorkflow({...ready,status:'acceptance',progress:100}).action.path).toBe('/documents?acceptance=1')
-  })
-  it.each(['completed','archived','suspended'])('%s does not restart setup or advance on a percentage',status=>{
-    const result=projectWorkflow({...ready,status,vehicles:0,progress:100})
-    expect(result.setup).toBe(false);expect(result.action.status).toBeUndefined()
+  it('describes each stage without asking for evidence checks', () => {
+    for (const status of ['preparing', 'executing', 'acceptance', 'completed', 'archived', 'suspended'])
+      expect(projectStageGuidance(status)?.description).not.toMatch(/核对|门禁|齐备/)
   })
 })

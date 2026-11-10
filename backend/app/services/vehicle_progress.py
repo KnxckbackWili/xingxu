@@ -68,14 +68,6 @@ def progress_totals(db,pid):
     return progress_totals_batch(db,[pid])[pid]
 
 
-def matrix_completion_blockers(db,pid):
-    totals=progress_totals(db,pid)
-    if not project_steps(db,pid):
-        return []
-    if totals['quantity_unknown']:return ['车辆环节应完成数量未知，请先核对数量']
-    return ['车辆进度表尚未全部完成'] if totals['completed']<totals['target'] else []
-
-
 def migration_warnings(db,pid):
     totals=progress_totals(db,pid)
     result=[]

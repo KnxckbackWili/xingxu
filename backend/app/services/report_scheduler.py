@@ -212,48 +212,6 @@ def maintain_document_deadlines(db: Session, now=None) -> dict:
     return result
 
 
-def scan_overdue_issues(db: Session, ref_date: Optional[date] = None, now=None) -> dict:
-    """Nature-specific elapsed-hour SLA; durable receipts prevent repeated alerts."""
-    from app.models import Issue
-    from app.services.document_triggers import issue_sla,claim_sla,NATURES,sla_hours,issue_events
-    from app.services.document_deadlines import utc
-    from app.services.record_lock import lock_record
-    now=utc(now)
-    scanned=notified=0
-    projects=db.query(Project).filter(Project.status.in_(ACTIVE_PROJECT_STATUSES),Project.deleted_at.is_(None)).order_by(Project.id).all()
-    for project in projects:
-        lock_record(db,project,conflict_detail='问题SLA扫描与项目修改冲突，请稍后重试')
-        if project.deleted_at or project.status not in ACTIVE_PROJECT_STATUSES:continue
-        rows=db.query(Issue).filter(Issue.project_id==project.id,
-            (Issue.status.notin_(['closed','cancelled']) | Issue.status.is_(None))).order_by(Issue.id).all()
-        sources=issue_events(db,rows)
-        recipients={}
-        pm=_pm_user(db,project)
-        if pm:recipients[pm.id]=pm
-        if not recipients:
-            recipients={person.id:person for person in db.query(User).filter_by(is_active=True,role='admin')
-                        if has_permission(person,'project.read')}
-        for issue in rows:
-            sla=issue_sla(db,issue,sources)
-            if sla['due_at'] is None or now<sla['due_at']:continue
-            scanned+=1
-            delivered=[]
-            for identity in sorted(recipients):
-                if not claim_sla(db,issue,identity,sla['hours']):continue
-                notify(db,identity,f'「{project.name}」问题 SLA 超时提醒'[:200],
-                    f'{issue.title}（{NATURES.get(issue.nature,"普通")}）：已超过{sla["hours"]}小时处理时限，当前{issue.status}。仅关闭或作废算闭环，请核对处理。',
-                    ntype='issue_sla',project_id=project.id,entity_id=issue.id)
-                delivered.append(identity);notified+=1
-            if delivered:
-                log_change(db,project.id,'issue',issue.id,'sla',None,'按问题性质发送SLA提醒',None,
-                    {'nature':issue.nature,'hours':sla['hours'],'due_at':sla['due_at'].isoformat(),'recipients':delivered,'basis':sla['basis']})
-            elif not recipients and claim_sla(db,issue,None,sla['hours']):
-                log_change(db,project.id,'issue',issue.id,'sla_unassigned',None,'问题SLA提醒缺少有读取权限的负责人，请管理员接手',None,
-                    {'nature':issue.nature,'hours':sla['hours']})
-    return {'scanned':scanned,'notified':notified,'sla_days':config.ISSUE_SLA_DAYS,
-            'sla_hours':{nature:sla_hours(nature) for nature in NATURES}}
-
-
 def _parse_hhmm(value: str):
     hour, minute = value.split(":")
     return int(hour), int(minute)
@@ -304,10 +262,6 @@ def _weekly_job() -> None:
     _run_with_session(generate_and_notify_weekly_report, job_id="weekly_report")
 
 
-def _overdue_job() -> None:
-    _run_with_session(scan_overdue_issues, job_id="issue_sla_scan")
-
-
 def purge_soft_deleted_projects(db: Session, retention_days: int = 30) -> dict:
     """#85 compatibility entrypoint: recycling never schedules permanent deletion."""
     return {'purged': 0, 'blocked': 0, 'disabled': True, 'blocked_reason': '自动物理清理已停用；仅管理员可在回收站备份后明确永久删除'}
@@ -338,8 +292,7 @@ def catch_up_missed_jobs() -> dict:
     """Inspect real local periods after restart; receipts prevent duplicate delivery."""
     _document_deadlines_job()
     _weekly_job()
-    _overdue_job()
-    return {'caught_up':['document_deadlines','weekly_report','issue_sla_scan']}
+    return {'caught_up':['document_deadlines','weekly_report']}
 
 
 def start_scheduler():
@@ -359,13 +312,6 @@ def start_scheduler():
     )
     sched.add_job(_document_deadlines_job,'interval',seconds=60,id='document_deadlines',replace_existing=True)
     sched.add_job(_storage_maintenance_job,'interval',hours=1,id='storage_maintenance',replace_existing=True)
-    sched.add_job(
-        _overdue_job,
-        "interval",
-        seconds=60,
-        id="issue_sla_scan",
-        replace_existing=True,
-    )
     # HYPE-58：出站通知队列投递（每分钟，失败可退避重试；见 notify_channels.deliver_outbox）
     sched.add_job(
         _outbox_job,

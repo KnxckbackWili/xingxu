@@ -30,7 +30,6 @@
 .workbench-mine-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 12px 20px; border-top: 1px solid var(--agv-border-soft); }
 .workbench-mine-name { flex: 1; font-weight: 500; font-size: 14px; }
 .workbench-mine-list small { flex-basis: 100%; color: var(--agv-text-secondary); font-size: 13px; }
-.workbench-mine-note { margin: 0; padding: 10px 20px; font-size: 13px; color: var(--agv-text-secondary); background: var(--agv-bg-subtle); border-top: 1px solid var(--agv-border-soft); }
 .workbench-mine .ant-spin, .workbench-mine .ant-alert, .workbench-mine .ant-empty { margin: 16px 20px; }
 .workbench-projects .ant-table-wrapper { padding: 0; }
 .workbench-statistics { margin-top: 20px; }

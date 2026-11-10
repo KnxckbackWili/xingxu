@@ -27,7 +27,7 @@ it('does not display successful zero counts after a read failure',async()=>{
  expect(screen.queryByText('暂无需要处理的事项')).toBeNull();expect(screen.queryByText('需要处理')).toBeNull()
 })
 it('hides the previous account immediately and ignores its delayed response',async()=>{
- let finish!:(value:typeof overview)=>void;h.overview.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve})).mockResolvedValue({projects:[],this_week_documents:[],weekly_plan:{state:'available',count:0,items:[],unknown_count:0,unknown_items:[]}})
+ let finish!:(value:typeof overview)=>void;h.overview.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve})).mockResolvedValue({projects:[],this_week_documents:[],weekly_plan:{state:'available',count:0,items:[]}})
  const view=show();h.user={...h.user,id:'b'};view.rerender(<MemoryRouter><DashboardPage/></MemoryRouter>)
  expect(await screen.findByText('暂无需要处理的事项')).toBeVisible();await act(async()=>finish(overview));expect(screen.queryByText('项目甲')).toBeNull()
 })
@@ -36,15 +36,15 @@ it('keeps partially unread document and signoff states unknown',async()=>{
  expect(await screen.findByText('逾期资料尚未完整读取。')).toBeVisible();expect(screen.getByText('签单状态尚未完整读取。')).toBeVisible()
  expect(screen.getByText('车辆进度未读取')).toBeVisible();expect(screen.queryByText('暂无需要处理的事项')).toBeNull()
 })
-it('lists overdue and unverified published weekly plan cells from the real contract',async()=>{
+it('lists overdue weekly plan cells and never asks to verify plans',async()=>{
  const cell={id:'c1',project_id:'p1',project_name:'项目甲',task_id:'t1',name:'场地勘测',week_start:'2026-10-19',state:'incomplete',url:'/pm/projects/p1/plan?view=weeks&week=2026-10-19&cell=c1'}
- h.overview.mockResolvedValue({...overview,weekly_plan:{state:'available',count:1,items:[cell],unknown_count:1,unknown_items:[{...cell,id:'c2',name:'多车联调'}]}});show()
+ h.overview.mockResolvedValue({...overview,weekly_plan:{state:'available',count:1,items:[cell]}});show()
  expect(await screen.findByRole('link',{name:'场地勘测'})).toHaveAttribute('href',cell.url)
- expect(screen.getByText('已逾期未完成')).toBeVisible();expect(screen.getByText('完成情况待核对')).toBeVisible()
+ expect(screen.getByText('已逾期未完成')).toBeVisible();expect(screen.queryByText(/待核对/)).toBeNull()
  expect(screen.queryByText(/本周计划暂不可读取/)).toBeNull()
 })
 it('shows an empty weekly attention state instead of an error when nothing is overdue',async()=>{
- h.overview.mockResolvedValue({...overview,weekly_plan:{state:'available',count:0,items:[],unknown_count:0,unknown_items:[]}});show()
+ h.overview.mockResolvedValue({...overview,weekly_plan:{state:'available',count:0,items:[]}});show()
  fireEvent.click(await screen.findByRole('button',{name:'周计划 0'}));expect(screen.getByText('暂无周计划待处理')).toBeVisible();expect(screen.queryByText(/本周计划暂不可读取/)).toBeNull()
 })
 
@@ -59,6 +59,6 @@ it('merges documents, weekly plan, issues and signoffs into one filterable list,
  expect(await screen.findByText('场地勘测')).toBeVisible();expect(screen.getByRole('link',{name:'去登记'})).toHaveAttribute('href','/worker/week')
 })
 it('keeps the list honest when issues cannot be read',async()=>{
- w.issues.mockRejectedValue(new Error('offline'));h.overview.mockResolvedValue({projects:[],this_week_documents:[],weekly_plan:{state:'available',count:0,items:[],unknown_count:0,unknown_items:[]}});show()
+ w.issues.mockRejectedValue(new Error('offline'));h.overview.mockResolvedValue({projects:[],this_week_documents:[],weekly_plan:{state:'available',count:0,items:[]}});show()
  expect(await screen.findByText('问题尚未读取。')).toBeVisible();expect(screen.queryByText('暂无需要处理的事项')).toBeNull()
 })

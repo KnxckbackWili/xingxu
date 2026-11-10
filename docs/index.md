@@ -12,7 +12,7 @@
 
 | 需要了解 | 说明 |
 |---|---|
-| 项目人工状态、实际签单日期 | [项目状态](project-lifecycle-v3.md)、[关键事件](project-events.md)、[完成核对](completion-review.md) |
+| 项目人工状态、实际签单日期 | [项目状态](project-lifecycle-v3.md)、[关键事件](project-events.md)、[问题闭环与验收](completion-review.md) |
 | 资料要求、文件、截止与触发 | [项目模板（段落 + 一件事一行）](project-templates.md)、[模板阶段主线](template-stage-backbone.md)、[资料要求模板](document-requirement-templates.md)、[项目清单](project-documents.md)、[截止提醒](document-deadlines.md)、[事故/质量/离场触发](triggered-documents.md) |
 | 表单与车辆事实 | [生成 Excel/Word](generated-document-forms.md)、[车辆进度](vehicle-progress.md)、[逐车检查](vehicle-checks.md)、[逐车资料](vehicle-documents.md) |
 | 账号与保密 | [账号与权限](accounts.md)、[数据可见性](data-visibility.md)、[保密](confidential-documents.md)、[二次验证](two-factor-auth.md) |

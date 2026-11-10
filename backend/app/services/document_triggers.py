@@ -3,21 +3,14 @@
 Callers hold the project lock and own commit/rollback. Neither GET projections
 nor imported historical metadata can manufacture a trigger.
 """
-from datetime import datetime,timedelta
-from uuid import uuid4
+from datetime import datetime
 from fastapi import HTTPException
-from app import config
 from app.models import (DocumentTriggerEvent,ProjectDocumentDefinition,ProjectDocument,
-                        VehicleUnit,Issue,User,IssueSlaReceipt)
+                        VehicleUnit,Issue,User)
 from app.services.change_log import log_change
 from app.services.document_deadlines import utc,refresh_project
 
 NATURES={'normal':'普通','accident':'事故','quality':'质量问题'}
-
-
-def sla_hours(nature):
-    return {'normal':config.ISSUE_SLA_NORMAL_HOURS,'accident':config.ISSUE_SLA_ACCIDENT_HOURS,
-            'quality':config.ISSUE_SLA_QUALITY_HOURS}.get(nature,config.ISSUE_SLA_NORMAL_HOURS)
 
 
 def issue_events(db,issues):
@@ -26,24 +19,13 @@ def issue_events(db,issues):
         DocumentTriggerEvent.source_type=='issue',DocumentTriggerEvent.source_id.in_(ids))}
 
 
-def issue_sla(db,issue,events=None):
-    event=(events.get((issue.project_id,issue.id,issue.nature)) if events is not None else db.query(DocumentTriggerEvent).filter_by(project_id=issue.project_id,source_type='issue',
-        source_id=issue.id,trigger_type=issue.nature).first()) if issue.nature in {'accident','quality'} else None
-    start=event.occurred_at if event else issue.created_at
-    unverified=bool((issue.source_metadata or {}).get('kind')=='portable_unverified_issue' and event is None)
-    if unverified:start=None
-    return {'hours':sla_hours(issue.nature),'start_at':start,
-            'trigger_event_id':event.id if event else None,
-            'due_at':utc(start)+timedelta(hours=sla_hours(issue.nature)) if start else None,
-            'basis':'nature_changed' if event and event.source_metadata.get('basis')=='nature_changed' else 'reported'}
-
-
-def issue_sla_fields(db,issue,events=None):
-    from app.services.project_documents import iso
-    sla=issue_sla(db,issue,events)
-    return {'nature':issue.nature,'sla_hours':sla['hours'],'sla_due_at':iso(sla['due_at']),
-            'sla_basis':sla['basis'],'trigger_event_id':sla['trigger_event_id'],
-            'source_metadata':issue.source_metadata,'sla_warning':'原问题仅作为导入来源保全；未重新上报，不生成新的SLA或事故义务' if (issue.source_metadata or {}).get('kind')=='portable_unverified_issue' and not sla['trigger_event_id'] else None}
+def issue_trigger_fields(db,issue,events=None):
+    """Accident and quality issues point at the trigger event that created their documents."""
+    event=None
+    if issue.nature in {'accident','quality'}:
+        event=(events.get((issue.project_id,issue.id,issue.nature)) if events is not None else db.query(DocumentTriggerEvent).filter_by(
+            project_id=issue.project_id,source_type='issue',source_id=issue.id,trigger_type=issue.nature).first())
+    return {'nature':issue.nature,'trigger_event_id':event.id if event else None,'source_metadata':issue.source_metadata}
 
 
 def event_dict(event):
@@ -139,14 +121,3 @@ def transfer_departures(db,project):
     identity=project.manager
     if not identity:return set()
     return {identity}
-
-
-def claim_sla(db,issue,recipient_id,hours):
-    if db.bind.dialect.name=='postgresql':
-        from sqlalchemy.dialects.postgresql import insert
-    else:
-        from sqlalchemy.dialects.sqlite import insert
-    result=db.execute(insert(IssueSlaReceipt).values(id=str(uuid4()),project_id=issue.project_id,issue_id=issue.id,
-        nature=issue.nature or 'normal',sla_hours=hours,recipient_id=recipient_id,
-        recipient_key=recipient_id or 'unassigned',created_at=utc(None)).on_conflict_do_nothing())
-    return result.rowcount==1
