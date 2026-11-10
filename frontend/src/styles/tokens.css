@@ -1,0 +1,56 @@
+/* The one place colours, spacing, radius and elevation are defined. Loaded first. */
+:root {
+  --agv-primary: #2563eb;
+  --agv-primary-strong: #1d4fd7;
+  --agv-link: #2563eb;
+  --agv-on-primary: #fff;
+  --agv-primary-soft: #eef4ff;
+  --agv-bg-layout: #f3f5f9;
+  --agv-bg-container: #fff;
+  --agv-bg-subtle: #f6f8fb;
+  --agv-border: #dfe4ec;
+  --agv-border-soft: #ebeef4;
+  --agv-text: #1b2333;
+  --agv-text-secondary: #5c6779;
+  --agv-success: #12805c;
+  --agv-success-soft: #e6f6ef;
+  --agv-warning: #a8620b;
+  --agv-warning-soft: #fff3df;
+  --agv-danger: #c5302f;
+  --agv-danger-soft: #fdecec;
+  --agv-neutral-soft: #eef1f6;
+  --agv-radius: 10px;
+  --agv-radius-lg: 16px;
+  --agv-shadow-sm: 0 1px 2px rgb(16 24 40 / 5%);
+  --agv-shadow-md: 0 1px 2px rgb(16 24 40 / 4%), 0 10px 28px -14px rgb(16 24 40 / 16%);
+  --agv-shadow-lg: 0 18px 48px -18px rgb(16 24 40 / 28%);
+  --agv-surface-shadow: var(--agv-shadow-sm);
+  --agv-header-surface: rgb(243 245 249 / 82%);
+  --agv-page-gap: 24px;
+  --agv-page-inset: clamp(16px, 2.2vw, 32px);
+}
+html[data-theme='dark'] {
+  --agv-primary: #8fb4ff;
+  --agv-primary-strong: #a9c5ff;
+  --agv-link: #8fb4ff;
+  --agv-on-primary: #0f1a30;
+  --agv-primary-soft: #1d2f4f;
+  --agv-bg-layout: #0f131a;
+  --agv-bg-container: #181e28;
+  --agv-bg-subtle: #212936;
+  --agv-border: #364153;
+  --agv-border-soft: #2a3342;
+  --agv-text: #edf1f7;
+  --agv-text-secondary: #aab5c6;
+  --agv-success: #6fd3a6;
+  --agv-success-soft: #153828;
+  --agv-warning: #eab765;
+  --agv-warning-soft: #3d2e12;
+  --agv-danger: #ff9a92;
+  --agv-danger-soft: #45201f;
+  --agv-neutral-soft: #262f3d;
+  --agv-shadow-sm: 0 1px 2px rgb(0 0 0 / 30%);
+  --agv-shadow-md: 0 1px 2px rgb(0 0 0 / 30%), 0 10px 28px -14px rgb(0 0 0 / 60%);
+  --agv-shadow-lg: 0 18px 48px -18px rgb(0 0 0 / 70%);
+  --agv-header-surface: rgb(15 19 26 / 84%);
+}

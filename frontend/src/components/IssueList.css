@@ -1,22 +1,23 @@
 /* Issues: one list, a colour strip for severity, one next step per row. */
 .issue-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 12px; }
 .issue-search { width: 260px; max-width: 100%; }
-.issue-count { margin-left: 6px; padding: 0 6px; border-radius: 9px; background: var(--agv-bg-subtle); color: var(--agv-text-secondary); font-size: 11px; font-weight: 500; }
-.issue-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--agv-border-soft); border-radius: 12px; background: var(--agv-bg-container); overflow: hidden; }
-.issue-row { position: relative; display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 10px 14px 10px 18px; border-bottom: 1px solid var(--agv-border-soft); }
+.issue-list { list-style: none; margin: 0; padding: 0; border-radius: var(--agv-radius-lg); box-shadow: var(--agv-shadow-sm); background: var(--agv-bg-container); overflow: hidden; }
+.issue-row { position: relative; display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 12px 16px 12px 20px; border-bottom: 1px solid var(--agv-border-soft); }
 .issue-row:last-child { border-bottom: 0; }
 .issue-row:hover { background: var(--agv-bg-subtle); }
 .issue-row.is-closed { opacity: .7; }
 .issue-row-severity { position: absolute; left: 0; top: 10px; bottom: 10px; width: 4px; border-radius: 0 3px 3px 0; background: var(--agv-border); }
-.issue-row.sev-critical .issue-row-severity { background: #d92d20; }
+.issue-row.sev-critical .issue-row-severity { background: var(--agv-danger); }
 .issue-row.sev-high .issue-row-severity { background: #f79009; }
 .issue-row.sev-medium .issue-row-severity { background: #fdb022; }
 .issue-row.sev-low .issue-row-severity { background: #84caff; }
 .issue-row-severity.is-vehicle { background: var(--agv-primary); }
 .issue-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.issue-row-title { padding: 0; border: 0; background: none; color: var(--agv-text); font: inherit; font-size: 14px; font-weight: 500; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+.issue-row-title { padding: 0; border: 0; background: none; color: var(--agv-text); font: inherit; font-size: 14px; font-weight: 600; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
 .issue-row-title:hover { color: var(--agv-primary); }
-.issue-row-meta { display: flex; flex-wrap: wrap; color: var(--agv-text-secondary); font-size: 12px; overflow-wrap: anywhere; }
+.issue-row-meta { display: flex; flex-wrap: wrap; align-items: center; color: var(--agv-text-secondary); font-size: 12px; overflow-wrap: anywhere; }
+.issue-row-reporter { display: inline-flex; align-items: center; gap: 5px; }
+.issue-row-reporter .person-avatar { width: 18px; height: 18px; font-size: 10px; }
 .issue-row-meta > span + span::before { content: '·'; margin: 0 6px; }
 .issue-row-summary { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .issue-row-tags { display: inline-flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
@@ -31,6 +32,7 @@
   .issue-row-action .ant-btn { min-height: 36px; }
 }
 @media (max-width: 767px) {
-  .issue-row-meta { flex-direction: column; }
+  .issue-row-meta { flex-direction: column; align-items: flex-start; }
   .issue-row-meta > span + span::before { content: none; }
 }
+.work-section .issue-list { border-radius: 0; box-shadow: none; }

@@ -1,7 +1,7 @@
 .weekly-plan-scroll { max-width:100%; overflow:auto; margin-top:16px; }
 .weekly-plan-table { border-collapse:collapse; width:100%; min-width:1000px; table-layout:fixed; }
 .weekly-plan-table th,.weekly-plan-table td { border:1px solid var(--agv-border-soft); padding:8px; vertical-align:top; min-width:150px; }
-.weekly-plan-table th { background:var(--agv-bg-subtle); text-align:left; font-weight:500; }
+.weekly-plan-table th { background:var(--agv-bg-container); text-align:left; font-weight:500; }
 .weekly-plan-table th:first-child { width:220px; }
 .weekly-plan-table small,.weekly-plan-table strong { display:block; }
 .weekly-plan-table article { margin-bottom:6px; }
@@ -30,10 +30,10 @@ html.printing-weekly-plans .weekly-plan-print>header { display:block; }.weekly-p
 .weekly-plan-range { display:inline-flex; align-items:center; gap:2px; }
 .weekly-plan-switch { display:inline-flex; align-items:center; gap:6px; color:var(--agv-text-secondary); font-size:13px; }
 .holiday-notice-compact { margin-bottom:12px; border-radius:8px; }
-.weekly-plan-warnings { margin:0 0 12px; padding:8px 12px; border-radius:8px; background:rgb(250 173 20 / 10%); font-size:13px; }
-.weekly-plan-warnings summary { cursor:pointer; color:#ad6800; }
+.weekly-plan-warnings { margin:0 0 12px; padding:10px 14px; border-radius:12px; background:var(--agv-warning-soft); font-size:13px; }
+.weekly-plan-warnings summary { cursor:pointer; color:var(--agv-warning); font-weight:500; }
 .weekly-plan-warnings ul { margin:6px 0 0; padding-left:18px; }
-.weekly-plan-scroll { border:1px solid var(--agv-border-soft); border-radius:12px; overflow:auto; background:var(--agv-bg-container); }
+.weekly-plan-scroll { border-radius:var(--agv-radius-lg); overflow:auto; background:var(--agv-bg-container); box-shadow:var(--agv-shadow-sm); }
 .weekly-plan-table { border-style:hidden; }
 .weekly-plan-table thead th { position:sticky; top:0; z-index:1; font-size:12px; color:var(--agv-text-secondary); }
 .weekly-plan-table thead th strong { color:var(--agv-text); font-size:13px; }
@@ -42,13 +42,13 @@ html.printing-weekly-plans .weekly-plan-print>header { display:block; }.weekly-p
 .weekly-plan-table tbody th small { margin-top:2px; color:var(--agv-text-secondary); font-size:12px; }
 .weekly-plan-kind.ant-tag { margin-left:6px; font-size:11px; line-height:16px; padding:0 4px; }
 .weekly-plan-table td { position:relative; }
-.weekly-plan-cell { border-radius:8px; padding:6px 8px; background:var(--agv-bg-subtle); border-left:3px solid var(--agv-border); }
+.weekly-plan-cell { border-radius:10px; padding:8px 10px; background:var(--agv-bg-subtle); border-left:3px solid var(--agv-border); }
 .weekly-plan-cell.is-published { background:var(--agv-primary-soft); border-left-color:var(--agv-primary); }
 .weekly-plan-cell-head { display:flex; align-items:center; gap:6px; font-size:11px; }
 .weekly-plan-badge { color:var(--agv-text-secondary); }
 .weekly-plan-state { margin-left:auto; color:var(--agv-text-secondary); }
-.weekly-plan-state.is-overdue { color:#d4380d; }
-.weekly-plan-state.is-done { color:var(--agv-success,#067647); }
+.weekly-plan-state.is-overdue { color:var(--agv-danger); }
+.weekly-plan-state.is-done { color:var(--agv-success); }
 .weekly-plan-cell-body { display:flex; flex-direction:column; gap:2px; width:100%; margin-top:2px; padding:0; border:0; background:none; color:var(--agv-text); font:inherit; text-align:left; }
 button.weekly-plan-cell-body { cursor:pointer; }
 button.weekly-plan-cell-body:hover strong { color:var(--agv-primary); }

@@ -18,7 +18,7 @@
 .vstep-dot { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid currentColor; }
 .vboard-table .ant-table-cell { vertical-align: middle; }
 .vboard-cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-.vboard-card { padding: 12px; border: 1px solid var(--agv-border-soft); border-radius: 12px; background: var(--agv-bg-container); }
+.vboard-card { padding: 12px; box-shadow: var(--agv-shadow-sm); border-radius: 12px; background: var(--agv-bg-container); }
 .vboard-card header { display: flex; align-items: flex-start; gap: 8px; }
 .vboard-card header .vrow-name { flex: 1; }
 .vboard-card-location { margin-top: 6px; color: var(--agv-text-secondary); font-size: 13px; display: flex; align-items: center; gap: 6px; }

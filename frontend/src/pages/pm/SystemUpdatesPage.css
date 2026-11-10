@@ -5,7 +5,7 @@
 .system-updates-page .updates-notices { display: grid; gap: 12px; }
 .system-updates-page .updates-notices:not(:empty) { margin-top: 16px; }
 .system-updates-page .ant-alert { overflow-wrap: anywhere; border-radius: 12px; }
-.system-updates-page .updates-activity { margin-top: 16px; padding: 18px 20px; border: 1px solid var(--agv-border-soft); border-radius: 15px; background: var(--agv-bg-container); }
+.system-updates-page .updates-activity { margin-top: 16px; padding: 18px 20px; box-shadow: var(--agv-shadow-sm); border-radius: 15px; background: var(--agv-bg-container); }
 .system-updates-page .updates-activity-heading { display: flex; align-items: center; gap: 12px; }
 .system-updates-page .updates-activity-symbol { display: grid; place-items: center; flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; background: var(--agv-bg-subtle); color: var(--agv-text-secondary); font-size: 15px; }
 .system-updates-page .updates-activity-symbol.is-success { color: var(--updates-success); }
@@ -99,7 +99,7 @@ html[data-theme='dark'] .system-updates-page .updates-activity-warning .updates-
 }
 
 /* Overview: versions on one line, status, then the actions. */
-.system-updates-page .updates-overview { padding: 24px 26px 22px; background: var(--agv-bg-container); border: 1px solid var(--agv-border-soft); border-radius: 16px; }
+.system-updates-page .updates-overview { padding: 24px 26px 22px; background: var(--agv-bg-container); box-shadow: var(--agv-shadow-sm); border-radius: 16px; }
 .system-updates-page .updates-versions { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 10px 18px; }
 .system-updates-page .updates-version { display: grid; gap: 2px; }
 .system-updates-page .updates-version > span { color: var(--agv-text-secondary); font-size: 12px; }

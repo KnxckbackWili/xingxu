@@ -13,9 +13,6 @@
 .project-library-filters .ant-input-search { flex: 1 1 220px; max-width: 420px; }
 .project-library-filters > .ant-select { flex-shrink: 0; }
 .project-library-filters .project-clear-filters { padding-inline: 4px; }
-.project-library-view-tools { display: flex; align-items: center; justify-content: flex-end; margin-left: auto; }
-.project-library-view-tools .ant-segmented { background: var(--agv-bg-subtle); }
-.project-library-view-tools .ant-segmented-item-label { padding-inline: 12px; }
 .project-library-page .project-library-card { height: 100%; border: 1px solid var(--agv-border-soft); border-radius: 20px; box-shadow: 0 2px 6px rgba(20, 44, 85, .025); transition: border-color .18s, box-shadow .18s; }
 .project-library-page .project-library-card:hover { border-color: var(--agv-primary); box-shadow: 0 6px 24px rgba(20, 44, 85, .06); }
 .project-library-page .project-library-card .ant-card-head { min-height: 0; padding: 20px 22px 0; border-bottom: 0; background: transparent; }
@@ -38,14 +35,14 @@
 .project-card-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding-top: 12px; border-top: 1px solid var(--agv-border-soft); margin-top: 2px; }
 .project-card-actions > .ant-btn:first-child { margin-right: auto; font-weight: 600; }
 .project-card-actions > .ant-btn { min-height: 40px; }
-.project-library-page .project-library-table { border: 1px solid var(--agv-border-soft); border-radius: 18px; background: var(--agv-bg-container); overflow: hidden; }
+.project-library-page .project-library-table { box-shadow: var(--agv-shadow-sm); border-radius: 18px; background: var(--agv-bg-container); overflow: hidden; }
 .project-library-page .project-library-table .ant-table-thead > tr > th { padding: 13px 12px; font-size: 12px; font-weight: 500; }
 .project-library-page .project-library-table .ant-table-tbody > tr { cursor: pointer; }
 .project-library-page .project-library-table .ant-table-tbody > tr > td { padding: 14px 12px; }
 .project-library-page .project-library-table .ant-table-pagination { padding-inline: 16px; }
 .project-library-table .project-table-name { min-width: 180px; overflow-wrap: anywhere; }
 .project-library-table .project-progress-row .ant-typography { font-variant-numeric: tabular-nums; }
-.project-library-empty { margin: 0; padding: 64px 24px; border: 1px solid var(--agv-border-soft); border-radius: 20px; background: var(--agv-bg-container); }
+.project-library-empty { margin: 0; padding: 64px 24px; box-shadow: var(--agv-shadow-sm); border-radius: 20px; background: var(--agv-bg-container); }
 .project-recent { margin-bottom: 20px; }
 .project-recent-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; color: var(--agv-text-secondary); font-size: 12px; }
 .project-recent-heading > span { display: flex; align-items: center; gap: 8px; }
@@ -77,8 +74,6 @@
   .project-library-filters .ant-input-affix-wrapper,
   .project-library-filters .ant-input-search-button,
   .project-library-filters > .ant-btn { min-height: 44px; }
-  .project-library-view-tools { width: 100%; padding-top: 10px; border-top: 1px solid var(--agv-border-soft); }
-  .project-library-view-tools .ant-segmented-item-label { display: flex; align-items: center; min-height: 40px; }
   .project-recent-grid { grid-template-columns: 1fr; gap: 8px; }
   .project-recent-link { min-height: 52px; padding: 10px 14px; }
   .project-recent-heading .ant-btn { min-height: 44px; }

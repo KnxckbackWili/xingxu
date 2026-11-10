@@ -16,6 +16,7 @@
 | 资料要求、文件、截止与触发 | [项目模板（段落 + 一件事一行）](project-templates.md)、[模板阶段主线](template-stage-backbone.md)、[资料要求模板](document-requirement-templates.md)、[项目清单](project-documents.md)、[截止提醒](document-deadlines.md)、[事故/质量/离场触发](triggered-documents.md) |
 | 表单与车辆事实 | [生成 Excel/Word](generated-document-forms.md)、[车辆进度](vehicle-progress.md)、[逐车检查](vehicle-checks.md)、[逐车资料](vehicle-documents.md) |
 | 账号与保密 | [账号与权限](accounts.md)、[数据可见性](data-visibility.md)、[保密](confidential-documents.md)、[二次验证](two-factor-auth.md) |
+| 页面外观 | [界面样式](visual-style.md)、[页面地图](page-map.md) |
 | 上传、清理与数据保全 | [续传和存储](resumable-storage.md)、[加密备份](encrypted-backups.md)、[回收站](project-retention.md) |
 | 本周工作、本人记录 | [实际操作与修订](field-week.md) |
 | 周计划、日历与消息 | [周计划](weekly-plans.md)、[年度节假日](holiday-calendars.md)、[消息规则](notifications.md) |

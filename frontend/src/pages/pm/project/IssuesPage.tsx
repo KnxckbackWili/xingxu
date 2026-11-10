@@ -22,6 +22,7 @@ import { WorkPageHeader } from '../../../components/WorkPage'
 import './FieldWorkPages.css'
 import '../../../components/IssueList.css'
 import { IconAction, RefreshAction } from '../../../components/IconAction'
+import { PersonAvatar } from '../../../components/Person'
 
 interface Issue {
   can_close?: boolean
@@ -291,7 +292,7 @@ export default function IssuesPage({ projectId, canManage = false, archived = fa
       <span className="issue-row-severity" title={`严重程度：${SEVERITY_MAP[issue.severity]?.label}`} aria-hidden />
       <div className="issue-row-main">
         <button type="button" className="issue-row-title" onClick={() => setDetailIssue(issue)}>{issue.title}</button>
-        <span className="issue-row-meta">{type && <span>{type}</span>}{summary && <span className="issue-row-summary">{summary}</span>}<span>{issue.reporter_name} 上报 {shortTime(issue.created_at)}</span></span>
+        <span className="issue-row-meta">{type && <span>{type}</span>}{summary && <span className="issue-row-summary">{summary}</span>}<span className="issue-row-reporter"><PersonAvatar name={issue.reporter_name} />{issue.reporter_name} 上报 {shortTime(issue.created_at)}</span></span>
       </div>
       <span className="issue-row-tags">
         {issue.nature && issue.nature !== 'normal' && <Tag color={issue.nature === 'accident' ? 'red' : issue.nature === 'quality' ? 'orange' : undefined}>{ISSUE_NATURES.find(item => item.value === issue.nature)?.label}</Tag>}

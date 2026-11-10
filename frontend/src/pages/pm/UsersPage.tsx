@@ -13,6 +13,7 @@ import { errMsg } from '../../api/client'
 import { useSubmitLock } from '../../hooks/useSubmitLock'
 import { ROLE_NAME } from '../../constants/roles'
 import { IconAction } from '../../components/IconAction'
+import { PersonAvatar } from '../../components/Person'
 
 interface UserRow {
   id: string
@@ -152,7 +153,7 @@ export default function UsersPage() {
           </Empty>
         : <>
           <ul className="user-list" aria-label="账号名单">{shownUsers.map(u => <li key={u.id} className={u.is_active ? '' : 'is-inactive'}>
-            <span className="user-avatar" aria-hidden>{(u.display_name || u.username).slice(0, 1)}</span>
+            <PersonAvatar name={u.display_name || u.username} large />
             <span className="user-main"><strong>{u.display_name}</strong>{!u.is_active && <Tag>停用</Tag>}<small>{[u.username, u.phone].filter(Boolean).join(' · ')}</small></span>
             <Tag color={ROLE_COLOR[u.role]} className="user-role">{ROLE_NAME[u.role] ?? u.role}</Tag>
             <span className="row-icon-actions">

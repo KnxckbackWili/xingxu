@@ -1,0 +1,73 @@
+/* Global look, loaded last: one treatment for surfaces, tables, tags, buttons and inputs. */
+body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; font-variant-numeric: tabular-nums; }
+::selection { background: color-mix(in srgb, var(--agv-primary) 22%, transparent); }
+* { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--agv-text-secondary) 35%, transparent) transparent; }
+
+/* Surfaces: a soft shadow carries the edge, borders stay faint. */
+.ant-card { border-color: var(--agv-border-soft); box-shadow: var(--agv-shadow-sm); }
+.ant-card .ant-card-head { border-bottom-color: var(--agv-border-soft); min-height: 52px; }
+.ant-card .ant-card-head-title { font-weight: 650; font-size: 15px; }
+.ant-modal .ant-modal-content { border-radius: var(--agv-radius-lg); box-shadow: var(--agv-shadow-lg); padding: 24px 24px 20px; }
+.ant-modal .ant-modal-title { font-size: 17px; font-weight: 650; }
+.ant-drawer .ant-drawer-title { font-size: 17px; font-weight: 650; }
+.ant-dropdown .ant-dropdown-menu, .ant-select-dropdown, .ant-picker-dropdown .ant-picker-panel-container, .ant-popover .ant-popover-inner {
+  border-radius: 12px; box-shadow: var(--agv-shadow-md); border: 1px solid var(--agv-border-soft);
+}
+.ant-dropdown .ant-dropdown-menu { padding: 6px; }
+.ant-dropdown .ant-dropdown-menu-item { border-radius: 8px; min-height: 36px; }
+
+/* Tables: quiet header, roomy rows, no grid lines. */
+.ant-table-wrapper { overflow: hidden; border-radius: var(--agv-radius-lg); background: var(--agv-bg-container); box-shadow: var(--agv-shadow-sm); }
+:is(.work-section, .ant-card, .ant-modal, .ant-drawer, .ant-popover, .workbench-card, .overview-card, .ant-collapse) .ant-table-wrapper { border-radius: 0; background: transparent; box-shadow: none; }
+.ant-table-wrapper .ant-table { background: transparent; font-size: 13.5px; }
+.ant-table-wrapper .ant-table-thead > tr > th, .ant-table-wrapper .ant-table-thead > tr > td {
+  background: transparent; color: var(--agv-text-secondary); font-size: 12px; font-weight: 600; letter-spacing: .02em;
+  border-bottom: 1px solid var(--agv-border-soft); padding-block: 12px;
+}
+.ant-table-wrapper .ant-table-thead > tr > th::before { display: none; }
+.ant-table-wrapper .ant-table-tbody > tr > td { border-bottom: 1px solid var(--agv-border-soft); padding-block: 14px; }
+.ant-table-wrapper .ant-table-tbody > tr:last-child > td { border-bottom: 0; }
+.ant-table-wrapper .ant-table-tbody > tr.ant-table-row:hover > td { background: var(--agv-bg-subtle); }
+.ant-table-wrapper .ant-table-container { border-radius: var(--agv-radius-lg); }
+
+/* Tags are status pills: soft fill, no outline. */
+.ant-tag { border: 0; border-radius: 999px; padding: 1px 10px; font-size: 12px; font-weight: 550; line-height: 20px; margin-inline-end: 6px; background: var(--agv-neutral-soft); color: var(--agv-text-secondary); }
+.ant-tag.ant-tag-green, .ant-tag.ant-tag-success, .ant-tag.ant-tag-cyan { background: var(--agv-success-soft); color: var(--agv-success); }
+.ant-tag.ant-tag-red, .ant-tag.ant-tag-error, .ant-tag.ant-tag-volcano, .ant-tag.ant-tag-magenta { background: var(--agv-danger-soft); color: var(--agv-danger); }
+.ant-tag.ant-tag-orange, .ant-tag.ant-tag-gold, .ant-tag.ant-tag-warning, .ant-tag.ant-tag-yellow { background: var(--agv-warning-soft); color: var(--agv-warning); }
+.ant-tag.ant-tag-blue, .ant-tag.ant-tag-processing, .ant-tag.ant-tag-geekblue, .ant-tag.ant-tag-purple { background: var(--agv-primary-soft); color: var(--agv-primary); }
+
+/* Buttons and fields. */
+.ant-btn { font-weight: 500; box-shadow: none; }
+.ant-btn-default:not(:disabled):not(.ant-btn-dangerous) { border-color: var(--agv-border); background: var(--agv-bg-container); box-shadow: var(--agv-shadow-sm); }
+.ant-btn-default:not(:disabled):not(.ant-btn-dangerous):hover { border-color: color-mix(in srgb, var(--agv-primary) 45%, var(--agv-border)); color: var(--agv-primary); background: var(--agv-bg-container); }
+.ant-btn-primary:not(:disabled):not(.ant-btn-dangerous):not(.ant-btn-background-ghost) { background: linear-gradient(180deg, color-mix(in srgb, var(--agv-primary) 90%, #fff), var(--agv-primary)); box-shadow: 0 1px 2px rgb(16 24 40 / 10%), 0 6px 14px -8px color-mix(in srgb, var(--agv-primary) 70%, transparent); }
+.ant-btn-primary:not(:disabled):not(.ant-btn-dangerous):not(.ant-btn-background-ghost):hover { background: var(--agv-primary-strong); }
+.ant-input, .ant-input-affix-wrapper, .ant-select:not(.ant-select-customize-input) .ant-select-selector, .ant-picker, .ant-input-number { border-color: var(--agv-border); }
+.ant-input-affix-wrapper:hover, .ant-input:hover, .ant-picker:hover { border-color: color-mix(in srgb, var(--agv-primary) 45%, var(--agv-border)); }
+.ant-form-item .ant-form-item-label > label { font-weight: 500; color: var(--agv-text); }
+.ant-segmented { padding: 3px; border-radius: 10px; background: var(--agv-neutral-soft); }
+.ant-segmented .ant-segmented-item { border-radius: 8px; }
+.ant-segmented .ant-segmented-item-selected { box-shadow: var(--agv-shadow-sm); font-weight: 600; }
+.ant-progress .ant-progress-inner { background: var(--agv-neutral-soft); }
+.ant-alert { border: 0; border-radius: 12px; }
+.ant-empty .ant-empty-description { color: var(--agv-text-secondary); }
+.ant-divider { border-color: var(--agv-border-soft); }
+.ant-collapse { border-color: var(--agv-border-soft); border-radius: 12px; overflow: hidden; }
+.ant-collapse > .ant-collapse-item { border-color: var(--agv-border-soft); }
+.ant-tabs .ant-tabs-tab { font-size: 14px; padding: 10px 4px; }
+.ant-tabs .ant-tabs-tab-active .ant-tabs-tab-btn { font-weight: 600; }
+.ant-tabs .ant-tabs-ink-bar { height: 3px; border-radius: 3px 3px 0 0; }
+.ant-tabs-top > .ant-tabs-nav::before { border-bottom-color: var(--agv-border-soft); }
+.ant-progress-status-success .ant-progress-bg { background: var(--agv-success); }
+.ant-progress-status-exception .ant-progress-bg { background: var(--agv-danger); }
+.ant-card-hoverable { cursor: pointer; transition: transform .2s ease-out, box-shadow .2s ease-out; }
+@media (hover: hover) and (pointer: fine) { .ant-card-hoverable:hover { transform: translateY(-2px); box-shadow: var(--agv-shadow-md); } }
+
+/* People: an initial in a steady colour wherever a name appears. */
+.person { display: inline-flex; align-items: center; gap: 8px; min-width: 0; vertical-align: middle; }
+.person-avatar { display: inline-grid; place-items: center; flex: 0 0 auto; width: 24px; height: 24px; border-radius: 50%; color: #fff; font-size: 11px; font-weight: 650; line-height: 1; letter-spacing: 0; }
+.person-avatar.is-lg { width: 36px; height: 36px; font-size: 14px; }
+.person-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Dark mode uses a light primary; text on it turns dark to stay readable. */
+html[data-theme='dark'] .ant-btn-primary:not(:disabled):not(.ant-btn-dangerous):not(.ant-btn-background-ghost) { color: var(--agv-on-primary); background: var(--agv-primary); }

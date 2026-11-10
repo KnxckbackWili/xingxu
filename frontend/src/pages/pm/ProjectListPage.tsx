@@ -1,3 +1,4 @@
+import Person from '../../components/Person'
 import { hasSystemPermission } from '../../constants/systemPermissions'
 import { canAccessNav } from '../../constants/nav'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -266,7 +267,7 @@ export default function ProjectListPage() {
             },
             {
               title: '负责人', width: 120,
-              render: (_, p) => <span style={{ whiteSpace: 'nowrap' }}>{p.manager_name || '未分配'}</span>,
+              render: (_, p) => <Person name={p.manager_name} fallback="未分配" />,
             },
             {
               title: '操作', key: 'action', width: 170,

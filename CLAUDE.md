@@ -32,5 +32,6 @@ PostgreSQL 回归同样只在首个用例建库，其余用例按内存中的行
 - 改状态、门禁或日期时先读[人工状态与签单](docs/project-lifecycle-v3.md)、[完成核对](docs/completion-review.md)和[截止规则](docs/document-deadlines.md)。使用真实来源和现场时区；登记时间、业务日期、计划日期分别表达。
 - 改车辆或进度时先读[车辆进度](docs/vehicle-progress.md)与[逐车检查](docs/vehicle-checks.md)。
 - 改删除或恢复时先读[项目保全](docs/project-retention.md)和[加密备份](docs/encrypted-backups.md)。
+- 改页面外观时先读[界面样式](docs/visual-style.md)：颜色、圆角、阴影只用 `styles/tokens.css` 里的变量，人名用 `Person` 组件。
 
 完成变更后跑触达模块的测试；前端构建通过后再交接。报告区分代码实现、自动测试、实际网页验收和部署结果。

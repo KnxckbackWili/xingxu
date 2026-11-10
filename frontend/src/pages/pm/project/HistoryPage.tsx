@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Card, Typography, Spin, Empty, Avatar, Space, Tag, Button, Alert, Input, Switch } from 'antd'
-import { UserOutlined } from '@ant-design/icons'
+import { Card, Typography, Spin, Empty, Space, Tag, Button, Alert, Input, Switch } from 'antd'
+import { PersonAvatar } from '../../../components/Person'
 import { api } from '../../../api/client'
 import { formatDateTime } from '../../../utils/date'
 import { formatAuditDetail } from '../../../utils/auditDetail'
@@ -60,7 +60,7 @@ export default function HistoryPage({ projectId }: { projectId: string }) {
         <Card key={g.name} size="small" style={{ marginBottom: 12 }}
           title={
             <Space size={8}>
-              <Avatar size={24} icon={<UserOutlined />} style={{ background: '#1677ff' }} />
+              <PersonAvatar name={g.name} />
               <Typography.Text strong>{g.name}</Typography.Text>
               <Tag>{g.logs.length} 条操作</Tag>
             </Space>

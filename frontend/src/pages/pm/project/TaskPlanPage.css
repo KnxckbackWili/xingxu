@@ -1,26 +1,27 @@
 .plan-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 4px 0 16px; }
 .plan-search { width: 220px; max-width: 100%; }
 .plan-filters { display: flex; flex-wrap: wrap; gap: 6px; }
-.plan-filters button { height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid var(--agv-border); background: var(--agv-bg-container); color: var(--agv-text); font: inherit; font-size: 13px; cursor: pointer; }
-.plan-filters button[aria-pressed='true'] { border-color: var(--agv-primary); background: var(--agv-primary-soft); color: var(--agv-primary); }
+.plan-filters button { height: 32px; padding: 0 14px; border-radius: 16px; border: 0; background: var(--agv-bg-container); box-shadow: var(--agv-shadow-sm); color: var(--agv-text-secondary); font: inherit; font-size: 13px; cursor: pointer; transition: background .15s, color .15s; }
+.plan-filters button:hover { color: var(--agv-text); }
+.plan-filters button[aria-pressed='true'] { background: var(--agv-primary); color: var(--agv-on-primary); font-weight: 600; }
 .plan-filters button:focus-visible { outline: 2px solid var(--agv-primary); outline-offset: 2px; }
 .plan-toolbar-actions { margin-left: auto; display: inline-flex; gap: 8px; }
 .plan-phase-count { font-size: 13px; font-weight: 400; color: var(--agv-text-secondary); font-variant-numeric: tabular-nums; }
 /* Work groups sit under the stage backbone (4–9) as light lists. */
-.plan-stage { margin-bottom: 20px; }
-.plan-stage-title { display: flex; align-items: baseline; gap: 10px; margin: 0 0 6px; padding-bottom: 6px; border-bottom: 1px solid var(--agv-border-soft); font-size: 15px; font-weight: 650; }
+.plan-stage { margin-bottom: 16px; padding: 16px 14px 10px; border-radius: var(--agv-radius-lg); background: var(--agv-bg-container); box-shadow: var(--agv-shadow-sm); }
+.plan-stage-title { display: flex; align-items: baseline; gap: 10px; margin: 0 6px 8px; font-size: 16px; font-weight: 650; }
 .plan-group { margin-top: 2px; }
 .plan-group-head { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 4px 6px; border: 0; border-radius: 8px; background: none; color: var(--agv-text); font: inherit; text-align: left; cursor: pointer; }
 .plan-group-head:hover { background: var(--agv-bg-subtle); }
 .plan-group-head > .anticon { font-size: 10px; color: var(--agv-text-secondary); width: 14px; }
 .plan-group-head strong { font-size: 14px; font-weight: 600; }
-.plan-group-bar { flex: 0 0 120px; height: 4px; border-radius: 2px; background: var(--agv-bg-subtle); overflow: hidden; margin-left: 6px; }
-.plan-group-bar > span { display: block; height: 100%; background: var(--agv-primary); border-radius: 2px; }
+.plan-group-bar { flex: 0 0 120px; height: 6px; border-radius: 3px; background: var(--agv-neutral-soft); overflow: hidden; margin-left: 6px; }
+.plan-group-bar > span { display: block; height: 100%; background: var(--agv-primary); border-radius: 3px; }
 .plan-rows { list-style: none; margin: 0 0 6px; padding: 0; }
-.plan-row { display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 3px 6px 3px 28px; border-radius: 8px; }
+.plan-row { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 3px 6px 3px 28px; border-radius: 10px; }
 .plan-row:hover { background: var(--agv-bg-subtle); }
 .plan-row-state { display: grid; place-items: center; width: 16px; flex: none; color: var(--agv-text-secondary); font-size: 13px; }
-.plan-row.is-done .plan-row-state { color: var(--agv-success, #52c41a); }
+.plan-row.is-done .plan-row-state { color: var(--agv-success); }
 .plan-dot { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--agv-border); }
 .plan-row-name { min-width: 0; padding: 0; border: 0; background: none; color: var(--agv-text); font: inherit; text-align: left; cursor: pointer; }
 .plan-row-name:hover { color: var(--agv-primary); }

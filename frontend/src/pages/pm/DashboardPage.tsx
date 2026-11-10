@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Alert, Button, Collapse, Empty, Spin, Table, Tag, Typography } from 'antd'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { FileTextOutlined, InboxOutlined, ProjectOutlined, WarningOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useAuth } from '../../stores/auth'
 import { hasSystemPermission } from '../../constants/systemPermissions'
@@ -52,6 +53,7 @@ function MyWeek({ account }: { account: string }) {
 export default function DashboardPage() {
   const { user } = useAuth()
   const location = useLocation()
+  const navigate = useNavigate()
   const canWorkspace = hasSystemPermission(user, 'workspace.view')
   const canStatistics = hasSystemPermission(user, 'insights.view')
   const canWeek = canAccessNav('/worker/week', user)
@@ -117,9 +119,25 @@ export default function DashboardPage() {
 
   const today = dayjs()
   const monday = today.subtract((today.day() + 6) % 7, 'day')
+  const hour = today.hour()
+  const greeting = hour < 6 ? '夜深了' : hour < 12 ? '上午好' : hour < 14 ? '中午好' : hour < 18 ? '下午好' : '晚上好'
+  const stats: { label: string; value: number; tone: string; icon: ReactNode; pick?: Kind | '全部'; to?: string }[] = [
+    { label: '待处理事项', value: todos.length, tone: 'primary', icon: <InboxOutlined />, pick: '全部' },
+    { label: '待交资料', value: counts['资料'], tone: 'info', icon: <FileTextOutlined />, pick: '资料' },
+    { label: '未解决问题', value: counts['问题'], tone: 'danger', icon: <WarningOutlined />, pick: '问题' },
+    { label: '进行中项目', value: projects.length, tone: 'success', icon: <ProjectOutlined />, to: '/pm/projects' },
+  ]
   return <div className="workbench">
-    <WorkPageHeader title="工作台" description={`${today.format('M 月 D 日')} · 本周 ${monday.format('M/D')} – ${monday.add(6, 'day').format('M/D')}`}
+    <WorkPageHeader title="工作台" description={`本周 ${monday.format('M/D')} – ${monday.add(6, 'day').format('M/D')}`}
+      meta={<span className="workbench-greeting">{greeting}，{user?.display_name} · {today.format('M 月 D 日 dddd')}</span>}
       tools={canWorkspace && <RefreshAction loading={loading} onClick={load} />} />
+    {canWorkspace && data && <div className="workbench-stats" role="group" aria-label="概览">
+      {stats.map(stat => <button key={stat.label} type="button" className={`workbench-stat workbench-stat--${stat.tone}`}
+        onClick={() => { if (stat.to) navigate(stat.to); else { setKind(stat.pick!); setShowAll(false); document.getElementById('workbench-todo-title')?.scrollIntoView?.({ block: 'nearest' }) } }}>
+        <span className="workbench-stat-icon" aria-hidden="true">{stat.icon}</span>
+        <span className="workbench-stat-copy"><strong>{stat.value}</strong><small>{stat.label}</small></span>
+      </button>)}
+    </div>}
     {current?.error && <Alert type="error" showIcon message="工作台暂不可读取" description={current.error} action={<Button onClick={() => void load()}>重试读取</Button>} style={{ marginBottom: 16 }} />}
     {loading && !data && canWorkspace && <Spin aria-label="正在读取工作台" />}
     <div className="workbench-grid">

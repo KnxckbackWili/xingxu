@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Avatar, Drawer, Dropdown, Input, Modal, type InputRef, type MenuProps } from 'antd'
+import { Drawer, Dropdown, Input, Modal, type InputRef, type MenuProps } from 'antd'
+import { PersonAvatar } from '../components/Person'
 import { SOURCE_URL } from '../version'
 import { LogoutOutlined, UserOutlined, SettingOutlined, BulbOutlined, SearchOutlined, CommentOutlined, LockOutlined, SafetyOutlined, HistoryOutlined, GithubOutlined } from '@ant-design/icons'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
@@ -86,7 +87,7 @@ export default function AppLayout() {
   const account = <Dropdown trigger={['click']} open={accountOpen} onOpenChange={setAccountOpen} placement="topLeft" menu={{ items: accountItems }}>
     <button ref={accountTrigger} className="app-account" type="button"
       aria-label={`账户菜单：${user?.display_name ?? '当前用户'}`} aria-haspopup="menu" aria-expanded={accountOpen}>
-      <Avatar size={32} icon={<UserOutlined />} />
+      <PersonAvatar name={user?.display_name} large />
       <span className="app-account-copy"><strong>{user?.display_name}</strong>{user?.display_name !== roleName && <small>{roleName}</small>}</span>
     </button>
   </Dropdown>

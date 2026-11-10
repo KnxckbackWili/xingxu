@@ -1,3 +1,4 @@
+import { PersonAvatar } from '../../../components/Person'
 import { type WeeklyPlanSummary } from '../../../api/weeklyPlans'
 import CompletionReview from './CompletionReview'
 import ProjectEventsTimeline from '../../../components/ProjectEventsTimeline'
@@ -297,7 +298,7 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
           </section>
           {recentLogs.length > 0 && <section className="overview-card overview-side-logs">
             <h2>最近记录</h2>
-            {recentLogs.slice(0, 3).map((log: any) => <div key={log.id}><span>{formatAuditDetail(log.detail)}</span><small>{log.operator_name || '系统'} · {log.created_at ? formatDateTime(log.created_at) : ''}</small></div>)}
+            {recentLogs.slice(0, 3).map((log: any) => <div key={log.id} className="overview-log"><PersonAvatar name={log.operator_name || '系统'} /><span className="overview-log-copy"><span>{formatAuditDetail(log.detail)}</span><small>{log.operator_name || '系统'} · {log.created_at ? formatDateTime(log.created_at) : ''}</small></span></div>)}
             <Button type="link" onClick={() => go('/history')}>全部记录</Button>
           </section>}
         </aside>
@@ -327,7 +328,7 @@ export default function OverviewPage({ projectId, projectStatus, projectSuspensi
             {timeline.length > 0 && timeline.every(t => t.plan_available === false) && <Alert type="info" message="尚未配置车辆环节周计划，计划曲线暂显示未知" />}
             <LazyChart option={chartOption} style={{ height: 240 }} />
             {<><h3 className="overview-evidence-title">最近动态</h3><div className="overview-tree-logs">
-              {recentLogs.length ? recentLogs.map((log: any) => <div key={log.id}><span>{formatAuditDetail(log.detail)}</span><small>{log.operator_name || '系统'} · {log.created_at ? formatDateTime(log.created_at) : ''}</small></div>) : <Typography.Text type="secondary">还没有项目动态。</Typography.Text>}
+              {recentLogs.length ? recentLogs.map((log: any) => <div key={log.id} className="overview-log"><PersonAvatar name={log.operator_name || '系统'} /><span className="overview-log-copy"><span>{formatAuditDetail(log.detail)}</span><small>{log.operator_name || '系统'} · {log.created_at ? formatDateTime(log.created_at) : ''}</small></span></div>) : <Typography.Text type="secondary">还没有项目动态。</Typography.Text>}
               {link('查看操作记录', '/history')}
             </div></>}
       </div>}

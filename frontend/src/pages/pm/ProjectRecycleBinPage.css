@@ -1,7 +1,7 @@
 .project-recycle-page { min-width: 0; }
 .project-recycle-search { max-width: 460px; margin: 20px 0; }
 .project-recycle-list { display: grid; gap: 14px; }
-.project-recycle-card { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 20px; border: 1px solid var(--agv-border-soft); border-radius: 12px; background: var(--agv-bg-container); color: var(--agv-text); }
+.project-recycle-card { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 20px; box-shadow: var(--agv-shadow-sm); border-radius: 12px; background: var(--agv-bg-container); color: var(--agv-text); }
 .project-recycle-info { min-width: 0; }
 .project-recycle-info h2 { margin: 0 0 10px; font-size: 17px; overflow-wrap: anywhere; }
 .project-recycle-info > div { display: flex; flex-wrap: wrap; gap: 6px; }
