@@ -29,11 +29,8 @@ services:
       - COOKIE_SECURE=${COOKIE_SECURE:-0}
       - COOKIE_SAMESITE=${COOKIE_SAMESITE:-lax}
       - MAX_BACKUP_UPLOAD_MB=${MAX_BACKUP_UPLOAD_MB:-2048}
-      - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-0}
+      - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-200}
       - MAX_BACKUP_EXPANDED_MB=${MAX_BACKUP_EXPANDED_MB:-8192}
-      - SCHEDULER_ENABLED=1
-      - REPORT_WEEKLY_TIME=${REPORT_WEEKLY_TIME:-20:00}
-      - FIELD_BACKFILL_DAYS=${FIELD_BACKFILL_DAYS:-}
       # 问题按性质使用经过小时阈值，每分钟扫描并去重；普通未设小时则兼容天数。
       # O2 unhealthy 自愈看门狗调参（默认值见 app/services/healthwatch.py）。
       - HEALTH_CHECK_URL=${HEALTH_CHECK_URL:-http://127.0.0.1:8000/health}

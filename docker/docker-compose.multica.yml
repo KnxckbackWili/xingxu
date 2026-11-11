@@ -61,14 +61,8 @@ services:
       - COOKIE_SECURE=${COOKIE_SECURE:-0}
       - COOKIE_SAMESITE=${COOKIE_SAMESITE:-lax}
       - MAX_BACKUP_UPLOAD_MB=${MAX_BACKUP_UPLOAD_MB:-2048}
-      - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-0}
+      - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-200}
       - MAX_BACKUP_EXPANDED_MB=${MAX_BACKUP_EXPANDED_MB:-8192}
-      # 调度器由独立 scheduler 进程承担（supervisord 内 web 已显式关闭）。
-      - SCHEDULER_ENABLED=1
-      # B4：500 项目聚合看板启用 TTL cache（overview/overdue/stats/trend）
-      - AGVPM_ENABLE_CACHE=1
-      - REPORT_WEEKLY_TIME=${REPORT_WEEKLY_TIME:-20:00}
-      - FIELD_BACKFILL_DAYS=${FIELD_BACKFILL_DAYS:-}
       # 问题按性质使用经过小时阈值，每分钟扫描并去重；普通未设小时则兼容天数。
       # O2 unhealthy 自愈看门狗调参（默认值见 app/services/healthwatch.py）。
       - HEALTH_CHECK_URL=${HEALTH_CHECK_URL:-http://127.0.0.1:8000/health}
@@ -76,21 +70,6 @@ services:
       - HEALTH_FAIL_THRESHOLD=${HEALTH_FAIL_THRESHOLD:-3}
       - HEALTH_WEB_RESTART_LIMIT=${HEALTH_WEB_RESTART_LIMIT:-2}
       - HEALTH_START_GRACE=${HEALTH_START_GRACE:-180}
-      # 不发起外部调用。见 app/services/ai_budget.py。
-      # 外部通知渠道（HYPE-58）：钉钉机器人 Webhook / 通用 JSON webhook（加签/token 可选），
-      # 密钥只从环境/文件读取。NOTIFY_CHANNELS 为空 = 只保留站内通知，不外发。接入说明见 docs/notifications.md。
-      - NOTIFY_CHANNELS=${NOTIFY_CHANNELS:-}
-      - DINGTALK_WEBHOOK_URL=${DINGTALK_WEBHOOK_URL:-}
-      - DINGTALK_WEBHOOK_SECRET=${DINGTALK_WEBHOOK_SECRET:-}
-      - DINGTALK_WEBHOOK_SECRET_FILE=${DINGTALK_WEBHOOK_SECRET_FILE:-}
-      - JSON_WEBHOOK_URL=${JSON_WEBHOOK_URL:-}
-      - JSON_WEBHOOK_TOKEN=${JSON_WEBHOOK_TOKEN:-}
-      - JSON_WEBHOOK_TOKEN_FILE=${JSON_WEBHOOK_TOKEN_FILE:-}
-      - NOTIFY_TIMEOUT_SECONDS=${NOTIFY_TIMEOUT_SECONDS:-3}
-      # 出站队列投递参数（默认值与 config.py 一致）：最大尝试次数 / 退避基数 / 每批条数。
-      - NOTIFY_RETRY_MAX_ATTEMPTS=${NOTIFY_RETRY_MAX_ATTEMPTS:-3}
-      - NOTIFY_RETRY_BASE_SECONDS=${NOTIFY_RETRY_BASE_SECONDS:-60}
-      - NOTIFY_DELIVERY_BATCH_SIZE=${NOTIFY_DELIVERY_BATCH_SIZE:-50}
       - WEB_CONCURRENCY=${WEB_CONCURRENCY:-2}
     volumes:
       - agv-pm-multica-data:/app/data

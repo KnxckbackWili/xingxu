@@ -42,11 +42,12 @@ export default function TemplateEditor() {
     return live.error ? <Result status="warning" title="打不开这个模板" subTitle={live.error} extra={<Button type="primary" onClick={() => navigate('/templates')}>回到模板</Button>} /> : <Skeleton active paragraph={{ rows: 8 }} />
   }
   const template = live.data.template
-  const setField = async (field: keyof Template & string, to: string) => {
-    const from = template[field]
+  const setField = async (field: keyof Template & string, to: string, seen: string) => {
+    const from = seen
     live.mutate((data) => ({ ...data, template: { ...data.template, [field]: to } }))
     try { await live.track(api.patch(base, { [field]: { from, to } })) } catch (failure) {
-      live.mutate((data) => ({ ...data, template: { ...data.template, [field]: from } }))
+      // Refused (or someone changed it first): show what the server holds now.
+      live.refresh()
       message.error(errMsg(failure))
     }
   }
@@ -54,13 +55,13 @@ export default function TemplateEditor() {
     <header className="project-head">
       <Link to="/templates" className="project-back"><LeftOutlined /> 全部模板</Link>
       <div className="project-title-row">
-        <h1 className="project-title"><TextCell value={template.name} label="模板名称" required strong onCommit={(next) => setField('name', next)} /></h1>
+        <h1 className="project-title"><TextCell value={template.name} label="模板名称" required strong onCommit={(next, seen) => setField('name', next, seen)} /></h1>
         <div className="project-actions">
           <Button icon={<UploadOutlined />} onClick={() => setImporting(true)}>从 Excel 导入</Button>
           <Button icon={<DownloadOutlined />} onClick={() => download(`${base}/export.xlsx`)}>导出 Excel</Button>
         </div>
       </div>
-      <div className="project-meta"><label className="is-wide"><span>说明</span><TextCell value={template.note} label="模板说明" placeholder="未填" onCommit={(next) => setField('note', next)} /></label></div>
+      <div className="project-meta"><label className="is-wide"><span>说明</span><TextCell value={template.note} label="模板说明" placeholder="未填" onCommit={(next, seen) => setField('note', next, seen)} /></label></div>
     </header>
     {SECTIONS.map((section) => {
       const rows = byKind.get(section.kind) ?? []
@@ -69,7 +70,7 @@ export default function TemplateEditor() {
       return <section key={section.kind} className="template-section" aria-label={section.title}>
         <header className="section-head"><h2>{section.title}</h2><p>{section.hint}</p></header>
         <Grid label={`模板的${section.title}`} rows={rows} columns={columns} empty="还没有内容"
-          onSet={(row, key, value) => ops.set(row, key as keyof TemplateRow & string, value)}
+          onSet={(row, key, value, seen) => ops.set(row, key as keyof TemplateRow & string, value, seen)}
           onAdd={(text) => ops.add({ kind: section.kind, name: text, stage: section.kind === 'work' ? rows[rows.length - 1]?.stage ?? '' : '', spec: '', quantity: null, unit: '' })}
           addPlaceholder={section.add} onDelete={(row) => void ops.remove(row)} onMove={(row, offset) => void ops.move(rows, row, offset)} onReorder={(ids) => void ops.reorder(ids)} />
       </section>

@@ -91,12 +91,12 @@ export default function VehiclesTab({ snap, live, base, me, todo }: TabProps) {
       <Button icon={<DownloadOutlined />} onClick={() => download(`${base}/lifecycle.xlsx`)}>导出生命周期表</Button>
     </div>
     <Grid label="车辆" rows={shown} columns={columns} empty={todo ? '所有车辆的环节都做完了' : '还没有车辆。在下面输入车辆编号后回车。'}
-      onSet={(row, key, value) => key.startsWith('step:') ? setMark(row.id, key.slice(5), !!value) : vehicles.set(row, key as keyof Vehicle & string, value)}
+      onSet={(row, key, value, seen) => key.startsWith('step:') ? setMark(row.id, key.slice(5), !!value) : vehicles.set(row, key as keyof Vehicle & string, value, seen)}
       onAdd={(text) => vehicles.add({ vehicle_no: text, fleet_no: '', model: '', config_no: '', note: '' })} addPlaceholder="输入车辆编号后回车，新增一台车"
       onDelete={(row) => void vehicles.remove(row)} onMove={(row, offset) => void vehicles.move(snap.vehicles, row, offset)} onReorder={todo ? undefined : (ids) => void vehicles.reorder(ids)}
       expandLabel={(row) => `记录 ${byVehicle.get(row.id)?.length ?? 0}`}
       expand={(row) => <Grid label={`${row.vehicle_no} 的车辆记录`} rows={byVehicle.get(row.id) ?? []} columns={recordColumns} empty="这台车还没有记录"
-        onSet={(record, key, value) => records.set(record, key as keyof VehicleRecord & string, value)} onDelete={(record) => void records.remove(record)}
+        onSet={(record, key, value, seen) => records.set(record, key as keyof VehicleRecord & string, value, seen)} onDelete={(record) => void records.remove(record)}
         onAdd={(text) => records.add({ vehicle_id: row.id, content: text, category: '', happened_on: null, recorded_by_name: me.name, recorded_on: today() })}
         addPlaceholder="写下这台车的变更、故障或维修，回车添加" />} />
     <ImportModal open={!!importing} title={importing === 'lifecycle' ? '导入生命周期表' : '导入车辆表'} url={`${base}/import/${importing || 'vehicles'}`}

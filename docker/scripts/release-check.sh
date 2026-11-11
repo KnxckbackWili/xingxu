@@ -20,7 +20,7 @@ case "$VERSION" in
 esac
 
 expect frontend/package-lock.json "\"version\": \"$VERSION\""
-expect frontend/src/pages/LoginPage.tsx "行序 · 项目工作台 · {APP_VERSION}"
+expect frontend/src/pages/Login.tsx "行序 {APP_VERSION}"
 expect backend/app/config.py "APP_VERSION = os.getenv(\"APP_VERSION\", \"$VERSION\")"
 expect docker/Dockerfile "ARG APP_VERSION=$VERSION"
 expect docker/docker-compose.yml "APP_VERSION: \${APP_VERSION:-$VERSION}"
@@ -34,14 +34,11 @@ docker compose --env-file .env.example -f docker/docker-compose.yml config --qui
 
 if [ "${FAST:-0}" != "1" ]; then
   (cd frontend && npm run build)
-  grep -Fq 'agvpm-pages' frontend/dist/sw.js || {
-    echo "Service worker must use the network-first navigation cache." >&2
+  # 行序 4 has no offline cache; the shipped sw.js only removes the one earlier versions installed.
+  grep -Fq 'registration.unregister' frontend/dist/sw.js || {
+    echo "frontend/dist/sw.js must be the cache-removing service worker." >&2
     exit 1
   }
-  if grep -Fq 'NavigationRoute' frontend/dist/sw.js; then
-    echo "Service worker must not restore cache-first SPA navigation." >&2
-    exit 1
-  fi
   if [ "${SKIP_AUDIT:-0}" != "1" ]; then
     (cd frontend && npm audit --audit-level=high --registry=https://registry.npmjs.org)
   fi

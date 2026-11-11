@@ -23,7 +23,7 @@ export default function DocumentsTab({ snap, live, base, me, todo }: TabProps) {
   const rows = todo ? snap.documents.filter((row) => !filesOf.get(row.id)?.length) : snap.documents
   return <>
     <Grid label="要交的资料" rows={rows} columns={columns} empty={todo ? '要交的资料都交齐了' : '还没有要交的资料。在下面输入资料名称后回车。'}
-      onSet={(row, key, value) => ops.set(row, key as keyof DocumentRow & string, value)}
+      onSet={(row, key, value, seen) => ops.set(row, key as keyof DocumentRow & string, value, seen)}
       onAdd={(text) => ops.add({ name: text, note: '' })} addPlaceholder="输入资料名称后回车，新增一项要交的资料"
       onDelete={(row) => void ops.remove(row)} onMove={(row, offset) => void ops.move(snap.documents, row, offset)} onReorder={todo ? undefined : (ids) => void ops.reorder(ids)} />
     {!todo && <section className="other-files" aria-label="其他文件">

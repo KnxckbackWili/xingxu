@@ -25,6 +25,6 @@ export default function IssuesTab({ snap, live, base, me, todo }: TabProps) {
   return <>
     <div className="grid-wrap issue-new"><AddLine placeholder="写一句话说明问题，回车上报" onAdd={(text) => ops.add({ description: text, vehicle_id: null, resolution: '', is_closed: false })} /></div>
     <Grid label="问题" rows={rows} columns={columns} empty={todo ? '没有未关闭的问题' : '还没有问题'} rowClass={(row) => (row.is_closed ? 'is-done' : '')}
-      onSet={(row, key, value) => ops.set(row, key as keyof Issue & string, value)} onDelete={(row) => void ops.remove(row)} />
+      onSet={(row, key, value, seen) => ops.set(row, key as keyof Issue & string, value, seen)} onDelete={(row) => void ops.remove(row)} />
   </>
 }

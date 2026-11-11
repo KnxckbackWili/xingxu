@@ -16,7 +16,7 @@ export default function ItemsTab({ snap, live, base, me, todo }: TabProps) {
   ]
   const rows = todo ? snap.items.filter((row) => !row.arrived) : snap.items
   return <Grid label="物品" rows={rows} columns={columns} empty={todo ? '物品都到齐了' : '还没有物品。在下面输入名称后回车。'} rowClass={(row) => (row.arrived ? 'is-done' : '')}
-    onSet={(row, key, value) => ops.set(row, key as keyof Item & string, value)}
+    onSet={(row, key, value, seen) => ops.set(row, key as keyof Item & string, value, seen)}
     onAdd={(text) => ops.add({ name: text, spec: '', quantity: null, unit: '', note: '', arrived: false })} addPlaceholder="输入物品名称后回车，新增一样"
     onDelete={(row) => void ops.remove(row)} onMove={(row, offset) => void ops.move(snap.items, row, offset)} onReorder={todo ? undefined : (ids) => void ops.reorder(ids)} />
 }

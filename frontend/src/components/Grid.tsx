@@ -32,7 +32,8 @@ interface GridProps<R extends Row> {
   label: string
   rows: R[]
   columns: Column<R>[]
-  onSet: (row: R, key: string, value: unknown) => Promise<unknown> | void
+  /** `seen` is what the cell showed when its editing began; it tells the server what this change is based on. */
+  onSet: (row: R, key: string, value: unknown, seen?: unknown) => Promise<unknown> | void
   onAdd?: (text: string) => Promise<unknown> | void
   addPlaceholder?: string
   onDelete?: (row: R) => void
@@ -47,9 +48,11 @@ interface GridProps<R extends Row> {
 function useDraft<T>(value: T) {
   const [draft, setDraft] = useState(value)
   const editing = useRef(false)
+  const seen = useRef(value)
   // Someone else's change shows in the cell, unless this person is typing in it right now.
-  useEffect(() => { if (!editing.current) setDraft(value) }, [value])
-  return { draft, setDraft, editing }
+  useEffect(() => { if (!editing.current) { setDraft(value); seen.current = value } }, [value])
+  const begin = () => { editing.current = true; seen.current = value }
+  return { draft, setDraft, editing, seen, begin }
 }
 
 function leave(event: KeyboardEvent<HTMLElement>, revert: () => void, multiline = false) {
@@ -58,10 +61,10 @@ function leave(event: KeyboardEvent<HTMLElement>, revert: () => void, multiline 
 }
 
 export function TextCell({ value, label, onCommit, options, multiline, required, placeholder, strong }: {
-  value: string; label: string; onCommit: (value: string) => Promise<unknown> | void
+  value: string; label: string; onCommit: (value: string, seen: string) => Promise<unknown> | void
   options?: string[]; multiline?: boolean; required?: boolean; placeholder?: string; strong?: boolean
 }) {
-  const { draft, setDraft, editing } = useDraft(value ?? '')
+  const { draft, setDraft, editing, seen, begin } = useDraft(value ?? '')
   const [state, setState] = useState<'' | 'saving' | 'saved'>('')
   const list = useId()
   const skip = useRef(false)
@@ -69,10 +72,11 @@ export function TextCell({ value, label, onCommit, options, multiline, required,
     editing.current = false
     if (skip.current) { skip.current = false; return }
     const next = draft.trim()
-    if (next === (value ?? '')) { setDraft(value ?? ''); return }
+    // Unchanged by this person: show whatever is current (someone else may have changed it meanwhile).
+    if (next === seen.current) { setDraft(value ?? ''); return }
     if (required && !next) { setDraft(value ?? ''); message.warning(`${label}不能为空`); return }
     setDraft(next)
-    const saving = onCommit(next)
+    const saving = onCommit(next, seen.current)
     if (saving) {
       setState('saving')
       void saving.then(() => { setState('saved'); window.setTimeout(() => setState(''), 1200) }, () => setState(''))
@@ -82,7 +86,7 @@ export function TextCell({ value, label, onCommit, options, multiline, required,
   const shared = {
     'aria-label': label, value: draft, placeholder,
     className: `cell-input${strong ? ' is-strong' : ''}`,
-    onFocus: () => { editing.current = true },
+    onFocus: begin,
     onBlur: commit,
   }
   return <span className={`cell${state ? ` is-${state}` : ''}`}>
@@ -93,22 +97,23 @@ export function TextCell({ value, label, onCommit, options, multiline, required,
   </span>
 }
 
-function NumberCell({ value, label, onCommit }: { value: number | null; label: string; onCommit: (value: number | null) => void }) {
+function NumberCell({ value, label, onCommit }: { value: number | null; label: string; onCommit: (value: number | null, seen: number | null) => void }) {
   const text = value === null || value === undefined ? '' : String(value)
-  const { draft, setDraft, editing } = useDraft(text)
+  const { draft, setDraft, editing, seen, begin } = useDraft(text)
   const commit = () => {
     editing.current = false
     const next = draft.trim()
-    if (next === text) return
-    if (next === '') { onCommit(null); return }
+    const before = seen.current === '' ? null : Number(seen.current)
+    if (next === seen.current) { setDraft(text); return }
+    if (next === '') { onCommit(null, before); return }
     const number = Number(next)
     if (!Number.isFinite(number)) { setDraft(text); message.warning(`${label}应为数字`); return }
     setDraft(String(number))
-    onCommit(number)
+    onCommit(number, before)
   }
   return <span className="cell"><input className="cell-input is-number" aria-label={label} inputMode="decimal" value={draft}
-    onFocus={() => { editing.current = true }} onBlur={commit} onChange={(event) => setDraft(event.target.value)}
-    onKeyDown={(event) => leave(event, () => setDraft(text))} /></span>
+    onFocus={begin} onBlur={commit} onChange={(event) => setDraft(event.target.value)}
+    onKeyDown={(event) => leave(event, () => { seen.current = draft.trim(); setDraft(text) })} /></span>
 }
 
 export function CheckCell({ checked, label, hint, onToggle, text }: { checked: boolean; label: string; hint?: string; onToggle: (next: boolean) => void; text?: string }) {
@@ -124,7 +129,7 @@ function renderCell<R extends Row>(column: Column<R>, row: R, onSet: GridProps<R
   switch (column.type ?? 'text') {
     case 'custom': return column.render?.(row)
     case 'check': return <CheckCell checked={!!raw} label={label} text={label} hint={column.hint?.(row)} onToggle={(next) => void onSet(row, column.key, next)} />
-    case 'number': return <NumberCell value={(raw as number | null) ?? null} label={label} onCommit={(next) => void onSet(row, column.key, next)} />
+    case 'number': return <NumberCell value={(raw as number | null) ?? null} label={label} onCommit={(next, seen) => void onSet(row, column.key, next, seen)} />
     case 'date': return <span className="cell"><input type="date" className="cell-input is-date" aria-label={label} value={(raw as string | null) ?? ''}
       onChange={(event) => void onSet(row, column.key, event.target.value || null)} /></span>
     case 'select': return <span className="cell"><select className="cell-input" aria-label={label} value={(raw as string | null) ?? ''}
@@ -132,7 +137,7 @@ function renderCell<R extends Row>(column: Column<R>, row: R, onSet: GridProps<R
       <option value="">—</option>{column.choices?.map((choice) => <option key={choice.value} value={choice.value}>{choice.label}</option>)}
     </select></span>
     default: return <TextCell value={(raw as string) ?? ''} label={label} options={column.options} multiline={column.multiline} required={column.required}
-      placeholder={column.placeholder} strong={column.primary} onCommit={(next) => onSet(row, column.key, next)} />
+      placeholder={column.placeholder} strong={column.primary} onCommit={(next, seen) => onSet(row, column.key, next, seen)} />
   }
 }
 

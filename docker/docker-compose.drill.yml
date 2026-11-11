@@ -38,9 +38,6 @@ services:
       - FORCE_HTTPS=0
       - COOKIE_SECURE=0
       - COOKIE_SAMESITE=lax
-      - SCHEDULER_ENABLED=1
-      - AGVPM_ENABLE_CACHE=1
-      - REPORT_WEEKLY_TIME=${REPORT_WEEKLY_TIME:-20:00}
       - WEB_CONCURRENCY=${WEB_CONCURRENCY:-2}
     volumes:
       - agvpm-drill-data:/app/data

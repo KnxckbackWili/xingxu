@@ -43,13 +43,14 @@ export default function ProjectPage() {
       : <Skeleton active paragraph={{ rows: 8 }} />
   }
   const project = snap.project
-  const setField = async (field: keyof Project & string, to: unknown) => {
-    const from = project[field]
+  const setField = async (field: keyof Project & string, to: unknown, seen?: unknown) => {
+    const from = seen === undefined ? project[field] : seen
     live.mutate((data) => ({ ...data, project: { ...data.project, [field]: to } }))
     try {
       await live.track(api.patch(base, { [field]: typeof to === 'boolean' ? { to } : { from, to } }))
     } catch (failure) {
-      live.mutate((data) => ({ ...data, project: { ...data.project, [field]: from } }))
+      // Refused (or someone changed it first): show what the server holds now.
+      live.refresh()
       message.error(errMsg(failure))
     }
   }
@@ -65,7 +66,7 @@ export default function ProjectPage() {
     <header className="project-head">
       <Link to="/" className="project-back"><LeftOutlined /> 全部项目</Link>
       <div className="project-title-row">
-        <h1 className="project-title"><TextCell value={project.name} label="项目名称" required strong onCommit={(next) => setField('name', next)} /></h1>
+        <h1 className="project-title"><TextCell value={project.name} label="项目名称" required strong onCommit={(next, seen) => setField('name', next, seen)} /></h1>
         <div className="project-actions">
           <Segmented aria-label="项目状态" value={project.is_closed ? 'closed' : 'open'} options={[{ value: 'open', label: '进行中' }, { value: 'closed', label: '已结束' }]}
             onChange={(value) => void setField('is_closed', value === 'closed')} />
@@ -77,9 +78,9 @@ export default function ProjectPage() {
         </div>
       </div>
       <div className="project-meta">
-        <label><span>合同号</span><TextCell value={project.contract_no} label="合同号" placeholder="未填" onCommit={(next) => setField('contract_no', next)} /></label>
-        <label><span>客户</span><TextCell value={project.customer} label="客户" placeholder="未填" onCommit={(next) => setField('customer', next)} /></label>
-        <label className="is-wide"><span>备注</span><TextCell value={project.note} label="项目备注" placeholder="未填" onCommit={(next) => setField('note', next)} /></label>
+        <label><span>合同号</span><TextCell value={project.contract_no} label="合同号" placeholder="未填" onCommit={(next, seen) => setField('contract_no', next, seen)} /></label>
+        <label><span>客户</span><TextCell value={project.customer} label="客户" placeholder="未填" onCommit={(next, seen) => setField('customer', next, seen)} /></label>
+        <label className="is-wide"><span>备注</span><TextCell value={project.note} label="项目备注" placeholder="未填" onCommit={(next, seen) => setField('note', next, seen)} /></label>
       </div>
       <nav className="project-tabs" aria-label="项目内容">
         {TABS.map((item) => {

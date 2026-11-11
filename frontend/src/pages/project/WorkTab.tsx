@@ -34,7 +34,7 @@ export default function WorkTab({ snap, live, base, me, todo }: TabProps) {
           <span className="stage-count">{rows.filter((row) => row.done).length} / {rows.length}</span>
         </header>
         <Grid label={`${stage || '未分阶段'}的工作`} rows={shown} columns={columns} rowClass={(row) => (row.done ? 'is-done' : '')}
-          onSet={(row, key, value) => ops.set(row, key as keyof WorkItem & string, value)}
+          onSet={(row, key, value, seen) => ops.set(row, key as keyof WorkItem & string, value, seen)}
           onAdd={(text) => ops.add({ stage, name: text, note: '', done: false })} addPlaceholder="输入工作内容后回车，新增一项"
           onDelete={(row) => void ops.remove(row)} onMove={(row, offset) => void ops.move(rows, row, offset)} onReorder={todo ? undefined : (ids) => void ops.reorder(ids)} />
       </section>

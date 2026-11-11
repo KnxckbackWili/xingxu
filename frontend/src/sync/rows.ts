@@ -10,7 +10,8 @@ type Row = { id: string }
 /** The editing operations of one list ("items" of a project, "rows" of a template…). */
 export interface ListOps<R extends Row> {
   add: (values: Partial<R>) => Promise<void>
-  set: (row: R, field: keyof R & string, to: unknown) => Promise<void>
+  /** `seen`: the value the change is based on, when it is not simply what the row holds now. */
+  set: (row: R, field: keyof R & string, to: unknown, seen?: unknown) => Promise<void>
   remove: (row: R) => Promise<void>
   move: (rows: R[], row: R, offset: number) => Promise<void>
   reorder: (ids: string[]) => Promise<void>
@@ -60,7 +61,7 @@ export function listOps<S extends object, R extends Row>(live: Live<S>, base: st
         }
         return
       }
-      put((rows) => rows.map((item) => (item.id === row.id ? { ...item, [field]: from } : item)))
+      put((rows) => rows.map((item) => (item.id === row.id ? { ...item, [field]: (row as Record<string, unknown>)[field] } : item)))
       message.error(errMsg(failure))
     }
   }
@@ -79,8 +80,8 @@ export function listOps<S extends object, R extends Row>(live: Live<S>, base: st
         throw failure
       }
     },
-    set: (row, field, to) => {
-      const from = (row as Record<string, unknown>)[field]
+    set: (row, field, to, ...seen) => {
+      const from = seen.length && seen[0] !== undefined ? seen[0] : (row as Record<string, unknown>)[field]
       if (from === to) return Promise.resolve()
       const stamp = stamps[field]
       const optimistic = { ...row, [field]: to, ...(stamp ? { [`${stamp}_by`]: to ? me : null, [`${stamp}_at`]: to ? new Date().toISOString() : null } : {}) }
