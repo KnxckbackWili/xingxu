@@ -30,6 +30,12 @@ export function stamp(people: Record<string, string>, by: string | null | undefi
   return `${(by && people[by]) || '有人'} · ${day(at)}`
 }
 
+/** Save a file the server offers; its name comes from the server's Content-Disposition. */
 export function download(path: string) {
-  window.location.assign(`/api${path}`)
+  const link = document.createElement('a')
+  link.href = `/api${path}`
+  link.download = ''
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
 }

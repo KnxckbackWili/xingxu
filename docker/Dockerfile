@@ -55,7 +55,6 @@ ENV GIT_SHA=${GIT_SHA}
 LABEL org.opencontainers.image.revision="${GIT_SHA}"
 
 ENV WEB_CONCURRENCY=2 \
-    AGVPM_ENABLE_CACHE=1 \
     # T024：FORWARDED_ALLOW_IPS 默认不信任任意来源（空 → uvicorn 仅回环 127.0.0.1 可信，
     # 见 supervisord.conf）；NPM 反代场景由 compose/.env 显式配置为可信地址/网段。
     FORWARDED_ALLOW_IPS= \

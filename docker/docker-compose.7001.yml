@@ -1,5 +1,5 @@
 # 与 docker-compose.yml 一起使用；7001 数据只在 Docker Linux 卷内读写。
-# 首次迁移按 docs/incident-governance-2026-09-17.md 执行，禁止直接打开运行中的 SQLite 文件。
+# 禁止直接打开运行中的 SQLite 文件。
 services:
   agv-pm:
     container_name: agv-pm-7001

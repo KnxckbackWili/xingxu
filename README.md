@@ -1,10 +1,19 @@
-# 行序 · 项目工作台
+# 行序
 
-面向 AGV 实施团队的项目工作台，集中管理项目资料、车辆环节、现场问题、人员与计划，并保留真实文件、版本和审计来源。支持 SQLite / PostgreSQL 和 Docker 单容器部署。
+AGV 实施项目的记录工具。把每个项目的车辆、工作、问题、资料、物品记下来，多人可以同时改，打开首页就能看到哪里缺什么、哪里还没做。支持 SQLite / PostgreSQL 和 Docker 单容器部署。
 
-当前版本为 **3.8.0**（已准备发布，尚未部署验收）。功能说明不代表迁移总验收或部署已完成；历史版本与当时的验收记录见 [CHANGELOG](CHANGELOG.md)。
+当前版本为 **4.0.0**。4.0 是从零重写的版本，不读 3.x 的项目数据，升级前请先看[从 3.x 升级到 4.0](docs/upgrade-to-4.md)。历史版本见 [CHANGELOG](CHANGELOG.md)。
 
 开源地址：<https://github.com/KnxckbackWili/xingxu>（[MIT 许可证](LICENSE)）。正式版本的多架构镜像由 GitHub Actions 发布到 `ghcr.io/knxckbackwili/xingxu`。
+
+## 它做什么
+
+- **首页是一张缺口表**：一行一个项目，车辆、工作、问题、资料、物品各差多少，点数字直达。
+- **在表格里直接记**：点格子就改，离开自动保存，最后一行回车新增，点一下打勾。手机上一行是一张卡片。
+- **多人同时编辑**：别人的修改几秒内自动出现；改不同格子互不影响，改同一格会提示。
+- **留痕和后悔药**：谁在什么时候改了什么都有记录；删除的内容 30 天内可以恢复。
+- **Excel**：整个项目导出；公司的 AGV 生命周期表可以导入、导出。
+- **只有两种账号**：系统管理员和员工。没有审批、没有截止日期、没有逾期。
 
 ## 快速开始
 
@@ -22,13 +31,13 @@ bash docker/scripts/manage.sh install
 
 ## 文档
 
-- [员工](docs/quickstart-employee.md)、[系统管理员](docs/quickstart-admin.md)：各一页说明。
-- [文档入口](docs/index.md)与[术语表](docs/glossary.md)：查当前流程、资料、车辆、权限和运维规则。
-- [开发约定](CLAUDE.md)、[版本历史](CHANGELOG.md)、QA 证据归档与 SHA。
+- [使用说明](docs/user-guide.md)：一页讲完怎么用。
+- [文档入口](docs/index.md)：术语、数据表、接口、多人编辑、部署、备份和更新。
+- [开发约定](CLAUDE.md)、[版本历史](CHANGELOG.md)。
 
 ## 参与和反馈
 
-问题和建议请在 [GitHub Issues](https://github.com/KnxckbackWili/xingxu/issues) 提交；系统内的「使用反馈」只发给本单位管理员。提交代码前请阅读[开发约定](CLAUDE.md)，并运行 `npm test`、`npm run build` 和后端 pytest。
+问题和建议请在 [GitHub Issues](https://github.com/KnxckbackWili/xingxu/issues) 提交。提交代码前请阅读[开发约定](CLAUDE.md)。
 
 ## 许可证
 

@@ -1,6 +1,6 @@
 # 部署指南（NAS / 服务器）
 
-> 本文引用的 QA 回执描述历史时点，原件已归档；当前 v3 操作请从[文档入口](index.md)开始。
+> 行序 4 的用法和数据结构见[文档入口](index.md)。本文只讲安装、配置和运维。
 
 ## 公网部署必改清单（T10）
 
@@ -58,15 +58,9 @@ server {
 
 上线核对：HTTP 域名跳转到 HTTPS；`curl -sS -D - -o /dev/null https://agv.example.com/health` 返回 HSTS；HTTPS 登录响应的四个会话 Cookie 均带 `Secure`；未配置域名返回 400。修改环境文件后重建/更新容器使启动校验生效。
 
-## 从 3.6 之前的版本升级
+## 从 3.x 升级
 
-3.6 起数据库从新的起点开始，不迁移旧数据。升级后第一次启动时：
-
-- 先照常生成一份迁移前加密备份（`DATA_DIR/backups/agvpm-before-migrate-*.agvenc`）。
-- 旧数据库原样挪开：SQLite 文件移到 `DATA_DIR/old-<时间>/`，PostgreSQL 的表移到 `old_<时间>` 架构；上传文件、项目删除备份一起移到 `DATA_DIR/old-<时间>/`。
-- 系统从空库开始，用 `INITIAL_ADMIN_PASSWORD` 建管理员账号，内置模板、车型字典自动写入。
-
-旧数据不会被删除；确认不需要后，可以手动删掉 `old-<时间>` 目录和 `old_<时间>` 架构。
+4.0 不读 3.x 的项目数据：旧数据库和旧文件原样挪到一边，账号带过来，系统从空的开始。升级是单向的。详见[从 3.x 升级到 4.0](upgrade-to-4.md)。
 
 ## 环境要求
 
@@ -214,7 +208,7 @@ FORWARDED_ALLOW_IPS=172.17.0.5
 登录失败限流（阈值 8 次、窗口 15 分钟）由进程内 `_login_failures` 改为 **PostgreSQL 共享计数**，复用 T006 导出限流的共享桶设计：
 
 - **表** `login_failure_buckets`：`key`=真实客户端 IP + 用户名（`request.client.host`，T024 可信代理后即真实客户端）、`bucket`=当前固定窗口、`window`=窗口秒数（PG 保留字，SQL 内双引号引用）、`count`=失败数。启动 `create_all` 自动建表，无需迁移操作。
-- **原子性**：`INSERT ... ON CONFLICT (key, bucket, "window") DO NOTHING` 幂等建行 + `UPDATE ... SET count = count + 1 WHERE count < :limit RETURNING count` 原子递增——PG 行锁保证并发（含 `WEB_CONCURRENCY=2` 多 worker）下恰好 8 次成功，第 9 次返回空 → 429。
+- **原子性**：`INSERT ... ON CONFLICT (key, bucket) DO NOTHING` 幂等建行 + `UPDATE ... SET count = count + 1 WHERE count < :limit RETURNING count` 原子递增——PG 行锁保证并发（含 `WEB_CONCURRENCY=2` 多 worker）下恰好 8 次成功，第 9 次返回空 → 429。
 - **语义不变**：仅统计失败；**成功登录清空**该 key 全部失败计数；每桶清理早于上一桶的过期行防膨胀；SQLite/单进程保留原内存路径（测试与本地行为不变）。
 - **运行时回归**：`docs/scripts/t025_login_limit_test.py`（真实 8002 单容器）：确认 uvicorn `--workers 2`（master + 2 worker 子进程）、顺序 9 次失败登录前 8 次 401 第 9 次 429（跨 worker 全局累计）、不同账号隔离（PG 两 key 计数 {8,1}）、`docker restart` 后同一账号仍 429（窗口未被绕过）、重启后另一账号仍 401、清理测试行后 `/health` 200。
 
@@ -268,11 +262,11 @@ docker run -d \
 
 | 账号 | 密码 | 角色 |
 |---|---|---|
-| admin | `.env` 中的 `INITIAL_ADMIN_PASSWORD` | 管理员（用户管理） |
+| admin | `.env` 中的 `INITIAL_ADMIN_PASSWORD` | 系统管理员 |
 
-本地演示如需预置 `pm`、`worker1`、`worker2`，可在 `.env` 设置 `SEED_DEMO_USERS=1`。该选项仅在空数据库首次启动时生效，不建议用于生产。
+本地演示可在 `.env` 设置 `SEED_DEMO_USERS=1`：没有管理员时建 `admin / admin123` 和两个演示员工 `zhangwei`、`lina`（密码 `demo12345`）。不要用于生产。
 
-修改密码：登录后 → 右上角头像 → 修改密码（或由管理员在「用户管理」中修改）。
+修改密码：登录后 → 右上角头像 → 修改密码（或由管理员在「设置 → 账号」中重置）。
 
 存量 admin 的运维轮换（忘记当前密码 / 计划性轮换）：在 `.env` 设置 `ADMIN_PASSWORD_ROTATE=1` 并同时提供 `INITIAL_ADMIN_PASSWORD`（≥8 位）后重启，启动时会显式改密并使所有已登录会话失效；密码未变时幂等跳过。轮换完成后建议移除 `ADMIN_PASSWORD_ROTATE=1`，避免每次重启重复轮换。明文只从环境变量读取，不会写入日志或落盘。
 
@@ -352,16 +346,6 @@ bash docker/scripts/manage.sh backup
 docker logs --tail 200 agv-pm
 ```
 
-## 一键验证（可选）
-
-在任意有 Docker 的机器上运行：
-
-```bash
-bash docker/scripts/verify.sh
-```
-
-脚本会自动：构建镜像 → 启动容器 → 登录 → 建项目/车型 → 生成任务 → 排程 → 检查 SPA/PWA → 清理。全部通过即说明构建链路正常。
-
 ## 正式部署（单容器 PostgreSQL，8002）
 
 从 v2.1 起支持**容器内 PostgreSQL**：仍是单容器，但数据库由 supervisord 托管的 PostgreSQL 17 承担（A1/A2），适合 500 项目级并发写入。这是**正式部署**使用的唯一入口（`make deploy` / `make update`），统一由 `docker/scripts/deploy.sh` 驱动。
@@ -378,8 +362,8 @@ chmod 600 docker/.env
 
 | 变量 | 说明 | 默认 |
 |---|---|---|
-| `INITIAL_ADMIN_PASSWORD` | 首次部署必填（≥8 位）；`SEED_DEMO_USERS=0` 时未设置会启动失败 | 空 |
-| `SEED_DEMO_USERS` | `0`=仅 admin（正式）；`1`=额外建演示账号（评审/演示用） | `0` |
+| `INITIAL_ADMIN_PASSWORD` | 视情况 | 空 | 库里没有启用中的系统管理员时必填（≥8 字符），用作 `admin` 的密码；从 3.x 升级且原管理员账号还在时不需要 |
+| `SEED_DEMO_USERS` | 否 | `0` | `1` 时在没有管理员的库里建 `admin/admin123` 和两个演示员工；仅用于演示 |
 | `TRUSTED_HOSTS` | Host 白名单：域名/IP/`*.domain`/IP 网段（CIDR） | `127.0.0.1,localhost` |
 | `PUBLIC_MODE` | `1` 启用公网配置强制检查；内网 HTTP 用 `0` | `0` |
 | `FORWARDED_ALLOW_IPS` | 反代可信 IP/有限网段；公网模式必须显式配置 | 空 |
@@ -388,8 +372,6 @@ chmod 600 docker/.env
 | `COOKIE_SAMESITE` | 会话 Cookie SameSite 策略：`lax`（默认）/ `strict` / `none`（`none` 必须同时 `COOKIE_SECURE=1`） | `lax` |
 | `ADMIN_PASSWORD_ROTATE` | `1` 且提供 `INITIAL_ADMIN_PASSWORD` 时启动显式改密并使旧会话失效（幂等） | `0` |
 | `AGV_IMAGE` / `APP_VERSION` | 镜像标签与版本（自动从源码同步，一般无需改动） | 自动 |
-
-> 演示账号（`SEED_DEMO_USERS=1`）若仍持默认口令（pm123/worker123），seed 会在启动时幂等禁用并失效其旧会话；需保留演示角色请先用 `DEMO_ADMIN_PASSWORD` / `DEMO_PM_PASSWORD` / `DEMO_WORKER_PASSWORD` 轮换为强口令。
 
 其余变量（备份上限等）不配置即用内置默认值。**二次部署通常无需改动任何变量。**
 
@@ -455,14 +437,6 @@ make rollback      # 回滚到上一次 update 前的镜像（依据状态文件
 
 权衡：autoheal sidecar 需额外常驻容器 + Docker socket（破坏单容器形态、提升攻击面）；宿主 watchdog 需 NAS 上额外 systemd/cron（逻辑不在仓库内）。看门狗为仓库内代码（`backend/app/services/healthwatch.py`），零外部依赖，两个 compose（SQLite 基线与 8002/PG）默认都启用。参数均可用环境变量覆盖（见 `.env.example`）。
 
-#### 周报时间
-
-```dotenv
-REPORT_WEEKLY_TIME=20:00  # 每个项目当地周日晚
-```
-
-修改后重启容器（`make deploy` 或 `docker compose -f docker/docker-compose.multica.yml up -d`）生效。
-
 ### 部署参数（8002 单容器）
 
 **几乎零配置即可启动**：不准备 `.env` 时 `make deploy` 直接使用 compose 默认值——演示账号
@@ -475,8 +449,8 @@ REPORT_WEEKLY_TIME=20:00  # 每个项目当地周日晚
 
 | 变量 | 必填 | 默认值 | 说明 |
 |---|---|---|---|
-| `INITIAL_ADMIN_PASSWORD` | 视模式 | 空 | 非空值一律用作 admin 密码且必须 ≥8 字符（`seed_data.py` 校验，演示模式下同样生效——短密码即使 `SEED_DEMO_USERS=1` 也会启动失败）；`SEED_DEMO_USERS=0` 时必填；留空且演示模式时 admin 用 `admin123` |
-| `SEED_DEMO_USERS` | 否 | `1`（本 compose；`.env.example` 的 `0` 是 SQLite 基线默认） | `1` 预置演示账号 `admin/admin123`、`pm/pm123`、`worker1/worker2/worker123`；`0` 仅建 admin |
+| `INITIAL_ADMIN_PASSWORD` | 视情况 | 空 | 库里没有启用中的系统管理员时必填（≥8 字符），用作 `admin` 的密码；从 3.x 升级且原管理员账号还在时不需要 |
+| `SEED_DEMO_USERS` | 否 | `0` | `1` 时在没有管理员的库里建 `admin/admin123` 和两个演示员工；仅用于演示 |
 | `SECRET_KEY` | 否 | 空 | 留空自动生成并持久化到 `/app/data/secret.key`（重启不失效）；生产建议显式设置 |
 | `APP_PORT` | 否 | `8002` | 宿主映射端口 → 容器内 `8000`。若 `docker/.env` 直接复制了 `.env.example` 的 `APP_PORT=8000`，会覆盖为 8000，不再是 8002 |
 | `AGV_IMAGE` | 否 | `agv-pm-multica:2.1.2` | 固定版本标签；生产不要用 `latest` |
@@ -506,7 +480,7 @@ REPORT_WEEKLY_TIME=20:00  # 每个项目当地周日晚
 | Registry 登录跳转到错误端口或返回 EOF | 检查 Gitea `[server] ROOT_URL` 是否包含外网 HTTPS 端口，并让反向代理保留原始 `Host` 端口 |
 | 端口 8000 被占用 | 修改 docker-compose.yml 的 `ports: "8080:8000"` |
 | 手机访问不了 | 确认 NAS 防火墙放行该端口；群晖需在「控制面板→安全性→防火墙」放行 |
-| 忘记密码 | 首选：登录后右上角头像 →「修改密码」；管理员可在「用户管理」中代改。兜底（部署主机受限终端）：`python3 docker/scripts/reset_password.py <用户名>` —— 用户名作命令行参数，新密码经 TTY 隐藏输入（getpass，不回显、两次一致、≥6 位），绝不进入命令行参数、环境变量、shell 历史或日志；成功后原子同步 `.secrets/` 对应凭据条目（临时文件 + os.replace，保持 0600），token_version 递增使旧会话全部失效。生产账号改密须在隔离演练容器验证过该脚本后再执行 |
+| 忘记密码 | 首选：登录后右上角头像 →「修改密码」；管理员可在「设置 → 账号」中重置。兜底（部署主机受限终端）：`python3 docker/scripts/reset_password.py <用户名>` —— 用户名作命令行参数，新密码经 TTY 隐藏输入（getpass，不回显、两次一致、≥6 位），绝不进入命令行参数、环境变量、shell 历史或日志；成功后原子同步 `.secrets/` 对应凭据条目（临时文件 + os.replace，保持 0600），token_version 递增使旧会话全部失效。生产账号改密须在隔离演练容器验证过该脚本后再执行 |
 | 数据库损坏 | 使用最近的备份文件替换 `data/agvpm.db` 后重启容器 |
 
 ## 性能说明
@@ -514,10 +488,6 @@ REPORT_WEEKLY_TIME=20:00  # 每个项目当地周日晚
 - 当前按约 **100 个账号 / 100 个项目**规划；单 worker + SQLite WAL 适合项目管理这种中低并发工作负载。若持续并发写入显著增加，再迁移 PostgreSQL。
 - 如需更高并发，可将 `DATABASE_URL` 切换到 PostgreSQL（代码使用 SQLAlchemy，切换成本低）
 
-## 离线使用（现场人员）
+## 手机使用
 
-1. 现场人员用手机浏览器打开系统地址 → 登录
-2. 浏览器菜单选择「添加到主屏幕」（iOS Safari：分享 → 添加到主屏幕；Android Chrome：菜单 → 安装应用）
-3. 打开后即为全屏 App，界面和资源已离线缓存
-4. **断网时**：仍可查看今日任务（缓存）并填写数量 → 记录进入本地队列
-5. **联网后**：点击「同步」按钮（或自动同步），本地记录上传服务器
+手机浏览器直接打开系统地址即可，页面会自动换成卡片排法。系统不做离线缓存，没有网络时不能保存。

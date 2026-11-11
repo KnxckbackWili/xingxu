@@ -5,13 +5,14 @@
 ## 发布前
 
 1. 更新 `frontend/package.json`、锁文件、`.env.example`、Docker 构建参数和发布说明中的版本号。
-2. 数据库变更必须可重复执行；破坏性变更需要独立迁移与恢复测试，不能只依赖启动时补列。
+2. 改表结构只在基线 `i0c0000000001` 之上新增修订；在 SQLite 和 PostgreSQL 上核对“模型与迁移一致”。
 3. 运行后端完整测试、前端生产构建、Compose 配置校验和 Shell 语法检查。
    首次准备测试环境：`python3 -m venv .venv && .venv/bin/pip install -r backend/requirements-dev.txt`。
    发布门禁默认使用 npm 官方端点执行依赖审计；仅离线排查时可临时使用 `SKIP_AUDIT=1`，正式发布不得跳过。
 4. 从生产备份恢复到临时环境，使用真实数据副本执行一次跨版本升级。
 5. 扫描仓库，确认没有 `.env`、数据库、附件、备份、密钥或访问令牌。
-6. 使用已经打开过旧版本的浏览器刷新一次，确认 PWA 自动取得新应用壳；再验证离线页面回退。
+6. 用打开过旧版本的浏览器访问一次，确认显示的是新界面（4.0 起没有离线缓存，`sw.js` 只负责清掉旧缓存）。
+7. 版本号一共 9 处：`.env.example`（两处）、`CHANGELOG.md`、`README.md`、`backend/app/config.py`、`docker/Dockerfile`、`docker/docker-compose.yml`、`docker/docker-compose.multica.yml`、`frontend/package.json`、`frontend/package-lock.json`。
 
 ## 发布
 

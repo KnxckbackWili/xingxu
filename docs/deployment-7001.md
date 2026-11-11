@@ -37,16 +37,11 @@ docker compose --env-file docker/.env.7001 \
 ```bash
 curl http://127.0.0.1:7001/health
 docker inspect agv-pm-7001 --format '{{.State.Health.Status}}'
-docker exec -i agv-pm-7001 python - < docker/scripts/verify_live_reads.py
 ```
 
-首次初始化仅创建 `admin`，初始密码存于本机登录资料文件。未迁移 8002 的账号或项目。
-
-读接口验收脚本用一个在职系统管理员和一个在职员工，读取应用当前全部无参数页面接口和每个项目的页面接口；任何 5xx、超时或管理员被拒都算失败。它不替代浏览器操作与隔离副本的写入流程验证。日志不输出凭据或响应正文。
+首次初始化仅创建 `admin`，初始密码存于本机登录资料文件。
 
 **数据库操作必须在容器内执行。** 禁止用 macOS SQLite 直接打开运行中的数据库。备份使用 `AGV_CONTAINER=agv-pm-7001 BACKUP_DIR=/absolute/backup/path bash docker/scripts/backup.sh`；宿主机只能检查已导出的离线备份。
-
-2026-09-17 已修复申请列表间歇性 500，并完成数据库存储迁移。此前的单次健康检查与宿主机数据库核对未覆盖真实运行状态；原因、恢复方法与验收范围见 故障记录。
 
 ## 本次部署修复
 
