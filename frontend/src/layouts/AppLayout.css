@@ -11,7 +11,8 @@
 .shell-user { padding: 0; border: 0; background: transparent; cursor: pointer; border-radius: 50%; }
 .shell-main { flex: 1; width: 100%; max-width: 1480px; margin: 0 auto; padding: 22px var(--agv-page-inset) 48px; }
 @media (max-width: 640px) {
-  .shell-bar { height: 52px; gap: 8px; }
+  /* No backdrop-filter here: it would make the bar the containing block of the fixed navigation below. */
+  .shell-bar { height: 52px; gap: 8px; backdrop-filter: none; background: var(--agv-bg-layout); }
   .shell-brand .brand-signature-copy { display: none; }
   .shell-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; justify-content: space-around; gap: 0; padding: 4px 4px calc(4px + env(safe-area-inset-bottom)); background: var(--agv-bg-container); border-top: 1px solid var(--agv-border-soft); }
   .shell-nav a { flex: 1; flex-direction: column; justify-content: center; gap: 2px; min-height: 50px; padding: 0 4px; font-size: 11.5px; border-radius: 12px; }

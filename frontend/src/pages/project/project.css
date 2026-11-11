@@ -39,8 +39,11 @@
 .other-files p { margin: 0 0 10px; color: var(--agv-text-secondary); font-size: 13px; }
 @media (max-width: 640px) {
   .project-title .cell-input { font-size: 19px; }
-  .project-actions { width: 100%; }
-  .project-actions .ant-btn { min-height: 40px; }
+  .project-actions { width: 100%; flex-wrap: nowrap; }
+  .project-actions .ant-btn { min-height: 40px; min-width: 44px; padding-inline: 10px; }
+  /* Icons only: the names stay as aria-labels. */
+  .project-actions .ant-btn > span:not(.anticon) { display: none; }
+  .project-actions .ant-segmented { margin-right: auto; }
   .project-meta { gap: 0 10px; margin-bottom: 8px; }
   .project-meta label { flex: 1 1 45%; }
   .project-meta label.is-wide { flex: 1 1 100%; }

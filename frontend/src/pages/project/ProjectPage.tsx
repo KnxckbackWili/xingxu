@@ -70,8 +70,8 @@ export default function ProjectPage() {
         <div className="project-actions">
           <Segmented aria-label="项目状态" value={project.is_closed ? 'closed' : 'open'} options={[{ value: 'open', label: '进行中' }, { value: 'closed', label: '已结束' }]}
             onChange={(value) => void setField('is_closed', value === 'closed')} />
-          <Button icon={<HistoryOutlined />} onClick={() => navigate(`/history?project=${id}`)}>操作记录</Button>
-          <Button icon={<DownloadOutlined />} onClick={() => download(`${base}/export.xlsx`)}>导出 Excel</Button>
+          <Button icon={<HistoryOutlined />} aria-label="操作记录" onClick={() => navigate(`/history?project=${id}`)}>操作记录</Button>
+          <Button icon={<DownloadOutlined />} aria-label="导出 Excel" onClick={() => download(`${base}/export.xlsx`)}>导出 Excel</Button>
           {user?.role === 'admin' && <Dropdown trigger={['click']} menu={{ items: [{ key: 'delete', label: '删除项目', danger: true, onClick: remove }] }}>
             <Button icon={<MoreOutlined />} aria-label="更多" />
           </Dropdown>}
