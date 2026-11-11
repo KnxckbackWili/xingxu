@@ -1,247 +1,100 @@
-from typing import Optional
-
-"""User management routes (admin only)."""
-
+"""Accounts. Two kinds only: administrators and employees."""
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
-from app.services.system_permissions import route_permission, route_permission_contextual, route_permission_exempt
 from app.db import get_db
-from app.deps import require_admin, get_current_user
+from app.deps import get_current_user, require_admin
 from app.models import User
+from app.routers.auth import pwd_context
 from app.services.change_log import log_change
-from app.services.system_permissions import has_permission
 
-from passlib.context import CryptContext
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-router = APIRouter(prefix="/users", tags=["用户管理"])
-
-
-_ROLE_RE = "^(admin|employee)$"
+router = APIRouter(prefix="/users", tags=["账号"])
+ROLES = ("admin", "employee")
 
 
 class UserCreate(BaseModel):
-    username: Optional[str] = Field(
-        default=None, max_length=50
-    )  # 留空 = 用姓名作为登录用户名
-    password: str = Field(..., min_length=6, max_length=128)
-    display_name: str = Field(..., min_length=1, max_length=100)
-    role: str = Field(default="employee", pattern=_ROLE_RE)
-    phone: str = ""
-    email: str = ""
+    model_config = ConfigDict(extra="forbid")
+    username: str = Field(min_length=1, max_length=50, pattern=r"^[A-Za-z0-9_.@-]+$")
+    display_name: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=8, max_length=128)
+    role: str = "employee"
 
 
 class UserUpdate(BaseModel):
-    display_name: Optional[str] = None
-    role: Optional[str] = Field(default=None, pattern=_ROLE_RE)
-    phone: Optional[str] = None
-    email: Optional[str] = None
-    is_active: Optional[bool] = None
-    password: Optional[str] = Field(default=None, min_length=6, max_length=128)
+    model_config = ConfigDict(extra="forbid")
+    display_name: str | None = Field(default=None, min_length=1, max_length=100)
+    role: str | None = None
+    is_active: bool | None = None
+    password: str | None = Field(default=None, min_length=8, max_length=128)
 
 
-def _user_dict(u: User) -> dict:
-    return {
-        "id": u.id,
-        "username": u.username,
-        "display_name": u.display_name,
-        "role": u.role,
-        "phone": u.phone or "",
-        "email": u.email or "",
-        "is_active": u.is_active,
-        "created_at": u.created_at.isoformat() if u.created_at else None,
-    }
+def _out(user: User) -> dict:
+    return {"id": user.id, "username": user.username, "display_name": user.display_name, "role": user.role,
+            "is_active": user.is_active, "created_at": user.created_at.isoformat() + "Z"}
 
 
-def _audit_fields(user: User) -> dict:
-    """Account audit snapshots never include credentials or contact details."""
-    return {
-        key: getattr(user, key)
-        for key in ("username", "display_name", "role", "is_active")
-    }
+def _other_active_admin(db: Session, user: User) -> bool:
+    return db.query(User.id).filter(User.role == "admin", User.is_active.is_(True), User.id != user.id).first() is not None
 
 
-@router.get("", response_model=list)
-@route_permission_contextual('system.users.read', 'system.users.manage', reason='处理器按查看或维护权限返回人员目录')
-def list_users(admin: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    full = has_permission(admin, "system.users.read") or has_permission(admin, "system.users.manage")
-    if not full:
-        raise HTTPException(403, "没有人员列表查看权限")
-    return [_user_dict(u) for u in db.query(User).order_by(User.created_at).all()]
+@router.get("")
+def list_users(_: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return [_out(user) for user in db.query(User).order_by(User.created_at, User.username)]
 
 
-@router.post("", response_model=dict)
-@route_permission('system.users.manage')
-def create_user(
-    data: UserCreate,
-    admin: User = Depends(require_admin),
-    db: Session = Depends(get_db),
-):
-    role = data.role
-    username = (data.username or data.display_name).strip()
-    if db.query(User).filter(User.username == username).first():
-        raise HTTPException(
-            status_code=400, detail="用户名已存在（与姓名或其他账号重复）"
-        )
-    u = User(
-        username=username,
-        password_hash=pwd_context.hash(data.password),
-        display_name=data.display_name,
-        role=role,
-        phone=data.phone,
-        email=data.email,
-    )
-    db.add(u)
+@router.get("/names")
+def names(_: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Everyone may see who the colleagues are (the history filter and the avatars need it)."""
+    return [{"id": user.id, "display_name": user.display_name, "is_active": user.is_active}
+            for user in db.query(User).order_by(User.display_name)]
+
+
+@router.post("")
+def create_user(body: UserCreate, actor: User = Depends(require_admin), db: Session = Depends(get_db)):
+    if body.role not in ROLES:
+        raise HTTPException(400, "账号类型只能是系统管理员或员工")
+    if db.query(User.id).filter(User.username == body.username).first():
+        raise HTTPException(400, f"用户名 {body.username} 已存在")
+    user = User(username=body.username, display_name=body.display_name.strip(), role=body.role,
+                password_hash=pwd_context.hash(body.password))
+    db.add(user)
     db.flush()
-    log_change(
-        db,
-        None,
-        "user",
-        u.id,
-        "create",
-        admin.id,
-        f"创建用户「{u.display_name}」",
-        None,
-        _audit_fields(u),
-    )
+    log_change(db, None, "user", user.id, "create", actor, "新建账号", new_value={"username": user.username, "role": user.role},
+               row_label=user.display_name)
     db.commit()
-    db.refresh(u)
-    return _user_dict(u)
+    return _out(user)
 
 
-def _lock_account_changes(
-    db: Session, admin: User, capability: str = "system.users.manage"
-) -> None:
-    """Serialize administrator retirement decisions on one stable account row.
-
-    Locking only the account being edited allows two administrators to each
-    observe the other as the remaining admin, then retire both concurrently.
-    The built-in account cannot be deleted and is a stable serialization point.
-    """
-    from app.services.record_lock import lock_record
-
-    anchor = db.query(User).filter(User.username == "admin").first()
-    if anchor is None:
-        anchor = db.query(User).order_by(User.id).first()
-    lock_record(db, anchor, conflict_detail="账号正在更新，请刷新后重试")
-    db.refresh(admin)
-    if not admin.is_active or not has_permission(admin, capability):
-        raise HTTPException(status_code=403, detail="管理员权限已变更，请重新登录")
-
-
-def _ensure_active_admin_remains(
-    db: Session, user: User, *, role=None, is_active=None
-) -> None:
-    next_role = user.role if role is None else role
-    next_active = user.is_active if is_active is None else is_active
-    if (
-        user.is_active
-        and user.role == "admin"
-        and not (next_active and next_role == "admin")
-    ):
-        remaining = (
-            db.query(User.id)
-            .filter(User.id != user.id, User.role == "admin", User.is_active.is_(True))
-            .first()
-        )
-        if remaining is None:
-            raise HTTPException(
-                status_code=400,
-                detail="必须保留至少一个启用的管理员账号，请先完成管理员交接",
-            )
-
-
-@router.put("/{user_id}", response_model=dict)
-@route_permission('system.users.manage')
-def update_user(
-    user_id: str,
-    data: UserUpdate,
-    admin: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    capability = "system.users.manage"
-    if not has_permission(admin, capability):
-        raise HTTPException(403, "没有该人员维护权限")
-    _lock_account_changes(db, admin, capability)
-    u = db.get(User, user_id)
-    if u is None:
-        raise HTTPException(status_code=404, detail="用户不存在")
-    db.refresh(u)
-    if admin.role != "admin" and (
-        u.role == "admin" or (data.role is not None and data.role != u.role)
-    ):
-        raise HTTPException(403, "只有系统管理员可以调整角色或维护管理员账号")
-    _ensure_active_admin_remains(db, u, role=data.role, is_active=data.is_active)
-    before = _audit_fields(u)
-    if u.username == "admin" and data.is_active is False:
-        raise HTTPException(status_code=400, detail="不能停用内置管理员账号")
-    if data.is_active is False and u.is_active:
-        u.token_version = (u.token_version or 0) + 1
-    fields = ["display_name", "role", "phone", "email", "is_active"]
-    for f in fields:
-        v = getattr(data, f)
-        if v is not None:
-            setattr(u, f, v)
-    if data.password:
-        u.password_hash = pwd_context.hash(data.password)
-        u.token_version = (u.token_version or 0) + 1
-    detail = f"更新用户「{u.display_name}」" + ("（重置密码）" if data.password else "")
-    log_change(
-        db, None, "user", u.id, "update", admin.id, detail, before, _audit_fields(u)
-    )
+@router.put("/{user_id}")
+def update_user(user_id: str, body: UserUpdate, actor: User = Depends(require_admin), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).with_for_update().first()
+    if user is None:
+        raise HTTPException(404, "账号不存在")
+    changes = body.model_dump(exclude_unset=True)
+    if changes.get("role") is not None and changes["role"] not in ROLES:
+        raise HTTPException(400, "账号类型只能是系统管理员或员工")
+    loses_admin = (changes.get("role", user.role) != "admin" or changes.get("is_active", user.is_active) is False)
+    if user.role == "admin" and user.is_active and loses_admin and not _other_active_admin(db, user):
+        raise HTTPException(400, "至少要保留一个启用中的系统管理员")
+    if user.id == actor.id and changes.get("is_active") is False:
+        raise HTTPException(400, "不能停用自己的账号")
+    old = {}
+    for name in ("display_name", "role", "is_active"):
+        if changes.get(name) is not None and changes[name] != getattr(user, name):
+            old[name] = getattr(user, name)
+            setattr(user, name, changes[name].strip() if name == "display_name" else changes[name])
+    if changes.get("password"):
+        user.password_hash = pwd_context.hash(changes["password"])
+        old["password"] = "已重置"
+    if not old:
+        return _out(user)
+    # A stopped, demoted or reset account loses every session it already had.
+    if {"is_active", "role", "password"} & set(old):
+        user.token_version = (user.token_version or 0) + 1
+    log_change(db, None, "user", user.id, "update", actor, "修改账号",
+               old_value={key: value for key, value in old.items() if key != "password"},
+               new_value={key: ("已重置" if key == "password" else getattr(user, key)) for key in old},
+               row_label=user.display_name)
     db.commit()
-    db.refresh(u)
-    return _user_dict(u)
-
-
-@router.delete("/{user_id}")
-@route_permission('system.users.manage')
-def delete_user(
-    user_id: str, admin: User = Depends(require_admin), db: Session = Depends(get_db)
-):
-    _lock_account_changes(db, admin)
-    u = db.get(User, user_id)
-    if u is None:
-        raise HTTPException(status_code=404, detail="用户不存在")
-    db.refresh(u)
-    if admin.role != "admin" and u.role == "admin":
-        raise HTTPException(403, "只有系统管理员可以停用管理员账号")
-    _ensure_active_admin_remains(db, u, is_active=False)
-    if u.username == "admin":
-        raise HTTPException(status_code=400, detail="不能删除内置管理员账号")
-    before = _audit_fields(u)
-    # Soft delete
-    if u.is_active:
-        u.token_version = (u.token_version or 0) + 1
-    u.is_active = False
-    log_change(
-        db,
-        None,
-        "user",
-        u.id,
-        "update",
-        admin.id,
-        f"停用用户「{u.display_name}」",
-        before,
-        _audit_fields(u),
-    )
-    db.commit()
-    return {"message": "用户已停用"}
-
-
-@router.get("/all-active", response_model=list)
-@route_permission_exempt('业务候选目录，处理器按可见项目裁剪最小字段')
-def list_active_users(
-    db: Session = Depends(get_db), user: User = Depends(get_current_user)
-):
-    """For project member assignment dropdowns（PM 添加成员/指派执行人需要）。
-
-    只返回最小字段（id/display_name/role），不下发手机号/邮箱/登录名。
-    """
-    users = (
-        db.query(User).filter(User.is_active == True).order_by(User.display_name).all()
-    )
-    return [{"id": u.id, "display_name": u.display_name, "role": u.role} for u in users]
+    return _out(user)

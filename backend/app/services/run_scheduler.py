@@ -1,33 +1,25 @@
-"""独立调度器进程入口（A2：单容器由 supervisord 托管，避免多 worker 各起一个调度器导致重复通知）。
-
-用法：python -m app.services.run_scheduler
-Web worker（uvicorn）内保持 SCHEDULER_ENABLED=0；本进程负责日报/周报/SLA 扫描。
-"""
-
-import logging
+"""The background process: once an hour, empty what has been in the trash for 30 days."""
+import sys
 import time
 
-logger = logging.getLogger("scheduler.runner")
 
-
-def main():
-    from app.services.report_scheduler import start_scheduler
+def main() -> None:
+    from app.db import SessionLocal
+    from app.services.cleanup import purge_expired
     from app.services.system_updates import is_maintenance
 
-    # The replacement container starts before the host completes verification.
-    # Do not run scheduled business writes until that maintenance window ends.
-    while is_maintenance():
-        time.sleep(2)
-    sched = start_scheduler()
-    logger.info("独立调度器已启动（资料截止/周报/存储维护/通知投递）")
-    try:
-        while True:
-            time.sleep(60)
-    except (KeyboardInterrupt, SystemExit):
-        logger.info("独立调度器退出")
-        sched.shutdown(wait=False)
+    time.sleep(60)  # the web process creates or upgrades the database first
+    while True:
+        try:
+            if not is_maintenance():
+                with SessionLocal() as db:
+                    removed = purge_expired(db)
+                if any(removed.values()):
+                    print(f"[cleanup] 已清除 {removed}", file=sys.stderr, flush=True)
+        except Exception as error:  # keep running; the next hour tries again
+            print(f"[cleanup] 本次清理失败（{type(error).__name__}: {error}）", file=sys.stderr, flush=True)
+        time.sleep(3600)
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
     main()

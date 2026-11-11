@@ -174,6 +174,58 @@ def old_database_revision():
 
 # Data that belongs to the database rows; it moves aside with an old database.
 _ROW_DATA_DIRS = ("uploads", "migration-exports", "project-deletion-backups")
+_CARRIED_ACCOUNTS = "carried-accounts.json"
+
+
+def _keep_accounts() -> None:
+    """Note the accounts of an old database in a private file, so people keep their sign-in.
+
+    Only accounts are carried over: user name, display name, password hash, administrator or not.
+    """
+    import json
+    from sqlalchemy import inspect
+    from app.config import DATA_DIR
+
+    with engine.connect() as connection:
+        inspector = inspect(connection)
+        if not inspector.has_table("users"):
+            return
+        columns = {column["name"] for column in inspector.get_columns("users")}
+        if not {"id", "username", "display_name", "password_hash", "role", "is_active"} <= columns:
+            return
+        version = "token_version" if "token_version" in columns else "0"
+        rows = connection.exec_driver_sql(
+            f"SELECT id, username, display_name, password_hash, role, is_active, {version} FROM users").all()
+    accounts = [{"id": str(row[0]), "username": row[1], "display_name": row[2] or row[1], "password_hash": row[3],
+                 "role": "admin" if row[4] == "admin" else "employee", "is_active": bool(row[5]),
+                 "token_version": int(row[6] or 0)} for row in rows if row[1] and row[3]]
+    target = DATA_DIR / _CARRIED_ACCOUNTS
+    descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+        json.dump(accounts, output, ensure_ascii=False)
+
+
+def _restore_accounts(db) -> int:
+    """Put the noted accounts into the new, still empty database. Safe to repeat after a crash."""
+    import json
+    import sys
+    from app.config import DATA_DIR
+    from app.models import User
+
+    source = DATA_DIR / _CARRIED_ACCOUNTS
+    if not source.is_file() or source.is_symlink():
+        return 0
+    count = 0
+    if db.query(User.id).first() is None:
+        for account in json.loads(source.read_text(encoding="utf-8")):
+            db.add(User(id=account["id"][:36], username=account["username"][:50], display_name=account["display_name"][:100],
+                        password_hash=account["password_hash"], role=account["role"], is_active=account["is_active"],
+                        token_version=account["token_version"] + 1))  # sessions of the old version end
+            count += 1
+        db.commit()
+        print(f"[db] 已把旧版本的 {count} 个账号带到新系统（只带账号，不带项目数据）", file=sys.stderr, flush=True)
+    source.unlink()
+    return count
 
 
 def _set_aside_old_database():
@@ -192,6 +244,7 @@ def _set_aside_old_database():
     revision = old_database_revision()
     if revision is None:
         return None
+    _keep_accounts()
     stamp = time.strftime("%Y%m%d-%H%M%S")
     folder = DATA_DIR / f"old-{stamp}"
     folder.mkdir(parents=True, exist_ok=False)
@@ -259,24 +312,25 @@ def init_db():
 
 
 def _init_db():
-    """实际初始化：_init_db 由 init_db 在 PG advisory lock（多 worker 串行化）下调用。
+    """Back up, move an old database aside, bring the schema to the newest revision, seed.
 
-    SQLite 单进程直接调用（无锁路径不变）。
+    Called under the PostgreSQL advisory lock, so several web workers starting together do it once.
     """
+    from sqlalchemy import inspect
+
     _backup_before_migrate()
-    import app.models  # noqa: F401 - ensure models are registered
+    import app.models  # noqa: F401 - register the tables
     _set_aside_old_database()
+    fresh = not inspect(engine).has_table("users")
     _alembic_sync_schema()
 
-    # Admin account, vehicle types and the built-in template.
-    from app.seed.seed_data import seed_all, seed_task_documents, seed_vehicle_types
-    from app.seed.default_template import seed_default_template
+    from app.seed.seed_data import seed_admin, seed_library
     db = SessionLocal()
     try:
-        seed_all(db)
-        if seed_default_template(db):
-            seed_task_documents(db)
-        seed_vehicle_types(db)
+        _restore_accounts(db)
+        seed_admin(db)
+        if fresh:
+            seed_library(db)
         db.commit()
     finally:
         db.close()

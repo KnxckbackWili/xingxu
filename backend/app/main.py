@@ -9,80 +9,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.services.system_permissions import route_permission_exempt
-from app.db import get_db, init_db
 from app import config
-from app.routers import system_updates
-from app.middleware import TrustedHostsMiddleware, StaticAssetCompressionMiddleware, HTTPSOnlyMiddleware
-from app.routers import (
-    project_recycle_bin,
-    auth,
-    users,
-    projects,
-    project_events,
-    project_documents,
-    uploads,
-    storage,
-    logs,
-    templates,
-    template_items,
-    document_requirements,
-    tasks,
-    work_items,
-    worker,
-    progress,
-    issues,
-    io_routes,
-    attachments,
-    notifications,
-    dashboard,
-    reports,
-    insights,
-    preparations,
-    vehicle_lifecycle,
-    vehicle_progress,
-    inventory,
-    system,
-    report_forms,
-    notification_channels,
-    vehicle_types,
-    holiday_calendars,
-    feedback,
-)
+from app.access import public, validate_routes
+from app.db import get_db, init_db
+from app.middleware import HTTPSOnlyMiddleware, StaticAssetCompressionMiddleware, TrustedHostsMiddleware
+from app.routers import (auth, excel, files, history, projects, records, system, system_updates, templates, users)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     config.validate_public_mode()
-    from app.services.system_permissions import validate_route_permissions
-
-    validate_route_permissions(app)
+    validate_routes(app)
     init_db()
-    # Recover a crash during an explicit cleanup even on installations that
-    # run their scheduler in a separate process.
-    from app.db import SessionLocal
-    from app.services.storage_maintenance import maintain_storage
-    with SessionLocal() as maintenance:
-        maintain_storage(maintenance)
-        maintenance.commit()
-    # 定时报告调度器（SCHEDULER_ENABLED=1 时启动；测试/本地默认关）
-    scheduler = None
-    if config.SCHEDULER_ENABLED:
-        from app.services.report_scheduler import start_scheduler
-
-        scheduler = start_scheduler()
-    app.state.scheduler = scheduler
-
-    try:
-        yield
-    finally:
-        if scheduler is not None:
-            scheduler.shutdown(wait=False)
+    yield
 
 
 app = FastAPI(
-    title="行序 · 项目工作台",
-    description="面向小型 AGV 实施团队的项目管理工具",
+    title="行序",
+    description="AGV 实施项目的记录与查看",
     version=config.APP_VERSION,
     lifespan=lifespan,
 )
@@ -111,8 +55,8 @@ if config.TRUSTED_HOSTS != ["*"]:
 async def security_headers(request, call_next):
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
-    if request.url.path.startswith(("/api/projects", "/api/dashboard", "/api/worker", "/api/people")):
-        response.headers["Cache-Control"]="private, no-store"
+    if request.url.path.startswith("/api/") and "Cache-Control" not in response.headers:
+        response.headers["Cache-Control"] = "private, no-store"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "same-origin"
     response.headers["Permissions-Policy"] = (
@@ -143,9 +87,7 @@ async def csrf_protection(request, call_next):
         #   cookie，强制 CSRF 会造成「已有会话无法重新登录」的鸡生蛋问题；
         # - refresh 只换发令牌不改变业务状态，且 refresh cookie 已 HttpOnly +
         #   path=/api/auth/refresh + SameSite=Lax，跨站 POST 不会携带该 cookie。
-        # MFA public steps authenticate with an audience/purpose-bound signed
-        # challenge in the JSON body, never with the ambient business Cookie.
-        if request.url.path in ("/api/auth/login", "/api/auth/refresh", "/api/auth/2fa/verify", "/api/auth/2fa/enroll/start", "/api/auth/2fa/enroll/confirm", "/api/auth/2fa/recover/start", "/api/auth/2fa/cancel"):
+        if request.url.path in ("/api/auth/login", "/api/auth/refresh"):
             return await call_next(request)
         from app.services.cookies import verify_csrf
 
@@ -163,44 +105,9 @@ async def csrf_protection(request, call_next):
     return await call_next(request)
 
 
-# API routes
-app.include_router(auth.router, prefix="/api")
-app.include_router(users.router, prefix="/api")
-app.include_router(projects.router, prefix="/api")
-app.include_router(project_events.router, prefix="/api")
-app.include_router(project_documents.router, prefix="/api")
-app.include_router(uploads.router,prefix='/api')
-app.include_router(storage.router,prefix='/api')
-app.include_router(project_recycle_bin.router, prefix="/api")
-app.include_router(logs.router, prefix="/api")
-app.include_router(templates.router, prefix="/api")
-app.include_router(template_items.router, prefix="/api")
-app.include_router(document_requirements.router, prefix="/api")
-app.include_router(tasks.router, prefix="/api")
-app.include_router(work_items.router, prefix="/api")
-from app.routers import field_week, weekly_plans
-app.include_router(field_week.router, prefix="/api")
-app.include_router(weekly_plans.router, prefix="/api")
-app.include_router(worker.router, prefix="/api")
-app.include_router(progress.router, prefix="/api")
-app.include_router(issues.router, prefix="/api")
-app.include_router(io_routes.router, prefix="/api")
-app.include_router(attachments.router, prefix="/api")
-app.include_router(notifications.router, prefix="/api")
-app.include_router(dashboard.router, prefix="/api")
-app.include_router(reports.router, prefix="/api")
-app.include_router(insights.router, prefix="/api")
-app.include_router(preparations.router, prefix="/api")
-app.include_router(vehicle_lifecycle.router, prefix="/api")
-app.include_router(vehicle_progress.router, prefix="/api")
-app.include_router(inventory.router, prefix="/api")
-app.include_router(system.router, prefix="/api")
-app.include_router(system_updates.router, prefix="/api")
-app.include_router(report_forms.router, prefix="/api")
-app.include_router(notification_channels.router, prefix="/api")
-app.include_router(vehicle_types.router, prefix="/api")
-app.include_router(holiday_calendars.router, prefix="/api")
-app.include_router(feedback.router, prefix="/api")
+# API routes. Fixed paths are registered before the generic /projects/{id}/{kind} ones.
+for module in (auth, users, projects, files, excel, templates, history, system, system_updates, records):
+    app.include_router(module.router, prefix="/api")
 
 
 @app.middleware("http")
@@ -232,7 +139,7 @@ async def update_maintenance(request, call_next):
 
 
 @app.get("/health")
-@route_permission_exempt('无凭据健康检查，只执行数据库SELECT 1')
+@public("健康检查：不带凭据，只执行 SELECT 1")
 def health(db: Session = Depends(get_db)):
     db.execute(text("SELECT 1"))
     return {"status": "ok", "version": config.APP_VERSION}
@@ -243,7 +150,7 @@ def health(db: Session = Depends(get_db)):
     methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
     include_in_schema=False,
 )
-@route_permission_exempt('未知接口统一返回404，不执行业务操作')
+@public("未知接口一律 404，不做任何事")
 def missing_api(missing_path: str):
     from fastapi import HTTPException
 

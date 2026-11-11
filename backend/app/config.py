@@ -3,11 +3,10 @@
 import os
 import sys
 from pathlib import Path
-from typing import Optional
 
 # Base directory
 BASE_DIR = Path(__file__).resolve().parent.parent
-APP_VERSION = os.getenv("APP_VERSION", "3.8.0")
+APP_VERSION = os.getenv("APP_VERSION", "4.0.0")
 
 # Data directory (SQLite DB, uploads)
 DATA_DIR = Path(os.getenv("DATA_DIR", BASE_DIR / "data"))
@@ -61,24 +60,18 @@ REFRESH_TOKEN_EXPIRE_DAYS = 30
 UPLOAD_DIR = DATA_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 def _upload_mb(raw):
-    # 0 / 空 = 不限大小（文件放在 NAS，按实际空间存放）；需要时可设正数 MiB 限制单个文件。
+    # The largest single file, in MiB. 0 = no limit.
     try:
-        value=int(raw)
-        return value if 0<=value<=1048576 else 0
-    except (TypeError,ValueError):return 0
+        value = int(raw)
+        return value if 0 <= value <= 1048576 else 200
+    except (TypeError, ValueError):
+        return 200
 
-MAX_UPLOAD_MB = _upload_mb(os.getenv('MAX_UPLOAD_MB','0') or '0')
-MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024  # 0 = 不限
-# Buffered import/legacy multipart readers must never allocate a multi-GiB body.
-# Project evidence files use the streaming resumable protocol and MAX_UPLOAD_BYTES.
-MAX_BUFFERED_UPLOAD_SIZE = 10 * 1024 * 1024
-MAX_UPLOAD_SIZE = min(MAX_UPLOAD_BYTES,MAX_BUFFERED_UPLOAD_SIZE) if MAX_UPLOAD_BYTES else MAX_BUFFERED_UPLOAD_SIZE
-UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024
-UPLOAD_SESSION_TTL_DAYS = 7
+
+MAX_UPLOAD_MB = _upload_mb(os.getenv("MAX_UPLOAD_MB", "200") or "200")
+MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024  # 0 = no limit
+MAX_IMPORT_BYTES = 10 * 1024 * 1024  # an Excel file read into memory
 MAX_BACKUP_UPLOAD_SIZE = int(os.getenv("MAX_BACKUP_UPLOAD_MB", "2048")) * 1024 * 1024
-
-# Default working hours per day
-DEFAULT_WORK_HOURS = 8
 
 # Timezone（默认东八区；多地区现场可通过环境变量覆盖）
 TIMEZONE = os.getenv("TIMEZONE", "Asia/Shanghai")
@@ -114,59 +107,5 @@ COOKIE_REFRESH_NAME = "agvpm_refresh"
 COOKIE_CSRF_NAME = "agvpm_csrf"
 COOKIE_SESSION_MARKER = "agvpm_session"
 
-# 定时报告（APScheduler；默认关，测试/本地开发不启动线程）
-SCHEDULER_ENABLED = os.getenv("SCHEDULER_ENABLED", "0") == "1"
-# C8-4：治理软删除的保留期（天）——超过保留期由每日清理任务物理删除（数据可恢复窗口）
-# Deprecated #85: ignored; recycled projects never expire automatically.
-SOFT_DELETE_RETENTION_DAYS = 30
-
-
-def _parse_hhmm(raw: Optional[str], default: str = "18:10") -> str:
-    if not raw:
-        return default
-    try:
-        hour, minute = raw.split(":", 1)
-        h, m = int(hour), int(minute)
-        if 0 <= h <= 23 and 0 <= m <= 59:
-            return f"{h:02d}:{m:02d}"
-    except (TypeError, ValueError):
-        pass
-    return default
-
-
-REPORT_WEEKLY_TIME = _parse_hhmm(os.getenv("REPORT_WEEKLY_TIME"), "20:00")  # 项目当地周日晚，HH:MM
-
-# ===== 消息通知外部渠道（钉钉机器人 / 通用 JSON webhook） =====
-# 站内通知始终保留；外部外发走 notification_outbox 出站队列，由独立 scheduler 进程
-# 按批投递（HYPE-58）。密钥只从环境变量或文件读取，绝不写死。
-# NOTIFY_CHANNELS 支持逗号分隔：dingtalk（钉钉机器人）/ json（通用 JSON webhook）。
-NOTIFY_CHANNELS = [
-    channel.strip().lower()
-    for channel in os.getenv("NOTIFY_CHANNELS", "").split(",")
-    if channel.strip().lower()
-]
-
-
-def _load_notify_secret(env_name: str, file_env_name: str) -> str:
-    """按 AI key 同样的模式读取 webhook 密钥：env 优先，文件路径兜底。"""
-    key_file = os.getenv(file_env_name, "").strip()
-    if key_file:
-        try:
-            return Path(key_file).read_text(encoding="utf-8").strip()
-        except OSError:
-            return ""
-    return os.getenv(env_name, "").strip()
-
-
-DINGTALK_WEBHOOK_URL = os.getenv("DINGTALK_WEBHOOK_URL", "").strip()
-DINGTALK_WEBHOOK_SECRET = _load_notify_secret("DINGTALK_WEBHOOK_SECRET", "DINGTALK_WEBHOOK_SECRET_FILE")
-# 通用 JSON webhook：可对接任意 HTTP 接收端（如企业微信群机器人 / 自建转发服务）。
-# 密钥以 Authorization: Bearer <token> 头发送，同样只从环境变量或文件读取。
-JSON_WEBHOOK_URL = os.getenv("JSON_WEBHOOK_URL", "").strip()
-JSON_WEBHOOK_TOKEN = _load_notify_secret("JSON_WEBHOOK_TOKEN", "JSON_WEBHOOK_TOKEN_FILE")
-# 外发超时（秒）：失败不影响站内通知
-NOTIFY_TIMEOUT_SECONDS = float(os.getenv("NOTIFY_TIMEOUT_SECONDS", "3"))
-# 出站队列投递参数：最大尝试次数 / 退避基数（attempts² × 基数秒）/ 每批条数
-NOTIFY_RETRY_MAX_ATTEMPTS = int(os.getenv("NOTIFY_RETRY_MAX_ATTEMPTS", "3"))
-NOTIFY_RETRY_BASE_SECONDS = float(os.getenv("NOTIFY_RETRY_BASE_SECONDS", "60"))
-NOTIFY_DELIVERY_BATCH_SIZE = int(os.getenv("NOTIFY_DELIVERY_BATCH_SIZE", "50"))
+# Rows and projects in the trash are removed for good after this many days.
+TRASH_DAYS = 30

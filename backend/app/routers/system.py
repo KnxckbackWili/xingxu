@@ -12,24 +12,13 @@ from starlette.background import BackgroundTask
 
 from app.config import DATA_DIR, DATABASE_URL, MAX_BACKUP_UPLOAD_SIZE
 from app.db import get_db
-from app.deps import get_current_user
+from app.deps import require_admin
 from app.models import User
 from app.services import backup_crypto as codec
 from app.services.change_log import log_change
 from app.services.system_backup import BACKUP_DIR, PENDING_RESTORE, create_backup, validate_archive
-from app.services.system_permissions import has_permission, route_permission
 
 router = APIRouter(prefix="/system", tags=["系统管理"])
-
-
-def backup_permission(capability: str, *, real_admin=False):
-    def checker(actor: User = Depends(get_current_user)):
-        if (real_admin and actor.role != "admin") or not has_permission(actor, capability):
-            raise HTTPException(status_code=403, detail="没有权限执行此备份操作")
-        return actor
-    checker.required_permissions = (capability,)
-    checker.capability = capability
-    return checker
 
 
 class BackupCreate(BaseModel):
@@ -53,8 +42,7 @@ def _item(path: Path) -> dict:
 
 
 @router.get("/backups")
-@route_permission("system.backups.read")
-def list_backups(_: User = Depends(backup_permission("system.backups.read"))):
+def list_backups(_: User = Depends(require_admin)):
     items = sorted([path for pattern in ("agvpm-*.tar.gz", "agvpm-*.tar.gz.agvenc")
                     for path in BACKUP_DIR.glob(pattern) if not path.is_symlink() and path.is_file()],
                    key=lambda item: item.stat().st_mtime, reverse=True)
@@ -65,9 +53,8 @@ def list_backups(_: User = Depends(backup_permission("system.backups.read"))):
 
 
 @router.put("/backup-encryption")
-@route_permission("system.backups.configure")
 def configure_encryption(body: BackupEncryption,
-                         actor: User = Depends(backup_permission("system.backups.configure", real_admin=True)),
+                         actor: User = Depends(require_admin),
                          db: Session = Depends(get_db)):
     previous = codec.passphrase_status(DATA_DIR)
     try:
@@ -82,8 +69,7 @@ def configure_encryption(body: BackupEncryption,
 
 
 @router.post("/backups")
-@route_permission("system.backups.create")
-def create_system_backup(body: BackupCreate, actor: User = Depends(backup_permission("system.backups.create")),
+def create_system_backup(body: BackupCreate, actor: User = Depends(require_admin),
                          db: Session = Depends(get_db)):
     try:
         path = create_backup(body.label)
@@ -109,8 +95,7 @@ def _backup_path(filename: str) -> Path:
 
 
 @router.get("/backups/{filename}")
-@route_permission("system.backups.download")
-def download_backup(filename: str, actor: User = Depends(backup_permission("system.backups.download")),
+def download_backup(filename: str, actor: User = Depends(require_admin),
                     db: Session = Depends(get_db)):
     path = _backup_path(filename)
     if codec.is_encrypted(path):
@@ -132,8 +117,7 @@ def download_backup(filename: str, actor: User = Depends(backup_permission("syst
 
 
 @router.delete("/backups/{filename}")
-@route_permission("system.backups.delete")
-def delete_backup(filename: str, actor: User = Depends(backup_permission("system.backups.delete")),
+def delete_backup(filename: str, actor: User = Depends(require_admin),
                   db: Session = Depends(get_db)):
     path = _backup_path(filename)
     held = path.with_name(".delete-" + uuid4().hex)
@@ -150,10 +134,9 @@ def delete_backup(filename: str, actor: User = Depends(backup_permission("system
 
 
 @router.post("/restore")
-@route_permission("system.backups.restore")
 async def stage_restore(file: UploadFile = File(...), confirm: str = "",
                         passphrase: SecretStr = Form(default=SecretStr("")),
-                        actor: User = Depends(backup_permission("system.backups.restore")),
+                        actor: User = Depends(require_admin),
                         db: Session = Depends(get_db)):
     if DATABASE_URL.startswith("postgresql"):
         raise HTTPException(status_code=400, detail="PostgreSQL 部署不支持网页恢复，请使用 docker/scripts/restore.sh 恢复备份")

@@ -1,1175 +1,257 @@
-from typing import Optional
+"""Projects: the gap overview, the one-request snapshot, ticks on the vehicle table, the trash."""
+import hashlib
 
-"""Project CRUD routes + vehicles."""
-
-from datetime import date
-from app.services.system_permissions import route_permission
-from app.time_utils import utcnow
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from pydantic import BaseModel, Field, model_validator
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app import models, records
 from app.db import get_db
-from app.deps import get_current_user, require_pm
-from app.services.permissions import require_project_capability
-from app.services.scope import visible_project_ids, ensure_project_visible
-from app.models import (
-    User,
-    Project,
-    Vehicle,
-    AcceptanceRecord,
-)
+from app.deps import get_current_user, require_admin
+from app.records import KINDS, PROJECT_FIELDS, iso
 from app.services.change_log import log_change
-from app.services.project_lifecycle import (
-    INITIAL_PROJECT_STATUSES,
-    PROJECT_STATUSES,
-    SUSPENDABLE_PROJECT_STATUSES,
-    can_transition,
-    status_label,
-)
+from app.services.cleanup import purge_project
+from app.services.gaps import project_gaps
+from app.time_utils import utcnow
 
-from app.services.project_events import (
-    DispatchPlatform, EventPlanInput, events_for_project, update_plans, sync_arrival_all,
-)
-
-def _private_response(response:Response):
-    response.headers["Cache-Control"]="private, no-store"
+router = APIRouter(tags=["项目"])
+MAX_NEW_VEHICLES = 200
+# template list -> (project kind, fields carried over)
+TEMPLATE_COPY = {"work": ("work", ("stage", "name")), "document": ("documents", ("name",)),
+                 "step": ("steps", ("name",)), "item": ("items", ("name", "spec", "quantity", "unit"))}
 
 
-router = APIRouter(prefix="/projects", tags=["项目"],dependencies=[Depends(_private_response)])
+def project_dict(project: models.Project) -> dict:
+    return {"id": project.id, "name": project.name, "contract_no": project.contract_no, "customer": project.customer,
+            "note": project.note, "is_closed": project.is_closed, "rev": project.rev,
+            "created_at": iso(project.created_at), "updated_at": iso(project.updated_at),
+            "deleted_at": iso(project.deleted_at)}
 
 
-class VehicleCreate(BaseModel):
-    model_config = {"protected_namespaces": ()}
-
-    vehicle_type: str = Field(..., min_length=1, max_length=50)
-    model_name: str = Field(..., min_length=1, max_length=100)
-    quantity: int = Field(..., gt=0)
-    configuration: dict = Field(default_factory=dict)
-    notes: str = Field(default="", max_length=2000)
-    sort_order: int = 0
+def _not_modified(request: Request, etag: str):
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers={"ETag": etag})
+    return None
 
 
-class ProjectCreate(EventPlanInput):
-    name: str = Field(..., min_length=1, max_length=200)
-    abbreviation: str = ""
-    client: str = ""
-    location: str = ""
-    timezone: str = Field(
-        default="Asia/Shanghai", max_length=64
-    )  # 项目现场时区（IANA）
-    start_date: date
-    end_date: date
-    status: str = Field(default="preparing", max_length=20)
-    description: str = ""
-    manager_id: Optional[str] = None
-    dispatch_platform: DispatchPlatform | None = None
-    vehicles: list[VehicleCreate] = Field(default_factory=list, max_length=100)
-    work_item_ids: Optional[list[str]] = Field(default=None, max_length=2000)
-    # Optional template rows chosen for this project; when given, every required row comes in
-    # (work, files and purchases) and work_item_ids is not needed.
-    optional_item_ids: Optional[list[str]] = Field(default=None, max_length=2000)
-    template_id: str = Field(default="default", min_length=1, max_length=100)
-    exclude_task_ids: list[str] = Field(default_factory=list, max_length=2000)
-    client_uuid: Optional[str] = Field(default=None, min_length=8, max_length=64)
+def _live_rows(db: Session, kind_key: str, project_id: str):
+    kind = KINDS[kind_key]
+    query = db.query(kind.model).filter_by(project_id=project_id, deleted_at=None)
+    order = (kind.model.sort_order, kind.model.created_at) if kind.ordered else (kind.model.created_at, kind.model.id)
+    return query.order_by(*order).all()
 
 
-class ClientContact(BaseModel):
-    model_config = {"extra": "forbid"}
-
-    department: str = Field(default="", max_length=100)
-    team: str = Field(default="", max_length=100)
-    name: str = Field(..., min_length=1, max_length=100)
-    title: str = Field(default="", max_length=100)
-    phone: str = Field(default="", max_length=50)
-    email: str = Field(default="", max_length=200)
-    responsibility: str = Field(default="", max_length=500)
-    decision_scope: str = Field(default="", max_length=500)
-    notes: str = Field(default="", max_length=1000)
-    is_primary: bool = False
+def file_dict(row: models.File) -> dict:
+    return {"id": row.id, "owner_kind": row.owner_kind, "owner_id": row.owner_id, "filename": row.filename,
+            "size": row.size, "mime": row.mime, "created_by": row.created_by, "created_at": iso(row.created_at)}
 
 
-class EntryPlan(BaseModel):
-    model_config = {"extra": "forbid"}
-
-    mode: str = Field(
-        default="",
-        pattern="^(|collective|staggered|self_arranged|client_pickup|resident|other)$",
-    )
-    meeting_time: str = Field(default="", max_length=50)
-    meeting_point: str = Field(default="", max_length=300)
-    client_contact: str = Field(default="", max_length=100)
-    contact_phone: str = Field(default="", max_length=50)
-    transport: str = Field(default="", max_length=300)
-    accommodation: str = Field(default="", max_length=300)
-    access_requirements: str = Field(default="", max_length=2000)
-    tools_ppe: str = Field(default="", max_length=2000)
-    network_access: str = Field(default="", max_length=2000)
-    vehicle_access: str = Field(default="", max_length=500)
-    safety_requirements: str = Field(default="", max_length=2000)
-    notes: str = Field(default="", max_length=3000)
-
-
-class ProjectUpdate(EventPlanInput):
-    name: Optional[str] = None
-    abbreviation: Optional[str] = None
-    contract_no: Optional[str] = Field(default=None, max_length=100)
-    client: Optional[str] = None
-    location: Optional[str] = None
-    timezone: Optional[str] = Field(default=None, max_length=64)
-    start_date: Optional[date] = None
-    end_date: Optional[date] = None
-    description: Optional[str] = None
-    staffing_notes: Optional[str] = Field(default=None, max_length=5000)
-    manager_id: Optional[str] = None
-    dispatch_platform: DispatchPlatform | None = None
-    rest_mode: Optional[str] = Field(default=None, pattern="^(none|one|two)$")
-    rest_days: Optional[list[str]] = None
-    skip_holidays: Optional[bool] = None
-    client_contacts: Optional[list[ClientContact]] = None
-    entry_plan: Optional[EntryPlan] = None
-    version: Optional[int] = None  # 乐观锁版本号
+def snapshot(db: Session, project: models.Project) -> dict:
+    """Everything the project page shows, in one answer."""
+    data = {"project": project_dict(project)}
+    for key in records.PROJECT_KINDS:
+        data[key.replace("-", "_")] = [records.row_dict(KINDS[key], row) for row in _live_rows(db, key, project.id)]
+    vehicles = {row["id"] for row in data["vehicles"]}
+    steps = {row["id"] for row in data["steps"]}
+    data["vehicle_records"] = [row for row in data["vehicle_records"] if row["vehicle_id"] in vehicles]
+    data["marks"] = [{"vehicle_id": mark.vehicle_id, "step_id": mark.step_id, "done_by": mark.done_by, "done_at": iso(mark.done_at)}
+                     for mark in db.query(models.VehicleMark).filter_by(project_id=project.id)
+                     if mark.vehicle_id in vehicles and mark.step_id in steps]
+    documents, issues = {row["id"] for row in data["documents"]}, {row["id"] for row in data["issues"]}
+    data["files"] = [file_dict(row) for row in db.query(models.File).filter_by(project_id=project.id, deleted_at=None)
+                     .order_by(models.File.created_at, models.File.id)
+                     if row.owner_kind == "other" or row.owner_id in (documents if row.owner_kind == "document" else issues)]
+    data["people"] = {user.id: user.display_name for user in db.query(models.User)}
+    data["vehicle_types"] = [row.name for row in db.query(models.VehicleType).filter_by(is_enabled=True)
+                             .order_by(models.VehicleType.sort_order, models.VehicleType.name)]
+    return data
 
 
-class VehicleUpdate(BaseModel):
-    model_config = {"protected_namespaces": ()}
-
-    vehicle_type: Optional[str] = None
-    model_name: Optional[str] = None
-    quantity: Optional[int] = Field(default=None, gt=0)
-    configuration: Optional[dict] = None
-    notes: Optional[str] = Field(default=None, max_length=2000)
-    sort_order: Optional[int] = None
-
-
-def _vehicle_dict(v: Vehicle) -> dict:
-    return {
-        "id": v.id,
-        "vehicle_type": v.vehicle_type,
-        "model_name": v.model_name,
-        "quantity": v.quantity,
-        "configuration": v.configuration or {},
-        "notes": v.notes or "",
-        "sort_order": v.sort_order,
-    }
+@router.get("/overview")
+def overview(request: Request, _: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Every project with what it still lacks. Unchanged since the caller's copy: 304."""
+    projects = db.query(models.Project).filter_by(deleted_at=None).order_by(models.Project.created_at.desc()).all()
+    stamp = "|".join(f"{project.id}:{project.rev}" for project in projects)
+    etag = '"' + hashlib.sha256(stamp.encode()).hexdigest()[:32] + '"'
+    if (unchanged := _not_modified(request, etag)) is not None:
+        return unchanged
+    gaps = project_gaps(db, [project for project in projects if not project.is_closed])
+    body = {"projects": [{**project_dict(project), "gaps": gaps.get(project.id)} for project in projects]}
+    return JSONResponse(body, headers={"ETag": etag})
 
 
-def _valid_timezone(tz: str) -> str:
-    """校验 IANA 时区名；非法值 → 400（防脏数据进入 timezone 列）。"""
-    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+@router.get("/projects")
+def list_projects(_: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return [project_dict(project) for project in
+            db.query(models.Project).filter_by(deleted_at=None).order_by(models.Project.created_at.desc())]
 
+
+@router.post("/projects")
+def create_project(body: dict = Body(...), user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    project_id = body.get("id")
+    if project_id is not None:
+        if not isinstance(project_id, str) or not records._UUID.match(project_id):
+            raise HTTPException(400, "项目编号格式不正确")
+        existing = db.get(models.Project, project_id)
+        if existing is not None:
+            return project_dict(existing)
+    count = body.get("vehicle_count") or 0
+    if isinstance(count, bool) or not isinstance(count, int) or not 0 <= count <= MAX_NEW_VEHICLES:
+        raise HTTPException(400, f"车辆台数应为 0 到 {MAX_NEW_VEHICLES} 之间的整数")
+    project = models.Project(id=project_id or models.gen_uuid(), created_by=user.id)
+    for name in ("name", "contract_no", "customer", "note"):
+        setattr(project, name, records.clean(PROJECT_FIELDS[name], body.get(name)))
+    db.add(project)
+    db.flush()
+    template = None
+    if body.get("template_id"):
+        template = db.get(models.Template, body["template_id"])
+        if template is None or template.deleted_at is not None:
+            raise HTTPException(400, "所选模板不存在或已删除")
+        rows = (db.query(models.TemplateRow).filter_by(template_id=template.id, deleted_at=None)
+                .order_by(models.TemplateRow.sort_order, models.TemplateRow.created_at).all())
+        positions = {}
+        for row in rows:
+            key, names = TEMPLATE_COPY[row.kind]
+            positions[key] = positions.get(key, 0) + 1
+            db.add(KINDS[key].model(project_id=project.id, created_by=user.id, sort_order=positions[key],
+                                    **{name: getattr(row, name) for name in names}))
+    for number in range(1, count + 1):
+        db.add(models.Vehicle(project_id=project.id, created_by=user.id, vehicle_no=f"车辆{number}", sort_order=number))
+    log_change(db, project.id, "project", project.id, "create", user, "新建项目",
+               new_value={"name": project.name, "template": template.name if template else "", "vehicles": count},
+               row_label=project.name)
+    db.commit()
+    return project_dict(project)
+
+
+@router.get("/projects/{project_id}")
+def get_project(project_id: str, request: Request, _: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    project = records.load_scope(db, "project", project_id)
+    etag = f'"{project.id}-{project.rev}"'
+    if (unchanged := _not_modified(request, etag)) is not None:
+        return unchanged
+    return JSONResponse(snapshot(db, project), headers={"ETag": etag})
+
+
+@router.patch("/projects/{project_id}")
+def update_project(project_id: str, changes: dict = Body(...), user: models.User = Depends(get_current_user),
+                   db: Session = Depends(get_db)):
+    project = db.query(models.Project).filter_by(id=project_id, deleted_at=None).with_for_update().first()
+    if project is None:
+        raise HTTPException(404, "项目不存在或已删除")
     try:
-        ZoneInfo(tz)
-    except (ZoneInfoNotFoundError, ValueError):
-        raise HTTPException(status_code=400, detail=f"无效的时区：{tz}")
-    return tz
+        changed = records.apply_changes(db, user, project, PROJECT_FIELDS, changes, scope_id=project.id,
+                                        kind_key="project", label="项目", row_label=project.name, project_id=project.id)
+    except records.Conflict as conflict:
+        return JSONResponse(status_code=409, content={"detail": "这一格刚被别人改过", "conflicts": conflict.conflicts,
+                                                      "row": project_dict(project)})
+    if changed:
+        records.bump(db, models.Project, project.id)
+    db.commit()
+    db.refresh(project)
+    return project_dict(project)
 
 
-# Field names a reader recognises in the project log; anything else shows as "项目信息".
-PROJECT_FIELD_LABELS = {
-    'name': '名称', 'abbreviation': '简称', 'contract_no': '合同号', 'client': '客户', 'location': '地点', 'timezone': '时区', 'description': '说明',
-    'start_date': '开始日期', 'end_date': '计划结束日期', 'manager': '负责人',
-    'client_contacts': '联系人',
-    'entry_plan': '入场信息', 'rest_days': '休息日', 'rest_mode': '休息日规则',
-    'skip_holidays': '节假日规则', 'staffing_notes': '人员说明',
-}
-IGNORED_PROJECT_FIELDS = {'version', 'manager_name', 'id', 'status'}
+@router.delete("/projects/{project_id}")
+def delete_project(project_id: str, user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
+    project = db.query(models.Project).filter_by(id=project_id, deleted_at=None).with_for_update().first()
+    if project is None:
+        raise HTTPException(404, "项目不存在或已删除")
+    project.deleted_at, project.deleted_by = utcnow(), user.id
+    log_change(db, project.id, "project", project.id, "delete", user, "删除项目（30 天内可恢复）", row_label=project.name)
+    records.bump(db, models.Project, project.id)
+    db.commit()
+    return {"message": "项目已删除，30 天内可以在设置里恢复"}
 
 
-def _update_summary(name, old, new):
-    changed = [key for key in new if key not in IGNORED_PROJECT_FIELDS and (old or {}).get(key) != new.get(key)]
-    labels = list(dict.fromkeys(PROJECT_FIELD_LABELS.get(key, '项目信息') for key in changed))
-    return f"更新项目「{name}」" + (f"：{'、'.join(labels)}" if labels else '')
-
-
-def _project_dict(db: Session, p: Project, event_rows=None) -> dict:
-    _mgr = db.get(User, p.manager) if p.manager else None
-    suspension = dict(p.suspension or {})
-    if suspension:
-        for key in ("suspended_by", "resumed_by"):
-            if suspension.get(key):
-                person = db.get(User, suspension[key])
-                suspension[f"{key}_name"] = person.display_name if person else ""
-    return {
-        "id": p.id,
-        "name": p.name,
-        "abbreviation": p.abbreviation,
-        "contract_no": p.contract_no or "",
-        "manager": p.manager,
-        "manager_name": _mgr.display_name if _mgr else "",
-        "client": p.client,
-        "location": p.location,
-        "timezone": p.timezone or "Asia/Shanghai",
-        "start_date": p.start_date.isoformat() if p.start_date else None,
-        "end_date": p.end_date.isoformat() if p.end_date else None,
-        "status": p.status,
-        "suspension": suspension,
-        "description": p.description,
-        "staffing_notes": p.staffing_notes or "",
-        "rest_mode": p.rest_mode or "none",
-        "rest_days": p.rest_days or [],
-        "skip_holidays": bool(p.skip_holidays),
-        "version": p.version or 0,
-        "client_contacts": p.client_contacts or [],
-        "entry_plan": p.entry_plan or {},
-        "dispatch_platform": p.dispatch_platform,
-        "events": events_for_project(db, p, event_rows),
-        **_holiday_calendar(db, p),
-        "created_at": p.created_at.isoformat() if p.created_at else None,
-        "updated_at": p.updated_at.isoformat() if p.updated_at else None,
-    }
-
-
-def _holiday_calendar(db: Session, p: Project) -> dict:
-    """Unknown years are explicit; yearly maintenance is visible immediately."""
-    from app.services.holidays import calendar_in_range
-    return calendar_in_range(p.start_date, p.end_date, db)
-
-
-def get_project_or_404(db: Session, project_id: str) -> Project:
-    p = db.get(Project, project_id)
-    if p is None:
-        raise HTTPException(status_code=404, detail="项目不存在")
-    return p
-
-
-# ===== Projects =====
-
-
-@router.get("")
-@route_permission('project.read')
-def list_projects(
-    page: int = Query(1, ge=1),
-    page_size: int = Query(0, ge=0, le=200),
-    search: str = Query("", max_length=100),
-    status: str = Query("", max_length=30),
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """List projects filtered by role scope and explicit project assignment.
-
-    默认保持旧行为返回完整 list；当 page/page_size > 0 时返回服务端分页结构，
-    避免 500 个项目时一次拉回全部数据。
-    """
-    from app.services.scope import visible_projects
-
-    projects = visible_projects(db, user)
-
-    query = search.strip().lower()
-    if query:
-        projects = [
-            p
-            for p in projects
-            if query in (p.name or "").lower()
-            or query in (p.client or "").lower()
-            or query in (p.abbreviation or "").lower()
-            or query in (p.location or "").lower()
-        ]
-    if status:
-        projects = [p for p in projects if p.status == status]
-
-    projects.sort(key=lambda p: p.created_at or p.id, reverse=True)
-    from app.models import ProjectEvent
-    event_projects = projects[(page - 1) * page_size:page * page_size] if page_size else projects
-    events_by_project = {project.id: [] for project in event_projects}
-    if events_by_project:
-        for event in db.query(ProjectEvent).filter(ProjectEvent.project_id.in_(events_by_project)).all():
-            events_by_project[event.project_id].append(event)
-
-    from app.services.workbench import project_facts
-    facts=project_facts(db,event_projects,user)
-
-    def serialize(project):
-        item = _project_dict(db, project, events_by_project.get(project.id, []))
-        from app.services.permissions import project_capabilities
-
-        item["capabilities"] = sorted(project_capabilities(user, project))
-        item["can_delete"] = "project.delete" in item["capabilities"]
-        item.update(facts[project.id])
-        return item
-
-    if page_size > 0:
-        total = len(projects)
-        start = (page - 1) * page_size
-        items = [serialize(p) for p in projects[start : start + page_size]]
-        return {"items": items, "total": total, "page": page, "page_size": page_size}
-
-    return [serialize(p) for p in projects]
-
-
-def _validate_user_ids(db: Session, ids, label="成员"):
-    """校验用户 ID 存在且启用：坏 ID 返回 400 + 字段级提示，而不是 FK 500（D2/C1-2/C3-4）。"""
-    if not ids:
-        return
-    bad = []
-    for uid in dict.fromkeys(ids):
-        if not uid:
-            continue
-        u = db.get(User, uid)
-        if u is None:
-            bad.append(f"不存在的用户 {uid[:8]}")
-        elif not u.is_active:
-            bad.append(f"已停用用户 {u.display_name or uid[:8]}")
-    if bad:
-        raise HTTPException(
-            status_code=400,
-            detail=f"{label}校验失败："
-            + "、".join(bad[:5])
-            + (" 等" if len(bad) > 5 else ""),
-        )
-
-
-@router.post("", response_model=dict)
-@route_permission('projects.create')
-def create_project(
-    data: ProjectCreate,
-    user: User = Depends(require_pm),
-    db: Session = Depends(get_db),
-):
-    from hashlib import sha256
-    import json
-    from sqlalchemy.exc import IntegrityError
-    from app.models import ProjectCreationReceipt
-
-    fingerprint = sha256(
-        json.dumps(
-            data.model_dump(mode="json", exclude={"client_uuid"}),
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode()
-    ).hexdigest()
-
-    def replay():
-        receipt = (
-            db.query(ProjectCreationReceipt)
-            .filter_by(user_id=user.id, client_uuid=data.client_uuid)
-            .first()
-        )
-        if receipt is None:
-            return None
-        if receipt.request_hash != fingerprint:
-            raise HTTPException(
-                409,
-                "该创建请求已成功，但本次内容与原请求不同；请到项目列表查看已创建项目",
-            )
-        ensure_project_visible(db, receipt.project_id, user)
-        return receipt.result
-
-    if data.client_uuid:
-        previous = replay()
-        if previous is not None:
-            return previous
-    copied_files = []
-    db.info["creation_copied_files"] = copied_files
-    try:
-        result = _create_project(data, user, db)
-        if data.client_uuid:
-            db.add(
-                ProjectCreationReceipt(
-                    user_id=user.id,
-                    client_uuid=data.client_uuid,
-                    request_hash=fingerprint,
-                    project_id=result["id"],
-                    result=result,
-                )
-            )
+@router.post("/projects/{project_id}/restore")
+def restore_project(project_id: str, user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
+    project = db.query(models.Project).filter_by(id=project_id).with_for_update().first()
+    if project is None:
+        raise HTTPException(404, "项目已被彻底清除，无法恢复")
+    if project.deleted_at is not None:
+        project.deleted_at = project.deleted_by = None
+        log_change(db, project.id, "project", project.id, "restore", user, "恢复项目", row_label=project.name)
+        records.bump(db, models.Project, project.id)
         db.commit()
-    except Exception as error:
-        db.rollback()
-        for path in copied_files:
-            path.unlink(missing_ok=True)
-        if isinstance(error, IntegrityError) and data.client_uuid:
-            previous = replay()
-            if previous is not None:
-                return previous
-        raise
-    finally:
-        db.info.pop("creation_copied_files", None)
-    from app.services.cache import cache_clear
-
-    cache_clear("dashboard:")
-    return result
+    return project_dict(project)
 
 
-def _create_project(data: ProjectCreate, user: User, db: Session):
-    if not data.name.strip():
-        raise HTTPException(400, "项目名称不能为空")
-    if data.end_date < data.start_date:
-        raise HTTPException(status_code=400, detail="结束日期不能早于开始日期")
-    if data.status not in INITIAL_PROJECT_STATUSES:
-        allowed = "、".join(status_label(value) for value in INITIAL_PROJECT_STATUSES)
-        raise HTTPException(status_code=400, detail=f"新项目状态只能选择：{allowed}")
-    # 成员 ID 合法性：坏 ID 在 SQLAlchemy 层会炸 FK 500，这里提前 400（C1-2/D2）
-    if data.manager_id:
-        _validate_user_ids(db, [data.manager_id], label="项目负责人")
-    from app.models import Template
-
-    template = (
-        db.get(Template, data.template_id) if data.template_id != "default" else None
-    )
-    if data.template_id != "default" and template is None:
-        raise HTTPException(400, "所选模板已不存在，请重新选择实施方案")
-    scope = None
-    if data.optional_item_ids is not None:
-        from app.services.template_items import creation_scope
-        try:
-            scope = creation_scope(db, data.template_id, data.optional_item_ids)
-        except ValueError as error:
-            raise HTTPException(400, str(error))
-        data.work_item_ids = scope["work_ids"]
-    p = Project(
-        template_id=data.template_id,
-        template_version=template.version or 1 if template else 1,
-        name=data.name.strip(),
-        abbreviation=data.abbreviation,
-        manager=data.manager_id or user.id,
-        client=data.client,
-        location=data.location,
-        timezone=_valid_timezone(data.timezone),
-        start_date=data.start_date,
-        end_date=data.end_date,
-        description=data.description,
-        status=data.status,
-        created_by=user.id,
-        dispatch_platform=data.dispatch_platform,
-    )
-    db.add(p)
-    db.flush()
-    from app.services.vehicle_progress import initialize_project
-    initialize_project(db, p, data.template_id)
-    update_plans(db, p, data.event_plans, user.id)
-    log_change(
-        db,
-        p.id,
-        "project",
-        p.id,
-        "create",
-        user.id,
-        f"创建项目「{p.name}」",
-        None,
-        _project_dict(db, p),
-    )
-    from app.routers.vehicle_types import validate_vehicle_type_value
-
-    for vehicle_data in data.vehicles:
-        payload = vehicle_data.model_dump()
-        payload["vehicle_type"] = validate_vehicle_type_value(
-            db, payload["vehicle_type"], allow_legacy=(user.role == "admin")
-        )
-        vehicle = Vehicle(project_id=p.id, **payload)
-        db.add(vehicle)
-        db.flush()
-        log_change(
-            db,
-            p.id,
-            "vehicle",
-            vehicle.id,
-            "create",
-            user.id,
-            f"新增车型 {vehicle.vehicle_type} {vehicle.model_name}",
-        )
-    from app.services.project_documents import initialize
-    initialize(db, p, scope["excluded_requirement_ids"] if scope else ())
-    if scope and scope["purchases"]:
-        from app.services.template_items import add_purchases
-        add_purchases(db, p, scope["purchases"], user.id)
-    result = _project_dict(db, p)
-    if data.work_item_ids is not None:
-        from app.services.work_items import selected_template_work, generate
-        try:
-            generated = generate(db, p, selected_template_work(db, data.template_id, data.work_item_ids, data.exclude_task_ids))
-        except ValueError as error:
-            raise HTTPException(400, str(error))
-        db.flush()
-        log_change(
-            db,
-            p.id,
-            "task",
-            p.id,
-            "generate",
-            user.id,
-            f"生成实施任务：{generated['tasks']} 个任务，{generated['check_items']} 个检查项",
-        )
-        result["initial_generation"] = generated
-    return result
+@router.get("/trash/projects")
+def trash(_: models.User = Depends(require_admin), db: Session = Depends(get_db)):
+    people = {user.id: user.display_name for user in db.query(models.User)}
+    return [{**project_dict(project), "deleted_by_name": people.get(project.deleted_by, "")}
+            for project in db.query(models.Project).filter(models.Project.deleted_at.isnot(None))
+            .order_by(models.Project.deleted_at.desc())]
 
 
-@router.get("/{project_id}", response_model=dict)
-@route_permission('project.read')
-def get_project(
-    project_id: str,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    p = ensure_project_visible(db, project_id, user)
-    result = _project_dict(db, p)
-    # Detail only: a retrospective can be long and is unnecessary on every
-    # project-list row. Keep legacy sections and the original UTC timestamp.
-    retrospective = (
-        dict(p.retrospective)
-        if isinstance(p.retrospective, dict)
-        else ({"content": p.retrospective} if isinstance(p.retrospective, str) else {})
-    )
-    author_id = retrospective.get("author")
-    author = (
-        db.get(User, author_id) if isinstance(author_id, str) and author_id else None
-    )
-    retrospective["author_name"] = author.display_name if author else ""
-    result["retrospective"] = retrospective
-    from app.services.project_templates import project_template_info
-
-    result["source_template"] = project_template_info(db, p)
-    from app.services.permissions import project_capabilities
-
-    result["capabilities"] = sorted(project_capabilities(user, p))
-    result["can_delete"] = "project.delete" in result["capabilities"]
-    # Include vehicles summary
-    result["vehicles"] = [
-        _vehicle_dict(v)
-        for v in db.query(Vehicle)
-        .filter_by(project_id=p.id)
-        .order_by(Vehicle.sort_order)
-        .all()
-    ]
-    result["vehicle_total"] = sum(
-        v.quantity for v in db.query(Vehicle).filter_by(project_id=p.id).all()
-    )
-    from app.services.weekly_plans import project_summary
-    result['weekly_plan_summary']=project_summary(db,p,user)
-    from app.services.acceptance import acceptance_summary
-
-    result["acceptance_summary"] = acceptance_summary(db, p.id)
-    return result
-
-
-@router.get("/{project_id}/people", response_model=list)
-@route_permission('project.read')
-def project_people(
-    project_id: str,
-    include_candidates: bool = False,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Every active account works on every project."""
-    p = ensure_project_visible(db, project_id, user)
-    query = db.query(User).filter(User.is_active == True)
-    from app.services.permissions import inherited_project_capabilities
-
-    return [
-        {
-            "id": person.id,
-            "display_name": person.display_name,
-            "role": person.role,
-            "inherited_capabilities": sorted(inherited_project_capabilities(person, p)),
-        }
-        for person in query.order_by(User.display_name).all()
-    ]
-
-
-class DirectTransfer(BaseModel):
-    model_config={'extra':'forbid'}
-    target_manager_id:str=Field(min_length=1,max_length=36)
-    reason:str=Field(min_length=5,max_length=1000)
-    version:int=Field(strict=True,ge=0)
-    member_removal_confirmations:list[str]=Field(default_factory=list,max_length=500)
-
-    @model_validator(mode='after')
-    def exact_input(self):
-        if len(self.reason.strip())<5:raise ValueError('请填写至少5个字的更换理由')
-        if len(self.member_removal_confirmations)!=len(set(self.member_removal_confirmations)):raise ValueError('确认离场人员不能重复')
-        return self
-
-
-@router.get('/{project_id}/transfer-preview')
-@route_permission('project.update')
-def transfer_preview(project_id:str,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-    from app.services import project_transfer
-    return project_transfer.preview(db,project_transfer.authorize(db,project_id,user),user)
-
-
-@router.post('/{project_id}/transfer')
-@route_permission('project.update')
-def direct_transfer(project_id:str,body:DirectTransfer,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-    from app.services import project_transfer
-    project=project_transfer.transfer(db,project_id,user,body)
-    result=_project_dict(db,project)
-    result['viewer_retains_access']=project.id in visible_project_ids(db,user)
-    return result
-
-
-@router.put("/{project_id}", response_model=dict)
-@route_permission('project.update')
-def update_project(
-    project_id: str,
-    data: ProjectUpdate,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    p = ensure_project_visible(db, project_id, user)
-    if data.model_fields_set & {'rest_mode','rest_days','skip_holidays'}:
-        raise HTTPException(400,'排期设置请通过周计划专用设置接口维护，不能绕过调度权限')
-    from app.services.record_lock import lock_record
-
-    lock_record(db, p, conflict_detail="项目正由另一操作更新，请刷新后重试")
-    db.refresh(user)
-    if not user.is_active:
-        raise HTTPException(401, "账号已停用，请重新登录")
-    p = ensure_project_visible(db, project_id, user)
-    from app.services.project_lifecycle import ensure_project_writable
-
-    ensure_project_writable(p)
-    from app.services.permissions import authorize_project, C_UPDATE
-
-    field_keys = set(data.model_dump(exclude_unset=True).keys())
-    if "manager_id" in field_keys:
-        raise HTTPException(status_code=400,detail="请使用项目设置的更换负责人入口，填写理由并核对版本与离场资料")
-    if not field_keys - {"version"}:
-        raise HTTPException(400, "请提供需要修改的项目字段")
-    authorize_project(user, p, C_UPDATE)
-    from app.services.optimistic import bump_version, require_client_version
-
-    bump_version(p, require_client_version(data.version), db=db)
-    old = _project_dict(db, p)
-    fields = [
-        "name",
-        "abbreviation",
-        "contract_no",
-        "client",
-        "location",
-        "timezone",
-        "start_date",
-        "end_date",
-        "description",
-        "staffing_notes",
-    ]
-    for f in fields:
-        v = getattr(data, f)
-        if v is not None:
-            setattr(p, f, _valid_timezone(v) if f == "timezone" else v)
-    if "dispatch_platform" in data.model_fields_set:
-        p.dispatch_platform = data.dispatch_platform
-    if "event_plans" in data.model_fields_set:
-        update_plans(db, p, data.event_plans, user.id)
-    if "timezone" in data.model_fields_set:
-        sync_arrival_all(db, p, user.id, "现场时区调整后重新汇总到场日期")
-    if "dispatch_platform" in data.model_fields_set:
-        from app.services.project_documents import materialize_static
-        materialize_static(db, p)
-    from app.services.document_deadlines import refresh_project
-    refresh_project(db,p,actor_id=user.id)
-    if data.rest_mode is not None:
-        p.rest_mode = data.rest_mode
-    if data.rest_days is not None:
-        p.rest_days = data.rest_days
-    if data.skip_holidays is not None:
-        p.skip_holidays = data.skip_holidays
-    if "client_contacts" in data.model_fields_set:
-        contacts = data.client_contacts or []
-        if len(contacts) > 100:
-            raise HTTPException(status_code=400, detail="甲方联系人不能超过 100 人")
-        if sum((1 for contact in contacts if contact.is_primary)) > 1:
-            raise HTTPException(status_code=400, detail="甲方主联系人只能设置 1 人")
-        p.client_contacts = [contact.model_dump() for contact in contacts]
-    if "entry_plan" in data.model_fields_set:
-        p.entry_plan = (
-            {
-                **(p.entry_plan or {}),
-                **data.entry_plan.model_dump(mode="json", exclude_unset=True),
-            }
-            if data.entry_plan is not None
-            else ({"entry_date": p.entry_plan["entry_date"]} if "entry_date" in (p.entry_plan or {}) else {})
-        )
-    if p.end_date < p.start_date:
-        raise HTTPException(status_code=400, detail="结束日期不能早于开始日期")
-    db.flush()
-    log_change(
-        db,
-        p.id,
-        "project",
-        p.id,
-        "update",
-        user.id,
-        _update_summary(p.name, old, new_dict := _project_dict(db, p)),
-        old,
-        new_dict,
-    )
+@router.delete("/trash/projects/{project_id}")
+def purge(project_id: str, user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
+    project = db.query(models.Project).filter(models.Project.id == project_id,
+                                              models.Project.deleted_at.isnot(None)).with_for_update().first()
+    if project is None:
+        raise HTTPException(404, "回收站里没有这个项目")
+    log_change(db, project.id, "project", project.id, "purge", user, "彻底清除项目", row_label=project.name)
+    purge_project(db, project)
     db.commit()
-    db.refresh(p)
-    from app.services.cache import cache_clear
-
-    cache_clear("dashboard:")
-    return _project_dict(db, p)
+    return {"message": "项目已彻底清除"}
 
 
-@router.delete("/{project_id}")
-@route_permission('project.delete')
-def delete_project(
-    project_id: str,
-    version: Optional[int] = Query(default=None, ge=0),
-    reason: str = Query(default="", max_length=1000),
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    from app.services.project_deletion import delete_project as delete_with_backup
-
-    return delete_with_backup(db, project_id, user, version=version, reason=reason)
+def _live(db: Session, model, project_id: str, row_id: str, label: str):
+    row = db.query(model).filter_by(id=row_id, project_id=project_id, deleted_at=None).first()
+    if row is None:
+        raise HTTPException(404, f"{label}不存在或已删除")
+    return row
 
 
-def _status_change_project(
-    project_id: str,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    from app.services.permissions import authorize_project, C_UPDATE
-
-    p = ensure_project_visible(db, project_id, user)
-    authorize_project(user, p, C_UPDATE)
-    return p
+def _done(body: dict) -> bool:
+    if not isinstance(body.get("done"), bool):
+        raise HTTPException(400, "请说明是打勾还是取消")
+    return body["done"]
 
 
-class ProjectStatusChange(BaseModel):
-    status: str = Field(..., min_length=1, max_length=20)
-    reason: str = Field(default="", max_length=5000)
-    retrospective: str = Field(default="", max_length=10000)
-
-
-@router.post("/{project_id}/status")
-@route_permission('project.update')
-def change_status(
-    project_id: str,
-    body: ProjectStatusChange,
-    user: User = Depends(get_current_user),
-    p: Project = Depends(_status_change_project),
-    db: Session = Depends(get_db),
-):
-    from app.services.record_lock import lock_record
-
-    lock_record(db, p, conflict_detail="项目状态正由另一操作更新，请刷新后重试")
-    # Ownership, grants and lifecycle may have changed while waiting for the lock.
-    db.refresh(user)
-    if not user.is_active:
-        raise HTTPException(401, "账号已停用，请重新登录")
-    p = _status_change_project(project_id, user, db)
-    # Invalidate project edits that read an active state before this transition.
-    from app.services.optimistic import bump_version
-
-    bump_version(p, p.version)
-    new_status = body.status
-    if new_status not in PROJECT_STATUSES:
-        raise HTTPException(status_code=400, detail=f"无效状态: {new_status}")
-    old_status = p.status
-    suspension = p.suspension or {}
-
-    # 突发停工（HYPE-71）：旁路状态，不参与 STATUS_FLOW 相邻流转。
-    # 仅运行中状态可进入；必须填写停工原因；恢复只能回到停工前状态。
-    if new_status == "suspended":
-        if old_status not in SUSPENDABLE_PROJECT_STATUSES:
-            raise HTTPException(
-                status_code=400,
-                detail=f"当前状态「{status_label(old_status)}」不能进入突发停工（仅运行中状态可停工）",
-            )
-        reason = body.reason.strip()
-        if not reason:
-            raise HTTPException(status_code=400, detail="进入突发停工必须填写停工原因")
-        p.suspension = {
-            "status_before": old_status,
-            "reason": reason,
-            "suspended_by": user.id,
-            "suspended_at": utcnow().isoformat(),
-        }
-    elif old_status == "suspended":
-        expected = suspension.get("status_before")
-        if not expected:
-            raise HTTPException(status_code=400, detail="缺少停工前状态记录，无法恢复")
-        if new_status != expected:
-            raise HTTPException(
-                status_code=400,
-                detail=f"突发停工后只能恢复到原状态「{status_label(expected)}」",
-            )
-        p.suspension = {
-            **suspension,
-            "resumed_by": user.id,
-            "resumed_at": utcnow().isoformat(),
-        }
-    elif not can_transition(old_status, new_status):
-        raise HTTPException(
-            status_code=400,
-            detail=f"不允许从「{status_label(old_status)}」切换到「{status_label(new_status)}」",
-        )
-    # Status is a manual record of where the project stands; it is not gated on evidence.
-    retrospective = body.retrospective.strip()
-    if new_status == "archived" and retrospective:
-        p.retrospective = {"content": retrospective, "written_at": utcnow().isoformat(), "author": user.id}
-    if new_status == "archived" and not p.retrospective:
-        raise HTTPException(status_code=400, detail="归档前请填写项目复盘（成功经验、问题教训、改进建议）")
-    from app.services.project_documents import materialize_static
-    old_status = p.status
-    p.status = new_status
-    db.flush()
-    materialize_static(db,p,actor_id=user.id)
-    if new_status == "suspended":
-        _action_detail = f"项目突发停工（原因：{p.suspension.get('reason', '')}）：{status_label(old_status)} → 突发停工"
-    elif old_status == "suspended":
-        _action_detail = f"项目恢复运行：突发停工 → {status_label(new_status)}"
+def _set_mark(db: Session, user, project_id: str, vehicle: models.Vehicle, step: models.ProjectStep, done: bool) -> bool:
+    mark = db.query(models.VehicleMark).filter_by(vehicle_id=vehicle.id, step_id=step.id).first()
+    if done == (mark is not None):
+        return False
+    if done:
+        try:
+            with db.begin_nested():
+                db.add(models.VehicleMark(project_id=project_id, vehicle_id=vehicle.id, step_id=step.id, done_by=user.id))
+        except IntegrityError:
+            return False  # someone ticked the same cell at the same moment
     else:
-        _action_detail = (
-            f"项目状态: {status_label(old_status)} → {status_label(new_status)}"
-        )
-    log_change(db, p.id, "project", p.id, "update", user.id, _action_detail,
-               {"status": old_status}, {"status": new_status, "reason": body.reason.strip()})
+        db.delete(mark)
+    log_change(db, project_id, "vehicles", vehicle.id, "update", user, f"{'完成' if done else '取消'}环节 {step.name}",
+               old_value=not done, new_value=done, field="step:" + step.id, row_label=vehicle.vehicle_no)
+    return True
+
+
+@router.put("/projects/{project_id}/vehicles/{vehicle_id}/steps/{step_id}")
+def set_mark(project_id: str, vehicle_id: str, step_id: str, body: dict = Body(...),
+             user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    records.load_scope(db, "project", project_id)
+    vehicle = _live(db, models.Vehicle, project_id, vehicle_id, "车辆")
+    step = _live(db, models.ProjectStep, project_id, step_id, "环节")
+    done = _done(body)
+    if _set_mark(db, user, project_id, vehicle, step, done):
+        records.bump(db, models.Project, project_id)
     db.commit()
-    from app.services.cache import cache_clear
-
-    cache_clear("dashboard:")
-    return {
-        "message": f"状态已更新为「{status_label(new_status)}」",
-        "status": new_status,
-    }
+    return {"vehicle_id": vehicle_id, "step_id": step_id, "done": done}
 
 
-# ===== Acceptance (验收签字记录 C7-2) =====
-
-
-class AcceptanceCreate(BaseModel):
-    accepted_by_name: str = Field(..., min_length=1, max_length=100)
-    accepted_at: date
-    conclusion: str = Field(
-        default="accepted", pattern="^(accepted|conditionally_accepted|rejected)$"
-    )
-    notes: str = ""
-    attachment_id: Optional[str] = None
-
-
-@router.post("/{project_id}/acceptance", response_model=dict)
-@route_permission('project.update')
-def create_acceptance(
-    project_id: str,
-    data: AcceptanceCreate,
-    user: User = Depends(get_current_user),
-    p: Project = Depends(require_project_capability("project.update")),
-    db: Session = Depends(get_db),
-):
-    """录入验收签字记录。conclusion=accepted 是 completed 的前置门禁（C7-2）。
-
-    允许从现场实施及之后的状态录入（原待进场已并入准备，准备阶段不录入）——提前录入客户签字属正常数据准备，
-    真正的约束在 completed 门禁（进度 100% + 交付物齐备 + 验收记录）。
-    """
-    from app.services.record_lock import lock_writable_project
-    from app.services.permissions import authorize_project, C_UPDATE
-
-    p = lock_writable_project(db, p, user)
-    db.refresh(user)
-    if not user.is_active:
-        raise HTTPException(401, "账号已停用，请重新登录")
-    authorize_project(user, p, C_UPDATE)
-    effective_status = (
-        (p.suspension or {}).get("status_before")
-        if p.status == "suspended"
-        else p.status
-    )
-    if effective_status not in (
-        "executing",
-        "acceptance",
-        "completed",
-    ):
-        raise HTTPException(
-            status_code=400, detail="项目尚未进入现场实施，不能录入验收记录"
-        )
-    from app.time_utils import project_today
-
-    local_today = project_today(p.timezone)
-    if data.accepted_at > local_today:
-        raise HTTPException(
-            status_code=400,
-            detail=f"验收日期不能晚于项目当地今天（{local_today.isoformat()}）",
-        )
-    signer_name = data.accepted_by_name.strip()
-    if not signer_name:
-        raise HTTPException(status_code=400, detail="请填写验收签字人姓名")
-    if data.attachment_id:
-        from app.models import Attachment
-
-        attachment = db.get(Attachment, data.attachment_id)
-        if attachment is None or attachment.project_id != project_id:
-            raise HTTPException(400, "验收附件不存在或不属于当前项目")
-    if data.attachment_id:
-        from app.services import project_documents as documents
-        from app.models import ProjectDocument, DocumentVersion
-        if not documents.can_read_file(user, p, attachment):
-            raise HTTPException(403, "没有该验收附件的查看权限")
-        documents.validate_file(attachment)
-        signature = db.query(ProjectDocument).filter_by(project_id=project_id, code='7.1', scope='project').first()
-        if signature is not None and documents.applicable(p, signature):
-            latest = db.query(DocumentVersion).filter_by(project_document_id=signature.id).order_by(
-                DocumentVersion.uploaded_at.desc().nullslast(), DocumentVersion.id.desc()).first()
-            if signature.status != 'submitted' or latest is None or latest.attachment_id != attachment.id:
-                documents.submit(db, p, [signature.id], attachment.id, user, '验收记录关联的项目验收单')
-    from app.services.acceptance import (
-        acceptance_scope_fingerprint,
-        next_acceptance_recorded_at,
-    )
-
-    record = AcceptanceRecord(
-        scope_fingerprint=acceptance_scope_fingerprint(db, project_id),
-        created_at=next_acceptance_recorded_at(db, project_id),
-        project_id=project_id,
-        accepted_by=user.id,
-        accepted_by_name=signer_name,
-        accepted_at=data.accepted_at,
-        conclusion=data.conclusion,
-        notes=data.notes,
-        attachment_id=data.attachment_id,
-        created_by=user.id,
-    )
-    db.add(record)
-    db.flush()
-    log_change(
-        db,
-        project_id,
-        "project",
-        project_id,
-        "acceptance",
-        user.id,
-        f"录入验收记录：{data.accepted_by_name} {data.conclusion}",
-    )
+@router.put("/projects/{project_id}/steps/{step_id}/all")
+def set_column(project_id: str, step_id: str, body: dict = Body(...),
+               user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Tick (or clear) one step for every vehicle of the project."""
+    records.load_scope(db, "project", project_id)
+    step = _live(db, models.ProjectStep, project_id, step_id, "环节")
+    done = _done(body)
+    changed = sum(_set_mark(db, user, project_id, vehicle, step, done)
+                  for vehicle in db.query(models.Vehicle).filter_by(project_id=project_id, deleted_at=None))
+    if changed:
+        records.bump(db, models.Project, project_id)
     db.commit()
-    db.refresh(record)
-    from app.services.cache import cache_clear
-
-    cache_clear("dashboard:")
-    return _acceptance_dict(db, record)
-
-
-@router.get("/{project_id}/acceptance", response_model=list)
-@route_permission('project.read')
-def list_acceptance(
-    project_id: str,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    ensure_project_visible(db, project_id, user)
-    from app.services.acceptance import acceptance_evidence
-
-    return acceptance_evidence(db, project_id)
-
-
-def _acceptance_dict(db: Session, r: AcceptanceRecord) -> dict:
-    from app.services.acceptance import acceptance_evidence
-
-    return next(
-        row for row in acceptance_evidence(db, r.project_id) if row["id"] == r.id
-    )
-
-
-# ===== Vehicles =====
-
-
-@router.get("/{project_id}/vehicles", response_model=list)
-@route_permission('project.read')
-def list_vehicles(
-    project_id: str,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    ensure_project_visible(db, project_id, user)
-    return [
-        _vehicle_dict(v)
-        for v in db.query(Vehicle)
-        .filter_by(project_id=project_id)
-        .order_by(Vehicle.sort_order)
-        .all()
-    ]
-
-
-def _attach_imported_units(db: Session, vehicle: Vehicle) -> int:
-    """Vehicles imported by model before their type existed (lifecycle table) join the type with that model.
-
-    Their config no comes along when the type has none. Unknown type already kept every
-    safety check applicable, so joining a type creates no new check obligations.
-    """
-    from app.models import VehicleUnit, VehicleLifecycleEvent
-
-    model = (vehicle.model_name or "").strip()
-    if not model:
-        return 0
-    units = [unit for unit in db.query(VehicleUnit).filter(
-        VehicleUnit.project_id == vehicle.project_id, VehicleUnit.vehicle_id.is_(None)).all()
-        if (unit.model_name or "").strip() == model]
-    if not units:
-        return 0
-    for unit in units:
-        unit.vehicle_id = vehicle.id
-    if not (vehicle.configuration or {}).get("config_no"):
-        events = db.query(VehicleLifecycleEvent).filter(
-            VehicleLifecycleEvent.vehicle_unit_id.in_([unit.id for unit in units])
-        ).order_by(VehicleLifecycleEvent.event_date, VehicleLifecycleEvent.created_at).all()
-        config_no = next((str(event.extra["config_no"]).strip() for event in events
-                          if isinstance(event.extra, dict) and str(event.extra.get("config_no") or "").strip()), "")
-        if config_no:
-            vehicle.configuration = {**(vehicle.configuration or {}), "config_no": config_no}
-    db.flush()
-    return len(units)
-
-
-@router.post("/{project_id}/vehicles", response_model=dict)
-@route_permission('project.update')
-def add_vehicle(
-    project_id: str,
-    data: VehicleCreate,
-    user: User = Depends(get_current_user),
-    p: Project = Depends(require_project_capability("project.update")),
-    db: Session = Depends(get_db),
-):
-    from app.services.record_lock import lock_writable_project
-    from app.services.permissions import authorize_project, C_UPDATE
-
-    lock_writable_project(db, p, user)
-    authorize_project(user, p, C_UPDATE)
-    from app.services.project_lifecycle import ensure_schedule_writable
-
-    ensure_schedule_writable(p)
-    # HYPE-63：车型字典校验（普通用户只能写入启用车型；管理员例外）。
-    from app.routers.vehicle_types import validate_vehicle_type_value
-
-    payload = data.model_dump()
-    payload["vehicle_type"] = validate_vehicle_type_value(
-        db, data.vehicle_type, allow_legacy=(user.role == "admin")
-    )
-    v = Vehicle(project_id=project_id, **payload)
-    db.add(v)
-    db.flush()
-    attached = _attach_imported_units(db, v)
-
-    sync_arrival_all(db, p, user.id, "车型配置变化后重新核对整批车辆")
-    log_change(
-        db,
-        project_id,
-        "vehicle",
-        v.id,
-        "create",
-        user.id,
-        f"添加车型 {payload['vehicle_type']} {data.model_name} ×{data.quantity}"
-        + (f"，同型号已建档车辆 {attached} 台归入此车型" if attached else ""),
-    )
-    db.commit()
-    db.refresh(v)
-    from app.services.cache import cache_clear
-
-    cache_clear("dashboard:")
-    return _vehicle_dict(v)
-
-
-@router.put("/{project_id}/vehicles/{vehicle_id}", response_model=dict)
-@route_permission('project.update')
-def update_vehicle(
-    project_id: str,
-    vehicle_id: str,
-    data: VehicleUpdate,
-    user: User = Depends(get_current_user),
-    p: Project = Depends(require_project_capability("project.update")),
-    db: Session = Depends(get_db),
-):
-    from app.services.record_lock import lock_writable_project
-    from app.services.permissions import authorize_project, C_UPDATE
-
-    lock_writable_project(db, p, user)
-    authorize_project(user, p, C_UPDATE)
-    v = db.get(Vehicle, vehicle_id)
-    if v is None or v.project_id != project_id:
-        raise HTTPException(status_code=404, detail="车型不存在")
-    # HYPE-63：车型字典校验 — 未变更时保留当前值（含已停用/字典外历史值），变更则须为启用项。
-    from app.routers.vehicle_types import validate_vehicle_type_value
-
-    payload = data.model_dump(exclude_none=True)
-    if payload.get("vehicle_type") is not None:
-        payload["vehicle_type"] = validate_vehicle_type_value(
-            db,
-            payload["vehicle_type"],
-            current_value=v.vehicle_type,
-            allow_legacy=(user.role == "admin"),
-        )
-    previous_type = v.vehicle_type
-    quantity_inputs_changed = any(
-        key in payload and payload[key] != getattr(v, key)
-        for key in ("quantity", "vehicle_type")
-    )
-    if quantity_inputs_changed:
-        from app.services.project_lifecycle import ensure_schedule_writable
-
-        ensure_schedule_writable(p)
-    previous_model = v.model_name
-    for f, val in payload.items():
-        setattr(v, f, val)
-    db.flush()
-    attached = _attach_imported_units(db, v) if v.model_name != previous_model else 0
-    if attached and not quantity_inputs_changed:
-        from app.services.project_lifecycle import ensure_schedule_writable
-
-        ensure_schedule_writable(p)
-    if v.vehicle_type != previous_type:
-        from app.models import VehicleUnit
-        from app.services.vehicle_checks import reconcile_vehicle_type
-        checks=reconcile_vehicle_type(db,project_id,db.query(VehicleUnit).filter_by(project_id=project_id,vehicle_id=v.id).all(),previous_type)
-        if checks:
-            log_change(db,project_id,"vehicle_check",v.id,"generate_scope",user.id,
-                f"车型适用范围变化，为真实车辆新增{len(checks)}项待检检查",{"vehicle_type":previous_type},
-                {"vehicle_type":v.vehicle_type,"check_ids":[c.id for c in checks]})
-    sync_arrival_all(db, p, user.id, "车型配置变化后重新核对整批车辆")
-    log_change(
-        db,
-        project_id,
-        "vehicle",
-        v.id,
-        "update",
-        user.id,
-        f"更新车型 {v.vehicle_type} {v.model_name}"
-        + (f"，同型号已建档车辆 {attached} 台归入此车型" if attached else ""),
-    )
-    db.commit()
-    db.refresh(v)
-    from app.services.cache import cache_clear
-
-    cache_clear("dashboard:")
-    return _vehicle_dict(v)
-
-
-@router.delete("/{project_id}/vehicles/{vehicle_id}")
-@route_permission('project.update')
-def delete_vehicle(
-    project_id: str,
-    vehicle_id: str,
-    user: User = Depends(get_current_user),
-    p: Project = Depends(require_project_capability("project.update")),
-    db: Session = Depends(get_db),
-):
-    from app.services.record_lock import lock_writable_project
-    from app.services.permissions import authorize_project, C_UPDATE
-
-    lock_writable_project(db, p, user)
-    authorize_project(user, p, C_UPDATE)
-    v = db.get(Vehicle, vehicle_id)
-    if v is None or v.project_id != project_id:
-        raise HTTPException(status_code=404, detail="车型不存在")
-    from app.services.project_lifecycle import ensure_schedule_writable
-
-    ensure_schedule_writable(p)
-    desc = f"删除车型 {v.vehicle_type} {v.model_name}"
-    from app.models import VehicleUnit
-    from app.services.vehicle_checks import reconcile_vehicle_type
-    units=db.query(VehicleUnit).filter_by(project_id=project_id,vehicle_id=v.id).all()
-    previous_type=v.vehicle_type
-    db.delete(v)
-    db.flush()
-    checks=reconcile_vehicle_type(db,project_id,units,previous_type)
-    if checks:
-        log_change(db,project_id,"vehicle_check",vehicle_id,"generate_scope",user.id,
-            f"车型删除后真实车辆类型待核对，新增{len(checks)}项适用性待检检查",
-            {"vehicle_type":previous_type},{"vehicle_type":None,"check_ids":[c.id for c in checks]})
-
-    sync_arrival_all(db, p, user.id, "删除车型配置后重新核对整批车辆")
-    log_change(db, project_id, "vehicle", vehicle_id, "delete", user.id, desc)
-    db.commit()
-    from app.services.cache import cache_clear
-
-    cache_clear("dashboard:")
-    return {"message": "车型已删除"}
+    return {"step_id": step_id, "done": done, "changed": changed}
