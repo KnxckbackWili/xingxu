@@ -1,48 +1,24 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import ReactDOM from 'react-dom/client'
-import { createBrowserRouter, RouterProvider } from 'react-router-dom'
-import { ConfigProvider, App as AntApp, theme } from 'antd'
+import { BrowserRouter } from 'react-router-dom'
+import { App as AntApp, ConfigProvider, theme } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
-import dayjs from 'dayjs'
-import 'dayjs/locale/zh-cn'
-import utc from 'dayjs/plugin/utc'
-import timezone from 'dayjs/plugin/timezone'
-dayjs.extend(utc)
-dayjs.extend(timezone)
 import App from './App'
 import ErrorBoundary from './components/ErrorBoundary'
-import { useThemeStore, applyThemeMode } from './stores/theme'
-import { useEffect } from 'react'
+import { applyThemeMode, useThemeStore } from './stores/theme'
 import './styles/tokens.css'
-import './index.css'
-import './styles/layout.css'
+import './styles/base.css'
 import './styles/workspace.css'
 import './styles/theme.css'
 
-// 版本标记：直接取 package.json version（构建时注入），缓存旧版本时强制刷新
-// 前端版本与 package.json 单一事实源，不再手工维护
-import { APP_VERSION } from './version'
-const VERSION_KEY = 'agvpm_app_version'
-try {
-  const stored = localStorage.getItem(VERSION_KEY)
-  if (stored && stored !== APP_VERSION) {
-    localStorage.setItem(VERSION_KEY, APP_VERSION)
-    // 清掉旧 Service Worker 缓存，强制拿新版本
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then((regs) => regs.forEach((r) => r.unregister()))
-    }
-    caches?.keys?.().then((keys) => keys.forEach((k) => caches.delete(k)))
-    window.location.reload()
-  } else {
-    localStorage.setItem(VERSION_KEY, APP_VERSION)
-  }
-} catch {
-  // ignore storage errors
+// Versions before 4 installed an offline cache. It would keep showing the old pages, so every
+// visit makes sure it is gone: its service worker is unregistered and its caches are deleted.
+if ('serviceWorker' in navigator) {
+  void navigator.serviceWorker.getRegistrations().then((registrations) => registrations.forEach((registration) => { void registration.unregister() })).catch(() => undefined)
 }
-
-dayjs.locale('zh-cn')
-
-const router = createBrowserRouter([{ path: '*', element: <App /> }])
+if ('caches' in window) {
+  void caches.keys().then((keys) => keys.forEach((key) => { void caches.delete(key) })).catch(() => undefined)
+}
 
 function AppRoot() {
   const mode = useThemeStore((state) => state.mode)
@@ -96,7 +72,7 @@ function AppRoot() {
     >
       <AntApp>
         <ErrorBoundary>
-          <RouterProvider router={router} />
+          <BrowserRouter><App /></BrowserRouter>
         </ErrorBoundary>
       </AntApp>
     </ConfigProvider>

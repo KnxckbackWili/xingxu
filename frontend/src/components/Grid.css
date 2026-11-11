@@ -1,0 +1,81 @@
+/* The editable table. Cells look like text until touched; rows turn into cards on a phone. */
+.grid-wrap { background: var(--agv-bg-container); border-radius: var(--agv-radius-lg); box-shadow: var(--agv-shadow-sm); overflow: hidden; }
+.grid { width: 100%; border-collapse: collapse; table-layout: auto; font-size: 14px; }
+.grid th { text-align: left; font-size: 12px; font-weight: 600; color: var(--agv-text-secondary); padding: 10px 8px; border-bottom: 1px solid var(--agv-border-soft); white-space: nowrap; }
+.grid th:first-child, .grid td:first-child { padding-left: 14px; }
+.grid td { padding: 3px 4px; border-bottom: 1px solid var(--agv-border-soft); vertical-align: middle; }
+.grid tbody tr:hover > td { background: var(--agv-bg-subtle); }
+.grid th.is-check, .grid td.is-check { text-align: center; width: 1%; white-space: nowrap; }
+.grid th.is-number, .grid td.is-number { width: 90px; }
+.grid .grid-tools, .grid .grid-expand, .grid .grid-handle { width: 36px; padding: 0 2px; text-align: center; }
+.grid .grid-handle { cursor: grab; color: var(--agv-border); }
+.grid tr:hover .grid-handle { color: var(--agv-text-secondary); }
+.grid-expand-text { display: none; }
+.grid-icon { display: inline-grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: var(--agv-text-secondary); cursor: pointer; }
+.grid-icon:hover, .grid-icon:focus-visible { background: var(--agv-neutral-soft); color: var(--agv-text); outline: none; }
+.grid-empty td { padding: 22px 16px; color: var(--agv-text-secondary); text-align: center; }
+.grid-more > td { padding: 10px 14px 16px 44px; background: var(--agv-bg-subtle); }
+.grid-more .grid-wrap { box-shadow: none; border: 1px solid var(--agv-border-soft); }
+.grid tr.is-done .cell-input { color: var(--agv-text-secondary); }
+
+.cell { position: relative; display: block; min-width: 60px; }
+.cell-input, .cell textarea.cell-input { width: 100%; min-height: 34px; padding: 6px 8px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--agv-text); font: inherit; line-height: 1.45; resize: none; outline: none; text-overflow: ellipsis; }
+.cell-input::placeholder { color: color-mix(in srgb, var(--agv-text-secondary) 60%, transparent); }
+.cell-input:hover { border-color: var(--agv-border); }
+.cell-input:focus, .cell textarea.cell-input:focus { border-color: var(--agv-primary); background: var(--agv-bg-container); box-shadow: 0 0 0 3px color-mix(in srgb, var(--agv-primary) 16%, transparent); }
+.cell-input.is-strong { font-weight: 600; }
+.cell-input.is-number { text-align: right; }
+select.cell-input { appearance: none; cursor: pointer; }
+.cell.is-saving::after, .cell.is-saved::after { content: ''; position: absolute; top: 5px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--agv-warning); }
+.cell.is-saved::after { background: var(--agv-success); }
+
+.cell-check { display: inline-flex; align-items: center; gap: 8px; min-width: 34px; min-height: 34px; padding: 4px; border: 0; border-radius: 8px; background: transparent; color: var(--agv-text-secondary); cursor: pointer; justify-content: center; }
+.cell-check-box { display: grid; place-items: center; width: 22px; height: 22px; border: 1.5px solid var(--agv-border); border-radius: 6px; background: var(--agv-bg-container); color: #fff; font-size: 13px; transition: background .12s, border-color .12s; }
+.cell-check:hover .cell-check-box { border-color: var(--agv-primary); }
+.cell-check.is-on .cell-check-box { background: var(--agv-success); border-color: var(--agv-success); }
+.cell-check:focus-visible { outline: 2px solid var(--agv-primary); outline-offset: 1px; }
+.cell-check-text { display: none; font-size: 13px; }
+
+.grid-add { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-top: 1px solid var(--agv-border-soft); }
+.grid-wrap > table + .grid-add { border-top: 0; }
+.grid-add input { flex: 1; min-width: 0; min-height: 36px; padding: 6px 8px; border: 1px dashed transparent; border-radius: 8px; background: transparent; color: var(--agv-text); font: inherit; outline: none; }
+.grid-add input::placeholder { color: var(--agv-text-secondary); }
+.grid-add input:hover { border-color: var(--agv-border); }
+.grid-add input:focus { border: 1px solid var(--agv-primary); background: var(--agv-bg-container); box-shadow: 0 0 0 3px color-mix(in srgb, var(--agv-primary) 16%, transparent); }
+.grid-add-go { flex: none; min-height: 36px; padding: 0 14px; border: 0; border-radius: 8px; background: var(--agv-primary); color: var(--agv-on-primary); font-weight: 600; cursor: pointer; }
+
+@media (max-width: 640px) {
+  .grid-wrap { background: transparent; box-shadow: none; overflow: visible; }
+  .grid, .grid tbody { display: block; }
+  .grid thead { display: none; }
+  .grid tbody tr { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; position: relative; margin-bottom: 10px; padding: 10px 44px 10px 12px; background: var(--agv-bg-container); border-radius: 14px; box-shadow: var(--agv-shadow-sm); }
+  .grid tbody tr:hover > td { background: transparent; }
+  .grid td, .grid td:first-child { display: block; flex: 1 1 100%; padding: 0; border: 0; }
+  .grid td::before { content: attr(data-label); display: block; padding: 4px 8px 0; font-size: 11px; color: var(--agv-text-secondary); }
+  .grid td.is-primary { order: -2; }
+  .grid td.is-primary::before, .grid td.is-check::before, .grid td.is-custom::before { display: none; }
+  .grid td.is-primary .cell-input { font-size: 16px; font-weight: 650; }
+  .grid td.is-text, .grid td.is-select, .grid td.is-number, .grid td.is-date { flex: 1 1 40%; width: auto; min-width: 0; }
+  .grid td.is-primary, .grid td.is-wide, .grid td.is-custom { flex: 1 1 100%; }
+  .grid tbody tr:not(.grid-more):not(.grid-empty)::after { content: ''; order: 4; flex: 1 1 100%; height: 0; }
+  .grid td.is-check { flex: 0 0 auto; width: auto; text-align: left; order: 5; }
+  .grid td.is-wide:not(.is-primary) { order: 6; }
+  .cell-input.is-number { text-align: left; }
+  .grid td.is-check .cell-check { min-height: 44px; padding: 0 12px 0 8px; border: 1px solid var(--agv-border); border-radius: 22px; background: var(--agv-bg-container); }
+  .grid td.is-check .cell-check.is-on { border-color: var(--agv-success); background: var(--agv-success-soft); color: var(--agv-success); }
+  .grid td.is-check .cell-check-text { display: inline; }
+  .grid td.grid-tools { position: absolute; top: 6px; right: 4px; width: auto; flex: none; }
+  .grid td.grid-handle { display: none; }
+  .grid td.grid-expand { order: 9; width: auto; }
+  .grid td.grid-expand .grid-icon { width: auto; min-height: 44px; gap: 6px; padding: 0 8px; display: inline-flex; color: var(--agv-primary); }
+  .grid-expand-text { display: inline; font-size: 13px; }
+  .grid-icon { width: 44px; height: 44px; }
+  .cell-input, .cell textarea.cell-input { min-height: 36px; font-size: 15px; padding-block: 4px; }
+  .grid tr.grid-more { padding: 10px; background: var(--agv-bg-subtle); box-shadow: none; margin-top: -6px; }
+  .grid tr.grid-more > td { padding: 0; background: transparent; }
+  .grid-empty td { padding: 8px; }
+  .grid tr.grid-empty { box-shadow: none; background: transparent; padding: 8px; }
+  .grid-add { margin-top: 2px; padding: 8px 10px; background: var(--agv-bg-container); border-radius: 14px; box-shadow: var(--agv-shadow-sm); border: 0; }
+  .grid-add input { min-height: 44px; font-size: 16px; }
+  .grid-add-go { min-height: 44px; }
+}

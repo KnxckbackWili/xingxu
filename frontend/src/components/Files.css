@@ -1,0 +1,11 @@
+.files { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 34px; padding: 2px 4px; border-radius: 8px; }
+.files.is-over { outline: 2px dashed var(--agv-primary); background: var(--agv-primary-soft); }
+.file-chip { display: inline-flex; align-items: center; max-width: 100%; border-radius: 8px; background: var(--agv-neutral-soft); font-size: 13px; }
+.file-chip a { display: inline-flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 4px 4px 8px; color: var(--agv-text); }
+.file-chip a:hover { color: var(--agv-primary); }
+.file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+.file-chip button { display: grid; place-items: center; width: 26px; height: 26px; border: 0; background: transparent; color: var(--agv-text-secondary); cursor: pointer; border-radius: 6px; font-size: 11px; }
+.file-chip button:hover { color: var(--agv-danger); background: var(--agv-danger-soft); }
+.file-add { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 10px; border: 1px dashed var(--agv-border); border-radius: 8px; background: transparent; color: var(--agv-text-secondary); font-size: 13px; cursor: pointer; }
+.file-add:hover:not(:disabled) { border-color: var(--agv-primary); color: var(--agv-primary); }
+@media (max-width: 640px) { .file-add { min-height: 44px; padding: 0 14px; } .file-chip a { padding: 9px 4px 9px 10px; } .file-chip button { width: 40px; height: 40px; } .file-name { max-width: 190px; } }

@@ -1,0 +1,17 @@
+.history-list { list-style: none; margin: 0; padding: 4px 18px; background: var(--agv-bg-container); border-radius: var(--agv-radius-lg); box-shadow: var(--agv-shadow-sm); }
+.history-list li { display: flex; align-items: center; gap: 14px; padding: 11px 0; border-bottom: 1px solid var(--agv-border-soft); font-size: 14px; }
+.history-list li:last-child { border-bottom: 0; }
+.history-who { flex: 0 0 110px; min-width: 0; font-weight: 550; }
+.history-what { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.history-project { margin-left: 10px; padding: 1px 8px; border-radius: 10px; background: var(--agv-neutral-soft); color: var(--agv-text-secondary); font-size: 12px; white-space: nowrap; }
+.history-when { flex: none; color: var(--agv-text-secondary); font-size: 12.5px; }
+.history-more { margin-top: 14px; text-align: center; }
+@media (max-width: 640px) {
+  .history-list { padding: 2px 14px; }
+  .history-list li { flex-wrap: wrap; gap: 4px 10px; }
+  .history-who { flex: 1 1 auto; }
+  .history-what { flex: 1 1 100%; order: 3; }
+  .history-list li .ant-btn { order: 4; min-height: 36px; }
+  .page-head-actions { width: 100%; }
+  .page-head-actions .ant-select { flex: 1; }
+}

@@ -1,0 +1,55 @@
+.project-head { margin-bottom: 16px; }
+.project-back { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; color: var(--agv-text-secondary); font-size: 13px; }
+.project-title-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; justify-content: space-between; }
+.project-title { flex: 1 1 280px; margin: 0; min-width: 0; }
+.project-title .cell-input { font-size: 22px; font-weight: 700; padding-left: 0; min-height: 40px; }
+.project-title .cell-input:focus { padding-left: 8px; }
+.project-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.project-meta { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 4px 0 12px; }
+.project-meta label { display: flex; align-items: center; gap: 6px; flex: 0 1 240px; min-width: 0; color: var(--agv-text-secondary); font-size: 13px; }
+.project-meta label.is-wide { flex: 1 1 320px; }
+.project-meta label > span:first-child { flex: none; }
+.project-meta .cell { flex: 1; min-width: 0; }
+.project-tabs { display: flex; align-items: center; gap: 4px; padding: 6px; background: var(--agv-bg-container); border-radius: var(--agv-radius-lg); box-shadow: var(--agv-shadow-sm); overflow-x: auto; }
+.project-tabs > button { display: inline-flex; align-items: center; gap: 8px; flex: none; min-height: 40px; padding: 0 16px; border: 0; border-radius: 10px; background: transparent; color: var(--agv-text-secondary); font: inherit; font-weight: 550; cursor: pointer; }
+.project-tabs > button:hover { background: var(--agv-bg-subtle); color: var(--agv-text); }
+.project-tabs > button.is-active { background: var(--agv-primary-soft); color: var(--agv-primary); }
+.tab-count { min-width: 22px; padding: 0 7px; border-radius: 11px; background: var(--agv-warning-soft); color: var(--agv-warning); font-size: 12px; line-height: 22px; text-align: center; }
+.tab-ok { color: var(--agv-success); font-style: normal; font-size: 13px; }
+.project-todo { display: inline-flex; align-items: center; gap: 8px; flex: none; margin-left: auto; padding: 0 10px; color: var(--agv-text-secondary); font-size: 13px; cursor: pointer; white-space: nowrap; }
+.project-offline { margin: 0 0 12px; padding: 8px 14px; border-radius: 10px; background: var(--agv-warning-soft); color: var(--agv-warning); font-size: 13px; }
+.tab-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.tab-empty { color: var(--agv-text-secondary); }
+.step-head { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px; border: 0; border-radius: 6px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.step-head .anticon { font-size: 9px; opacity: .6; }
+.step-head:hover { background: var(--agv-neutral-soft); color: var(--agv-text); }
+.stage { margin-bottom: 18px; }
+.stage-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.stage-head .cell { flex: 0 1 260px; }
+.stage-head .cell-input { font-size: 15px; }
+.stage-count { color: var(--agv-text-secondary); font-size: 13px; white-space: nowrap; }
+.stage-new, .issue-new { margin-bottom: 12px; }
+.stage-new .grid-add, .issue-new .grid-add { border-top: 0; }
+.issue-state { min-width: 60px; min-height: 30px; padding: 0 12px; border: 0; border-radius: 15px; background: var(--agv-warning-soft); color: var(--agv-warning); font-weight: 600; font-size: 13px; cursor: pointer; }
+.issue-state.is-closed { background: var(--agv-success-soft); color: var(--agv-success); }
+.issue-meta { display: flex; flex-direction: column; gap: 2px; padding: 4px 8px; font-size: 13px; }
+.issue-meta small { color: var(--agv-text-secondary); }
+.other-files { margin-top: 20px; padding: 16px 18px; background: var(--agv-bg-container); border-radius: var(--agv-radius-lg); box-shadow: var(--agv-shadow-sm); }
+.other-files h3 { margin: 0 0 2px; font-size: 15px; }
+.other-files p { margin: 0 0 10px; color: var(--agv-text-secondary); font-size: 13px; }
+@media (max-width: 640px) {
+  .project-title .cell-input { font-size: 19px; }
+  .project-actions { width: 100%; }
+  .project-actions .ant-btn { min-height: 40px; }
+  .project-meta { gap: 0 10px; margin-bottom: 8px; }
+  .project-meta label { flex: 1 1 45%; }
+  .project-meta label.is-wide { flex: 1 1 100%; }
+  .project-tabs { margin-inline: calc(var(--agv-page-inset) * -1); border-radius: 0; padding-inline: 10px; position: sticky; top: 0; z-index: 5; }
+  .project-tabs { flex-wrap: wrap; overflow: visible; gap: 2px; }
+  .project-tabs > button { flex: 1 1 0; justify-content: center; min-height: 44px; padding: 0 4px; gap: 4px; }
+  .tab-count { min-width: 18px; padding: 0 5px; }
+  .project-todo { flex: 1 1 100%; margin: 0; min-height: 40px; justify-content: flex-end; border-top: 1px solid var(--agv-border-soft); }
+  .tab-tools .ant-btn { min-height: 40px; }
+  .issue-state { min-height: 40px; min-width: 72px; }
+  .issue-meta { flex-direction: row; align-items: center; gap: 10px; }
+}

@@ -1,0 +1,11 @@
+.settings-tabs { margin-bottom: 18px; max-width: 100%; overflow-x: auto; }
+.settings-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px; }
+.settings-list { list-style: none; margin: 0; padding: 2px 18px; background: var(--agv-bg-container); border-radius: var(--agv-radius-lg); box-shadow: var(--agv-shadow-sm); }
+.settings-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 0; border-bottom: 1px solid var(--agv-border-soft); }
+.settings-list li:last-child { border-bottom: 0; }
+.settings-list li.is-off .settings-main { opacity: .55; }
+.settings-main { display: flex; flex-direction: column; gap: 2px; flex: 1 1 200px; min-width: 0; }
+.settings-main small { color: var(--agv-text-secondary); font-size: 12.5px; }
+.settings-actions { display: flex; gap: 8px; }
+.settings .work-page-header { display: none; }
+@media (max-width: 640px) { .settings-actions .ant-btn { min-height: 36px; } }

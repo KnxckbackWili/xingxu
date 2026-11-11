@@ -1,0 +1,6 @@
+.login { min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px; background: radial-gradient(1200px 600px at 20% -10%, var(--agv-primary-soft), transparent 60%), var(--agv-bg-layout); }
+.login-card { width: min(400px, 100%); padding: 32px 28px 22px; background: var(--agv-bg-container); border-radius: 20px; box-shadow: var(--agv-shadow-lg); }
+.login-brand { margin-bottom: 22px; }
+.login-card h1 { margin: 0; font-size: 24px; font-weight: 700; }
+.login-sub { margin: 6px 0 22px; color: var(--agv-text-secondary); font-size: 13.5px; }
+.login-foot { margin-top: 22px; text-align: center; color: var(--agv-text-secondary); font-size: 12px; }
