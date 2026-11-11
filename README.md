@@ -2,7 +2,7 @@
 
 AGV 实施项目的记录工具。把每个项目的车辆、工作、问题、资料、物品记下来，多人可以同时改，打开首页就能看到哪里缺什么、哪里还没做。支持 SQLite / PostgreSQL 和 Docker 单容器部署。
 
-当前版本为 **4.0.1**。4.0 是从零重写的版本，不读 3.x 的项目数据，升级前请先看[从 3.x 升级到 4.0](docs/upgrade-to-4.md)。历史版本见 [CHANGELOG](CHANGELOG.md)。
+当前版本为 **4.0.2**。4.0 是从零重写的版本，不读 3.x 的项目数据，升级前请先看[从 3.x 升级到 4.0](docs/upgrade-to-4.md)。历史版本见 [CHANGELOG](CHANGELOG.md)。
 
 开源地址：<https://github.com/KnxckbackWili/xingxu>（[MIT 许可证](LICENSE)）。正式版本的多架构镜像由 GitHub Actions 发布到 `ghcr.io/knxckbackwili/xingxu`。
 

@@ -6,7 +6,7 @@ from pathlib import Path
 
 # Base directory
 BASE_DIR = Path(__file__).resolve().parent.parent
-APP_VERSION = os.getenv("APP_VERSION", "4.0.1")
+APP_VERSION = os.getenv("APP_VERSION", "4.0.2")
 
 # Data directory (SQLite DB, uploads)
 DATA_DIR = Path(os.getenv("DATA_DIR", BASE_DIR / "data"))
